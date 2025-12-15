@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from './ProtectedRoute';
 
 // Auth Pages
@@ -20,91 +20,89 @@ import ProfissionalCalendario from '../pages/profissional/Calendario';
 
 export const AppRoutes = () => {
     return (
-        <BrowserRouter>
-            <Routes>
-                {/* Rota pública */}
-                <Route path="/login" element={<Login />} />
+        <Routes>
+            {/* Rota pública */}
+            <Route path="/login" element={<Login />} />
 
-                {/* Rotas Admin */}
-                <Route
-                    path="/admin"
-                    element={
-                        <ProtectedRoute adminOnly>
-                            <AdminDashboard />
-                        </ProtectedRoute>
-                    }
-                />
-                <Route
-                    path="/admin/profissionais"
-                    element={
-                        <ProtectedRoute adminOnly>
-                            <Profissionais />
-                        </ProtectedRoute>
-                    }
-                />
-                <Route
-                    path="/admin/departamentos"
-                    element={
-                        <ProtectedRoute adminOnly>
-                            <Departamentos />
-                        </ProtectedRoute>
-                    }
-                />
-                <Route
-                    path="/admin/clientes"
-                    element={
-                        <ProtectedRoute adminOnly>
-                            <Clientes />
-                        </ProtectedRoute>
-                    }
-                />
-                <Route
-                    path="/admin/tarefas"
-                    element={
-                        <ProtectedRoute adminOnly>
-                            <Tarefas />
-                        </ProtectedRoute>
-                    }
-                />
-                <Route
-                    path="/admin/calendario"
-                    element={
-                        <ProtectedRoute adminOnly>
-                            <Calendario />
-                        </ProtectedRoute>
-                    }
-                />
+            {/* Rotas Admin */}
+            <Route
+                path="/admin"
+                element={
+                    <ProtectedRoute adminOnly>
+                        <AdminDashboard />
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/admin/profissionais"
+                element={
+                    <ProtectedRoute adminOnly>
+                        <Profissionais />
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/admin/departamentos"
+                element={
+                    <ProtectedRoute adminOnly>
+                        <Departamentos />
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/admin/clientes"
+                element={
+                    <ProtectedRoute adminOnly>
+                        <Clientes />
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/admin/tarefas"
+                element={
+                    <ProtectedRoute adminOnly>
+                        <Tarefas />
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/admin/calendario"
+                element={
+                    <ProtectedRoute adminOnly>
+                        <Calendario />
+                    </ProtectedRoute>
+                }
+            />
 
-                {/* Rotas Profissional */}
-                <Route
-                    path="/profissional"
-                    element={
-                        <ProtectedRoute>
-                            <ProfissionalDashboard />
-                        </ProtectedRoute>
-                    }
-                />
-                <Route
-                    path="/profissional/tarefas"
-                    element={
-                        <ProtectedRoute>
-                            <MinhasTarefas />
-                        </ProtectedRoute>
-                    }
-                />
-                <Route
-                    path="/profissional/calendario"
-                    element={
-                        <ProtectedRoute>
-                            <ProfissionalCalendario />
-                        </ProtectedRoute>
-                    }
-                />
+            {/* Rotas Profissional */}
+            <Route
+                path="/profissional"
+                element={
+                    <ProtectedRoute>
+                        <ProfissionalDashboard />
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/profissional/tarefas"
+                element={
+                    <ProtectedRoute>
+                        <MinhasTarefas />
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/profissional/calendario"
+                element={
+                    <ProtectedRoute>
+                        <ProfissionalCalendario />
+                    </ProtectedRoute>
+                }
+            />
 
-                {/* Redirect padrão */}
-                <Route path="/" element={<Navigate to="/login" replace />} />
-                <Route path="*" element={<Navigate to="/login" replace />} />
-            </Routes>
-        </BrowserRouter>
+            {/* Redirect padrão */}
+            <Route path="/" element={<Navigate to="/login" replace />} />
+            <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
     );
 };
