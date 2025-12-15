@@ -29,11 +29,11 @@ export const getDashboardMetrics = async () => {
         const { data: overdueTasks, error: overdueError } = await supabase
             .from('tarefas')
             .select(`
-        *,
-        profissionais(id, nome),
-        clientes(nome),
-        departamentos(nome, cor_hex)
-      `)
+                *,
+                responsavel:profissionais!tarefas_assigned_to_fkey(id, nome),
+                clientes(nome),
+                departamentos(nome, cor_hex)
+            `)
             .lt('deadline', today.toISOString())
             .neq('status', 'completed')
             .order('deadline', { ascending: true });
@@ -91,15 +91,15 @@ export const getTodayTasks = async () => {
         const { data, error } = await supabase
             .from('tarefas')
             .select(`
-        *,
-        profissionais(id, nome),
-        clientes(nome),
-        departamentos(nome, cor_hex)
-      `)
+                *,
+                responsavel:profissionais!tarefas_assigned_to_fkey(id, nome),
+                clientes(nome),
+                departamentos(nome, cor_hex)
+            `)
             .gte('deadline', today.toISOString())
             .lt('deadline', tomorrow.toISOString())
             .order('deadline', { ascending: true })
-            .order('prioridade', { ascending: false });
+            .order('priority', { ascending: false });
 
         if (error) throw error;
         return data || [];
@@ -117,11 +117,11 @@ export const getTeamWorkload = async () => {
         const { data: professionals, error: prosError } = await supabase
             .from('profissionais')
             .select(`
-        id,
-        nome,
-        departamento_id,
-        departamentos(nome, cor_hex)
-      `)
+                id,
+                nome,
+                departamento_id,
+                departamento:departamentos(nome, cor_hex)
+            `)
             .eq('ativo', true)
             .order('nome');
 
