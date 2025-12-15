@@ -21,7 +21,7 @@ export const getDashboardMetrics = async () => {
             .select('id')
             .gte('deadline', today.toISOString())
             .lt('deadline', tomorrow.toISOString())
-            .neq('status', 'completed');
+            .neq('status', 'concluida');
 
         if (todayError) throw todayError;
 
@@ -44,7 +44,7 @@ export const getDashboardMetrics = async () => {
         const { data: completedToday, error: completedError } = await supabase
             .from('tarefas')
             .select('id')
-            .eq('status', 'completed')
+            .eq('status', 'concluida')
             .gte('updated_at', today.toISOString());
 
         if (completedError) throw completedError;
@@ -55,7 +55,7 @@ export const getDashboardMetrics = async () => {
             .select('id')
             .gte('deadline', today.toISOString())
             .lte('deadline', weekEnd.toISOString())
-            .neq('status', 'completed');
+            .neq('status', 'concluida');
 
         if (weekError) throw weekError;
 
@@ -135,8 +135,8 @@ export const getTeamWorkload = async () => {
             const { data: activeTasks } = await supabase
                 .from('tarefas')
                 .select('id, status, deadline')
-                .eq('assigned_to', prof.id)
-                .neq('status', 'completed');
+                .eq('profissional_id', prof.id)
+                .neq('status', 'concluida');
 
             // Tarefas atrasadas
             const overdueTasks = activeTasks?.filter(
@@ -174,9 +174,9 @@ export const getQuickStats = async (startDate, endDate) => {
 
         const stats = {
             total: data?.length || 0,
-            completed: data?.filter((t) => t.status === 'completed').length || 0,
-            pending: data?.filter((t) => t.status === 'pending').length || 0,
-            inProgress: data?.filter((t) => t.status === 'in_progress').length || 0,
+            completed: data?.filter((t) => t.status === 'concluida').length || 0,
+            pending: data?.filter((t) => t.status === 'pendente').length || 0,
+            inProgress: data?.filter((t) => t.status === 'em_andamento').length || 0,
             highPriority: data?.filter((t) => t.prioridade === 'alta').length || 0,
         };
 
@@ -197,7 +197,7 @@ export const updateTaskStatus = async (taskId, newStatus) => {
             updated_at: new Date().toISOString(),
         };
 
-        if (newStatus === 'completed') {
+        if (newStatus === 'concluida') {
             updateData.completed_at = new Date().toISOString();
         }
 
@@ -224,7 +224,7 @@ export const reassignTask = async (taskId, newAssigneeId) => {
         const { data, error } = await supabase
             .from('tarefas')
             .update({
-                assigned_to: newAssigneeId,
+                profissional_id: newAssigneeId,
                 updated_at: new Date().toISOString(),
             })
             .eq('id', taskId)
