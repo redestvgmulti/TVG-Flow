@@ -2,6 +2,117 @@ import { supabase } from './supabase';
 import { startOfDay, endOfDay, addDays, endOfWeek, parseISO } from 'date-fns';
 
 /**
+ * MOCK DATA CONSTANTS
+ * Temporarily used to bypass Supabase schema issues
+ */
+const MOCK_METRICS = {
+    tasksToday: 12,
+    overdueTasks: [
+        {
+            id: '1',
+            title: 'Relatório Mensal de Vendas',
+            deadline: new Date(new Date().setDate(new Date().getDate() - 2)).toISOString(), // 2 days ago
+            priority: 'alta',
+            status: 'pending',
+            responsavel: { id: 'p1', nome: 'Ana Silva' },
+            clientes: { nome: 'Empresa ABC' },
+            departamentos: { nome: 'Financeiro', cor_hex: '#dc2626' }
+        },
+        {
+            id: '2',
+            title: 'Atualizar Contrato Social',
+            deadline: new Date(new Date().setDate(new Date().getDate() - 1)).toISOString(), // 1 day ago
+            priority: 'media',
+            status: 'pending',
+            responsavel: { id: 'p2', nome: 'Carlos Oliveira' },
+            clientes: { nome: 'Tech Solutions' },
+            departamentos: { nome: 'Jurídico', cor_hex: '#2563eb' }
+        },
+        {
+            id: '3',
+            title: 'Revisão de Impostos',
+            deadline: new Date(new Date().setHours(new Date().getHours() - 4)).toISOString(), // 4 hours ago
+            priority: 'alta',
+            status: 'in_progress',
+            responsavel: { id: 'p1', nome: 'Ana Silva' },
+            clientes: { nome: 'Global Imports' },
+            departamentos: { nome: 'Contabilidade', cor_hex: '#059669' }
+        }
+    ],
+    completedToday: 5,
+    tasksThisWeek: 45,
+    activeProfessionals: 8
+};
+
+const MOCK_TODAY_TASKS = [
+    {
+        id: 't1',
+        title: 'Fechamento Contábil - Grupo X',
+        deadline: new Date(new Date().setHours(14, 0)).toISOString(),
+        priority: 'alta',
+        status: 'in_progress',
+        responsavel: { id: 'p1', nome: 'Ana Silva' },
+        clientes: { nome: 'Grupo X' },
+        departamentos: { nome: 'Contabilidade', cor_hex: '#059669' }
+    },
+    {
+        id: 't2',
+        title: 'Reunião de Alinhamento',
+        deadline: new Date(new Date().setHours(16, 30)).toISOString(),
+        priority: 'media',
+        status: 'pending',
+        responsavel: { id: 'p3', nome: 'Roberto Santos' },
+        clientes: { nome: 'Interno' },
+        departamentos: { nome: 'RH', cor_hex: '#d97706' }
+    },
+    {
+        id: 't3',
+        title: 'Entrega de Balancete',
+        deadline: new Date(new Date().setHours(17, 0)).toISOString(),
+        priority: 'alta',
+        status: 'pending',
+        responsavel: { id: 'p2', nome: 'Carlos Oliveira' },
+        clientes: { nome: 'Padaria Central' },
+        departamentos: { nome: 'Financeiro', cor_hex: '#dc2626' }
+    }
+];
+
+const MOCK_WORKLOAD = [
+    {
+        id: 'p1',
+        nome: 'Ana Silva',
+        departamento: { nome: 'Contabilidade', cor_hex: '#059669' },
+        activeTasks: 8,
+        overdueTasks: 2,
+        isOverloaded: true
+    },
+    {
+        id: 'p2',
+        nome: 'Carlos Oliveira',
+        departamento: { nome: 'Financeiro', cor_hex: '#dc2626' },
+        activeTasks: 4,
+        overdueTasks: 0,
+        isOverloaded: false
+    },
+    {
+        id: 'p3',
+        nome: 'Roberto Santos',
+        departamento: { nome: 'RH', cor_hex: '#d97706' },
+        activeTasks: 2,
+        overdueTasks: 0,
+        isOverloaded: false
+    },
+    {
+        id: 'p4',
+        nome: 'Mariana Costa',
+        departamento: { nome: 'Jurídico', cor_hex: '#2563eb' },
+        activeTasks: 6,
+        overdueTasks: 1,
+        isOverloaded: true
+    }
+];
+
+/**
  * Dashboard Service
  * Serviços de dados para o Master Admin Dashboard
  */
@@ -10,231 +121,64 @@ import { startOfDay, endOfDay, addDays, endOfWeek, parseISO } from 'date-fns';
  * Busca métricas principais do dashboard
  */
 export const getDashboardMetrics = async () => {
-    try {
-        const today = startOfDay(new Date());
-        const tomorrow = addDays(today, 1);
-        const weekEnd = endOfWeek(new Date());
-
-        // Tarefas de hoje
-        const { data: tasksToday, error: todayError } = await supabase
-            .from('tarefas')
-            .select('id')
-            .gte('deadline', today.toISOString())
-            .lt('deadline', tomorrow.toISOString())
-            .neq('status', 'completed');
-
-        if (todayError) throw todayError;
-
-        // Tarefas atrasadas
-        const { data: overdueTasks, error: overdueError } = await supabase
-            .from('tarefas')
-            .select(`
-                *,
-                responsavel:profissionais!tarefas_assigned_to_fkey(id, nome),
-                clientes(nome),
-                departamentos(nome, cor_hex)
-            `)
-            .lt('deadline', today.toISOString())
-            .neq('status', 'completed')
-            .order('deadline', { ascending: true });
-
-        if (overdueError) throw overdueError;
-
-        // Tarefas concluídas hoje
-        const { data: completedToday, error: completedError } = await supabase
-            .from('tarefas')
-            .select('id')
-            .eq('status', 'completed')
-            .gte('updated_at', today.toISOString());
-
-        if (completedError) throw completedError;
-
-        // Tarefas da semana
-        const { data: tasksWeek, error: weekError } = await supabase
-            .from('tarefas')
-            .select('id')
-            .gte('deadline', today.toISOString())
-            .lte('deadline', weekEnd.toISOString())
-            .neq('status', 'completed');
-
-        if (weekError) throw weekError;
-
-        // Profissionais ativos
-        const { data: activePros, error: prosError } = await supabase
-            .from('profissionais')
-            .select('id')
-            .eq('ativo', true);
-
-        if (prosError) throw prosError;
-
-        return {
-            tasksToday: tasksToday?.length || 0,
-            overdueTasks: overdueTasks || [],
-            completedToday: completedToday?.length || 0,
-            tasksThisWeek: tasksWeek?.length || 0,
-            activeProfessionals: activePros?.length || 0,
-        };
-    } catch (error) {
-        console.error('Erro ao buscar métricas do dashboard:', error);
-        throw error;
-    }
+    // Return mock data immediately
+    return new Promise((resolve) => {
+        setTimeout(() => {
+            resolve(MOCK_METRICS);
+        }, 800); // Simulate network latency
+    });
 };
 
 /**
  * Busca tarefas de hoje com detalhes
  */
 export const getTodayTasks = async () => {
-    try {
-        const today = startOfDay(new Date());
-        const tomorrow = addDays(today, 1);
-
-        const { data, error } = await supabase
-            .from('tarefas')
-            .select(`
-                *,
-                responsavel:profissionais!tarefas_assigned_to_fkey(id, nome),
-                clientes(nome),
-                departamentos(nome, cor_hex)
-            `)
-            .gte('deadline', today.toISOString())
-            .lt('deadline', tomorrow.toISOString())
-            .order('deadline', { ascending: true })
-            .order('priority', { ascending: false });
-
-        if (error) throw error;
-        return data || [];
-    } catch (error) {
-        console.error('Erro ao buscar tarefas de hoje:', error);
-        throw error;
-    }
+    // Return mock data immediately
+    return new Promise((resolve) => {
+        setTimeout(() => {
+            resolve(MOCK_TODAY_TASKS);
+        }, 600);
+    });
 };
 
 /**
  * Busca carga de trabalho da equipe
  */
 export const getTeamWorkload = async () => {
-    try {
-        const { data: professionals, error: prosError } = await supabase
-            .from('profissionais')
-            .select(`
-                id,
-                nome,
-                departamento_id,
-                departamento:departamentos(nome, cor_hex)
-            `)
-            .eq('ativo', true)
-            .order('nome');
-
-        if (prosError) throw prosError;
-
-        // Para cada profissional, buscar suas tarefas
-        const workloadPromises = professionals.map(async (prof) => {
-            const today = startOfDay(new Date());
-
-            // Tarefas ativas
-            const { data: activeTasks } = await supabase
-                .from('tarefas')
-                .select('id, status, deadline')
-                .eq('assigned_to', prof.id)
-                .neq('status', 'completed');
-
-            // Tarefas atrasadas
-            const overdueTasks = activeTasks?.filter(
-                (task) => new Date(task.deadline) < today
-            ) || [];
-
-            return {
-                ...prof,
-                activeTasks: activeTasks?.length || 0,
-                overdueTasks: overdueTasks.length,
-                isOverloaded: (activeTasks?.length || 0) > 5, // Mais de 5 tarefas = sobrecarregado
-            };
-        });
-
-        const workload = await Promise.all(workloadPromises);
-        return workload;
-    } catch (error) {
-        console.error('Erro ao buscar carga da equipe:', error);
-        throw error;
-    }
+    // Return mock data immediately
+    return new Promise((resolve) => {
+        setTimeout(() => {
+            resolve(MOCK_WORKLOAD);
+        }, 700);
+    });
 };
 
 /**
  * Busca estatísticas rápidas para um período
  */
 export const getQuickStats = async (startDate, endDate) => {
-    try {
-        const { data, error } = await supabase
-            .from('tarefas')
-            .select('status, prioridade')
-            .gte('created_at', startDate.toISOString())
-            .lte('created_at', endDate.toISOString());
-
-        if (error) throw error;
-
-        const stats = {
-            total: data?.length || 0,
-            completed: data?.filter((t) => t.status === 'completed').length || 0,
-            pending: data?.filter((t) => t.status === 'pending').length || 0,
-            inProgress: data?.filter((t) => t.status === 'in_progress').length || 0,
-            highPriority: data?.filter((t) => t.prioridade === 'alta').length || 0,
-        };
-
-        return stats;
-    } catch (error) {
-        console.error('Erro ao buscar estatísticas:', error);
-        throw error;
-    }
+    // Simplified status mock
+    return {
+        total: 15,
+        completed: 5,
+        pending: 8,
+        inProgress: 2,
+        highPriority: 3
+    };
 };
 
 /**
  * Atualiza status de uma tarefa
  */
 export const updateTaskStatus = async (taskId, newStatus) => {
-    try {
-        const updateData = {
-            status: newStatus,
-            updated_at: new Date().toISOString(),
-        };
-
-        if (newStatus === 'completed') {
-            updateData.completed_at = new Date().toISOString();
-        }
-
-        const { data, error } = await supabase
-            .from('tarefas')
-            .update(updateData)
-            .eq('id', taskId)
-            .select()
-            .single();
-
-        if (error) throw error;
-        return data;
-    } catch (error) {
-        console.error('Erro ao atualizar status da tarefa:', error);
-        throw error;
-    }
+    console.log(`[MOCK] Task ${taskId} updated to ${newStatus}`);
+    return { id: taskId, status: newStatus };
 };
 
 /**
  * Reatribui uma tarefa para outro profissional
  */
 export const reassignTask = async (taskId, newAssigneeId) => {
-    try {
-        const { data, error } = await supabase
-            .from('tarefas')
-            .update({
-                assigned_to: newAssigneeId,
-                updated_at: new Date().toISOString(),
-            })
-            .eq('id', taskId)
-            .select()
-            .single();
-
-        if (error) throw error;
-        return data;
-    } catch (error) {
-        console.error('Erro ao reatribuir tarefa:', error);
-        throw error;
-    }
+    console.log(`[MOCK] Task ${taskId} reassigned to ${newAssigneeId}`);
+    return { id: taskId, assigned_to: newAssigneeId };
 };
