@@ -70,7 +70,12 @@ export const AuthProvider = ({ children }) => {
             password,
         });
         if (error) throw error;
-        return data;
+
+        // Carregar perfil do usuário
+        const profileData = await getProfissionalProfile(data.user.id);
+        setProfile(profileData);
+
+        return profileData;
     };
 
     const signOut = async () => {

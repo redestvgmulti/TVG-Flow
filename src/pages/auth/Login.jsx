@@ -19,21 +19,17 @@ const Login = () => {
         setLoading(true);
 
         try {
-            await signIn(email, password);
+            const userProfile = await signIn(email, password);
 
-            // Aguardar um momento para o perfil carregar
-            setTimeout(() => {
-                // Redirecionar baseado no role
-                if (profile?.role === 'admin') {
-                    navigate('/admin');
-                } else {
-                    navigate('/profissional');
-                }
-            }, 500);
+            // Redirecionar baseado no role
+            if (userProfile?.role === 'admin') {
+                navigate('/admin');
+            } else {
+                navigate('/profissional');
+            }
         } catch (err) {
             console.error('Erro no login:', err);
             setError('Email ou senha inválidos');
-        } finally {
             setLoading(false);
         }
     };
