@@ -21,17 +21,19 @@ const Login = () => {
         try {
             const userProfile = await signIn(email, password);
 
-            // Redirecionar baseado no role
+            // Redirect immediately after successful login
+            // Do NOT wait for onAuthStateChange or AuthContext loading state
             if (userProfile?.role === 'admin') {
-                navigate('/admin');
+                navigate('/admin', { replace: true });
             } else {
-                navigate('/profissional');
+                navigate('/profissional', { replace: true });
             }
         } catch (err) {
             console.error('Erro no login:', err);
             setError('Email ou senha inválidos');
-            setLoading(false);
+            setLoading(false); // Only reset loading on error
         }
+        // Note: loading stays true on success because we're navigating away
     };
 
     return (
