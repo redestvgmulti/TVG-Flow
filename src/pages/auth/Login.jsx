@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
+import { supabase } from '../../services/supabase';
+import { getProfissionalProfile } from '../../services/auth';
 import { Button } from '../../components/common/Button';
 import { Card } from '../../components/common/Card';
 import './Login.css';
@@ -10,7 +11,6 @@ const Login = () => {
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const { signIn, profile } = useAuth();
     const navigate = useNavigate();
 
     const handleSubmit = async (e) => {
@@ -19,21 +19,30 @@ const Login = () => {
         setLoading(true);
 
         try {
-            const userProfile = await signIn(email, password);
+            // 1. Autenticar com Supabase
+            const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+                email,
+                password,
+            });
 
-            // Redirect immediately after successful login
-            // Do NOT wait for onAuthStateChange or AuthContext loading state
-            if (userProfile?.role === 'admin') {
+            if (authError) {
+                throw authError;
+            }
+
+            // 2. Buscar perfil do usuário
+            const profile = await getProfissionalProfile(authData.user.id);
+
+            // 3. Redirecionar baseado no role
+            if (profile?.role === 'admin') {
                 navigate('/admin', { replace: true });
             } else {
                 navigate('/profissional', { replace: true });
             }
         } catch (err) {
             console.error('Erro no login:', err);
-            setError('Email ou senha inválidos');
-            setLoading(false); // Only reset loading on error
+            setError(err.message || 'Email ou senha inválidos');
+            setLoading(false);
         }
-        // Note: loading stays true on success because we're navigating away
     };
 
     return (
@@ -65,6 +74,7 @@ const Login = () => {
                                 placeholder="seu@email.com"
                                 required
                                 autoComplete="email"
+                                disabled={loading}
                             />
                         </div>
 
@@ -81,6 +91,7 @@ const Login = () => {
                                 placeholder="••••••••"
                                 required
                                 autoComplete="current-password"
+                                disabled={loading}
                             />
                         </div>
 
