@@ -17,7 +17,13 @@ import Calendario from '../pages/admin/Calendario';
 import ProfissionalDashboard from '../pages/profissional/Dashboard';
 import MinhasTarefas from '../pages/profissional/MinhasTarefas';
 import ProfissionalCalendario from '../pages/profissional/Calendario';
+// Profissional Pages
+import ProfissionalDashboard from '../pages/profissional/Dashboard';
+import MinhasTarefas from '../pages/profissional/MinhasTarefas';
+import ProfissionalCalendario from '../pages/profissional/Calendario';
 
+// Common Pages
+import Profile from '../pages/common/Profile';
 export const AppRoutes = () => {
     return (
         <Routes>
@@ -96,6 +102,16 @@ export const AppRoutes = () => {
                 element={
                     <ProtectedRoute>
                         <ProfissionalCalendario />
+                    </ProtectedRoute>
+                }
+            />
+
+            {/* Rota Comum - Perfil */}
+            <Route
+                path="/perfil"
+                element={
+                    <ProtectedRoute>
+                        <Profile />
                     </ProtectedRoute>
                 }
             />
