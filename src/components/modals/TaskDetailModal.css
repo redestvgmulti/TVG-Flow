@@ -135,6 +135,45 @@
     box-shadow: 0 0 0 3px var(--primary-100);
 }
 
+.task-detail-input {
+    padding: var(--spacing-2) var(--spacing-3);
+    border: 1px solid var(--neutral-300);
+    border-radius: var(--radius-lg);
+    font-size: var(--text-base);
+    color: var(--color-text);
+    background: white;
+    width: 100%;
+    transition: all var(--transition-base);
+}
+
+.task-detail-input:hover {
+    border-color: var(--primary-400);
+}
+
+.task-detail-input:focus {
+    outline: none;
+    border-color: var(--primary-600);
+    box-shadow: 0 0 0 3px var(--primary-100);
+}
+
+.task-detail-link {
+    color: var(--primary-600);
+    text-decoration: none;
+    font-size: var(--text-base);
+    word-break: break-all;
+    transition: color var(--transition-base);
+}
+
+.task-detail-link:hover {
+    color: var(--primary-700);
+    text-decoration: underline;
+}
+
+.task-detail-empty {
+    color: var(--color-text-secondary);
+    font-style: italic;
+}
+
 .task-detail-meta {
     display: flex;
     align-items: center;

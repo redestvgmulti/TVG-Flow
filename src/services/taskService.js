@@ -16,6 +16,8 @@ export const createTask = async (taskData) => {
             departamento_id: taskData.departamento_id,
             prioridade: taskData.prioridade,
             deadline: taskData.deadline,
+            research_link: taskData.research_link || null,
+            final_link: taskData.final_link || null,
             status: 'pendente',
         }])
         .select(`
@@ -128,72 +130,6 @@ export const getDepartments = async () => {
     return data;
 };
 
-// ==================== Arquivos ====================
-
-/**
- * Upload de arquivo
- */
-export const uploadTaskFile = async (taskId, file) => {
-    // Upload para Supabase Storage
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${taskId}/${Date.now()}.${fileExt}`;
-
-    const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('task-files')
-        .upload(fileName, file);
-
-    if (uploadError) throw uploadError;
-
-    // Registrar no banco
-    const { data, error } = await supabase
-        .from('arquivos_tarefas')
-        .insert([{
-            tarefa_id: taskId,
-            nome_arquivo: file.name,
-            caminho_storage: uploadData.path,
-            tamanho_bytes: file.size,
-        }])
-        .select()
-        .single();
-
-    if (error) throw error;
-    return data;
-};
-
-/**
- * Buscar arquivos da tarefa
- */
-export const getTaskFiles = async (taskId) => {
-    const { data, error } = await supabase
-        .from('arquivos_tarefas')
-        .select('*')
-        .eq('tarefa_id', taskId)
-        .order('created_at', { ascending: false });
-
-    if (error) throw error;
-    return data;
-};
-
-/**
- * Deletar arquivo
- */
-export const deleteTaskFile = async (fileId, storagePath) => {
-    // Deletar do storage
-    const { error: storageError } = await supabase.storage
-        .from('task-files')
-        .remove([storagePath]);
-
-    if (storageError) throw storageError;
-
-    // Deletar do banco
-    const { error } = await supabase
-        .from('arquivos_tarefas')
-        .delete()
-        .eq('id', fileId);
-
-    if (error) throw error;
-};
-
 // ==================== Validações ====================
 
 /**
@@ -229,6 +165,17 @@ export const validateTaskData = (taskData) => {
         if (deadlineDate < new Date()) {
             errors.deadline = 'Deadline não pode ser no passado';
         }
+    }
+
+    // Validar URLs se fornecidas
+    const urlPattern = /^https?:\/\/.+/i;
+
+    if (taskData.research_link && !urlPattern.test(taskData.research_link)) {
+        errors.research_link = 'Link de pesquisa deve ser uma URL válida';
+    }
+
+    if (taskData.final_link && !urlPattern.test(taskData.final_link)) {
+        errors.final_link = 'Link final deve ser uma URL válida';
     }
 
     return {

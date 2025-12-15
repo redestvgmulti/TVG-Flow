@@ -14,6 +14,8 @@ const TaskDetailModal = ({ isOpen, task, onClose, onUpdate, onDelete }) => {
     const [formData, setFormData] = useState({
         status: '',
         profissional_id: '',
+        research_link: '',
+        final_link: '',
     });
     const [error, setError] = useState('');
 
@@ -25,6 +27,8 @@ const TaskDetailModal = ({ isOpen, task, onClose, onUpdate, onDelete }) => {
                 setFormData({
                     status: task.status,
                     profissional_id: task.profissional_id,
+                    research_link: task.research_link || '',
+                    final_link: task.final_link || '',
                 });
             }
         }
@@ -62,6 +66,14 @@ const TaskDetailModal = ({ isOpen, task, onClose, onUpdate, onDelete }) => {
 
             if (formData.profissional_id !== task.profissional_id) {
                 updates.profissional_id = formData.profissional_id;
+            }
+
+            if (formData.research_link !== (task.research_link || '')) {
+                updates.research_link = formData.research_link || null;
+            }
+
+            if (formData.final_link !== (task.final_link || '')) {
+                updates.final_link = formData.final_link || null;
             }
 
             if (Object.keys(updates).length > 0) {
@@ -144,6 +156,8 @@ const TaskDetailModal = ({ isOpen, task, onClose, onUpdate, onDelete }) => {
                             setFormData({
                                 status: task.status,
                                 profissional_id: task.profissional_id,
+                                research_link: task.research_link || '',
+                                final_link: task.final_link || '',
                             });
                             setError('');
                         }}
@@ -277,6 +291,57 @@ const TaskDetailModal = ({ isOpen, task, onClose, onUpdate, onDelete }) => {
                             </div>
                         </div>
                     )}
+
+                    {/* Links */}
+                    <div className="task-detail-row">
+                        <div className="task-detail-field">
+                            <label>Link de Pesquisa</label>
+                            {isEditing ? (
+                                <input
+                                    type="url"
+                                    value={formData.research_link}
+                                    onChange={(e) => setFormData({ ...formData, research_link: e.target.value })}
+                                    placeholder="https://..."
+                                    className="task-detail-input"
+                                />
+                            ) : task.research_link ? (
+                                <a
+                                    href={task.research_link}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="task-detail-link"
+                                >
+                                    {task.research_link}
+                                </a>
+                            ) : (
+                                <div className="task-detail-value task-detail-empty">Nenhum link</div>
+                            )}
+                        </div>
+
+                        <div className="task-detail-field">
+                            <label>Link Final</label>
+                            {isEditing ? (
+                                <input
+                                    type="url"
+                                    value={formData.final_link}
+                                    onChange={(e) => setFormData({ ...formData, final_link: e.target.value })}
+                                    placeholder="https://..."
+                                    className="task-detail-input"
+                                />
+                            ) : task.final_link ? (
+                                <a
+                                    href={task.final_link}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="task-detail-link"
+                                >
+                                    {task.final_link}
+                                </a>
+                            ) : (
+                                <div className="task-detail-value task-detail-empty">Nenhum link</div>
+                            )}
+                        </div>
+                    </div>
 
                     {/* Datas de criação e atualização */}
                     <div className="task-detail-meta">
