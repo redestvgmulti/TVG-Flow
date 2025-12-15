@@ -1,11 +1,14 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, lazy, Suspense } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { useDashboardData, useRealtimeDashboard } from '../../hooks/useDashboard';
+import { useDashboardData, useRealtimeDashboard, useModal } from '../../hooks/useDashboard';
 import DashboardHeader from '../../components/dashboard/DashboardHeader';
 import KPICard from '../../components/dashboard/KPICard';
 import TaskCard from '../../components/dashboard/TaskCard';
 import TeamWorkload from '../../components/dashboard/TeamWorkload';
 import './Dashboard.css';
+
+// Lazy load modals
+const TaskDetailModal = lazy(() => import('../../components/modals/TaskDetailModal'));
 
 const AdminDashboard = () => {
     const { profile } = useAuth();
@@ -19,6 +22,9 @@ const AdminDashboard = () => {
         refresh,
     } = useDashboardData();
 
+    // Modal state
+    const { isOpen: isTaskDetailOpen, data: selectedTask, open: openTaskDetail, close: closeTaskDetail } = useModal();
+
     // Real-time updates
     useRealtimeDashboard(
         useCallback(() => {
@@ -29,7 +35,17 @@ const AdminDashboard = () => {
 
     const handleTaskClick = (task) => {
         console.log('Task clicked:', task);
-        // TODO: Abrir modal de detalhes da tarefa
+        openTaskDetail(task);
+    };
+
+    const handleTaskUpdate = (updatedTask) => {
+        console.log('Task updated:', updatedTask);
+        refresh(); // Refresh dashboard data
+    };
+
+    const handleTaskDelete = (taskId) => {
+        console.log('Task deleted:', taskId);
+        refresh(); // Refresh dashboard data
     };
 
     const handleMemberClick = (member) => {
@@ -182,6 +198,19 @@ const AdminDashboard = () => {
                     +
                 </button>
             </div>
+
+            {/* Modals */}
+            <Suspense fallback={null}>
+                {isTaskDetailOpen && (
+                    <TaskDetailModal
+                        isOpen={isTaskDetailOpen}
+                        task={selectedTask}
+                        onClose={closeTaskDetail}
+                        onUpdate={handleTaskUpdate}
+                        onDelete={handleTaskDelete}
+                    />
+                )}
+            </Suspense>
         </div>
     );
 };

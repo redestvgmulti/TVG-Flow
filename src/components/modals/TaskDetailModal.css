@@ -1,0 +1,220 @@
+.task-detail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-5);
+}
+
+.task-detail-error {
+    padding: var(--spacing-3);
+    background: var(--danger-50);
+    border: 1px solid var(--danger-200);
+    border-radius: var(--radius-lg);
+    color: var(--danger-700);
+    font-size: var(--text-sm);
+}
+
+.task-detail-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-4);
+}
+
+@media (max-width: 640px) {
+    .task-detail-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+.task-detail-field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-2);
+}
+
+.task-detail-field label {
+    font-size: var(--text-sm);
+    font-weight: var(--font-semibold);
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.task-detail-value {
+    font-size: var(--text-base);
+    color: var(--color-text);
+}
+
+.task-detail-relative {
+    display: block;
+    font-size: var(--text-sm);
+    color: var(--color-text-secondary);
+    margin-top: 4px;
+}
+
+.task-detail-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: var(--radius-full);
+    font-size: var(--text-sm);
+    font-weight: var(--font-semibold);
+    width: fit-content;
+}
+
+/* Status badges */
+.status-pendente {
+    background: var(--warning-100);
+    color: var(--warning-700);
+}
+
+.status-em_andamento {
+    background: var(--primary-100);
+    color: var(--primary-700);
+}
+
+.status-concluida {
+    background: var(--success-100);
+    color: var(--success-700);
+}
+
+/* Priority badges */
+.priority-alta {
+    background: var(--danger-100);
+    color: var(--danger-700);
+}
+
+.priority-media {
+    background: var(--warning-100);
+    color: var(--warning-700);
+}
+
+.priority-baixa {
+    background: var(--success-100);
+    color: var(--success-700);
+}
+
+.task-detail-department {
+    display: inline-flex;
+    padding: 6px 12px;
+    border-radius: var(--radius-full);
+    font-size: var(--text-sm);
+    font-weight: var(--font-semibold);
+    border: 1px solid;
+    width: fit-content;
+}
+
+.task-detail-description {
+    padding: var(--spacing-4);
+    background: var(--neutral-50);
+    border-radius: var(--radius-lg);
+    font-size: var(--text-base);
+    color: var(--color-text);
+    line-height: 1.6;
+    white-space: pre-wrap;
+}
+
+.task-detail-select {
+    padding: var(--spacing-2) var(--spacing-3);
+    border: 1px solid var(--neutral-300);
+    border-radius: var(--radius-lg);
+    font-size: var(--text-base);
+    color: var(--color-text);
+    background: white;
+    cursor: pointer;
+    transition: all var(--transition-base);
+}
+
+.task-detail-select:hover {
+    border-color: var(--primary-400);
+}
+
+.task-detail-select:focus {
+    outline: none;
+    border-color: var(--primary-600);
+    box-shadow: 0 0 0 3px var(--primary-100);
+}
+
+.task-detail-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    padding-top: var(--spacing-4);
+    border-top: 1px solid var(--neutral-200);
+    font-size: var(--text-sm);
+    color: var(--color-text-secondary);
+}
+
+.task-separator {
+    color: var(--neutral-400);
+}
+
+/* Buttons */
+.btn-primary,
+.btn-secondary,
+.btn-delete,
+.btn-danger {
+    padding: var(--spacing-2) var(--spacing-4);
+    border-radius: var(--radius-lg);
+    font-size: var(--text-sm);
+    font-weight: var(--font-semibold);
+    cursor: pointer;
+    transition: all var(--transition-base);
+    border: none;
+    min-width: 80px;
+}
+
+.btn-primary {
+    background: var(--primary-600);
+    color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: var(--primary-700);
+}
+
+.btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-secondary {
+    background: white;
+    color: var(--color-text);
+    border: 1px solid var(--neutral-300);
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background: var(--neutral-50);
+    border-color: var(--neutral-400);
+}
+
+.btn-delete {
+    background: transparent;
+    color: var(--danger-600);
+    margin-right: auto;
+}
+
+.btn-delete:hover {
+    background: var(--danger-50);
+}
+
+.btn-danger {
+    background: var(--danger-600);
+    color: white;
+}
+
+.btn-danger:hover:not(:disabled) {
+    background: var(--danger-700);
+}
+
+.btn-danger:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.text-danger {
+    color: var(--danger-600);
+    font-size: var(--text-sm);
+    margin: var(--spacing-2) 0 0 0;
+}
