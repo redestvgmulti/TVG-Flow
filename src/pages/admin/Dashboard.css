@@ -1,25 +1,28 @@
 .admin-dashboard {
     min-height: 100vh;
     min-height: 100dvh;
-    background: var(--color-bg-secondary);
-    padding-bottom: calc(64px + 16px + env(safe-area-inset-bottom));
+    background: var(--color-bg);
+    padding-bottom: calc(64px + var(--spacing-4) + env(safe-area-inset-bottom));
 }
 
 /* KPI Section */
 .kpi-section {
     padding: var(--spacing-4) 0;
-    background: white;
-    box-shadow: var(--shadow-sm);
+    /* Removed solid background to allow dashboard background to show through if desired, 
+       or use glass effect. For now, keeping clean but using vars */
+    background: transparent;
     margin-bottom: var(--spacing-4);
 }
 
 .kpi-cards-container {
     display: flex;
-    gap: var(--spacing-3);
-    padding: 0 var(--container-padding);
+    gap: var(--spacing-4);
+    padding: 0 var(--spacing-4);
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
+    /* Add padding bottom to account for shadows */
+    padding-bottom: var(--spacing-4);
 }
 
 .kpi-cards-container::-webkit-scrollbar {
@@ -28,15 +31,18 @@
 
 /* Dashboard Sections */
 .dashboard-section {
-    padding: 0 var(--container-padding);
-    margin-bottom: var(--section-gap);
+    padding: 0 var(--spacing-4);
+    margin-bottom: var(--spacing-6);
 }
 
 .overdue-section {
-    background: var(--danger-50);
-    padding: var(--spacing-4) var(--container-padding);
-    margin: 0 0 var(--section-gap) 0;
-    border-radius: 0;
+    /* Glassmorphism for overdue section warning */
+    background: rgba(239, 68, 68, 0.05);
+    border-top: 1px solid rgba(239, 68, 68, 0.1);
+    border-bottom: 1px solid rgba(239, 68, 68, 0.1);
+    backdrop-filter: blur(8px);
+    padding: var(--spacing-4);
+    margin: 0 0 var(--spacing-6) 0;
 }
 
 .section-header {
@@ -49,16 +55,17 @@
 .section-title {
     font-size: var(--text-lg);
     font-weight: var(--font-bold);
-    color: var(--color-text);
+    color: var(--color-text-primary);
     margin: 0;
+    letter-spacing: -0.01em;
 }
 
 .section-count {
-    background: var(--primary-100);
-    color: var(--primary-700);
-    font-size: var(--text-sm);
+    background: var(--color-primary-soft);
+    color: var(--color-primary);
+    font-size: var(--text-xs);
     font-weight: var(--font-bold);
-    padding: 4px 12px;
+    padding: 2px 10px;
     border-radius: var(--radius-full);
 }
 
@@ -66,6 +73,7 @@
 .tasks-list {
     display: flex;
     flex-direction: column;
+    gap: var(--spacing-3);
 }
 
 /* Loading State */
@@ -74,15 +82,15 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: var(--spacing-8) var(--spacing-4);
+    padding: var(--spacing-8);
     gap: var(--spacing-3);
 }
 
 .loading-spinner {
-    width: 40px;
-    height: 40px;
-    border: 4px solid var(--primary-100);
-    border-top-color: var(--primary-600);
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--color-primary-soft);
+    border-top-color: var(--color-primary);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
 }
@@ -94,7 +102,7 @@
 }
 
 .tasks-loading p {
-    color: var(--color-text-secondary);
+    color: var(--color-text-tertiary);
     font-size: var(--text-sm);
     margin: 0;
 }
@@ -105,74 +113,79 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: var(--spacing-8) var(--spacing-4);
-    background: white;
-    border-radius: var(--radius-xl);
+    padding: var(--spacing-12) var(--spacing-6);
+    background: var(--color-surface);
+    border: 1px dashed var(--color-text-tertiary);
+    border-radius: var(--radius-lg);
     text-align: center;
+    /* Optional glass effect for empty state */
+    background: rgba(255, 255, 255, 0.5);
 }
 
 .empty-icon {
-    font-size: 48px;
+    font-size: 40px;
     margin-bottom: var(--spacing-3);
+    opacity: 0.5;
 }
 
 .empty-state p {
     color: var(--color-text-secondary);
     margin: 0;
+    font-size: var(--text-sm);
 }
 
 /* View All Button */
 .btn-view-all {
     width: 100%;
     padding: var(--spacing-3);
-    background: white;
-    border: 2px dashed var(--danger-300);
+    background: transparent;
+    border: 1px dashed var(--color-text-secondary);
     border-radius: var(--radius-lg);
-    color: var(--danger-700);
+    color: var(--color-text-secondary);
     font-size: var(--text-sm);
-    font-weight: var(--font-semibold);
+    font-weight: var(--font-medium);
     cursor: pointer;
-    transition: all var(--transition-base);
+    transition: all 0.2s ease;
     margin-top: var(--spacing-2);
 }
 
 .btn-view-all:hover {
-    background: var(--danger-50);
-    border-color: var(--danger-400);
+    background: var(--color-surface);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
 }
 
 .btn-view-all:active {
-    transform: scale(0.98);
+    transform: scale(0.99);
 }
 
 /* Quick Actions FAB */
 .quick-actions {
     position: fixed;
-    bottom: calc(64px + 16px + env(safe-area-inset-bottom));
-    right: 16px;
-    z-index: var(--z-fixed);
+    bottom: calc(64px + var(--spacing-4) + env(safe-area-inset-bottom));
+    right: var(--spacing-4);
+    z-index: 100;
 }
 
 .fab {
     width: 56px;
     height: 56px;
     border-radius: 50%;
-    background: linear-gradient(135deg, var(--primary-600), var(--primary-700));
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
     color: white;
     border: none;
-    box-shadow: var(--shadow-xl);
-    font-size: 28px;
-    font-weight: var(--font-light);
-    cursor: pointer;
-    transition: all var(--transition-base);
+    box-shadow: 0 8px 20px rgba(99, 102, 241, 0.4);
+    font-size: 24px;
     display: flex;
     align-items: center;
     justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 .fab:hover {
-    transform: scale(1.05);
-    box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+    transform: scale(1.1);
+    box-shadow: 0 12px 24px rgba(99, 102, 241, 0.5);
 }
 
 .fab:active {
@@ -191,58 +204,35 @@
 }
 
 .dashboard-error h2 {
-    color: var(--danger-600);
+    color: var(--color-danger);
     margin-bottom: var(--spacing-3);
+    font-size: var(--text-xl);
 }
 
 .dashboard-error p {
     color: var(--color-text-secondary);
-    margin-bottom: var(--spacing-4);
-}
-
-.btn-retry {
-    padding: var(--spacing-3) var(--spacing-6);
-    background: var(--primary-600);
-    color: white;
-    border: none;
-    border-radius: var(--radius-lg);
-    font-size: var(--text-base);
-    font-weight: var(--font-semibold);
-    cursor: pointer;
-    transition: all var(--transition-base);
-}
-
-.btn-retry:hover {
-    background: var(--primary-700);
-}
-
-.btn-retry:active {
-    transform: scale(0.95);
+    margin-bottom: var(--spacing-6);
 }
 
 /* Responsive */
 @media (max-width: 480px) {
     .kpi-section {
-        padding: var(--spacing-3) 0;
-    }
-
-    .section-title {
-        font-size: var(--text-base);
+        padding: var(--spacing-2) 0;
     }
 
     .fab {
         width: 52px;
         height: 52px;
-        font-size: 24px;
     }
 }
 
 @media (min-width: 769px) {
     .admin-dashboard {
-        padding-bottom: var(--spacing-6);
+        padding-bottom: var(--spacing-8);
     }
 
     .quick-actions {
-        bottom: var(--spacing-6);
+        bottom: var(--spacing-8);
+        right: var(--spacing-8);
     }
 }

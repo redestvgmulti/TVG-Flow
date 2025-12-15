@@ -1,16 +1,36 @@
 .dashboard-header {
-    background: linear-gradient(135deg, var(--tvg-purple-light) 0%, var(--tvg-purple-dark) 100%);
+    background: var(--color-surface);
+    /* Alternative: use primary gradient but softer */
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
     color: white;
-    padding: var(--spacing-6) var(--container-padding);
+    padding: var(--spacing-6) var(--spacing-4);
     padding-top: calc(var(--spacing-6) + env(safe-area-inset-top));
     box-shadow: var(--shadow-md);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    /* Glass effect on the header might be nice if content scrolls behind it */
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+/* Dark mode header override */
+@media (prefers-color-scheme: dark) {
+    .dashboard-header {
+        background: rgba(30, 41, 59, 0.85);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
 }
 
 .dashboard-header-content {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
+    align-items: center;
     gap: var(--spacing-4);
+    max-width: 1200px;
+    margin: 0 auto;
 }
 
 .dashboard-greeting-section {
@@ -20,15 +40,18 @@
 .dashboard-greeting {
     font-size: var(--text-2xl);
     font-weight: var(--font-bold);
-    margin: 0 0 var(--spacing-1) 0;
+    margin: 0 0 2px 0;
     line-height: 1.2;
+    color: var(--color-text-primary);
+    letter-spacing: -0.02em;
 }
 
 .dashboard-date {
     font-size: var(--text-sm);
     margin: 0;
-    opacity: 0.9;
+    color: var(--color-text-secondary);
     text-transform: capitalize;
+    font-weight: var(--font-medium);
 }
 
 /* Notifications */
@@ -38,23 +61,30 @@
 
 .notification-button {
     position: relative;
-    background: rgba(255, 255, 255, 0.2);
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    background: var(--color-surface);
+    border: 1px solid var(--glass-border);
     border-radius: 50%;
-    width: 48px;
-    height: 48px;
+    width: 44px;
+    height: 44px;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: all var(--transition-fast);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    transition: all 0.2s ease;
+    box-shadow: var(--shadow-sm);
+    color: var(--color-text-secondary);
+}
+
+.notification-button:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+    color: var(--color-primary);
+    border-color: var(--color-primary-soft);
 }
 
 .notification-button:active {
-    transform: scale(0.9);
-    background: rgba(255, 255, 255, 0.3);
+    transform: scale(0.95);
+    background: var(--color-bg);
 }
 
 .notification-icon {
@@ -63,26 +93,27 @@
 
 .notification-badge {
     position: absolute;
-    top: -4px;
-    right: -4px;
-    background: var(--danger-600);
+    top: -2px;
+    right: -2px;
+    background: var(--color-danger);
     color: white;
-    font-size: var(--text-xs);
+    font-size: 10px;
     font-weight: var(--font-bold);
-    min-width: 20px;
-    height: 20px;
+    min-width: 18px;
+    height: 18px;
     border-radius: var(--radius-full);
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 0 4px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
+    border: 2px solid var(--color-surface);
 }
 
 /* Responsive */
 @media (max-width: 480px) {
     .dashboard-header {
-        padding: var(--spacing-4) var(--container-padding);
+        padding: var(--spacing-4);
         padding-top: calc(var(--spacing-4) + env(safe-area-inset-top));
     }
 
@@ -95,7 +126,7 @@
     }
 
     .notification-button {
-        width: 44px;
-        height: 44px;
+        width: 40px;
+        height: 40px;
     }
 }
