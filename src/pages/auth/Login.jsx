@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../services/supabase';
-import { getProfissionalProfile } from '../../services/auth';
+import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../../components/common/Button';
 import { Card } from '../../components/common/Card';
 import './Login.css';
@@ -13,36 +12,38 @@ const Login = () => {
     const [error, setError] = useState('');
     const navigate = useNavigate();
 
+    const { signIn } = useAuth();
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
         setLoading(true);
 
         try {
-            // 1. Autenticar com Supabase
-            const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-                email,
-                password,
-            });
+            console.log('Iniciando login...');
+            // 1. Authenticate via Context (handles auth + profile fetch)
+            const profile = await signIn(email, password);
+            console.log('Login sucesso, perfil:', profile);
 
-            if (authError) {
-                throw authError;
-            }
-
-            // 2. Buscar perfil do usuário
-            const profile = await getProfissionalProfile(authData.user.id);
-
-            // 3. Redirecionar baseado no role
+            // 2. Redirect based on role
             if (profile?.role === 'admin') {
+                console.log('Redirecionando para /admin');
                 navigate('/admin', { replace: true });
             } else {
+                console.log('Redirecionando para /profissional');
                 navigate('/profissional', { replace: true });
             }
         } catch (err) {
             console.error('Erro no login:', err);
-            setError(err.message || 'Email ou senha inválidos');
+            // Handle expected Supabase errors
+            if (err.message.includes('JSON object requested, multiple (or no) rows returned')) {
+                setError('Usuário sem perfil profissional associado. Contate o suporte.');
+            } else {
+                setError(err.message || 'Falha na autenticação');
+            }
             setLoading(false);
         }
+        // Note: We do NOT set loading(false) on success to prevent UI flicker before redirect
     };
 
     return (

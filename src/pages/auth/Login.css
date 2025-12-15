@@ -59,15 +59,16 @@
 .login-title {
     font-size: var(--text-2xl);
     font-weight: var(--font-bold);
-    color: var(--color-text-primary);
-    /* Dark text */
+    color: #0f172a !important;
+    /* Force dark text explicitly to handle system dark mode */
     margin-bottom: var(--spacing-2);
     letter-spacing: -0.02em;
 }
 
 .login-subtitle {
     font-size: var(--text-sm);
-    color: var(--color-text-secondary);
+    color: #475569 !important;
+    /* Force slate-600 */
     font-weight: var(--font-regular);
 }
 
@@ -113,7 +114,8 @@
 .form-label {
     font-size: var(--text-xs);
     font-weight: var(--font-semibold);
-    color: var(--color-text-secondary);
+    color: #475569 !important;
+    /* Force dark label */
     text-transform: uppercase;
     letter-spacing: 0.05em;
     margin-left: 2px;
@@ -128,7 +130,8 @@
     border: 1px solid var(--color-border, #e2e8f0);
     border-radius: var(--radius-md);
     background: white;
-    color: var(--color-text-primary);
+    color: #0f172a !important;
+    /* Force dark input text */
     transition: all 0.2s ease;
     box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
 }
