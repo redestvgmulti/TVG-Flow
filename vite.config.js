@@ -47,7 +47,7 @@ export default defineConfig({
         ]
       },
       devOptions: {
-        enabled: true
+        enabled: false // DESABILITADO: SW causa problemas de cache em dev
       }
     })
   ],
