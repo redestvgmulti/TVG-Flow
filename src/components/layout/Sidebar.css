@@ -1,9 +1,10 @@
-/* Clean Apple-like Sidebar */
+/* Premium Apple-like Sidebar */
 .sidebar {
     width: 250px;
     height: 100vh;
     background-color: #ffffff;
-    border-right: 1px solid var(--border-subtle);
+    box-shadow: inset -1px 0 0 #e5e7eb;
+    /* Premium subtle divider */
     /* #e5e7eb */
     display: flex;
     flex-direction: column;
@@ -40,7 +41,8 @@
 .nav-group {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
+    /* Increased spacing */
 }
 
 .nav-label {
@@ -51,15 +53,17 @@
     font-weight: 600;
     letter-spacing: 0.05em;
     padding: 0 var(--spacing-3);
-    margin-bottom: var(--spacing-1);
+    margin-bottom: var(--spacing-2);
 }
 
 .sidebar-link {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 10px 12px;
-    border-radius: 10px;
+    padding: 10px 14px;
+    /* More breathing room */
+    border-radius: 12px;
+    /* Softer radius */
     /* Soft radius */
     color: var(--text-secondary);
     font-size: 14px;
@@ -76,10 +80,13 @@
     background-color: var(--bg-muted);
     /* #f5f6fa */
     color: var(--text-primary);
+    transform: translateX(2px);
+    /* Subtle hover lift */
 }
 
 .sidebar-link.active {
-    background-color: var(--bg-muted);
+    background: rgba(99, 102, 241, 0.08);
+    /* Brand soft tint */
     color: var(--color-primary);
     /* Brand highlight for active text only */
     font-weight: 600;
@@ -87,10 +94,11 @@
 
 /* Subtle indicator line for active state (optional, cleaner without) */
 .sidebar-link svg {
-    opacity: 0.7;
+    opacity: 0.6;
     transition: opacity 0.2s;
 }
 
+.sidebar-link:hover svg,
 .sidebar-link.active svg {
     opacity: 1;
     color: var(--color-primary);
@@ -104,6 +112,7 @@
 .logout-btn:hover {
     background-color: var(--color-danger-soft);
     color: var(--color-danger);
+    transform: none;
 }
 
 /* Mobile Sidebar logic handled via Layout/BottomNav, hide desktop sidebar */
