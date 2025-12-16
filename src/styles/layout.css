@@ -1,15 +1,37 @@
 /* =========================================
-   LAYOUT & STRUCTURE
-   Source: Layout.css, Sidebar.css, Dashboard.css
+   STRUCTURAL LAYOUT
+   Rule: NO colors, NO shadows, NO borders.
+   Focus: Grid, Flex, Positioning, Spacing.
    ========================================= */
 
 /* --- APP SHELL --- */
 .app-layout {
     display: flex;
     min-height: 100vh;
-    /* Background handled in base.css or tokens */
+    width: 100%;
 }
 
+.main-content {
+    flex: 1;
+    margin-left: 250px;
+    /* Width of Sidebar */
+    padding: var(--space-lg);
+    min-height: 100vh;
+    transition: margin-left var(--transition-smooth);
+    width: 100%;
+    /* Ensure full width availability */
+}
+
+.content-wrapper {
+    max-width: 1100px;
+    /* Optimized reading width */
+    margin: 0 auto;
+    width: 100%;
+    padding-bottom: 80px;
+    /* Bottom spacing */
+}
+
+/* --- SIDEBAR STRUCTURE --- */
 .sidebar {
     width: 250px;
     height: 100vh;
@@ -19,99 +41,113 @@
     z-index: 50;
     display: flex;
     flex-direction: column;
+    padding-top: var(--space-lg);
+    padding-bottom: var(--space-lg);
     overflow-y: auto;
-    /* Visuals like background/border moved to tokens/components or stripped for now */
-    background: #ffffff;
-    /* Keeping basic white for legibility */
-    border-right: 1px solid #e5e5e5;
 }
 
-.main-content {
-    flex: 1;
-    margin-left: 250px;
-    /* Sidebar width */
-    padding: 24px;
-    min-height: 100vh;
-    transition: margin-left 0.3s ease;
-}
-
-.content-wrapper {
-    max-width: 1200px;
-    margin: 0 auto;
-    width: 100%;
-}
-
-/* --- SIDEBAR STRUCTURE --- */
 .sidebar-header {
-    padding: 16px;
-    margin-bottom: 32px;
+    padding: 0 var(--space-lg);
+    margin-bottom: var(--space-xl);
 }
 
 .sidebar-content {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 24px;
-    padding: 0 16px;
+    gap: var(--space-lg);
+    padding: 0 var(--space-md);
 }
 
 .nav-group {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 4px;
+    /* Tighter nav items */
 }
 
-.sidebar-link {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 14px;
-    width: 100%;
-    /* Visuals handled in components.css or tokens later */
-}
-
-/* --- DASHBOARD GRID LAYOUT --- */
+/* --- DASHBOARD GRID --- */
 .admin-dashboard {
     display: flex;
     flex-direction: column;
-    gap: 32px;
-    /* var(--spacing-8) */
-    position: relative;
-    padding-bottom: 80px;
+    gap: var(--space-xl);
 }
 
 .kpi-cards-container {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 20px;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: var(--space-lg);
 }
 
 .tasks-list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--space-md);
 }
 
-/* --- RESPONSIVENESS --- */
+.team-members-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: var(--space-md);
+}
 
-/* Tablet/Mobile: Hide Sidebar, Adjust Content */
+/* --- RESPONSIVE BREAKPOINTS --- */
+
+/* Tablet & Mobile < 768px */
 @media (max-width: 768px) {
     .sidebar {
         display: none;
+        /* Hide Sidebar on mobile */
     }
 
     .main-content {
         margin-left: 0;
-        padding-bottom: 80px;
-        /* Space for BottomNav */
+        padding: var(--space-md);
+        padding-bottom: 90px;
+        /* Space for BottomNav + FAB */
+    }
+
+    /* Bottom Nav Structure */
+    .bottom-nav {
+        display: flex;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 64px;
+        z-index: 900;
+        justify-content: space-around;
+        align-items: center;
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    .nav-item {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
     }
 }
 
-/* Mobile Dashboard Adjustments */
+/* Base Desktop: Hide Bottom Nav */
+@media (min-width: 769px) {
+    .bottom-nav {
+        display: none;
+    }
+}
+
+/* Mobile < 480px */
 @media (max-width: 480px) {
     .kpi-cards-container {
         grid-template-columns: repeat(2, 1fr);
-        /* 2 Columns on mobile */
-        gap: 12px;
+        /* Force 2-col on small screens */
+        gap: var(--space-sm);
+    }
+
+    .team-members-list {
+        grid-template-columns: 1fr;
+        /* 1-col for team cards */
     }
 }

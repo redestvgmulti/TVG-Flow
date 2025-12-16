@@ -1,8 +1,96 @@
-/* Neutral Base Styles */
+/* =========================================
+   BASE STYLES (GLOBAL)
+   Rules: Typography, Reset enhancements, Inputs
+   ========================================= */
+
 body {
-    background-color: #f5f5f5;
-    /* Light Gray Neutral */
-    color: #333333;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    font-size: 16px;
+    background-color: var(--color-bg-app);
+    color: var(--color-text-primary);
+    font-family: var(--font-stack);
+    font-size: var(--text-base);
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Headings */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    color: var(--color-text-primary);
+    font-weight: var(--weight-semibold);
+    letter-spacing: -0.015em;
+    margin-bottom: var(--space-2);
+}
+
+h1 {
+    font-size: var(--text-3xl);
+    letter-spacing: -0.025em;
+}
+
+h2 {
+    font-size: var(--text-2xl);
+}
+
+h3 {
+    font-size: var(--text-xl);
+}
+
+/* Links */
+a {
+    color: var(--color-primary);
+    text-decoration: none;
+    font-weight: var(--weight-medium);
+    transition: opacity var(--ease-default);
+}
+
+a:hover {
+    opacity: 0.8;
+}
+
+/* Paragraphs */
+p {
+    margin-bottom: var(--space-3);
+    color: var(--color-text-secondary);
+}
+
+/* --- FORM ELEMENTS (Global Normalization) --- */
+input,
+textarea,
+select {
+    font-family: inherit;
+    font-size: var(--text-base);
+    color: var(--color-text-primary);
+    background-color: var(--color-bg-subtle);
+    /* Soft gray bg */
+    border: 1px solid transparent;
+    /* No border by default */
+    border-radius: var(--radius-md);
+    padding: 10px 12px;
+    width: 100%;
+    transition: all var(--ease-default);
+    outline: none;
+    -webkit-appearance: none;
+}
+
+input:hover {
+    background-color: #eaeaec;
+    /* Slightly darker on hover */
+}
+
+input:focus {
+    background-color: var(--color-bg-surface);
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-soft);
+}
+
+input::placeholder {
+    color: var(--color-text-tertiary);
+}
+
+button {
+    font-family: inherit;
 }

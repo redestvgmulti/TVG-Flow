@@ -1,55 +1,94 @@
 /* =========================================
-   DESIGN TOKENS
-   Source: theme.css (Legacy)
+   DESIGN TOKENS (FINAL)
+   Style: Premium · Clean · Light
+   Rule: NO Dark Mode, NO Gradients
    ========================================= */
 
 :root {
-    /* 🎨 COLORS */
-    --bg-app: #f5f6fa;
-    --bg-surface: #ffffff;
-    --bg-muted: #f0f1f5;
-
-    /* Brand */
-    --color-primary: #6366f1;
-    /* Indigo 500 */
-    --color-primary-soft: #eef2ff;
-    --color-primary-hover: #4f46e5;
-
-    /* Semantic */
-    --color-danger: #e5484d;
-    --color-danger-soft: #fef2f2;
-    --color-warning: #f5a524;
-    --color-warning-soft: #fffbeb;
-    --color-success: #2ecc71;
-    --color-success-soft: #f0fdf4;
-    --color-info: #3b82f6;
-    --color-info-soft: #eff6ff;
-
-    /* Text */
-    --text-primary: #1d1d1f;
-    --text-secondary: #6e6e73;
-    --text-tertiary: #86868b;
-    --text-inverse: #ffffff;
+    /* 🎨 PALETTE */
+    /* Backgrounds */
+    --color-bg-app: #f5f5f7;
+    /* Apple System Gray 6 (ish) - Very Light */
+    --color-bg-surface: #ffffff;
+    /* Pure White */
+    --color-bg-subtle: #f0f0f2;
+    /* Inputs / Secondary */
+    --color-bg-active: #e5e5ea;
+    /* Active States */
 
     /* Borders */
-    --border-color: #e5e5e5;
-    --border-subtle: #f0f1f5;
+    --color-border: #d1d1d6;
+    /* Neutral Border */
+    --color-border-soft: #e5e5ea;
+    /* Subtle Separators */
 
-    /* 🧱 LAYOUT */
-    --radius-sm: 8px;
-    --radius-md: 12px;
+    /* Text */
+    --color-text-primary: #1d1d1f;
+    /* Almost Black - Sharp */
+    --color-text-secondary: #86868b;
+    /* Apple Gray - Calm */
+    --color-text-tertiary: #a1a1a6;
+    /* Disabled / Footnotes */
+    --color-text-inverse: #ffffff;
+
+    /* Brand (TVG Blue) */
+    --color-primary: #0071e3;
+    /* Apple/Linear Blue - Confident */
+    --color-primary-hover: #0077ed;
+    --color-primary-soft: #eef7ff;
+    /* Very light tint */
+
+    /* Status (Soft & Solid) */
+    --color-success: #34c759;
+    --color-success-bg: #f2fcf5;
+    --color-warning: #ff9f0a;
+    --color-warning-bg: #fff8eb;
+    --color-danger: #ff3b30;
+    --color-danger-bg: #fff2f2;
+    --color-info: #007aff;
+    --color-info-bg: #f0f8ff;
+
+    /* 📐 SPACING */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 24px;
+    --space-6: 32px;
+    --space-7: 48px;
+
+    /* 🟣 RADIUS */
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    /* Standard Button/Input */
     --radius-lg: 16px;
+    /* Cards */
     --radius-full: 9999px;
 
-    /* Spacing */
-    --spacing-1: 4px;
-    --spacing-2: 8px;
-    --spacing-3: 12px;
-    --spacing-4: 16px;
-    --spacing-6: 24px;
-    --spacing-8: 32px;
-    --spacing-10: 40px;
+    /* 🖋 TYPOGRAPHY */
+    --font-stack: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 
-    /* Shadows (Minimal for now) */
+    --text-xs: 11px;
+    --text-sm: 13px;
+    --text-base: 15px;
+    /* Optimal readability */
+    --text-lg: 17px;
+    --text-xl: 22px;
+    --text-2xl: 28px;
+    --text-3xl: 34px;
+
+    --weight-regular: 400;
+    --weight-medium: 500;
+    --weight-semibold: 600;
+    --weight-bold: 700;
+
+    /* 🌑 SHADOWS (Subtle & Ambient) */
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.05);
+    /* Card lift */
+    --shadow-lg: 0 12px 24px rgba(0, 0, 0, 0.08);
+    /* Modal / Float */
+
+    /* ✨ ANIMATION */
+    --ease-default: 0.2s cubic-bezier(0.25, 0.1, 0.25, 1.0);
 }
