@@ -20,6 +20,13 @@
     gap: 16px;
 }
 
+@media (max-width: 480px) {
+    .team-members-list {
+        grid-template-columns: 1fr;
+        /* Full width cards on mobile */
+    }
+}
+
 .team-member {
     display: flex;
     justify-content: space-between;

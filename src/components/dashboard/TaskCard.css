@@ -1,33 +1,59 @@
-/* Clean Apple-like Task Card (Row Style) */
+/* Premium Focus Item Task Card */
 .task-card {
-    background: #ffffff;
-    border-radius: 14px;
-    padding: 16px 20px;
-    margin-bottom: 12px;
+    background: rgba(255, 255, 255, 0.85);
+    /* Semi-transparent */
+    backdrop-filter: blur(6px);
+    /* Glass effect */
+    border-radius: 16px;
+    padding: 18px 24px;
+    margin-bottom: 16px;
+    /* Increased spacing */
     display: flex;
     justify-content: space-between;
     align-items: center;
-    transition: all 0.2s ease;
-    border: 1px solid transparent;
+    transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.4);
     cursor: pointer;
 }
 
+@media (max-width: 480px) {
+    .task-card {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+
+    .task-status-section {
+        align-items: flex-start;
+        width: 100%;
+        flex-direction: row;
+        justify-content: space-between;
+        margin-top: 4px;
+        padding-top: 12px;
+        border-top: 1px solid var(--border-subtle);
+    }
+}
+
 .task-card:hover {
-    background-color: #fafbfc;
-    border-color: var(--border-subtle);
-    transform: translateX(4px);
+    background: #ffffff;
+    transform: scale(1.01);
+    /* Subtle scale */
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.06);
+    z-index: 10;
 }
 
 .task-main-info {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
 }
 
 .task-client {
     font-size: 15px;
     font-weight: 600;
     color: var(--text-primary);
+    letter-spacing: -0.01em;
 }
 
 .task-meta {
@@ -40,13 +66,15 @@
 
 .department-tag {
     background-color: var(--bg-muted);
-    padding: 2px 8px;
-    border-radius: 6px;
+    padding: 3px 10px;
+    border-radius: 8px;
+    /* Piller shape */
     font-size: 11px;
-    font-weight: 500;
+    font-weight: 600;
     color: var(--text-secondary);
     text-transform: uppercase;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.04em;
+    border: 1px solid rgba(0, 0, 0, 0.04);
 }
 
 .task-status-section {
@@ -56,17 +84,18 @@
     gap: 6px;
 }
 
+/* Status Badge - Refined Pill */
 .status-badge {
     font-size: 12px;
-    padding: 4px 10px;
-    border-radius: 999px;
+    padding: 4px 12px;
+    border-radius: 20px;
     font-weight: 500;
+    letter-spacing: 0.01em;
 }
 
-/* Status Variants - Clean & Pastel */
 .status-badge.pending {
     background: var(--bg-muted);
-    color: var(--text-secondary);
+    color: var(--text-tertiary);
 }
 
 .status-badge.in_progress {
@@ -84,27 +113,35 @@
     color: var(--color-danger);
 }
 
+/* Delay Text - Muted Red */
 .task-countdown {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 5px;
     font-size: 12px;
-    color: var(--text-secondary);
+    color: var(--text-tertiary);
     font-weight: 500;
 }
 
 .task-countdown.countdown-urgent {
-    color: var(--color-danger);
+    color: #b91c1c;
+    /* Muted red as requested */
     font-weight: 600;
+    background: rgba(185, 28, 28, 0.05);
+    padding: 2px 8px;
+    border-radius: 6px;
 }
 
 /* Priority Badge (Dot Style) */
 .priority-badge {
-    font-size: 11px;
+    font-size: 10px;
     text-transform: uppercase;
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 5px;
+    letter-spacing: 0.03em;
+    color: var(--text-secondary);
+    font-weight: 500;
 }
 
 .priority-badge::before {
@@ -113,6 +150,7 @@
     height: 6px;
     border-radius: 50%;
     background: currentColor;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8);
 }
 
 .priority-alta {
