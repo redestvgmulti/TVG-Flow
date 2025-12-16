@@ -1,0 +1,33 @@
+/* Clean Apple-like Layout */
+.app-layout {
+    display: flex;
+    min-height: 100vh;
+    background-color: var(--bg-app);
+    /* #f5f6fa */
+}
+
+.main-content {
+    flex: 1;
+    margin-left: 250px;
+    /* Sidebar width */
+    padding: var(--spacing-6);
+    /* 24px */
+    background-color: var(--bg-app);
+    min-height: 100vh;
+    transition: margin-left 0.3s ease;
+}
+
+.content-wrapper {
+    max-width: 1200px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .main-content {
+        margin-left: 0;
+        padding-bottom: 80px;
+        /* Space for BottomNav */
+    }
+}

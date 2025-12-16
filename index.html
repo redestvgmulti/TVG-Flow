@@ -26,6 +26,18 @@
   <link rel="manifest" href="/manifest.json" />
 
   <title>TVG Flow</title>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.getRegistrations().then(function (registrations) {
+          for (let registration of registrations) {
+            registration.unregister();
+            console.log('ServiceWorker unregistered to avoid development conflicts');
+          }
+        });
+      });
+    }
+  </script>
 </head>
 
 <body>

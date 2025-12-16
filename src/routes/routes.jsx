@@ -1,6 +1,7 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from './ProtectedRoute';
+import Layout from '../components/layout/Layout';
 
 // Auth Pages
 import Login from '../pages/auth/Login';
@@ -12,11 +13,8 @@ import Departamentos from '../pages/admin/Departamentos';
 import Clientes from '../pages/admin/Clientes';
 import Tarefas from '../pages/admin/Tarefas';
 import Calendario from '../pages/admin/Calendario';
+import Relatorios from '../pages/admin/Relatorios';
 
-// Profissional Pages
-import ProfissionalDashboard from '../pages/profissional/Dashboard';
-import MinhasTarefas from '../pages/profissional/MinhasTarefas';
-import ProfissionalCalendario from '../pages/profissional/Calendario';
 // Profissional Pages
 import ProfissionalDashboard from '../pages/profissional/Dashboard';
 import MinhasTarefas from '../pages/profissional/MinhasTarefas';
@@ -24,6 +22,7 @@ import ProfissionalCalendario from '../pages/profissional/Calendario';
 
 // Common Pages
 import Profile from '../pages/common/Profile';
+
 export const AppRoutes = () => {
     return (
         <Routes>
@@ -35,7 +34,9 @@ export const AppRoutes = () => {
                 path="/admin"
                 element={
                     <ProtectedRoute adminOnly>
-                        <AdminDashboard />
+                        <Layout>
+                            <AdminDashboard />
+                        </Layout>
                     </ProtectedRoute>
                 }
             />
@@ -43,7 +44,9 @@ export const AppRoutes = () => {
                 path="/admin/profissionais"
                 element={
                     <ProtectedRoute adminOnly>
-                        <Profissionais />
+                        <Layout>
+                            <Profissionais />
+                        </Layout>
                     </ProtectedRoute>
                 }
             />
@@ -51,7 +54,9 @@ export const AppRoutes = () => {
                 path="/admin/departamentos"
                 element={
                     <ProtectedRoute adminOnly>
-                        <Departamentos />
+                        <Layout>
+                            <Departamentos />
+                        </Layout>
                     </ProtectedRoute>
                 }
             />
@@ -59,7 +64,9 @@ export const AppRoutes = () => {
                 path="/admin/clientes"
                 element={
                     <ProtectedRoute adminOnly>
-                        <Clientes />
+                        <Layout>
+                            <Clientes />
+                        </Layout>
                     </ProtectedRoute>
                 }
             />
@@ -67,7 +74,9 @@ export const AppRoutes = () => {
                 path="/admin/tarefas"
                 element={
                     <ProtectedRoute adminOnly>
-                        <Tarefas />
+                        <Layout>
+                            <Tarefas />
+                        </Layout>
                     </ProtectedRoute>
                 }
             />
@@ -75,7 +84,19 @@ export const AppRoutes = () => {
                 path="/admin/calendario"
                 element={
                     <ProtectedRoute adminOnly>
-                        <Calendario />
+                        <Layout>
+                            <Calendario />
+                        </Layout>
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/admin/relatorios"
+                element={
+                    <ProtectedRoute adminOnly>
+                        <Layout>
+                            <Relatorios />
+                        </Layout>
                     </ProtectedRoute>
                 }
             />
@@ -85,7 +106,9 @@ export const AppRoutes = () => {
                 path="/profissional"
                 element={
                     <ProtectedRoute>
-                        <ProfissionalDashboard />
+                        <Layout>
+                            <ProfissionalDashboard />
+                        </Layout>
                     </ProtectedRoute>
                 }
             />
@@ -93,7 +116,9 @@ export const AppRoutes = () => {
                 path="/profissional/tarefas"
                 element={
                     <ProtectedRoute>
-                        <MinhasTarefas />
+                        <Layout>
+                            <MinhasTarefas />
+                        </Layout>
                     </ProtectedRoute>
                 }
             />
@@ -101,7 +126,9 @@ export const AppRoutes = () => {
                 path="/profissional/calendario"
                 element={
                     <ProtectedRoute>
-                        <ProfissionalCalendario />
+                        <Layout>
+                            <ProfissionalCalendario />
+                        </Layout>
                     </ProtectedRoute>
                 }
             />
@@ -111,7 +138,9 @@ export const AppRoutes = () => {
                 path="/perfil"
                 element={
                     <ProtectedRoute>
-                        <Profile />
+                        <Layout>
+                            <Profile />
+                        </Layout>
                     </ProtectedRoute>
                 }
             />

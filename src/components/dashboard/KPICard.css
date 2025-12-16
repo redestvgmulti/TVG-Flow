@@ -1,192 +1,92 @@
+/* Clean Apple-like KPI Card */
 .kpi-card {
-    flex: 0 0 160px;
-    min-height: 160px;
-    padding: var(--spacing-6);
-    background: var(--glass-bg);
-    backdrop-filter: var(--glass-blur);
-    -webkit-backdrop-filter: var(--glass-blur);
-    border: 1px solid var(--glass-border);
-    box-shadow: var(--glass-shadow);
-    border-radius: var(--radius-xl);
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 20px 24px;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid rgba(0, 0, 0, 0.02);
+    /* Ultra subtle border */
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
-    /* Aligned left for better hierarchy */
     justify-content: space-between;
-    text-align: left;
+    height: 100%;
+    min-height: 110px;
     position: relative;
     overflow: hidden;
 }
 
-.kpi-card-clickable:hover {
-    transform: translateY(-4px) scale(1.02);
-    box-shadow: 0 12px 24px -4px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-    border-color: rgba(255, 255, 255, 0.8);
-    background: rgba(255, 255, 255, 0.85);
+.kpi-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
 }
 
-.kpi-card-clickable:active {
-    transform: scale(0.98);
+/* Status Indicator Line (Left Side) */
+.kpi-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 20px;
+    bottom: 20px;
+    width: 4px;
+    border-radius: 0 4px 4px 0;
 }
 
-/* Subtle gradient background based on color prop, heavily translucent */
-.kpi-card-primary {
-    background: linear-gradient(145deg, rgba(255, 255, 255, 0.9) 0%, rgba(99, 102, 241, 0.05) 100%);
-    border-left: 4px solid var(--color-primary);
+/* Color Variants for Indicator */
+.kpi-card.primary::before {
+    background-color: var(--color-primary);
 }
 
-.kpi-card-success {
-    background: linear-gradient(145deg, rgba(255, 255, 255, 0.9) 0%, rgba(16, 185, 129, 0.05) 100%);
-    border-left: 4px solid var(--color-success);
+.kpi-card.danger::before {
+    background-color: var(--color-danger);
 }
 
-.kpi-card-warning {
-    background: linear-gradient(145deg, rgba(255, 255, 255, 0.9) 0%, rgba(245, 158, 11, 0.05) 100%);
-    border-left: 4px solid var(--color-warning);
+.kpi-card.success::before {
+    background-color: var(--color-success);
 }
 
-.kpi-card-danger {
-    background: linear-gradient(145deg, rgba(255, 255, 255, 0.9) 0%, rgba(239, 68, 68, 0.05) 100%);
-    border-left: 4px solid var(--color-danger);
+.kpi-card.info::before {
+    background-color: var(--color-info);
 }
 
-.kpi-card-info {
-    background: linear-gradient(145deg, rgba(255, 255, 255, 0.9) 0%, rgba(59, 130, 246, 0.05) 100%);
-    border-left: 4px solid var(--color-info);
+.kpi-card.warning::before {
+    background-color: var(--color-warning);
 }
 
-/* Elementos do card */
-.kpi-icon {
-    font-size: 28px;
-    line-height: 1;
-    margin-bottom: var(--spacing-4);
-    opacity: 0.9;
-    padding: var(--spacing-2);
-    border-radius: var(--radius-md);
-    background: rgba(255, 255, 255, 0.5);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-}
-
-/* Color specific icons */
-.kpi-card-primary .kpi-icon {
-    color: var(--color-primary);
-}
-
-.kpi-card-success .kpi-icon {
-    color: var(--color-success);
-}
-
-.kpi-card-warning .kpi-icon {
-    color: var(--color-warning);
-}
-
-.kpi-card-danger .kpi-icon {
-    color: var(--color-danger);
-}
-
-.kpi-card-info .kpi-icon {
-    color: var(--color-info);
-}
-
-.kpi-value {
-    font-size: var(--text-3xl);
-    font-weight: var(--font-bold);
-    line-height: 1;
-    margin-bottom: var(--spacing-1);
-    color: var(--color-text-primary);
-    letter-spacing: -0.05em;
+.kpi-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 8px;
 }
 
 .kpi-title {
-    font-size: var(--text-xs);
-    color: var(--color-text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    font-weight: var(--font-semibold);
 }
 
-/* Trend indicator */
-.kpi-trend {
-    position: absolute;
-    top: var(--spacing-4);
-    right: var(--spacing-4);
-    font-size: var(--text-xs);
-    font-weight: var(--font-bold);
-    padding: 2px 8px;
-    border-radius: var(--radius-full);
+.kpi-icon {
+    font-size: 18px;
+    opacity: 0.8;
 }
 
-.kpi-trend-up {
-    color: var(--color-success);
-    background: rgba(16, 185, 129, 0.1);
+.kpi-value {
+    font-size: 32px;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: -1px;
+    line-height: 1;
 }
 
-.kpi-trend-down {
-    color: var(--color-danger);
-    background: rgba(239, 68, 68, 0.1);
-}
-
-/* Loading skeleton */
-.kpi-card-loading {
-    cursor: default;
-    pointer-events: none;
-    background: var(--color-surface);
-}
-
-.kpi-skeleton {
-    background: linear-gradient(90deg,
-            var(--color-bg) 25%,
-            var(--glass-border) 50%,
-            var(--color-bg) 75%);
-    background-size: 200% 100%;
-    animation: loading 1.5s ease-in-out infinite;
-    border-radius: var(--radius-md);
-}
-
-.kpi-skeleton-icon {
-    width: 32px;
+/* Loading State */
+.kpi-card.loading .kpi-value {
+    color: transparent;
+    background: var(--bg-muted);
+    border-radius: 4px;
+    width: 60px;
     height: 32px;
-    margin-bottom: var(--spacing-4);
-    border-radius: var(--radius-md);
-}
-
-.kpi-skeleton-value {
-    width: 80px;
-    height: 36px;
-    margin-bottom: var(--spacing-1);
-}
-
-.kpi-skeleton-title {
-    width: 100px;
-    height: 12px;
-}
-
-@keyframes loading {
-    0% {
-        background-position: 200% 0;
-    }
-
-    100% {
-        background-position: -200% 0;
-    }
-}
-
-/* Responsive */
-@media (max-width: 480px) {
-    .kpi-card {
-        flex: 0 0 140px;
-        min-height: 140px;
-        padding: var(--spacing-4);
-    }
-
-    .kpi-icon {
-        font-size: 24px;
-        margin-bottom: var(--spacing-3);
-    }
-
-    .kpi-value {
-        font-size: var(--text-2xl);
-    }
 }

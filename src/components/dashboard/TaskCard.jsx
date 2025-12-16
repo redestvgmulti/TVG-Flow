@@ -81,7 +81,6 @@ const TaskCard = ({ task, onClick, compact = false }) => {
                 </span>
                 <span
                     className={`task-countdown ${overdue ? 'countdown-urgent' : ''}`}
-                    style={{ color: getCountdownColor() }}
                 >
                     {formatCountdown()}
                 </span>

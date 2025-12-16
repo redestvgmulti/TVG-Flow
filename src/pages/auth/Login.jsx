@@ -49,7 +49,7 @@ const Login = () => {
     return (
         <div className="login-container">
             <div className="login-content">
-                <Card glass className="login-card">
+                <Card className="login-card">
                     <div className="login-header">
                         <h1 className="login-title">TVG Flow</h1>
                         <p className="login-subtitle">Sistema de Gestão Operacional</p>

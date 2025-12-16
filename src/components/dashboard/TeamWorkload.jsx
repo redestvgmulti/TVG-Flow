@@ -24,12 +24,9 @@ const TeamWorkload = ({ teamData, onMemberClick }) => {
                         <div className="team-member-info">
                             <div className="team-member-name">{member.nome}</div>
                             {member.departamentos && (
-                                <div
-                                    className="team-member-department"
-                                    style={{ color: member.departamentos.cor_hex }}
-                                >
-                                    {member.departamentos.nome}
-                                </div>
+                                <span className="member-dept">
+                                    {member.departamentos?.nome}
+                                </span>
                             )}
                         </div>
 

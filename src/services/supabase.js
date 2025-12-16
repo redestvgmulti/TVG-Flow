@@ -10,11 +10,13 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
+console.log('Supabase Config:', { url: supabaseUrl, hasKey: !!supabaseAnonKey });
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true
+    autoRefreshToken: false, // Temporarily disabled for debugging
+    persistSession: false,   // Temporarily disabled for debugging
+    detectSessionInUrl: false
   },
   realtime: {
     params: {

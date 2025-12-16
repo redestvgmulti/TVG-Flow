@@ -83,6 +83,47 @@ export const getTaskById = async (taskId) => {
     return data;
 };
 
+// ... (previous code)
+
+/**
+ * Buscar tarefas com filtros
+ */
+export const getAllTasks = async (filters = {}) => {
+    let query = supabase
+        .from('tarefas')
+        .select(`
+      *,
+      clientes (id, nome),
+      profissionais (id, nome),
+      departamentos (id, nome, cor_hex)
+    `)
+        .order('deadline', { ascending: true }); // Mais urgentes primeiro
+
+    if (filters.status) {
+        query = query.eq('status', filters.status);
+    }
+
+    if (filters.cliente_id) {
+        query = query.eq('cliente_id', filters.cliente_id);
+    }
+
+    if (filters.profissional_id) {
+        query = query.eq('profissional_id', filters.profissional_id);
+    }
+
+    if (filters.departamento_id) {
+        query = query.eq('departamento_id', filters.departamento_id);
+    }
+
+    if (filters.search) {
+        query = query.ilike('titulo', `%${filters.search}%`);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data;
+};
+
 // ==================== Buscar Dados para Formulários ====================
 
 /**

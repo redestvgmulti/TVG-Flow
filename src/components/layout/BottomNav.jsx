@@ -1,50 +1,40 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
+import { Home, CheckSquare, Calendar, Menu, Users, Building, Briefcase, FileText } from 'lucide-react';
 import './BottomNav.css';
 
-const BottomNav = () => {
-    const { profile } = useAuth();
-    const location = useLocation();
-
-    // Não mostrar bottom nav na página de login
-    if (location.pathname === '/login') {
-        return null;
-    }
-
-    const isAdmin = profile?.role === 'admin';
-
-    const navItems = isAdmin ? [
-        { path: '/admin', icon: '🏠', label: 'Hoje', exact: true },
-        { path: '/admin/tarefas', icon: '✅', label: 'Tarefas' },
-        { path: '/admin/calendario', icon: '📅', label: 'Calendário' },
-        { path: '/admin/profissionais', icon: '👥', label: 'Equipe' },
-        { path: '/perfil', icon: '👤', label: 'Perfil' },
-    ] : [
-        { path: '/profissional', icon: '🏠', label: 'Hoje', exact: true },
-        { path: '/profissional/tarefas', icon: '✅', label: 'Tarefas' },
-        { path: '/profissional/calendario', icon: '📅', label: 'Calendário' },
-        { path: '/notificacoes', icon: '🔔', label: 'Notificações' },
-        { path: '/perfil', icon: '👤', label: 'Perfil' },
-    ];
-
+const BottomNav = ({ onMenuClick }) => {
     return (
         <nav className="bottom-nav">
-            <div className="bottom-nav-container">
-                {navItems.map((item) => (
-                    <NavLink
-                        key={item.path}
-                        to={item.path}
-                        end={item.exact}
-                        className={({ isActive }) =>
-                            `bottom-nav-item ${isActive ? 'active' : ''}`
-                        }
-                    >
-                        <span className="bottom-nav-icon">{item.icon}</span>
-                        <span className="bottom-nav-label">{item.label}</span>
-                    </NavLink>
-                ))}
-            </div>
+            <NavLink
+                to="/admin"
+                end
+                className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+            >
+                <Home size={24} />
+                <span>Home</span>
+            </NavLink>
+
+            <NavLink
+                to="/admin/tarefas"
+                className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+            >
+                <CheckSquare size={24} />
+                <span>Tarefas</span>
+            </NavLink>
+
+            <NavLink
+                to="/admin/calendario"
+                className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+            >
+                <Calendar size={24} />
+                <span>Agenda</span>
+            </NavLink>
+
+            <button className="nav-item" onClick={onMenuClick}>
+                <Menu size={24} />
+                <span>Menu</span>
+            </button>
         </nav>
     );
 };

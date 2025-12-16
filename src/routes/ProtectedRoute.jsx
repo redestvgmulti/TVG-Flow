@@ -7,14 +7,8 @@ export const ProtectedRoute = ({ children, adminOnly = false }) => {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center" style={{ minHeight: '100vh' }}>
-                <div className="spin" style={{
-                    width: '48px',
-                    height: '48px',
-                    border: '4px solid var(--neutral-200)',
-                    borderTop: '4px solid var(--primary-600)',
-                    borderRadius: '50%'
-                }}></div>
+            <div className="flex items-center justify-center">
+                <div className="spin"></div>
             </div>
         );
     }

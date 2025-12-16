@@ -65,14 +65,35 @@ export const AuthProvider = ({ children }) => {
     };
 
     const signIn = async (email, password) => {
-        const { data, error } = await supabase.auth.signInWithPassword({
-            email,
-            password,
-        });
+        console.log('AuthContext: Calling supabase.auth.signInWithPassword');
+
+        // Timeout race to prevent infinite hanging
+        const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Login timed out (15s)')), 15000)
+        );
+
+        const { data, error } = await Promise.race([
+            supabase.auth.signInWithPassword({
+                email,
+                password,
+            }),
+            timeoutPromise
+        ]);
+
+        console.log('AuthContext: signInWithPassword result:', { data, error });
         if (error) throw error;
 
         // Carregar perfil do usuário
-        const profileData = await getProfissionalProfile(data.user.id);
+        console.log('AuthContext: Fetching profile for user', data.user.id);
+        let profileData = null;
+        try {
+            profileData = await getProfissionalProfile(data.user.id);
+            console.log('AuthContext: Profile fetched', profileData);
+        } catch (profileError) {
+            console.warn('AuthContext: Could not fetch profile (user might not be in profissionais table yet)', profileError);
+            // Non-fatal error for login, but might affect routing. 
+            // We return null profile.
+        }
         setProfile(profileData);
 
         return profileData;

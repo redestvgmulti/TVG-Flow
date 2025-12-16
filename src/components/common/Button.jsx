@@ -29,7 +29,7 @@ export const Button = ({
         >
             {loading ? (
                 <span className="btn-loading">
-                    <span className="spin" style={{ width: '16px', height: '16px', border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%' }}></span>
+                    <span className="spin"></span>
                 </span>
             ) : (
                 children
