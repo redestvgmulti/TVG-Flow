@@ -1,4 +1,55 @@
-/* Design Tokens (Placeholder) */
+/* =========================================
+   DESIGN TOKENS
+   Source: theme.css (Legacy)
+   ========================================= */
+
 :root {
-    /* Will be populated later */
+    /* 🎨 COLORS */
+    --bg-app: #f5f6fa;
+    --bg-surface: #ffffff;
+    --bg-muted: #f0f1f5;
+
+    /* Brand */
+    --color-primary: #6366f1;
+    /* Indigo 500 */
+    --color-primary-soft: #eef2ff;
+    --color-primary-hover: #4f46e5;
+
+    /* Semantic */
+    --color-danger: #e5484d;
+    --color-danger-soft: #fef2f2;
+    --color-warning: #f5a524;
+    --color-warning-soft: #fffbeb;
+    --color-success: #2ecc71;
+    --color-success-soft: #f0fdf4;
+    --color-info: #3b82f6;
+    --color-info-soft: #eff6ff;
+
+    /* Text */
+    --text-primary: #1d1d1f;
+    --text-secondary: #6e6e73;
+    --text-tertiary: #86868b;
+    --text-inverse: #ffffff;
+
+    /* Borders */
+    --border-color: #e5e5e5;
+    --border-subtle: #f0f1f5;
+
+    /* 🧱 LAYOUT */
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-full: 9999px;
+
+    /* Spacing */
+    --spacing-1: 4px;
+    --spacing-2: 8px;
+    --spacing-3: 12px;
+    --spacing-4: 16px;
+    --spacing-6: 24px;
+    --spacing-8: 32px;
+    --spacing-10: 40px;
+
+    /* Shadows (Minimal for now) */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
 }

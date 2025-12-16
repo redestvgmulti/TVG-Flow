@@ -1,1 +1,229 @@
-/* Component Styles (Placeholder) */
+/* =========================================
+   COMPONENT STYLES
+   Source: KPICard, TaskCard, TeamWorkload, DashboardHeader
+   ========================================= */
+
+/* --- DASHBOARD HEADER --- */
+.dashboard-header {
+    margin-bottom: var(--spacing-8);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+}
+
+.welcome-section h1 {
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+    letter-spacing: -0.5px;
+}
+
+.date-text {
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+/* Mobile Header */
+@media (max-width: 480px) {
+    .welcome-section h1 {
+        font-size: 22px;
+    }
+
+    .date-text {
+        font-size: 12px;
+    }
+}
+
+/* --- KPI CARD --- */
+.kpi-card {
+    background: var(--bg-surface);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    position: relative;
+    overflow: hidden;
+    /* Removed heavy shadows for "Ugly but Stable" phase */
+    border: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 120px;
+    cursor: pointer;
+}
+
+.kpi-card:hover {
+    background: #fafafa;
+}
+
+/* Status Indicator */
+.kpi-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 24px;
+    bottom: 24px;
+    width: 2px;
+    border-radius: 0 4px 4px 0;
+    background-color: var(--text-tertiary);
+    /* Default */
+}
+
+.kpi-card.primary::before {
+    background-color: var(--color-primary);
+}
+
+.kpi-card.danger::before {
+    background-color: var(--color-danger);
+}
+
+.kpi-card.success::before {
+    background-color: var(--color-success);
+}
+
+.kpi-card.info::before {
+    background-color: var(--color-info);
+}
+
+.kpi-card.warning::before {
+    background-color: var(--color-warning);
+}
+
+.kpi-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.kpi-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.kpi-value {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1;
+}
+
+/* --- TASK CARD (FOCUS ITEM) --- */
+.task-card {
+    background: var(--bg-surface);
+    border-radius: var(--radius-lg);
+    padding: 18px 24px;
+    margin-bottom: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+}
+
+.task-main-info {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.task-client {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.task-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.department-tag {
+    background-color: var(--bg-muted);
+    padding: 3px 10px;
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+}
+
+.status-badge {
+    font-size: 12px;
+    padding: 4px 12px;
+    border-radius: var(--radius-full);
+    font-weight: 500;
+}
+
+.status-badge.pending {
+    background: var(--bg-muted);
+    color: var(--text-tertiary);
+}
+
+.status-badge.overdue {
+    background: var(--color-danger-soft);
+    color: var(--color-danger);
+}
+
+/* Mobile Task Caard */
+@media (max-width: 480px) {
+    .task-card {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+}
+
+/* --- TEAM WORKLOAD --- */
+.team-workload {
+    background: var(--bg-surface);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    border: 1px solid var(--border-color);
+}
+
+.team-members-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+}
+
+.team-member {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-radius: var(--radius-md);
+    background: var(--bg-app);
+}
+
+.team-member-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* --- BUTTONS & GENERIC --- */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 16px;
+    border-radius: var(--radius-md);
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.btn-primary {
+    background: var(--color-primary);
+    color: white;
+}
+
+.btn-ghost {
+    background: transparent;
+    color: var(--text-secondary);
+}

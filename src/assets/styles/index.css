@@ -1,12 +1,1 @@
-@import './theme.css';
-
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  font-family: var(--font-sans);
-  background: var(--bg-app);
-  color: var(--text-primary);
-}
+/* LEGACY - DEPRECATED */
