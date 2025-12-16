@@ -12,7 +12,7 @@ import {
     LogOut
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import './Sidebar.css';
+// import './Sidebar.css';
 
 const Sidebar = () => {
     const { signOut } = useAuth();

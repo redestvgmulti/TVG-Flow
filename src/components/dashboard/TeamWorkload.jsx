@@ -1,5 +1,5 @@
 import React from 'react';
-import './TeamWorkload.css';
+// import './TeamWorkload.css';
 
 const TeamWorkload = ({ teamData, onMemberClick }) => {
     if (!teamData || teamData.length === 0) {

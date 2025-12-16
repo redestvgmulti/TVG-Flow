@@ -2,7 +2,7 @@ import React from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { getTimeRemaining, isOverdue } from '../../utils/dateUtils';
-import './TaskCard.css';
+// import './TaskCard.css';
 
 const TaskCard = ({ task, onClick, compact = false }) => {
     const timeRemaining = getTimeRemaining(task.deadline);

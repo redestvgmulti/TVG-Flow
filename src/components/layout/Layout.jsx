@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Sidebar from './Sidebar';
 import BottomNav from './BottomNav';
-import './Layout.css';
+// import './Layout.css';
 import { useLocation } from 'react-router-dom';
 
 const Layout = ({ children }) => {

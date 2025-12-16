@@ -1,7 +1,7 @@
 import React from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import './DashboardHeader.css';
+// import './DashboardHeader.css';
 
 const DashboardHeader = ({ userName = 'Admin', notificationCount = 0 }) => {
     const today = new Date();

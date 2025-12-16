@@ -1,5 +1,5 @@
 import React from 'react';
-import './KPICard.css';
+// import './KPICard.css';
 
 const KPICard = ({ title, value, icon, color = 'primary', onClick, trend, loading }) => {
     if (loading) {

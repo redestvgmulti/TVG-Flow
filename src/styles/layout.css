@@ -1,0 +1,44 @@
+/* Minimal Layout Structure */
+
+/* Sidebar Layout Support */
+.app-layout {
+    display: flex;
+    min-height: 100vh;
+}
+
+.sidebar {
+    width: 250px;
+    background: #ffffff;
+    border-right: 1px solid #e0e0e0;
+    height: 100vh;
+    position: fixed;
+    top: 0;
+    left: 0;
+    overflow-y: auto;
+    /* padding handles in component/js for now, just structural here */
+}
+
+.main-content {
+    flex: 1;
+    margin-left: 250px;
+    /* Offset for fixed sidebar */
+    padding: 20px;
+}
+
+/* Mobile Layout Support */
+@media (max-width: 768px) {
+    .sidebar {
+        display: none;
+    }
+
+    .main-content {
+        margin-left: 0;
+        padding-bottom: 80px;
+        /* Space for bottom nav */
+    }
+
+    .bottom-nav {
+        display: flex;
+        /* Ensure it's visible if it exists */
+    }
+}
