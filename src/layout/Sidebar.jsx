@@ -1,10 +1,22 @@
 import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import {
+    LayoutGrid,
+    CheckSquare,
+    Calendar,
+    Settings,
+    Users,
+    BarChart,
+    Map,
+    ChevronRight,
+    LogOut,
+    User
+} from 'lucide-react'
 
 function Sidebar() {
     const { user, professionalName, signOut } = useAuth()
-    const [adminPanelOpen, setAdminPanelOpen] = useState(true) // Default open for better discovery
+    const [adminPanelOpen, setAdminPanelOpen] = useState(true)
     const [profileOpen, setProfileOpen] = useState(false)
 
     // Helper to get initials
@@ -17,7 +29,7 @@ function Sidebar() {
             {/* Logo Area */}
             <div className="sidebar-header">
                 <div className="brand-logo">
-                    <span className="brand-dot"></span>
+                    <div className="brand-dot"></div>
                     <h2>TVG Flow</h2>
                 </div>
             </div>
@@ -27,44 +39,48 @@ function Sidebar() {
                 <div className="nav-section">
                     <p className="nav-label">MENU PRINCIPAL</p>
                     <NavLink to="/admin" end className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-                        <span className="nav-icon">📊</span>
+                        <LayoutGrid size={20} className="nav-icon" />
                         <span className="nav-text">Dashboard</span>
                     </NavLink>
 
                     <NavLink to="/admin/tasks" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-                        <span className="nav-icon">✅</span>
+                        <CheckSquare size={20} className="nav-icon" />
                         <span className="nav-text">Tarefas</span>
                     </NavLink>
 
                     <NavLink to="/admin/calendar" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-                        <span className="nav-icon">📅</span>
+                        <Calendar size={20} className="nav-icon" />
                         <span className="nav-text">Calendário</span>
                     </NavLink>
                 </div>
 
                 <div className="nav-section">
                     <p className="nav-label">GERENCIAMENTO</p>
+
                     {/* Admin Panel Group */}
                     <div className={`nav-group ${adminPanelOpen ? 'open' : ''}`}>
                         <button
                             className="nav-group-trigger"
                             onClick={() => setAdminPanelOpen(!adminPanelOpen)}
                         >
-                            <span className="nav-icon">⚙️</span>
+                            <Settings size={20} className="nav-icon" />
                             <span className="nav-text">Administração</span>
-                            <span className="nav-arrow">›</span>
+                            <ChevronRight size={16} className="nav-arrow" />
                         </button>
 
                         {adminPanelOpen && (
                             <div className="nav-sub">
                                 <NavLink to="/admin/areas" className="nav-sub-item">
-                                    Setores
+                                    <Map size={16} />
+                                    <span>Setores</span>
                                 </NavLink>
                                 <NavLink to="/admin/professionals" className="nav-sub-item">
-                                    Funcionários
+                                    <Users size={16} />
+                                    <span>Funcionários</span>
                                 </NavLink>
                                 <NavLink to="/admin/reports" className="nav-sub-item">
-                                    Relatórios
+                                    <BarChart size={16} />
+                                    <span>Relatórios</span>
                                 </NavLink>
                             </div>
                         )}
@@ -89,7 +105,7 @@ function Sidebar() {
                 {profileOpen && (
                     <>
                         <div className="backdrop-invisible" onClick={() => setProfileOpen(false)} />
-                        <div className="profile-popup glasses">
+                        <div className="profile-popup">
                             <div className="popup-header">
                                 <div className="popup-avatar">
                                     {getInitials(professionalName)}
@@ -101,6 +117,7 @@ function Sidebar() {
                             </div>
                             <div className="popup-divider" />
                             <div className="popup-item" onClick={signOut}>
+                                <LogOut size={16} className="text-danger" />
                                 <span className="text-danger">Sair do Sistema</span>
                             </div>
                         </div>
