@@ -5,13 +5,21 @@ function Professionals() {
     const [professionals, setProfessionals] = useState([])
     const [loading, setLoading] = useState(true)
     const [showAddModal, setShowAddModal] = useState(false)
+    const [showEditModal, setShowEditModal] = useState(false)
+    const [editingStaff, setEditingStaff] = useState(null)
     const [newStaff, setNewStaff] = useState({
         nome: '',
         email: '',
         role: 'profissional',
         ativo: true
     })
+    const [editStaff, setEditStaff] = useState({
+        nome: '',
+        role: '',
+        ativo: true
+    })
     const [creating, setCreating] = useState(false)
+    const [updating, setUpdating] = useState(false)
     const [feedback, setFeedback] = useState({ show: false, type: '', message: '' })
 
     useEffect(() => {
@@ -49,6 +57,16 @@ function Professionals() {
         setFeedback({ show: true, type, message })
     }
 
+    function handleOpenEditModal(professional) {
+        setEditingStaff(professional)
+        setEditStaff({
+            nome: professional.nome,
+            role: professional.role,
+            ativo: professional.ativo
+        })
+        setShowEditModal(true)
+    }
+
     async function handleAddStaff(e) {
         e.preventDefault()
 
@@ -73,12 +91,6 @@ function Professionals() {
                 return
             }
 
-            // SECURITY NOTE: This approach requires manual user creation
-            // For production, implement server-side invite using:
-            // supabase.auth.admin.inviteUserByEmail(email)
-            // This requires SUPABASE_SERVICE_ROLE_KEY
-
-            // For now, we insert the record and user must sign up separately
             const { error } = await supabase
                 .from('profissionais')
                 .insert([{
@@ -102,24 +114,62 @@ function Professionals() {
         }
     }
 
-    async function handleToggleActive(professionalId, currentStatus) {
-        if (!confirm(`${currentStatus ? 'Deactivate' : 'Activate'} this professional?`)) {
+    async function handleUpdateStaff(e) {
+        e.preventDefault()
+
+        if (!editStaff.nome.trim()) {
+            showFeedback('error', 'Name cannot be empty')
             return
         }
+
+        // Check if role is changing
+        const roleChanged = editStaff.role !== editingStaff.role
+        const statusChanged = editStaff.ativo !== editingStaff.ativo
+
+        if (roleChanged) {
+            if (!confirm(`Change role from "${editingStaff.role}" to "${editStaff.role}"? This will affect their access permissions.`)) {
+                return
+            }
+        }
+
+        if (statusChanged && !editStaff.ativo) {
+            if (!confirm(`Deactivate ${editingStaff.nome}? They will be immediately logged out and lose all access.`)) {
+                return
+            }
+        }
+
+        setUpdating(true)
 
         try {
             const { error } = await supabase
                 .from('profissionais')
-                .update({ ativo: !currentStatus })
-                .eq('id', professionalId)
+                .update({
+                    nome: editStaff.nome,
+                    role: editStaff.role,
+                    ativo: editStaff.ativo
+                })
+                .eq('id', editingStaff.id)
 
             if (error) throw error
 
-            showFeedback('success', `Professional ${currentStatus ? 'deactivated' : 'activated'} successfully`)
+            setShowEditModal(false)
+            setEditingStaff(null)
+
+            let message = 'Staff member updated successfully'
+            if (roleChanged) {
+                message += '. Role change will take effect on next login.'
+            }
+            if (statusChanged && !editStaff.ativo) {
+                message += '. User has been deactivated.'
+            }
+
+            showFeedback('success', message)
             await fetchProfessionals()
         } catch (error) {
-            console.error('Error updating professional:', error)
-            showFeedback('error', 'Failed to update professional status')
+            console.error('Error updating staff:', error)
+            showFeedback('error', 'Failed to update staff member: ' + error.message)
+        } finally {
+            setUpdating(false)
         }
     }
 
@@ -203,11 +253,11 @@ function Professionals() {
                                         </td>
                                         <td style={{ padding: 'var(--space-md)' }}>
                                             <button
-                                                onClick={() => handleToggleActive(prof.id, prof.ativo)}
+                                                onClick={() => handleOpenEditModal(prof)}
                                                 className="btn btn-secondary"
                                                 style={{ padding: 'var(--space-xs) var(--space-sm)', fontSize: 'var(--text-sm)' }}
                                             >
-                                                {prof.ativo ? 'Deactivate' : 'Activate'}
+                                                Edit
                                             </button>
                                         </td>
                                     </tr>
@@ -285,7 +335,6 @@ function Professionals() {
                                 }}>
                                     <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', margin: 0 }}>
                                         <strong>Note:</strong> Staff member will need to sign up with this email address to access the system.
-                                        For automatic invite emails, configure the service role key.
                                     </p>
                                 </div>
                             </div>
@@ -305,6 +354,100 @@ function Professionals() {
                                     disabled={creating}
                                 >
                                     {creating ? 'Adding...' : 'Add Staff'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Edit Staff Modal */}
+            {showEditModal && editingStaff && (
+                <div className="modal-backdrop" onClick={() => setShowEditModal(false)}>
+                    <div className="modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h3>Edit Staff Member</h3>
+                        </div>
+                        <form onSubmit={handleUpdateStaff}>
+                            <div className="modal-body">
+                                <div className="input-group">
+                                    <label htmlFor="edit-nome">Name *</label>
+                                    <input
+                                        id="edit-nome"
+                                        type="text"
+                                        className="input"
+                                        value={editStaff.nome}
+                                        onChange={(e) => setEditStaff({ ...editStaff, nome: e.target.value })}
+                                        placeholder="Enter staff name"
+                                        required
+                                    />
+                                </div>
+
+                                <div className="input-group">
+                                    <label htmlFor="edit-email">Email (Read-only)</label>
+                                    <input
+                                        id="edit-email"
+                                        type="email"
+                                        className="input"
+                                        value={editingStaff.email}
+                                        disabled
+                                        style={{ backgroundColor: 'var(--color-bg-subtle)', cursor: 'not-allowed' }}
+                                    />
+                                    <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', marginTop: 'var(--space-xs)' }}>
+                                        Email cannot be changed for security reasons
+                                    </p>
+                                </div>
+
+                                <div className="input-group">
+                                    <label htmlFor="edit-role">Role</label>
+                                    <select
+                                        id="edit-role"
+                                        className="input"
+                                        value={editStaff.role}
+                                        onChange={(e) => setEditStaff({ ...editStaff, role: e.target.value })}
+                                    >
+                                        <option value="profissional">Professional</option>
+                                        <option value="admin">Admin</option>
+                                    </select>
+                                    {editStaff.role !== editingStaff.role && (
+                                        <p style={{ fontSize: 'var(--text-sm)', color: '#ff9500', marginTop: 'var(--space-xs)' }}>
+                                            ⚠️ Role change will affect access permissions
+                                        </p>
+                                    )}
+                                </div>
+
+                                <div className="input-group">
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={editStaff.ativo}
+                                            onChange={(e) => setEditStaff({ ...editStaff, ativo: e.target.checked })}
+                                        />
+                                        Active
+                                    </label>
+                                    {!editStaff.ativo && editingStaff.ativo && (
+                                        <p style={{ fontSize: 'var(--text-sm)', color: '#ff3b30', marginTop: 'var(--space-xs)' }}>
+                                            ⚠️ Deactivating will immediately log out this user
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="modal-footer">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowEditModal(false)}
+                                    className="btn btn-secondary"
+                                    disabled={updating}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="btn btn-primary"
+                                    disabled={updating}
+                                >
+                                    {updating ? 'Updating...' : 'Update Staff'}
                                 </button>
                             </div>
                         </form>
