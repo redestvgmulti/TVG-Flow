@@ -31,6 +31,11 @@
     /* Bottom spacing */
 }
 
+/* --- BOTTOM NAV (Default: Hidden) --- */
+.bottom-nav {
+    display: none;
+}
+
 /* --- SIDEBAR STRUCTURE --- */
 .sidebar {
     width: 250px;
@@ -63,7 +68,6 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
-    /* Tighter nav items */
 }
 
 /* --- DASHBOARD GRID --- */
@@ -107,18 +111,21 @@
         /* Space for BottomNav + FAB */
     }
 
-    /* Bottom Nav Structure */
+    /* Bottom Nav Structure (FORCED) */
     .bottom-nav {
-        display: flex;
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
+        display: flex !important;
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
         height: 64px;
-        z-index: 900;
+        z-index: 9999;
         justify-content: space-around;
         align-items: center;
+        background: #ffffff;
         padding-bottom: env(safe-area-inset-bottom);
+        width: 100%;
+        border-top: 1px solid rgba(0, 0, 0, 0.1);
     }
 
     .nav-item {
@@ -128,13 +135,10 @@
         align-items: center;
         justify-content: center;
         height: 100%;
-    }
-}
-
-/* Base Desktop: Hide Bottom Nav */
-@media (min-width: 769px) {
-    .bottom-nav {
-        display: none;
+        gap: 4px;
+        /* Space between icon and text */
+        text-align: center;
+        min-height: 44px;
     }
 }
 

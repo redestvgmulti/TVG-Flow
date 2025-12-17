@@ -5,6 +5,15 @@
 
 body {
     background-color: var(--color-bg-app);
+    /* Apple-like Aurora Mesh Gradient (Subtle) */
+    background-image:
+        radial-gradient(at 0% 0%, rgba(79, 110, 247, 0.08) 0px, transparent 50%),
+        radial-gradient(at 100% 0%, rgba(52, 199, 89, 0.05) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(229, 72, 77, 0.03) 0px, transparent 50%);
+    background-attachment: fixed;
+    /* Parallax feel */
+    background-size: 100% 100%;
+
     color: var(--color-text-primary);
     font-family: var(--font-stack);
     font-size: var(--text-base);
