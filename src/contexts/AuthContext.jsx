@@ -50,7 +50,7 @@ export function AuthProvider({ children }) {
                 .from('profissionais')
                 .select('id, role, nome, ativo')
                 .eq('id', userId)
-                .single()
+                .maybeSingle()
 
             if (error) {
                 console.error('Error fetching professional data:', error)
@@ -61,16 +61,26 @@ export function AuthProvider({ children }) {
                 return
             }
 
+            // If no professional found, clear state
+            if (!professional) {
+                console.warn('No professional record found for user')
+                setRole(null)
+                setProfessionalId(null)
+                setProfessionalName(null)
+                setLoading(false)
+                return
+            }
+
             // SECURITY: Check if user is active
-            if (professional && !professional.ativo) {
+            if (!professional.ativo) {
                 console.warn('User is inactive, forcing logout')
                 await signOut()
                 return
             }
 
-            setRole(professional?.role || null)
-            setProfessionalId(professional?.id || null)
-            setProfessionalName(professional?.nome || null)
+            setRole(professional.role || null)
+            setProfessionalId(professional.id || null)
+            setProfessionalName(professional.nome || null)
         } catch (error) {
             console.error('Error in fetchProfessionalData:', error)
             setRole(null)

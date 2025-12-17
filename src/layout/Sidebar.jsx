@@ -4,111 +4,104 @@ import { useAuth } from '../contexts/AuthContext'
 
 function Sidebar() {
     const { user, professionalName, signOut } = useAuth()
-    const [adminPanelOpen, setAdminPanelOpen] = useState(false)
+    const [adminPanelOpen, setAdminPanelOpen] = useState(true) // Default open for better discovery
     const [profileOpen, setProfileOpen] = useState(false)
+
+    // Helper to get initials
+    const getInitials = (name) => {
+        return (name || 'U').charAt(0).toUpperCase()
+    }
 
     return (
         <aside className="sidebar">
+            {/* Logo Area */}
             <div className="sidebar-header">
-                <h2>TVG Flow</h2>
+                <div className="brand-logo">
+                    <span className="brand-dot"></span>
+                    <h2>TVG Flow</h2>
+                </div>
             </div>
 
+            {/* Navigation */}
             <nav className="sidebar-nav">
-                <NavLink to="/admin" end className="sidebar-link">
-                    Dashboard
-                </NavLink>
+                <div className="nav-section">
+                    <p className="nav-label">MENU PRINCIPAL</p>
+                    <NavLink to="/admin" end className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+                        <span className="nav-icon">📊</span>
+                        <span className="nav-text">Dashboard</span>
+                    </NavLink>
 
-                <NavLink to="/admin/tasks" className="sidebar-link">
-                    Tarefas
-                </NavLink>
+                    <NavLink to="/admin/tasks" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+                        <span className="nav-icon">✅</span>
+                        <span className="nav-text">Tarefas</span>
+                    </NavLink>
 
-                {/* Painel Administrativo - Expansível */}
-                <div className={`sidebar-group ${adminPanelOpen ? 'open' : ''}`}>
-                    <button
-                        className="sidebar-group-title"
-                        onClick={() => setAdminPanelOpen(!adminPanelOpen)}
-                    >
-                        <span>Painel Administrativo</span>
-                        <span className="sidebar-group-arrow">›</span>
-                    </button>
-
-                    {adminPanelOpen && (
-                        <div className="sidebar-submenu">
-                            <NavLink to="/admin/areas" className="sidebar-link">
-                                Setores
-                            </NavLink>
-                            <NavLink to="/admin/professionals" className="sidebar-link">
-                                Funcionários
-                            </NavLink>
-                            <NavLink to="/admin/reports" className="sidebar-link">
-                                Relatórios
-                            </NavLink>
-                        </div>
-                    )}
+                    <NavLink to="/admin/calendar" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+                        <span className="nav-icon">📅</span>
+                        <span className="nav-text">Calendário</span>
+                    </NavLink>
                 </div>
 
-                <NavLink to="/admin/calendar" className="sidebar-link">
-                    Calendário
-                </NavLink>
+                <div className="nav-section">
+                    <p className="nav-label">GERENCIAMENTO</p>
+                    {/* Admin Panel Group */}
+                    <div className={`nav-group ${adminPanelOpen ? 'open' : ''}`}>
+                        <button
+                            className="nav-group-trigger"
+                            onClick={() => setAdminPanelOpen(!adminPanelOpen)}
+                        >
+                            <span className="nav-icon">⚙️</span>
+                            <span className="nav-text">Administração</span>
+                            <span className="nav-arrow">›</span>
+                        </button>
+
+                        {adminPanelOpen && (
+                            <div className="nav-sub">
+                                <NavLink to="/admin/areas" className="nav-sub-item">
+                                    Setores
+                                </NavLink>
+                                <NavLink to="/admin/professionals" className="nav-sub-item">
+                                    Funcionários
+                                </NavLink>
+                                <NavLink to="/admin/reports" className="nav-sub-item">
+                                    Relatórios
+                                </NavLink>
+                            </div>
+                        )}
+                    </div>
+                </div>
             </nav>
 
-            {/* Perfil do Usuário - Rodapé */}
+            {/* User Profile Footer */}
             <div className="sidebar-footer">
-                <div className="sidebar-profile" onClick={() => setProfileOpen(!profileOpen)}>
-                    <div className="sidebar-avatar">
-                        {(professionalName || user?.email || 'U').charAt(0).toUpperCase()}
+                <div className={`user-menu ${profileOpen ? 'active' : ''}`} onClick={() => setProfileOpen(!profileOpen)}>
+                    <div className="user-avatar">
+                        {getInitials(professionalName || user?.email)}
                     </div>
-                    <div className="sidebar-user-info">
-                        <span className="sidebar-user-name">
-                            {professionalName || 'Usuário'}
-                        </span>
-                        <span className="sidebar-user-email">
-                            {user?.email}
-                        </span>
+                    <div className="user-info">
+                        <span className="user-name">{professionalName || 'Usuário'}</span>
+                        <span className="user-role">Online</span>
                     </div>
+                    <div className="user-status-indicator"></div>
                 </div>
 
-                {/* Dropdown do Perfil */}
+                {/* Profile Popup */}
                 {profileOpen && (
                     <>
-                        <div
-                            style={{
-                                position: 'fixed',
-                                top: 0,
-                                left: 0,
-                                right: 0,
-                                bottom: 0,
-                                zIndex: 999
-                            }}
-                            onClick={() => setProfileOpen(false)}
-                        />
-                        <div className="profile-dropdown">
-                            <div className="profile-dropdown-header">
-                                <p>{professionalName || 'Usuário'}</p>
-                                <p>{user?.email}</p>
+                        <div className="backdrop-invisible" onClick={() => setProfileOpen(false)} />
+                        <div className="profile-popup glasses">
+                            <div className="popup-header">
+                                <div className="popup-avatar">
+                                    {getInitials(professionalName)}
+                                </div>
+                                <div>
+                                    <p className="popup-name">{professionalName}</p>
+                                    <p className="popup-email">{user?.email}</p>
+                                </div>
                             </div>
-
-                            <div
-                                className="profile-dropdown-item"
-                                onClick={() => {/* TODO: Configurações */ }}
-                            >
-                                ⚙️ Configurações
-                            </div>
-
-                            <div
-                                className="profile-dropdown-item"
-                                onClick={() => {/* TODO: Ajuda */ }}
-                            >
-                                ❓ Ajuda
-                            </div>
-
-                            <div className="profile-dropdown-divider" />
-
-                            <div
-                                className="profile-dropdown-item logout"
-                                onClick={signOut}
-                            >
-                                🚪 Sair
+                            <div className="popup-divider" />
+                            <div className="popup-item" onClick={signOut}>
+                                <span className="text-danger">Sair do Sistema</span>
                             </div>
                         </div>
                     </>

@@ -317,122 +317,118 @@ function Painel() {
     }
 
     return (
-        <div>
-            <h2>Painel</h2>
+        <div className="dashboard-container animation-fade-in">
+            <div className="dashboard-header">
+                <h2>Painel</h2>
+            </div>
 
             {feedback.show && (
-                <div
-                    className="card"
-                    style={{
-                        marginBottom: 'var(--space-md)',
-                        padding: 'var(--space-md)',
-                        backgroundColor: feedback.type === 'success' ? '#d1f4dd' : '#ffe5e5',
-                        border: `1px solid ${feedback.type === 'success' ? '#34c759' : '#ff3b30'}`
-                    }}
-                >
-                    <p style={{
-                        margin: 0,
-                        color: feedback.type === 'success' ? '#34c759' : '#ff3b30',
-                        fontWeight: 'var(--weight-medium)'
-                    }}>
+                <div className={`card mb-6 p-4 border-${feedback.type === 'success' ? 'success' : 'danger'} bg-${feedback.type === 'success' ? 'success' : 'danger'}-subtle`}>
+                    <p className={`text-${feedback.type === 'success' ? 'success' : 'danger'} font-medium m-0`}>
                         {feedback.message}
                     </p>
                 </div>
             )}
 
             {/* KPI Cards */}
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                gap: 'var(--space-md)',
-                marginBottom: 'var(--space-xl)'
-            }}>
-                <div className="card">
-                    <h3 style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                        Total de Tarefas
-                    </h3>
-                    <p style={{ fontSize: 'var(--text-3xl)', fontWeight: 'var(--weight-bold)', margin: 0 }}>
-                        {stats.totalTasks}
-                    </p>
+            <div className="dashboard-grid-metrics">
+                <div className="card metric-card">
+                    <h3 className="metric-label">Total de Tarefas</h3>
+                    <p className="metric-value">{stats.totalTasks}</p>
                 </div>
 
-                <div className="card">
-                    <h3 style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                        Tarefas Ativas
-                    </h3>
-                    <p style={{ fontSize: 'var(--text-3xl)', fontWeight: 'var(--weight-bold)', margin: 0 }}>
-                        {stats.activeTasks}
-                    </p>
+                <div className="card metric-card">
+                    <h3 className="metric-label">Tarefas Ativas</h3>
+                    <p className="metric-value" style={{ color: 'var(--color-primary)' }}>{stats.activeTasks}</p>
                 </div>
 
-                <div className="card">
-                    <h3 style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                        Concluídas
-                    </h3>
-                    <p style={{ fontSize: 'var(--text-3xl)', fontWeight: 'var(--weight-bold)', margin: 0 }}>
-                        {stats.completedTasks}
-                    </p>
+                <div className="card metric-card">
+                    <h3 className="metric-label">Concluídas</h3>
+                    <p className="metric-value" style={{ color: 'var(--color-success)' }}>{stats.completedTasks}</p>
                 </div>
 
-                <div className="card">
-                    <h3 style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                        Profissionais
-                    </h3>
-                    <p style={{ fontSize: 'var(--text-3xl)', fontWeight: 'var(--weight-bold)', margin: 0 }}>
-                        {stats.totalProfissionais}
-                    </p>
+                <div className="card metric-card">
+                    <h3 className="metric-label">Profissionais</h3>
+                    <p className="metric-value">{stats.totalProfissionais}</p>
                 </div>
             </div>
 
             {/* Charts Row */}
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-                gap: 'var(--space-md)',
-                marginBottom: 'var(--space-xl)'
-            }}>
+            <div className="dashboard-grid-charts">
                 <div className="card">
-                    <h3 style={{ marginBottom: 'var(--space-md)' }}>Tarefas ao Longo do Tempo (Últimos 30 Dias)</h3>
+                    <div className="card-header">
+                        <h3 className="card-title">Tarefas (30 dias)</h3>
+                    </div>
                     {tasksOverTime.length > 0 ? (
                         <ResponsiveContainer width="100%" height={250}>
                             <LineChart data={tasksOverTime}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#e5e5ea" />
+                                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
                                 <XAxis
                                     dataKey="date"
-                                    tick={{ fontSize: 11, fill: '#6e6e73' }}
-                                    interval="preserveStartEnd"
+                                    tick={{ fontSize: 11, fill: '#6B7280' }}
+                                    axisLine={false}
+                                    tickLine={false}
+                                    dy={10}
                                 />
-                                <YAxis tick={{ fontSize: 11, fill: '#6e6e73' }} />
-                                <Tooltip />
+                                <YAxis
+                                    tick={{ fontSize: 11, fill: '#6B7280' }}
+                                    axisLine={false}
+                                    tickLine={false}
+                                />
+                                <Tooltip
+                                    contentStyle={{
+                                        borderRadius: '8px',
+                                        border: 'none',
+                                        boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                                    }}
+                                />
                                 <Line
                                     type="monotone"
                                     dataKey="tasks"
-                                    stroke="#007aff"
-                                    strokeWidth={2}
-                                    dot={{ fill: '#007aff', r: 3 }}
+                                    stroke="var(--color-primary)"
+                                    strokeWidth={3}
+                                    dot={{ fill: 'var(--color-primary)', strokeWidth: 2, r: 4, stroke: '#fff' }}
+                                    activeDot={{ r: 6 }}
                                 />
                             </LineChart>
                         </ResponsiveContainer>
                     ) : (
-                        <div style={{ textAlign: 'center', padding: 'var(--space-xl)', color: 'var(--color-text-secondary)' }}>
-                            <p style={{ marginBottom: 'var(--space-xs)' }}>Nenhum dado de tarefa ainda</p>
-                            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>
-                                Crie sua primeira tarefa para ver tendências
-                            </p>
+                        <div className="empty-state">
+                            <span className="empty-icon">📉</span>
+                            <p className="empty-text">Sem dados suficientes para exibir o gráfico.</p>
                         </div>
                     )}
                 </div>
 
                 <div className="card">
-                    <h3 style={{ marginBottom: 'var(--space-md)' }}>Tarefas por Status</h3>
+                    <div className="card-header">
+                        <h3 className="card-title">Status Atual</h3>
+                    </div>
                     {tasksByStatus.length > 0 ? (
                         <ResponsiveContainer width="100%" height={250}>
                             <BarChart data={tasksByStatus}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#e5e5ea" />
-                                <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#6e6e73' }} />
-                                <YAxis tick={{ fontSize: 11, fill: '#6e6e73' }} />
-                                <Tooltip />
-                                <Bar dataKey="value" radius={[8, 8, 0, 0]}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+                                <XAxis
+                                    dataKey="name"
+                                    tick={{ fontSize: 11, fill: '#6B7280' }}
+                                    axisLine={false}
+                                    tickLine={false}
+                                    dy={10}
+                                />
+                                <YAxis
+                                    tick={{ fontSize: 11, fill: '#6B7280' }}
+                                    axisLine={false}
+                                    tickLine={false}
+                                />
+                                <Tooltip
+                                    cursor={{ fill: 'var(--color-bg-subtle)' }}
+                                    contentStyle={{
+                                        borderRadius: '8px',
+                                        border: 'none',
+                                        boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                                    }}
+                                />
+                                <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={40}>
                                     {tasksByStatus.map((entry, index) => (
                                         <Cell key={`cell-${index}`} fill={entry.color} />
                                     ))}
@@ -440,138 +436,82 @@ function Painel() {
                             </BarChart>
                         </ResponsiveContainer>
                     ) : (
-                        <div style={{ textAlign: 'center', padding: 'var(--space-xl)', color: 'var(--color-text-secondary)' }}>
-                            <p style={{ marginBottom: 'var(--space-xs)' }}>Nenhum dado de status</p>
-                            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>
-                                As tarefas aparecerão aqui conforme você as criar
-                            </p>
+                        <div className="empty-state">
+                            <span className="empty-icon">📊</span>
+                            <p className="empty-text">Nenhuma tarefa ativa no momento.</p>
                         </div>
                     )}
                 </div>
             </div>
 
-            {tasksByPriority.length > 0 && (
-                <div className="card" style={{ marginBottom: 'var(--space-xl)' }}>
-                    <h3 style={{ marginBottom: 'var(--space-md)' }}>Tarefas por Prioridade</h3>
-                    <ResponsiveContainer width="100%" height={250}>
-                        <PieChart>
-                            <Pie
-                                data={tasksByPriority}
-                                cx="50%"
-                                cy="50%"
-                                labelLine={false}
-                                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                                outerRadius={80}
-                                fill="#8884d8"
-                                dataKey="value"
-                            >
-                                {tasksByPriority.map((entry, index) => {
-                                    const colors = ['#6e6e73', '#007aff', '#ff9500', '#ff3b30']
-                                    return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
-                                })}
-                            </Pie>
-                            <Tooltip />
-                        </PieChart>
-                    </ResponsiveContainer>
-                </div>
-            )}
-
-            {/* Tarefas Recentes */}
+            {/* Recent Tasks */}
             <div className="card">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-lg)' }}>
-                    <h3 style={{ margin: 0 }}>Tarefas Recentes</h3>
+                <div className="card-header">
+                    <h3 className="card-title">Tarefas Recentes</h3>
                     <button onClick={() => setShowCreateModal(true)} className="btn btn-primary">
                         + Nova Tarefa
                     </button>
                 </div>
 
                 {recentTasks.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: 'var(--space-2xl)', color: 'var(--color-text-secondary)' }}>
-                        <p style={{ fontSize: 'var(--text-lg)', marginBottom: 'var(--space-sm)' }}>Nenhuma tarefa ainda</p>
-                        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', marginBottom: 'var(--space-md)' }}>
-                            Comece criando sua primeira tarefa
-                        </p>
+                    <div className="empty-state">
+                        <span className="empty-icon">📝</span>
+                        <p className="empty-text">Você ainda não tem tarefas criadas. Comece agora!</p>
                         <button onClick={() => setShowCreateModal(true)} className="btn btn-primary">
                             Criar Primeira Tarefa
                         </button>
                     </div>
                 ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
+                    <div className="task-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                         {recentTasks.map(task => (
                             <div
                                 key={task.id}
+                                className="task-item card"
                                 style={{
-                                    padding: 'var(--space-md)',
-                                    border: '1px solid var(--color-border-light)',
-                                    borderRadius: 'var(--radius-md)',
+                                    padding: '16px',
                                     display: 'flex',
                                     justifyContent: 'space-between',
                                     alignItems: 'center',
-                                    gap: 'var(--space-md)',
-                                    flexWrap: 'wrap'
+                                    gap: '16px',
+                                    flexWrap: 'wrap',
+                                    marginBottom: 0,
+                                    boxShadow: 'none',
+                                    border: '1px solid var(--color-border)'
                                 }}
                             >
                                 <div style={{ flex: 1, minWidth: '200px' }}>
-                                    <p style={{ fontWeight: 'var(--weight-medium)', marginBottom: 'var(--space-xs)' }}>
+                                    <p style={{ fontWeight: '600', marginBottom: '4px', color: 'var(--color-text-primary)' }}>
                                         {task.titulo}
                                     </p>
-                                    <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', margin: 0 }}>
-                                        Prazo: {new Date(task.deadline).toLocaleDateString()} • Atribuída: {getAssignedToName(task.assigned_to)}
-                                        {task.drive_link && (
-                                            <>
-                                                {' • '}
-                                                <a
-                                                    href={task.drive_link}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    style={{ color: 'var(--color-primary)', textDecoration: 'none' }}
-                                                >
-                                                    📎 Arquivos
-                                                </a>
-                                            </>
-                                        )}
+                                    <p className="text-sm text-muted" style={{ margin: 0 }}>
+                                        Prazo: {new Date(task.deadline).toLocaleDateString()} • {getAssignedToName(task.assigned_to)}
                                     </p>
                                 </div>
-                                <div style={{ display: 'flex', gap: 'var(--space-xs)', alignItems: 'center', flexWrap: 'wrap' }}>
+
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                                     <span className={`badge ${getStatusBadgeClass(task.status)}`}>
                                         {task.status}
                                     </span>
-                                    {task.priority !== 'medium' && task.priority !== 'low' && (
-                                        <span className={`badge ${getPriorityBadgeClass(task.priority)}`}>
-                                            {task.priority}
-                                        </span>
-                                    )}
-                                    <button
-                                        onClick={() => handleOpenReatribuirModal(task)}
-                                        className="btn btn-secondary"
-                                        style={{ padding: 'var(--space-xs) var(--space-sm)', fontSize: 'var(--text-sm)' }}
-                                    >
-                                        Reatribuir
-                                    </button>
-                                    {task.status !== 'completed' && (
+
+                                    <div className="btn-group" style={{ display: 'flex', gap: '4px' }}>
                                         <button
-                                            onClick={() => handleCompleteTask(task.id, task.titulo)}
-                                            className="btn btn-secondary"
-                                            style={{ padding: 'var(--space-xs) var(--space-sm)', fontSize: 'var(--text-sm)' }}
+                                            onClick={() => handleOpenReatribuirModal(task)}
+                                            className="btn btn-ghost btn-xs"
+                                            title="Reatribuir"
                                         >
-                                            Complete
+                                            👤
                                         </button>
-                                    )}
-                                    <select
-                                        value={task.status}
-                                        onChange={(e) => handleUpdateStatus(task.id, e.target.value, task.titulo)}
-                                        style={{
-                                            padding: 'var(--space-xs) var(--space-sm)',
-                                            fontSize: 'var(--text-sm)',
-                                            borderRadius: 'var(--radius-sm)',
-                                            border: '1px solid var(--color-border)'
-                                        }}
-                                    >
-                                        <option value="pending">Pending</option>
-                                        <option value="in_progress">In Progress</option>
-                                        <option value="completed">Concluídas</option>
-                                        <option value="overdue">Overdue</option>
-                                    </select>
+
+                                        {task.status !== 'completed' && (
+                                            <button
+                                                onClick={() => handleCompleteTask(task.id, task.titulo)}
+                                                className="btn btn-ghost btn-xs text-success"
+                                                title="Concluir"
+                                            >
+                                                ✅
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         ))}
@@ -579,30 +519,32 @@ function Painel() {
                 )}
             </div>
 
+            {/* Modals are kept as is, just ensuring classes match */}
             {/* Create Task Modal */}
             {showCreateModal && (
                 <div className="modal-backdrop" onClick={() => setShowCreateModal(false)}>
                     <div className="modal" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
-                            <h3>Create New Task</h3>
+                            <h3>Nova Tarefa</h3>
+                            <button className="modal-close" onClick={() => setShowCreateModal(false)}>×</button>
                         </div>
                         <form onSubmit={handleCreateTask}>
                             <div className="modal-body">
                                 <div className="input-group">
-                                    <label htmlFor="titulo">Title *</label>
+                                    <label htmlFor="titulo">Título *</label>
                                     <input
                                         id="titulo"
                                         type="text"
                                         className="input"
                                         value={newTask.titulo}
                                         onChange={(e) => setNewTask({ ...newTask, titulo: e.target.value })}
-                                        placeholder="Enter task title"
+                                        placeholder="Ex: Atualizar relatório mensal"
                                         required
                                     />
                                 </div>
 
                                 <div className="input-group">
-                                    <label htmlFor="deadline">Deadline *</label>
+                                    <label htmlFor="deadline">Prazo *</label>
                                     <input
                                         id="deadline"
                                         type="datetime-local"
@@ -614,64 +556,44 @@ function Painel() {
                                 </div>
 
                                 <div className="input-group">
-                                    <label htmlFor="assigned_to">Assigned To</label>
+                                    <label htmlFor="assigned_to">Atribuir a</label>
                                     <select
                                         id="assigned_to"
                                         className="input"
                                         value={newTask.assigned_to}
                                         onChange={(e) => setNewTask({ ...newTask, assigned_to: e.target.value })}
                                     >
-                                        <option value="">Não atribuída</option>
+                                        <option value="">-- Selecione --</option>
                                         {professionals.map(prof => (
                                             <option key={prof.id} value={prof.id}>{prof.nome}</option>
                                         ))}
                                     </select>
-                                    <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', marginTop: 'var(--space-xs)' }}>
-                                        Only active professionals are shown
-                                    </p>
                                 </div>
 
                                 <div className="input-group">
-                                    <label htmlFor="drive_link">Drive / Arquivos Link</label>
+                                    <label htmlFor="drive_link">Link do Arquivo (Drive)</label>
                                     <input
                                         id="drive_link"
                                         type="url"
                                         className="input"
                                         value={newTask.drive_link}
                                         onChange={(e) => setNewTask({ ...newTask, drive_link: e.target.value })}
-                                        placeholder="https://drive.google.com/..."
+                                        placeholder="https://..."
                                     />
-                                    <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', marginTop: 'var(--space-xs)' }}>
-                                        Optional link to files or documents
-                                    </p>
                                 </div>
 
                                 <div className="input-group">
-                                    <label htmlFor="priority">Priority</label>
+                                    <label htmlFor="priority">Prioridade</label>
                                     <select
                                         id="priority"
                                         className="input"
                                         value={newTask.priority}
                                         onChange={(e) => setNewTask({ ...newTask, priority: e.target.value })}
                                     >
-                                        <option value="low">Low</option>
-                                        <option value="medium">Medium</option>
-                                        <option value="high">High</option>
-                                        <option value="urgent">Urgent</option>
-                                    </select>
-                                </div>
-
-                                <div className="input-group">
-                                    <label htmlFor="status">Initial Status</label>
-                                    <select
-                                        id="status"
-                                        className="input"
-                                        value={newTask.status}
-                                        onChange={(e) => setNewTask({ ...newTask, status: e.target.value })}
-                                    >
-                                        <option value="pending">Pending</option>
-                                        <option value="in_progress">In Progress</option>
-                                        <option value="completed">Concluídas</option>
+                                        <option value="low">Baixa</option>
+                                        <option value="medium">Média</option>
+                                        <option value="high">Alta</option>
+                                        <option value="urgent">Urgente</option>
                                     </select>
                                 </div>
                             </div>
@@ -683,14 +605,14 @@ function Painel() {
                                     className="btn btn-secondary"
                                     disabled={creating}
                                 >
-                                    Cancel
+                                    Cancelar
                                 </button>
                                 <button
                                     type="submit"
                                     className="btn btn-primary"
                                     disabled={creating}
                                 >
-                                    {creating ? 'Creating...' : 'Create Task'}
+                                    {creating ? 'Criando...' : 'Criar Tarefa'}
                                 </button>
                             </div>
                         </form>
@@ -698,21 +620,22 @@ function Painel() {
                 </div>
             )}
 
-            {/* Reatribuir Task Modal */}
+            {/* Reatribuir Modal */}
             {showReatribuirModal && reassigningTask && (
                 <div className="modal-backdrop" onClick={() => setShowReatribuirModal(false)}>
                     <div className="modal" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
-                            <h3>Reatribuir Task</h3>
+                            <h3>Reatribuir Tarefa</h3>
+                            <button className="modal-close" onClick={() => setShowReatribuirModal(false)}>×</button>
                         </div>
                         <form onSubmit={handleReatribuirTask}>
                             <div className="modal-body">
-                                <p style={{ marginBottom: 'var(--space-md)', color: 'var(--color-text-secondary)' }}>
-                                    Task: <strong>{reassigningTask.titulo}</strong>
+                                <p className="text-muted" style={{ marginBottom: '16px' }}>
+                                    Tarefa: <strong className="text-primary">{reassigningTask.titulo}</strong>
                                 </p>
 
                                 <div className="input-group">
-                                    <label htmlFor="reassign_to">Assign To</label>
+                                    <label htmlFor="reassign_to">Novo Responsável</label>
                                     <select
                                         id="reassign_to"
                                         className="input"
@@ -720,14 +643,11 @@ function Painel() {
                                         onChange={(e) => setReatribuirTo(e.target.value)}
                                         required
                                     >
-                                        <option value="">Não atribuída</option>
+                                        <option value="">-- Selecione --</option>
                                         {professionals.map(prof => (
                                             <option key={prof.id} value={prof.id}>{prof.nome}</option>
                                         ))}
                                     </select>
-                                    <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', marginTop: 'var(--space-xs)' }}>
-                                        Only active professionals are shown
-                                    </p>
                                 </div>
                             </div>
 
@@ -738,14 +658,14 @@ function Painel() {
                                     className="btn btn-secondary"
                                     disabled={reassigning}
                                 >
-                                    Cancel
+                                    Cancelar
                                 </button>
                                 <button
                                     type="submit"
                                     className="btn btn-primary"
                                     disabled={reassigning}
                                 >
-                                    {reassigning ? 'Reatribuiring...' : 'Reatribuir Task'}
+                                    {reassigning ? 'Salvando...' : 'Confirmar'}
                                 </button>
                             </div>
                         </form>

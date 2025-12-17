@@ -1,15 +1,36 @@
 /* Base Styles - CityOS Premium */
+
+/* Imports - Fonts served via Google Fonts (IBM Plex Sans) & CDN (Satoshi) 
+   Note: In a real prod environment, self-hosting is better for performance. */
+@import url('https://api.fontshare.com/v2/css?f[]=satoshi@900,700,500,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+
+/* Modern Reset */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html,
+body {
+    height: 100%;
+}
+
 body {
     font-family: var(--font-body);
     font-size: var(--text-base);
-    font-weight: var(--weight-regular);
-    line-height: 1.6;
-    background-color: var(--color-bg-app);
     color: var(--color-text-primary);
+    background-color: var(--color-bg-app);
+    line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
 }
 
+/* Typography Defaults */
 h1,
 h2,
 h3,
@@ -17,70 +38,54 @@ h4,
 h5,
 h6 {
     font-family: var(--font-display);
+    color: var(--color-text-primary);
     font-weight: var(--weight-bold);
-    color: var(--color-text-primary);
+    letter-spacing: -0.025em;
+    /* Tighter tracking for display text */
     line-height: 1.2;
-    letter-spacing: -0.02em;
-    /* Tight tracking for display font */
 }
 
-h1 {
-    font-size: var(--text-3xl);
-    margin-bottom: var(--space-lg);
-}
-
-h2 {
-    font-size: var(--text-2xl);
-    margin-bottom: var(--space-md);
-}
-
-button {
-    cursor: pointer;
-    border: none;
-    background: none;
-    font-family: inherit;
-    transition: all var(--transition-base);
-}
-
-input,
-textarea,
-select {
-    font-family: inherit;
-    font-size: var(--text-base);
-    color: var(--color-text-primary);
-    background-color: var(--color-bg-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    padding: var(--space-sm) var(--space-md);
-    outline: none;
-    transition: all var(--transition-base);
-}
-
-input:focus,
-textarea:focus,
-select:focus {
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px var(--color-primary-light);
-}
-
-input::placeholder,
-textarea::placeholder {
-    color: var(--color-text-tertiary);
-}
-
-label {
-    font-size: var(--text-sm);
-    font-weight: var(--weight-medium);
+p {
+    margin-bottom: var(--space-4);
     color: var(--color-text-secondary);
-    margin-bottom: var(--space-xs);
 }
 
-a {
-    color: var(--color-primary);
-    text-decoration: none;
-    transition: color var(--transition-fast);
+/* Focus States - Accessibility */
+:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
 }
 
-a:hover {
-    color: var(--color-primary-hover);
+/* Scrollbar Customization */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #CBD5E1;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #94A3B8;
+}
+
+/* Utility / Helpers */
+.glass-panel {
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--backdrop-blur));
+    -webkit-backdrop-filter: blur(var(--backdrop-blur));
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+}
+
+.text-gradient {
+    background: linear-gradient(135deg, var(--color-primary) 0%, #60A5FA 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
 }

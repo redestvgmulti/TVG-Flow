@@ -29,19 +29,28 @@ function Header() {
     }, [])
 
     return (
-        <header className="admin-header">
-            {/* Contexto Vivo / Status Bar */}
-            <div className="header-status-area">
-                <div className="status-item clock">
+        <header className="status-bar">
+            {/* Left: Context / Date */}
+            <div className="status-left">
+                <div className="status-clock">
                     {time.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                 </div>
-                <div className="status-item">
-                    <span style={{ opacity: 0.3 }}>|</span>
-                    <span>{systemMsg}</span>
+                <div className="status-divider"></div>
+                <div className="status-date">
+                    {time.toLocaleDateString('pt-BR', { weekday: 'short', day: 'numeric', month: 'short' })}
                 </div>
             </div>
 
-            <div className="header-actions">
+            {/* Center: System Pulse (Optional) */}
+            <div className="status-center">
+                <div className="system-pill">
+                    <span className="status-dot"></span>
+                    <span className="status-text">{systemMsg}</span>
+                </div>
+            </div>
+
+            {/* Right: Actions */}
+            <div className="status-right">
                 <NotificationCenter />
             </div>
         </header>

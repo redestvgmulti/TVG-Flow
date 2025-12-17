@@ -1,108 +1,130 @@
-/* Design Tokens - CityOS Premium Theme */
+/* Design Tokens - CityOS Premium Theme v2.0 */
 :root {
     /* 
-     * CORES PRINCIPAIS 
-     * Tons sólidos, neutros e de alto contraste
+     * PALETA DE CORES — CITYOS PREMIUM
+     * Focada em profundidade, contraste e elegância
      */
-    --color-bg-app: #F5F5F7;
-    /* Background principal (cinza Apple claro) */
+
+    /* Backgrounds */
+    --color-bg-app: #F5F7FA;
+    /* Base cinza-azulado muito sutil */
     --color-bg-surface: #FFFFFF;
-    /* Superfícies principais de leitura */
-    --color-bg-subtle: #F9F9FA;
-    /* Fundos secundários/hover muito suaves */
+    /* Superfície padrão */
+    --color-bg-subtle: #F0F2F5;
+    /* Hover/Active sutil */
     --color-bg-sidebar: #0F1218;
-    /* Sidebar sólida, escura, premium */
+    /* Dark Mode Sidebar (Deep Navy/Black) */
+    --color-bg-sidebar-hover: #1A1F28;
+    /* Hover na sidebar */
 
-    /* Texto */
+    /* Text Colors */
     --color-text-primary: #111827;
-    /* Quase preto para leitura máxima */
-    --color-text-secondary: #6B7280;
-    /* Cinza médio para descrições */
+    /* Preto profundo para leitura */
+    --color-text-secondary: #4B5563;
+    /* Cinza médio para suporte */
     --color-text-tertiary: #9CA3AF;
-    /* Placeholders e ícones inativos */
+    /* Cinza claro para meta-dados */
     --color-text-inverse: #FFFFFF;
-    /* Texto sobre fundos escuros */
+    /* Texto em fundos escuros */
+    --color-text-inverse-dim: rgba(255, 255, 255, 0.7);
+    /* Secundário em fundos escuros */
 
-    /* Bordas */
+    /* Brand / Accents */
+    --color-primary: #2563EB;
+    /* Royal Blue Vibrante */
+    --color-primary-hover: #1D4ED8;
+    /* Royal Blue Dark */
+    --color-primary-light: #EFF6FF;
+    /* Fundo azul muito claro */
+    --color-primary-glow: rgba(37, 99, 235, 0.5);
+    /* Glow para focus/active */
+
+    /* Functional Colors */
+    --color-success: #059669;
+    --color-success-bg: #D1FAE5;
+    --color-warning: #D97706;
+    --color-warning-bg: #FEF3C7;
+    --color-danger: #DC2626;
+    --color-danger-bg: #FEE2E2;
+
+    /* Borders */
     --color-border: #E5E7EB;
+    /* Borda padrão */
     --color-border-hover: #D1D5DB;
-
-    /* Ação / Marca (Azul Institucional Refinado) */
-    --color-primary: #0066CC;
-    /* Azul clássico de sistema */
-    --color-primary-hover: #0052A3;
-    --color-primary-subtle: #E6F0FA;
-    /* Backgrounds de seleção */
-
-    /* Semântica */
-    --color-success: #10B981;
-    --color-success-bg: #ECFDF5;
-    --color-warning: #F59E0B;
-    --color-warning-bg: #FFFBEB;
-    --color-danger: #EF4444;
-    --color-danger-bg: #FEF2F2;
+    /* Borda hover */
+    --color-border-sidebar: rgba(255, 255, 255, 0.1);
+    /* Separadores na sidebar */
 
     /* 
-     * TIPOGRAFIA 
-     * Satoshi para display, IBM Plex Sans para UI/Leitura 
+     * GLASSMORPHISM SYSTEM
      */
-    --font-display: 'Satoshi', sans-serif;
-    --font-body: 'IBM Plex Sans', sans-serif;
+    --glass-bg: rgba(255, 255, 255, 0.75);
+    --glass-border: rgba(255, 255, 255, 0.6);
+    --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
+    --backdrop-blur: 16px;
 
-    --text-xs: 12px;
-    --text-sm: 14px;
-    --text-base: 15px;
-    /* Tamanho de leitura confortável */
-    --text-lg: 18px;
-    --text-xl: 24px;
-    --text-2xl: 32px;
-    --text-3xl: 40px;
+    /* 
+     * TYPOGRAPHY
+     */
+    --font-display: 'Satoshi', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-body: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 
-    /* Pesos */
+    /* Scale */
+    --text-xs: 0.75rem;
+    /* 12px */
+    --text-sm: 0.875rem;
+    /* 14px */
+    --text-base: 1rem;
+    /* 16px */
+    --text-lg: 1.125rem;
+    /* 18px */
+    --text-xl: 1.25rem;
+    /* 20px */
+    --text-2xl: 1.5rem;
+    /* 24px */
+    --text-3xl: 2rem;
+    /* 32px */
+    --text-4xl: 2.5rem;
+    /* 40px */
+
+    /* Weights */
     --weight-regular: 400;
     --weight-medium: 500;
+    --weight-semibold: 600;
     --weight-bold: 700;
-    --weight-black: 900;
 
     /* 
-     * ESPAÇAMENTO COMPACTO MAS RESPIRÁVEL 
+     * SPACING & LAYOUT
      */
-    --space-xs: 4px;
-    --space-sm: 8px;
-    --space-md: 16px;
-    --space-lg: 24px;
-    --space-xl: 32px;
-    --space-2xl: 48px;
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-6: 24px;
+    --space-8: 32px;
+    --space-12: 48px;
+
+    --sidebar-width: 260px;
+    --header-height: 60px;
+    --max-content-width: 1400px;
+    /* Largura máxima confortável */
 
     /* 
-     * BORDAS E SOMBRAS 
-     * Estética suave "OS-like"
+     * SHADOWS & RADIUS
      */
     --radius-sm: 6px;
     --radius-md: 10px;
-    /* Padrão para inputs, botões */
     --radius-lg: 16px;
-    /* Padrão para cards */
     --radius-xl: 24px;
-    /* Modais grandes */
     --radius-full: 9999px;
 
-    /* Sombras Premium (Inter) */
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
-    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
-    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 10px 10px -5px rgba(0, 0, 0, 0.03);
+    --shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.04);
+    --shadow-float: 0 8px 16px rgba(0, 0, 0, 0.08);
+    --shadow-depth: 0 12px 24px -6px rgba(0, 0, 0, 0.08);
 
-    /* Específico do CityOS */
-    --shadow-glow: 0 0 20px rgba(0, 102, 204, 0.15);
-    /* Brilho sutil azul */
-
-    /* Glassmorphism */
-    --glass-bg: rgba(255, 255, 255, 0.85);
-    --glass-border: rgba(255, 255, 255, 0.5);
-    --glass-blur: 16px;
-
-    /* Transitions */
+    /* 
+     * ANIMATIONS
+     */
     --transition-fast: 150ms ease;
-    --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-smooth: 300ms cubic-bezier(0.4, 0, 0.2, 1);
 }

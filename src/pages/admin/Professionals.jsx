@@ -249,49 +249,47 @@ function Professionals() {
 
             <div className="card">
                 {professionals.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: 'var(--space-2xl)', color: 'var(--color-text-secondary)' }}>
-                        <p style={{ fontSize: 'var(--text-lg)', marginBottom: 'var(--space-sm)' }}>No professionals yet</p>
-                        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', marginBottom: 'var(--space-md)' }}>
-                            Add your first staff member to get started
-                        </p>
+                    <div className="empty-state">
+                        <span className="empty-icon">👥</span>
+                        <p className="empty-text">Nenhum profissional cadastrado ainda.</p>
                         <button onClick={() => setShowAddModal(true)} className="btn btn-primary">
-                            Add First Staff Member
+                            Adicionar Primeiro Membro
                         </button>
                     </div>
                 ) : (
-                    <div style={{ overflowX: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <div className="table-container">
+                        <table className="table">
                             <thead>
-                                <tr style={{ borderBottom: '2px solid var(--color-border-light)' }}>
-                                    <th style={{ padding: 'var(--space-md)', textAlign: 'left', fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-semibold)', color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Name</th>
-                                    <th style={{ padding: 'var(--space-md)', textAlign: 'left', fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-semibold)', color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Email</th>
-                                    <th style={{ padding: 'var(--space-md)', textAlign: 'left', fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-semibold)', color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Role</th>
-                                    <th style={{ padding: 'var(--space-md)', textAlign: 'left', fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-semibold)', color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</th>
-                                    <th style={{ padding: 'var(--space-md)', textAlign: 'left', fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-semibold)', color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Actions</th>
+                                <tr>
+                                    <th>Nome</th>
+                                    <th>Email</th>
+                                    <th>Função</th>
+                                    <th>Status</th>
+                                    <th>Ações</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {professionals.map(prof => (
-                                    <tr key={prof.id} style={{ borderBottom: '1px solid var(--color-border-light)' }}>
-                                        <td style={{ padding: 'var(--space-md)', fontWeight: 'var(--weight-medium)' }}>{prof.nome}</td>
-                                        <td style={{ padding: 'var(--space-md)', color: 'var(--color-text-secondary)' }}>{prof.email}</td>
-                                        <td style={{ padding: 'var(--space-md)' }}>
-                                            <span className={`badge ${prof.role === 'admin' ? 'badge-primary' : ''}`}>
+                                    <tr key={prof.id}>
+                                        <td style={{ fontWeight: '500' }}>{prof.nome}</td>
+                                        <td className="text-muted">{prof.email}</td>
+                                        <td>
+                                            <span className={`badge ${prof.role === 'admin' ? 'badge-primary' : 'badge-neutral'}`}>
                                                 {prof.role}
                                             </span>
                                         </td>
-                                        <td style={{ padding: 'var(--space-md)' }}>
+                                        <td>
                                             <span className={`badge ${prof.ativo ? 'badge-success' : 'badge-danger'}`}>
-                                                {prof.ativo ? 'Active' : 'Inactive'}
+                                                {prof.ativo ? 'Ativo' : 'Inativo'}
                                             </span>
                                         </td>
-                                        <td style={{ padding: 'var(--space-md)' }}>
+                                        <td>
                                             <button
                                                 onClick={() => handleOpenEditModal(prof)}
-                                                className="btn btn-secondary"
-                                                style={{ padding: 'var(--space-xs) var(--space-sm)', fontSize: 'var(--text-sm)' }}
+                                                className="btn btn-secondary btn-sm"
+                                                style={{ padding: '6px 12px', fontSize: '13px' }}
                                             >
-                                                Edit
+                                                Editar
                                             </button>
                                         </td>
                                     </tr>
