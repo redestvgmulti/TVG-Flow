@@ -108,31 +108,41 @@ function Professionals() {
                 .eq('email', newStaff.email)
                 .single()
 
+
             if (existing) {
-                showFeedback('error', 'A professional with this email already exists')
+                showFeedback('error', 'Um profissional com este email já existe')
                 setCreating(false)
                 return
             }
 
-            const { error } = await supabase
-                .from('profissionais')
-                .insert([{
+            // Chamar Edge Function para criar profissional
+            const { data, error: functionError } = await supabase.functions.invoke('create-professional', {
+                body: {
                     nome: newStaff.nome,
                     email: newStaff.email,
                     role: newStaff.role,
                     ativo: newStaff.ativo,
                     area_id: newStaff.area_id
-                }])
+                }
+            })
 
-            if (error) throw error
+            // Se houver erro na chamada HTTP
+            if (functionError) {
+                throw new Error(functionError.message || 'Erro ao chamar função de criação')
+            }
+
+            // Se a função retornou um erro de negócio
+            if (data && typeof data === 'object' && 'error' in data) {
+                throw new Error(data.error)
+            }
 
             setNewStaff({ nome: '', email: '', role: 'profissional', ativo: true, area_id: '' })
             setShowAddModal(false)
-            showFeedback('success', 'Staff member added! They must sign up with this email to access the system.')
+            showFeedback('success', 'Profissional adicionado! Eles devem fazer login com este email para acessar o sistema.')
             await fetchProfessionals()
         } catch (error) {
             console.error('Error adding staff:', error)
-            showFeedback('error', 'Failed to add staff member: ' + error.message)
+            showFeedback('error', 'Falha ao adicionar profissional: ' + (error.message || 'Erro desconhecido'))
         } finally {
             setCreating(false)
         }
