@@ -34,7 +34,7 @@ function StaffDashboard() {
 
             const { data: tasks, error } = await supabase
                 .from('tarefas')
-                .select('id, titulo, deadline, status, priority, created_at')
+                .select('id, titulo, deadline, status, priority, created_at, drive_link')
                 .eq('assigned_to', professionalId)
                 .order('created_at', { ascending: false })
 
@@ -238,6 +238,19 @@ function StaffDashboard() {
                                     </p>
                                     <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', margin: 0 }}>
                                         Deadline: {new Date(task.deadline).toLocaleDateString()}
+                                        {task.drive_link && (
+                                            <>
+                                                {' • '}
+                                                <a
+                                                    href={task.drive_link}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    style={{ color: 'var(--color-primary)', textDecoration: 'none' }}
+                                                >
+                                                    📎 Files
+                                                </a>
+                                            </>
+                                        )}
                                     </p>
                                 </div>
                                 <div style={{ display: 'flex', gap: 'var(--space-xs)', alignItems: 'center', flexWrap: 'wrap' }}>

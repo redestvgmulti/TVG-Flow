@@ -23,7 +23,8 @@ function Dashboard() {
         deadline: '',
         priority: 'medium',
         status: 'pending',
-        assigned_to: ''
+        assigned_to: '',
+        drive_link: ''
     })
     const [reassignTo, setReassignTo] = useState('')
     const [creating, setCreating] = useState(false)
@@ -66,7 +67,7 @@ function Dashboard() {
 
             const { data: allTasks, error: allTasksError } = await supabase
                 .from('tarefas')
-                .select('id, status, titulo, deadline, priority, created_at, assigned_to')
+                .select('id, status, titulo, deadline, priority, created_at, assigned_to, drive_link')
                 .order('created_at', { ascending: false })
 
             if (allTasksError) throw allTasksError
@@ -160,13 +161,18 @@ function Dashboard() {
                 taskData.assigned_to = newTask.assigned_to
             }
 
+            // Only add drive_link if provided
+            if (newTask.drive_link && newTask.drive_link.trim()) {
+                taskData.drive_link = newTask.drive_link.trim()
+            }
+
             const { error } = await supabase
                 .from('tarefas')
                 .insert([taskData])
 
             if (error) throw error
 
-            setNewTask({ titulo: '', deadline: '', priority: 'medium', status: 'pending', assigned_to: '' })
+            setNewTask({ titulo: '', deadline: '', priority: 'medium', status: 'pending', assigned_to: '', drive_link: '' })
             setShowCreateModal(false)
             showFeedback('success', 'Task created successfully!')
             await fetchDashboardData()
@@ -511,6 +517,19 @@ function Dashboard() {
                                     </p>
                                     <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', margin: 0 }}>
                                         Deadline: {new Date(task.deadline).toLocaleDateString()} • Assigned: {getAssignedToName(task.assigned_to)}
+                                        {task.drive_link && (
+                                            <>
+                                                {' • '}
+                                                <a
+                                                    href={task.drive_link}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    style={{ color: 'var(--color-primary)', textDecoration: 'none' }}
+                                                >
+                                                    📎 Files
+                                                </a>
+                                            </>
+                                        )}
                                     </p>
                                 </div>
                                 <div style={{ display: 'flex', gap: 'var(--space-xs)', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -609,6 +628,21 @@ function Dashboard() {
                                     </select>
                                     <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', marginTop: 'var(--space-xs)' }}>
                                         Only active professionals are shown
+                                    </p>
+                                </div>
+
+                                <div className="input-group">
+                                    <label htmlFor="drive_link">Drive / Files Link</label>
+                                    <input
+                                        id="drive_link"
+                                        type="url"
+                                        className="input"
+                                        value={newTask.drive_link}
+                                        onChange={(e) => setNewTask({ ...newTask, drive_link: e.target.value })}
+                                        placeholder="https://drive.google.com/..."
+                                    />
+                                    <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', marginTop: 'var(--space-xs)' }}>
+                                        Optional link to files or documents
                                     </p>
                                 </div>
 
