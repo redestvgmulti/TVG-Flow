@@ -1,8 +1,11 @@
-/* Modern Reset */
+/* Modern CSS Reset */
 *,
 *::before,
 *::after {
     box-sizing: border-box;
+}
+
+* {
     margin: 0;
     padding: 0;
 }
@@ -15,7 +18,6 @@ body {
 body {
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
 }
 
 img,
@@ -32,20 +34,19 @@ button,
 textarea,
 select {
     font: inherit;
-    border: none;
-    background: transparent;
 }
 
-button {
-    cursor: pointer;
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    overflow-wrap: break-word;
 }
 
-ul,
-ol {
-    list-style: none;
-}
-
-a {
-    text-decoration: none;
-    color: inherit;
+#root {
+    isolation: isolate;
+    height: 100%;
 }

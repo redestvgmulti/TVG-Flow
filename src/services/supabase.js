@@ -14,8 +14,8 @@ console.log('Supabase Config:', { url: supabaseUrl, hasKey: !!supabaseAnonKey })
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    autoRefreshToken: false, // Temporarily disabled for debugging
-    persistSession: false,   // Temporarily disabled for debugging
+    autoRefreshToken: true,
+    persistSession: true,
     detectSessionInUrl: false
   },
   realtime: {

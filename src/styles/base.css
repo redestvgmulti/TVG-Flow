@@ -1,105 +1,24 @@
-/* =========================================
-   BASE STYLES (GLOBAL)
-   Rules: Typography, Reset enhancements, Inputs
-   ========================================= */
-
+/* Base Styles - Minimal */
 body {
-    background-color: var(--color-bg-app);
-    /* Apple-like Aurora Mesh Gradient (Subtle) */
-    background-image:
-        radial-gradient(at 0% 0%, rgba(79, 110, 247, 0.08) 0px, transparent 50%),
-        radial-gradient(at 100% 0%, rgba(52, 199, 89, 0.05) 0px, transparent 50%),
-        radial-gradient(at 100% 100%, rgba(229, 72, 77, 0.03) 0px, transparent 50%);
-    background-attachment: fixed;
-    /* Parallax feel */
-    background-size: 100% 100%;
-
-    color: var(--color-text-primary);
-    font-family: var(--font-stack);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+        'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+        sans-serif;
     font-size: var(--text-base);
-    line-height: 1.4;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-}
-
-/* Headings */
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-    color: var(--color-text-primary);
-    font-weight: var(--weight-semibold);
-    letter-spacing: -0.015em;
-    margin-bottom: var(--space-2);
-}
-
-h1 {
-    font-size: var(--text-3xl);
-    letter-spacing: -0.025em;
-}
-
-h2 {
-    font-size: var(--text-2xl);
-}
-
-h3 {
-    font-size: var(--text-xl);
-}
-
-/* Links */
-a {
-    color: var(--color-primary);
-    text-decoration: none;
-    font-weight: var(--weight-medium);
-    transition: opacity var(--ease-default);
-}
-
-a:hover {
-    opacity: 0.8;
-}
-
-/* Paragraphs */
-p {
-    margin-bottom: var(--space-3);
-    color: var(--color-text-secondary);
-}
-
-/* --- FORM ELEMENTS (Global Normalization) --- */
-input,
-textarea,
-select {
-    font-family: inherit;
-    font-size: var(--text-base);
-    color: var(--color-text-primary);
-    background-color: var(--color-bg-subtle);
-    /* Soft gray bg */
-    border: 1px solid transparent;
-    /* No border by default */
-    border-radius: var(--radius-md);
-    padding: 10px 12px;
-    width: 100%;
-    transition: all var(--ease-default);
-    outline: none;
-    -webkit-appearance: none;
-}
-
-input:hover {
-    background-color: #eaeaec;
-    /* Slightly darker on hover */
-}
-
-input:focus {
-    background-color: var(--color-bg-surface);
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px var(--color-primary-soft);
-}
-
-input::placeholder {
-    color: var(--color-text-tertiary);
+    background-color: #ffffff;
+    color: #000000;
 }
 
 button {
-    font-family: inherit;
+    cursor: pointer;
+    border: none;
+    background: none;
+}
+
+input {
+    border: 1px solid #cccccc;
+    outline: none;
+}
+
+input:focus {
+    border-color: #000000;
 }

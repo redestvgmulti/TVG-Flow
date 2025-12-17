@@ -1,157 +1,156 @@
-/* =========================================
-   STRUCTURAL LAYOUT
-   Rule: NO colors, NO shadows, NO borders.
-   Focus: Grid, Flex, Positioning, Spacing.
-   ========================================= */
-
-/* --- APP SHELL --- */
-.app-layout {
+/* Layout Structure - No Visuals */
+.app-container {
     display: flex;
     min-height: 100vh;
     width: 100%;
 }
 
-.main-content {
-    flex: 1;
-    margin-left: 250px;
-    /* Width of Sidebar */
-    padding: var(--space-lg);
+.centered-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     min-height: 100vh;
-    transition: margin-left var(--transition-smooth);
     width: 100%;
-    /* Ensure full width availability */
 }
 
-.content-wrapper {
-    max-width: 1100px;
-    /* Optimized reading width */
-    margin: 0 auto;
+.form-container {
     width: 100%;
-    padding-bottom: 80px;
-    /* Bottom spacing */
+    max-width: 400px;
+    padding: var(--space-lg);
 }
 
-/* --- BOTTOM NAV (Default: Hidden) --- */
-.bottom-nav {
-    display: none;
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-md);
 }
 
-/* --- SIDEBAR STRUCTURE --- */
+.form-input {
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-sm);
+    width: 100%;
+}
+
+.form-button {
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-sm);
+    width: 100%;
+    background-color: #000000;
+    color: #ffffff;
+}
+
+/* Admin Layout Structure */
+.admin-layout {
+    display: flex;
+    min-height: 100vh;
+    width: 100%;
+}
+
 .sidebar {
     width: 250px;
     height: 100vh;
     position: fixed;
     top: 0;
     left: 0;
-    z-index: 50;
     display: flex;
     flex-direction: column;
-    padding-top: var(--space-lg);
-    padding-bottom: var(--space-lg);
-    overflow-y: auto;
+    padding: var(--space-lg);
+    border-right: 1px solid #e0e0e0;
+    background-color: #ffffff;
 }
 
 .sidebar-header {
-    padding: 0 var(--space-lg);
     margin-bottom: var(--space-xl);
 }
 
-.sidebar-content {
+.sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+
+.sidebar-link {
+    padding: var(--space-sm) var(--space-md);
+    text-decoration: none;
+    color: #000000;
+    border-radius: var(--radius-sm);
+}
+
+.sidebar-link.active {
+    background-color: #f0f0f0;
+}
+
+.admin-main {
     flex: 1;
+    margin-left: 250px;
     display: flex;
     flex-direction: column;
-    gap: var(--space-lg);
-    padding: 0 var(--space-md);
+    min-height: 100vh;
 }
 
-.nav-group {
+.admin-header {
     display: flex;
-    flex-direction: column;
-    gap: 4px;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-lg);
+    border-bottom: 1px solid #e0e0e0;
+    background-color: #ffffff;
 }
 
-/* --- DASHBOARD GRID --- */
-.admin-dashboard {
+.header-actions {
     display: flex;
-    flex-direction: column;
-    gap: var(--space-xl);
-}
-
-.kpi-cards-container {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: var(--space-lg);
-}
-
-.tasks-list {
-    display: flex;
-    flex-direction: column;
+    align-items: center;
     gap: var(--space-md);
 }
 
-.team-members-list {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: var(--space-md);
+.admin-content {
+    flex: 1;
+    padding: var(--space-lg);
+    overflow-y: auto;
 }
 
-/* --- RESPONSIVE BREAKPOINTS --- */
+.bottom-nav {
+    display: none;
+}
 
-/* Tablet & Mobile < 768px */
-@media (max-width: 768px) {
+/* Mobile Layout (<768px) */
+@media (max-width: 767px) {
     .sidebar {
         display: none;
-        /* Hide Sidebar on mobile */
     }
 
-    .main-content {
+    .admin-main {
         margin-left: 0;
-        padding: var(--space-md);
-        padding-bottom: 90px;
-        /* Space for BottomNav + FAB */
     }
 
-    /* Bottom Nav Structure (FORCED) */
     .bottom-nav {
-        display: flex !important;
-        position: fixed !important;
-        bottom: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
-        height: 64px;
-        z-index: 9999;
+        display: flex;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
         justify-content: space-around;
         align-items: center;
-        background: #ffffff;
-        padding-bottom: env(safe-area-inset-bottom);
-        width: 100%;
-        border-top: 1px solid rgba(0, 0, 0, 0.1);
+        padding: var(--space-sm);
+        border-top: 1px solid #e0e0e0;
+        background-color: #ffffff;
+        height: 60px;
     }
 
-    .nav-item {
+    .bottom-nav-link {
         flex: 1;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        height: 100%;
-        gap: 4px;
-        /* Space between icon and text */
         text-align: center;
-        min-height: 44px;
-    }
-}
-
-/* Mobile < 480px */
-@media (max-width: 480px) {
-    .kpi-cards-container {
-        grid-template-columns: repeat(2, 1fr);
-        /* Force 2-col on small screens */
-        gap: var(--space-sm);
+        padding: var(--space-sm);
+        text-decoration: none;
+        color: #000000;
     }
 
-    .team-members-list {
-        grid-template-columns: 1fr;
-        /* 1-col for team cards */
+    .bottom-nav-link.active {
+        font-weight: var(--weight-bold);
+    }
+
+    .admin-content {
+        padding-bottom: 80px;
     }
 }
