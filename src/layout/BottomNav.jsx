@@ -12,6 +12,9 @@ function BottomNav() {
             <NavLink to="/admin/professionals" className="bottom-nav-link">
                 Professionals
             </NavLink>
+            <NavLink to="/admin/calendar" className="bottom-nav-link">
+                Calendar
+            </NavLink>
             <NavLink to="/admin/reports" className="bottom-nav-link">
                 Reports
             </NavLink>

@@ -6,6 +6,7 @@ import Dashboard from './pages/admin/Dashboard'
 import Tasks from './pages/admin/Tasks'
 import Professionals from './pages/admin/Professionals'
 import Reports from './pages/admin/Reports'
+import Calendar from './pages/admin/Calendar'
 import StaffDashboard from './pages/staff/Dashboard'
 import ProtectedRoute from './routes/ProtectedRoute'
 import RoleProtectedRoute from './routes/RoleProtectedRoute'
@@ -31,6 +32,7 @@ function App() {
             <Route index element={<Dashboard />} />
             <Route path="tasks" element={<Tasks />} />
             <Route path="professionals" element={<Professionals />} />
+            <Route path="calendar" element={<Calendar />} />
             <Route path="reports" element={<Reports />} />
           </Route>
 
