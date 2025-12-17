@@ -48,7 +48,7 @@ export function AuthProvider({ children }) {
         try {
             const { data: professional, error } = await supabase
                 .from('profissionais')
-                .select('id, role, nome')
+                .select('id, role, nome, ativo')
                 .eq('id', userId)
                 .single()
 
@@ -57,11 +57,20 @@ export function AuthProvider({ children }) {
                 setRole(null)
                 setProfessionalId(null)
                 setProfessionalName(null)
-            } else {
-                setRole(professional?.role || null)
-                setProfessionalId(professional?.id || null)
-                setProfessionalName(professional?.nome || null)
+                setLoading(false)
+                return
             }
+
+            // SECURITY: Check if user is active
+            if (professional && !professional.ativo) {
+                console.warn('User is inactive, forcing logout')
+                await signOut()
+                return
+            }
+
+            setRole(professional?.role || null)
+            setProfessionalId(professional?.id || null)
+            setProfessionalName(professional?.nome || null)
         } catch (error) {
             console.error('Error in fetchProfessionalData:', error)
             setRole(null)

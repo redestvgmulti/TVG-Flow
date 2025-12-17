@@ -60,10 +60,25 @@ function Professionals() {
         setCreating(true)
 
         try {
-            // Note: This requires service role key for admin.createUser
-            // For now, we'll just insert into profissionais table
-            // The user will need to be created separately or via invite
+            // Check for duplicate email
+            const { data: existing } = await supabase
+                .from('profissionais')
+                .select('id')
+                .eq('email', newStaff.email)
+                .single()
 
+            if (existing) {
+                showFeedback('error', 'A professional with this email already exists')
+                setCreating(false)
+                return
+            }
+
+            // SECURITY NOTE: This approach requires manual user creation
+            // For production, implement server-side invite using:
+            // supabase.auth.admin.inviteUserByEmail(email)
+            // This requires SUPABASE_SERVICE_ROLE_KEY
+
+            // For now, we insert the record and user must sign up separately
             const { error } = await supabase
                 .from('profissionais')
                 .insert([{
@@ -77,13 +92,34 @@ function Professionals() {
 
             setNewStaff({ nome: '', email: '', role: 'profissional', ativo: true })
             setShowAddModal(false)
-            showFeedback('success', 'Staff member added successfully! They will need to sign up with this email.')
+            showFeedback('success', 'Staff member added! They must sign up with this email to access the system.')
             await fetchProfessionals()
         } catch (error) {
             console.error('Error adding staff:', error)
-            showFeedback('error', 'Failed to add staff member')
+            showFeedback('error', 'Failed to add staff member: ' + error.message)
         } finally {
             setCreating(false)
+        }
+    }
+
+    async function handleToggleActive(professionalId, currentStatus) {
+        if (!confirm(`${currentStatus ? 'Deactivate' : 'Activate'} this professional?`)) {
+            return
+        }
+
+        try {
+            const { error } = await supabase
+                .from('profissionais')
+                .update({ ativo: !currentStatus })
+                .eq('id', professionalId)
+
+            if (error) throw error
+
+            showFeedback('success', `Professional ${currentStatus ? 'deactivated' : 'activated'} successfully`)
+            await fetchProfessionals()
+        } catch (error) {
+            console.error('Error updating professional:', error)
+            showFeedback('error', 'Failed to update professional status')
         }
     }
 
@@ -147,6 +183,7 @@ function Professionals() {
                                     <th style={{ padding: 'var(--space-md)', textAlign: 'left', fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-semibold)', color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Email</th>
                                     <th style={{ padding: 'var(--space-md)', textAlign: 'left', fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-semibold)', color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Role</th>
                                     <th style={{ padding: 'var(--space-md)', textAlign: 'left', fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-semibold)', color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</th>
+                                    <th style={{ padding: 'var(--space-md)', textAlign: 'left', fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-semibold)', color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -160,9 +197,18 @@ function Professionals() {
                                             </span>
                                         </td>
                                         <td style={{ padding: 'var(--space-md)' }}>
-                                            <span className={`badge ${prof.ativo ? 'badge-success' : ''}`}>
+                                            <span className={`badge ${prof.ativo ? 'badge-success' : 'badge-danger'}`}>
                                                 {prof.ativo ? 'Active' : 'Inactive'}
                                             </span>
+                                        </td>
+                                        <td style={{ padding: 'var(--space-md)' }}>
+                                            <button
+                                                onClick={() => handleToggleActive(prof.id, prof.ativo)}
+                                                className="btn btn-secondary"
+                                                style={{ padding: 'var(--space-xs) var(--space-sm)', fontSize: 'var(--text-sm)' }}
+                                            >
+                                                {prof.ativo ? 'Deactivate' : 'Activate'}
+                                            </button>
                                         </td>
                                     </tr>
                                 ))}
@@ -231,9 +277,17 @@ function Professionals() {
                                     </label>
                                 </div>
 
-                                <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: 'var(--space-md)' }}>
-                                    Note: Staff member will need to sign up with this email address to access the system.
-                                </p>
+                                <div style={{
+                                    padding: 'var(--space-md)',
+                                    backgroundColor: 'var(--color-bg-subtle)',
+                                    borderRadius: 'var(--radius-md)',
+                                    marginTop: 'var(--space-md)'
+                                }}>
+                                    <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', margin: 0 }}>
+                                        <strong>Note:</strong> Staff member will need to sign up with this email address to access the system.
+                                        For automatic invite emails, configure the service role key.
+                                    </p>
+                                </div>
                             </div>
 
                             <div className="modal-footer">
