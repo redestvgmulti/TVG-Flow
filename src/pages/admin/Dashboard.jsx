@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../services/supabase'
-import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
 function Dashboard() {
     const [stats, setStats] = useState({
@@ -14,6 +14,14 @@ function Dashboard() {
     const [tasksByStatus, setTasksByStatus] = useState([])
     const [tasksByPriority, setTasksByPriority] = useState([])
     const [loading, setLoading] = useState(true)
+    const [showCreateModal, setShowCreateModal] = useState(false)
+    const [newTask, setNewTask] = useState({
+        titulo: '',
+        deadline: '',
+        priority: 'medium',
+        status: 'pending'
+    })
+    const [creating, setCreating] = useState(false)
 
     useEffect(() => {
         fetchDashboardData()
@@ -90,6 +98,60 @@ function Dashboard() {
         } finally {
             setLoading(false)
         }
+    }
+
+    async function handleCreateTask(e) {
+        e.preventDefault()
+        setCreating(true)
+
+        try {
+            const { error } = await supabase
+                .from('tarefas')
+                .insert([{
+                    titulo: newTask.titulo,
+                    deadline: newTask.deadline,
+                    priority: newTask.priority,
+                    status: newTask.status
+                }])
+
+            if (error) throw error
+
+            // Reset form and close modal
+            setNewTask({ titulo: '', deadline: '', priority: 'medium', status: 'pending' })
+            setShowCreateModal(false)
+
+            // Refresh dashboard
+            await fetchDashboardData()
+        } catch (error) {
+            console.error('Error creating task:', error)
+            alert('Failed to create task')
+        } finally {
+            setCreating(false)
+        }
+    }
+
+    async function handleUpdateStatus(taskId, newStatus) {
+        try {
+            const { error } = await supabase
+                .from('tarefas')
+                .update({
+                    status: newStatus,
+                    completed_at: newStatus === 'completed' ? new Date().toISOString() : null
+                })
+                .eq('id', taskId)
+
+            if (error) throw error
+
+            // Refresh dashboard
+            await fetchDashboardData()
+        } catch (error) {
+            console.error('Error updating task:', error)
+            alert('Failed to update task')
+        }
+    }
+
+    async function handleCompleteTask(taskId) {
+        await handleUpdateStatus(taskId, 'completed')
     }
 
     function getLast30Days() {
@@ -270,7 +332,12 @@ function Dashboard() {
 
             {/* Recent Tasks */}
             <div className="card">
-                <h3 style={{ marginBottom: 'var(--space-md)' }}>Recent Tasks</h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-md)' }}>
+                    <h3 style={{ margin: 0 }}>Recent Tasks</h3>
+                    <button onClick={() => setShowCreateModal(true)} className="btn btn-primary">
+                        + New Task
+                    </button>
+                </div>
 
                 {recentTasks.length === 0 ? (
                     <p style={{ color: 'var(--color-text-secondary)' }}>No tasks found</p>
@@ -286,10 +353,11 @@ function Dashboard() {
                                     display: 'flex',
                                     justifyContent: 'space-between',
                                     alignItems: 'center',
-                                    gap: 'var(--space-md)'
+                                    gap: 'var(--space-md)',
+                                    flexWrap: 'wrap'
                                 }}
                             >
-                                <div style={{ flex: 1 }}>
+                                <div style={{ flex: 1, minWidth: '200px' }}>
                                     <p style={{ fontWeight: 'var(--weight-medium)', marginBottom: 'var(--space-xs)' }}>
                                         {task.titulo}
                                     </p>
@@ -297,7 +365,7 @@ function Dashboard() {
                                         Deadline: {new Date(task.deadline).toLocaleDateString()}
                                     </p>
                                 </div>
-                                <div style={{ display: 'flex', gap: 'var(--space-xs)' }}>
+                                <div style={{ display: 'flex', gap: 'var(--space-xs)', alignItems: 'center', flexWrap: 'wrap' }}>
                                     <span className={`badge ${getStatusBadgeClass(task.status)}`}>
                                         {task.status}
                                     </span>
@@ -306,12 +374,121 @@ function Dashboard() {
                                             {task.priority}
                                         </span>
                                     )}
+                                    {task.status !== 'completed' && (
+                                        <button
+                                            onClick={() => handleCompleteTask(task.id)}
+                                            className="btn btn-secondary"
+                                            style={{ padding: 'var(--space-xs) var(--space-sm)', fontSize: 'var(--text-sm)' }}
+                                        >
+                                            Complete
+                                        </button>
+                                    )}
+                                    <select
+                                        value={task.status}
+                                        onChange={(e) => handleUpdateStatus(task.id, e.target.value)}
+                                        style={{
+                                            padding: 'var(--space-xs) var(--space-sm)',
+                                            fontSize: 'var(--text-sm)',
+                                            borderRadius: 'var(--radius-sm)',
+                                            border: '1px solid var(--color-border)'
+                                        }}
+                                    >
+                                        <option value="pending">Pending</option>
+                                        <option value="in_progress">In Progress</option>
+                                        <option value="completed">Completed</option>
+                                        <option value="overdue">Overdue</option>
+                                    </select>
                                 </div>
                             </div>
                         ))}
                     </div>
                 )}
             </div>
+
+            {/* Create Task Modal */}
+            {showCreateModal && (
+                <div className="modal-backdrop" onClick={() => setShowCreateModal(false)}>
+                    <div className="modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h3>Create New Task</h3>
+                        </div>
+                        <form onSubmit={handleCreateTask}>
+                            <div className="modal-body">
+                                <div className="input-group">
+                                    <label htmlFor="titulo">Title</label>
+                                    <input
+                                        id="titulo"
+                                        type="text"
+                                        className="input"
+                                        value={newTask.titulo}
+                                        onChange={(e) => setNewTask({ ...newTask, titulo: e.target.value })}
+                                        required
+                                    />
+                                </div>
+
+                                <div className="input-group">
+                                    <label htmlFor="deadline">Deadline</label>
+                                    <input
+                                        id="deadline"
+                                        type="datetime-local"
+                                        className="input"
+                                        value={newTask.deadline}
+                                        onChange={(e) => setNewTask({ ...newTask, deadline: e.target.value })}
+                                        required
+                                    />
+                                </div>
+
+                                <div className="input-group">
+                                    <label htmlFor="priority">Priority</label>
+                                    <select
+                                        id="priority"
+                                        className="input"
+                                        value={newTask.priority}
+                                        onChange={(e) => setNewTask({ ...newTask, priority: e.target.value })}
+                                    >
+                                        <option value="low">Low</option>
+                                        <option value="medium">Medium</option>
+                                        <option value="high">High</option>
+                                        <option value="urgent">Urgent</option>
+                                    </select>
+                                </div>
+
+                                <div className="input-group">
+                                    <label htmlFor="status">Status</label>
+                                    <select
+                                        id="status"
+                                        className="input"
+                                        value={newTask.status}
+                                        onChange={(e) => setNewTask({ ...newTask, status: e.target.value })}
+                                    >
+                                        <option value="pending">Pending</option>
+                                        <option value="in_progress">In Progress</option>
+                                        <option value="completed">Completed</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="modal-footer">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowCreateModal(false)}
+                                    className="btn btn-secondary"
+                                    disabled={creating}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="btn btn-primary"
+                                    disabled={creating}
+                                >
+                                    {creating ? 'Creating...' : 'Create Task'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
