@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Calendar as BigCalendar, dateFnsLocalizer } from 'react-big-calendar'
 import { format, parse, startOfWeek, getDay } from 'date-fns'
-import enUS from 'date-fns/locale/en-US'
+import ptBR from 'date-fns/locale/pt-BR'
 import { supabase } from '../../services/supabase'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 
@@ -11,9 +11,25 @@ const localizer = dateFnsLocalizer({
     startOfWeek,
     getDay,
     locales: {
-        'en-US': enUS
+        'pt-BR': ptBR
     },
 })
+
+const messages = {
+    allDay: 'Dia inteiro',
+    previous: 'Anterior',
+    next: 'Próximo',
+    today: 'Hoje',
+    month: 'Mês',
+    week: 'Semana',
+    day: 'Dia',
+    agenda: 'Agenda',
+    date: 'Data',
+    time: 'Hora',
+    event: 'Evento',
+    noEventsInRange: 'Não há eventos neste período.',
+    showMore: total => `+ Ver mais (${total})`
+}
 
 function Calendar() {
     const [tasks, setTasks] = useState([])
@@ -21,6 +37,8 @@ function Calendar() {
     const [loading, setLoading] = useState(true)
     const [selectedTask, setSelectedTask] = useState(null)
     const [showDetailModal, setShowDetailModal] = useState(false)
+    const [view, setView] = useState('month')
+    const [date, setDate] = useState(new Date())
 
     useEffect(() => {
         fetchData()
@@ -144,7 +162,13 @@ function Calendar() {
                     onSelectEvent={handleSelectEvent}
                     eventPropGetter={eventStyleGetter}
                     views={['month', 'week', 'agenda']}
-                    defaultView="month"
+                    view={view}
+                    date={date}
+                    onView={setView}
+                    onNavigate={setDate}
+                    selectable
+                    messages={messages}
+                    culture="pt-BR"
                 />
             </div>
 

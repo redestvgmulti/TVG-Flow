@@ -412,3 +412,112 @@
 .header-actions .form-button {
   display: none;
 }
+
+/* ================================
+   CITYOS STYLE — CALENDAR
+   ================================ */
+
+.rbc-calendar {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 16px;
+}
+
+/* Toolbar */
+.rbc-toolbar {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.rbc-toolbar button {
+  background: #f1f5f9;
+  border: 1px solid #e5e9f0;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.rbc-toolbar button:hover {
+  background: #e2e8f0;
+}
+
+.rbc-toolbar button.rbc-active {
+  background: #eaf1ff;
+  color: #2563eb;
+  font-weight: 600;
+  border-color: #2563eb;
+}
+
+/* Month view */
+.rbc-month-view {
+  border: none;
+}
+
+.rbc-day-bg {
+  border: 1px solid #e5e9f0;
+}
+
+.rbc-today {
+  background: #eaf1ff;
+}
+
+.rbc-off-range-bg {
+  background: #f8fafc;
+}
+
+/* Date number */
+.rbc-date-cell {
+  padding: 6px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* Events */
+.rbc-event {
+  background: #3b82f6;
+  border-radius: 6px;
+  padding: 4px 6px;
+  font-size: 12px;
+  border: none;
+}
+
+.rbc-event:hover {
+  background: #2563eb;
+}
+
+/* Header */
+.rbc-header {
+  padding: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  color: #64748b;
+  border-bottom: 2px solid #e5e9f0;
+}
+
+/* Month row */
+.rbc-month-row {
+  border: none;
+}
+
+/* Agenda view */
+.rbc-agenda-view {
+  border: 1px solid #e5e9f0;
+  border-radius: 8px;
+}
+
+.rbc-agenda-table {
+  border: none;
+}
+
+.rbc-agenda-date-cell,
+.rbc-agenda-time-cell {
+  padding: 8px;
+  font-size: 13px;
+}
+
+.rbc-agenda-event-cell {
+  padding: 8px;
+}
