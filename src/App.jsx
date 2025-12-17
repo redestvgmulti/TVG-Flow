@@ -7,6 +7,7 @@ import Tasks from './pages/admin/Tasks'
 import Professionals from './pages/admin/Professionals'
 import Reports from './pages/admin/Reports'
 import Calendar from './pages/admin/Calendar'
+import Areas from './pages/admin/Areas'
 import StaffDashboard from './pages/staff/Dashboard'
 import StaffToday from './pages/staff/Today'
 import ProtectedRoute from './routes/ProtectedRoute'
@@ -32,6 +33,7 @@ function App() {
           >
             <Route index element={<Dashboard />} />
             <Route path="tasks" element={<Tasks />} />
+            <Route path="areas" element={<Areas />} />
             <Route path="professionals" element={<Professionals />} />
             <Route path="calendar" element={<Calendar />} />
             <Route path="reports" element={<Reports />} />

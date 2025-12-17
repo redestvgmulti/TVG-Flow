@@ -222,3 +222,193 @@
         box-shadow: var(--shadow-md);
     }
 }
+/* ================================
+   FIXES — SIDEBAR HIERARCHY
+   ================================ */
+
+/* Remove visual de link do grupo */
+.sidebar-group-title {
+  background: transparent;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  padding: var(--space-sm) var(--space-md);
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  transition: background-color 0.2s;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border: none;
+  width: 100%;
+  text-align: left;
+  font-size: var(--text-base);
+}
+
+.sidebar-group-title:hover {
+  background-color: var(--color-bg-subtle);
+}
+
+/* Arrow alignment */
+.sidebar-group-title svg,
+.sidebar-group-arrow {
+  transition: transform 0.2s ease;
+  font-size: var(--text-lg);
+}
+
+.sidebar-group.open .sidebar-group-title svg,
+.sidebar-group.open .sidebar-group-arrow {
+  transform: rotate(90deg);
+}
+
+/* Submenu visual hierarchy */
+.sidebar-submenu {
+  padding-left: 14px;
+  border-left: 2px solid var(--color-border-light);
+  margin-left: 10px;
+  margin-top: var(--space-xs);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+/* Submenu items softer */
+.sidebar-submenu .sidebar-link {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.sidebar-submenu .sidebar-link.active {
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+}
+
+/* ================================
+   SIDEBAR FOOTER (PROFILE)
+   ================================ */
+
+.sidebar-footer {
+  margin-top: auto;
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--color-border-light);
+  position: relative;
+}
+
+.sidebar-profile {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  transition: background-color 0.2s;
+}
+
+.sidebar-profile:hover {
+  background-color: var(--color-bg-subtle);
+}
+
+.sidebar-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: var(--color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: var(--weight-semibold);
+  font-size: var(--text-sm);
+  flex-shrink: 0;
+}
+
+.sidebar-user-info {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-user-name {
+  font-weight: var(--weight-medium);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-user-email {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.profile-dropdown {
+  position: absolute;
+  bottom: 100%;
+  left: var(--space-md);
+  right: var(--space-md);
+  margin-bottom: var(--space-xs);
+  background-color: var(--color-bg-surface);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-sm);
+  z-index: 1000;
+}
+
+.profile-dropdown-header {
+  padding: var(--space-sm);
+  border-bottom: 1px solid var(--color-border-light);
+  margin-bottom: var(--space-xs);
+}
+
+.profile-dropdown-header p:first-child {
+  font-weight: var(--weight-semibold);
+  margin-bottom: var(--space-xs);
+}
+
+.profile-dropdown-header p:last-child {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.profile-dropdown-item {
+  padding: var(--space-sm);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  transition: background-color 0.2s;
+}
+
+.profile-dropdown-item:hover {
+  background-color: var(--color-bg-subtle);
+}
+
+.profile-dropdown-divider {
+  border-top: 1px solid var(--color-border-light);
+  margin: var(--space-xs) 0;
+}
+
+.profile-dropdown-item.logout {
+  color: #ff3b30;
+}
+
+.profile-dropdown-item.logout:hover {
+  background-color: #fff5f5;
+}
+
+/* ================================
+   HEADER CLEANUP
+   ================================ */
+
+/* Hide email and logout from header */
+.header-actions span {
+  display: none;
+}
+
+.header-actions .form-button {
+  display: none;
+}
