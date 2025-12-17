@@ -6,13 +6,13 @@ function Header() {
 
     return (
         <header className="admin-header">
-            <h1>Admin Dashboard</h1>
+            <h1>Painel Administrativo</h1>
 
             <div className="header-actions">
                 <NotificationCenter />
                 <span>{user?.email}</span>
                 <button onClick={signOut} className="form-button">
-                    Sign Out
+                    Sair
                 </button>
             </div>
         </header>

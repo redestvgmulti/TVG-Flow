@@ -47,7 +47,7 @@ function NotificationCenter() {
             setNotifications(data || [])
             setUnreadCount(data?.filter(n => !n.read_at).length || 0)
         } catch (error) {
-            console.error('Error fetching notifications:', error)
+            console.error('Erro ao buscar notificações:', error)
         } finally {
             setLoading(false)
         }
@@ -72,7 +72,7 @@ function NotificationCenter() {
             )
             setUnreadCount(prev => Math.max(0, prev - 1))
         } catch (error) {
-            console.error('Error marking as read:', error)
+            console.error('Erro ao marcar como lida:', error)
         }
     }
 
@@ -93,7 +93,7 @@ function NotificationCenter() {
                 setUnreadCount(prev => Math.max(0, prev - 1))
             }
         } catch (error) {
-            console.error('Error clearing notification:', error)
+            console.error('Erro ao limpar notificação:', error)
         }
     }
 
@@ -115,12 +115,12 @@ function NotificationCenter() {
             )
             setUnreadCount(0)
         } catch (error) {
-            console.error('Error marking all as read:', error)
+            console.error('Erro ao marcar todas como lidas:', error)
         }
     }
 
     async function clearAll() {
-        if (!confirm('Clear all notifications? This cannot be undone.')) return
+        if (!confirm('Limpar todas as notificações? Esta ação não pode ser desfeita.')) return
 
         try {
             const ids = notifications.map(n => n.id)
@@ -137,7 +137,7 @@ function NotificationCenter() {
             setNotifications([])
             setUnreadCount(0)
         } catch (error) {
-            console.error('Error clearing all:', error)
+            console.error('Erro ao limpar todas:', error)
         }
     }
 
@@ -160,10 +160,10 @@ function NotificationCenter() {
         const diffHours = Math.floor(diffMs / 3600000)
         const diffDays = Math.floor(diffMs / 86400000)
 
-        if (diffMins < 1) return 'Just now'
-        if (diffMins < 60) return `${diffMins}m ago`
-        if (diffHours < 24) return `${diffHours}h ago`
-        if (diffDays < 7) return `${diffDays}d ago`
+        if (diffMins < 1) return 'Agora'
+        if (diffMins < 60) return `${diffMins}m atrás`
+        if (diffHours < 24) return `${diffHours}h atrás`
+        if (diffDays < 7) return `${diffDays}d atrás`
         return date.toLocaleDateString()
     }
 
@@ -245,7 +245,7 @@ function NotificationCenter() {
                             justifyContent: 'space-between',
                             alignItems: 'center'
                         }}>
-                            <h3 style={{ margin: 0, fontSize: 'var(--text-lg)' }}>Notifications</h3>
+                            <h3 style={{ margin: 0, fontSize: 'var(--text-lg)' }}>Notificações</h3>
                             {notifications.length > 0 && (
                                 <div style={{ display: 'flex', gap: 'var(--space-xs)' }}>
                                     {unreadCount > 0 && (
@@ -254,7 +254,7 @@ function NotificationCenter() {
                                             className="btn btn-secondary"
                                             style={{ padding: 'var(--space-xs) var(--space-sm)', fontSize: 'var(--text-sm)' }}
                                         >
-                                            Mark all read
+                                            Marcar todas como lidas
                                         </button>
                                     )}
                                     <button
@@ -262,7 +262,7 @@ function NotificationCenter() {
                                         className="btn btn-secondary"
                                         style={{ padding: 'var(--space-xs) var(--space-sm)', fontSize: 'var(--text-sm)' }}
                                     >
-                                        Clear all
+                                        Limpar todas
                                     </button>
                                 </div>
                             )}
@@ -272,12 +272,12 @@ function NotificationCenter() {
                         <div style={{ overflowY: 'auto', flex: 1 }}>
                             {loading ? (
                                 <div style={{ padding: 'var(--space-xl)', textAlign: 'center', color: 'var(--color-text-secondary)' }}>
-                                    Loading...
+                                    Carregando...
                                 </div>
                             ) : notifications.length === 0 ? (
                                 <div style={{ padding: 'var(--space-xl)', textAlign: 'center', color: 'var(--color-text-secondary)' }}>
                                     <p style={{ fontSize: 'var(--text-2xl)', marginBottom: 'var(--space-sm)' }}>🎉</p>
-                                    <p style={{ margin: 0 }}>No notifications</p>
+                                    <p style={{ margin: 0 }}>Sem notificações</p>
                                 </div>
                             ) : (
                                 notifications.map(notification => (
