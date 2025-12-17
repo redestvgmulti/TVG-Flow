@@ -13,19 +13,26 @@ function Dashboard() {
     const [tasksOverTime, setTasksOverTime] = useState([])
     const [tasksByStatus, setTasksByStatus] = useState([])
     const [tasksByPriority, setTasksByPriority] = useState([])
+    const [professionals, setProfessionals] = useState([])
     const [loading, setLoading] = useState(true)
     const [showCreateModal, setShowCreateModal] = useState(false)
+    const [showReassignModal, setShowReassignModal] = useState(false)
+    const [reassigningTask, setReassigningTask] = useState(null)
     const [newTask, setNewTask] = useState({
         titulo: '',
         deadline: '',
         priority: 'medium',
-        status: 'pending'
+        status: 'pending',
+        assigned_to: ''
     })
+    const [reassignTo, setReassignTo] = useState('')
     const [creating, setCreating] = useState(false)
+    const [reassigning, setReassigning] = useState(false)
     const [feedback, setFeedback] = useState({ show: false, type: '', message: '' })
 
     useEffect(() => {
         fetchDashboardData()
+        fetchProfessionals()
     }, [])
 
     useEffect(() => {
@@ -37,13 +44,29 @@ function Dashboard() {
         }
     }, [feedback.show])
 
+    async function fetchProfessionals() {
+        try {
+            const { data, error } = await supabase
+                .from('profissionais')
+                .select('id, nome')
+                .eq('role', 'profissional')
+                .eq('ativo', true)
+                .order('nome')
+
+            if (error) throw error
+            setProfessionals(data || [])
+        } catch (error) {
+            console.error('Error fetching professionals:', error)
+        }
+    }
+
     async function fetchDashboardData() {
         try {
             setLoading(true)
 
             const { data: allTasks, error: allTasksError } = await supabase
                 .from('tarefas')
-                .select('id, status, titulo, deadline, priority, created_at')
+                .select('id, status, titulo, deadline, priority, created_at, assigned_to')
                 .order('created_at', { ascending: false })
 
             if (allTasksError) throw allTasksError
@@ -108,6 +131,12 @@ function Dashboard() {
         setFeedback({ show: true, type, message })
     }
 
+    function handleOpenReassignModal(task) {
+        setReassigningTask(task)
+        setReassignTo(task.assigned_to || '')
+        setShowReassignModal(true)
+    }
+
     async function handleCreateTask(e) {
         e.preventDefault()
 
@@ -119,18 +148,25 @@ function Dashboard() {
         setCreating(true)
 
         try {
+            const taskData = {
+                titulo: newTask.titulo,
+                deadline: newTask.deadline,
+                priority: newTask.priority,
+                status: newTask.status
+            }
+
+            // Only add assigned_to if a professional is selected
+            if (newTask.assigned_to) {
+                taskData.assigned_to = newTask.assigned_to
+            }
+
             const { error } = await supabase
                 .from('tarefas')
-                .insert([{
-                    titulo: newTask.titulo,
-                    deadline: newTask.deadline,
-                    priority: newTask.priority,
-                    status: newTask.status
-                }])
+                .insert([taskData])
 
             if (error) throw error
 
-            setNewTask({ titulo: '', deadline: '', priority: 'medium', status: 'pending' })
+            setNewTask({ titulo: '', deadline: '', priority: 'medium', status: 'pending', assigned_to: '' })
             setShowCreateModal(false)
             showFeedback('success', 'Task created successfully!')
             await fetchDashboardData()
@@ -139,6 +175,35 @@ function Dashboard() {
             showFeedback('error', 'Failed to create task. Please try again.')
         } finally {
             setCreating(false)
+        }
+    }
+
+    async function handleReassignTask(e) {
+        e.preventDefault()
+
+        if (!confirm(`Reassign "${reassigningTask.titulo}" to ${professionals.find(p => p.id === reassignTo)?.nome || 'Unassigned'}?`)) {
+            return
+        }
+
+        setReassigning(true)
+
+        try {
+            const { error } = await supabase
+                .from('tarefas')
+                .update({ assigned_to: reassignTo || null })
+                .eq('id', reassigningTask.id)
+
+            if (error) throw error
+
+            setShowReassignModal(false)
+            setReassigningTask(null)
+            showFeedback('success', 'Task reassigned successfully!')
+            await fetchDashboardData()
+        } catch (error) {
+            console.error('Error reassigning task:', error)
+            showFeedback('error', 'Failed to reassign task')
+        } finally {
+            setReassigning(false)
         }
     }
 
@@ -224,6 +289,11 @@ function Dashboard() {
         }
     }
 
+    function getAssignedToName(assignedToId) {
+        const prof = professionals.find(p => p.id === assignedToId)
+        return prof ? prof.nome : 'Unassigned'
+    }
+
     if (loading) {
         return (
             <div>
@@ -244,10 +314,9 @@ function Dashboard() {
         <div>
             <h2>Dashboard</h2>
 
-            {/* Feedback Message */}
             {feedback.show && (
                 <div
-                    className={`card ${feedback.type === 'success' ? 'badge-success' : 'badge-danger'}`}
+                    className="card"
                     style={{
                         marginBottom: 'var(--space-md)',
                         padding: 'var(--space-md)',
@@ -375,7 +444,6 @@ function Dashboard() {
                 </div>
             </div>
 
-            {/* Tasks by Priority */}
             {tasksByPriority.length > 0 && (
                 <div className="card" style={{ marginBottom: 'var(--space-xl)' }}>
                     <h3 style={{ marginBottom: 'var(--space-md)' }}>Tasks by Priority</h3>
@@ -442,7 +510,7 @@ function Dashboard() {
                                         {task.titulo}
                                     </p>
                                     <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', margin: 0 }}>
-                                        Deadline: {new Date(task.deadline).toLocaleDateString()}
+                                        Deadline: {new Date(task.deadline).toLocaleDateString()} • Assigned: {getAssignedToName(task.assigned_to)}
                                     </p>
                                 </div>
                                 <div style={{ display: 'flex', gap: 'var(--space-xs)', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -454,6 +522,13 @@ function Dashboard() {
                                             {task.priority}
                                         </span>
                                     )}
+                                    <button
+                                        onClick={() => handleOpenReassignModal(task)}
+                                        className="btn btn-secondary"
+                                        style={{ padding: 'var(--space-xs) var(--space-sm)', fontSize: 'var(--text-sm)' }}
+                                    >
+                                        Reassign
+                                    </button>
                                     {task.status !== 'completed' && (
                                         <button
                                             onClick={() => handleCompleteTask(task.id, task.titulo)}
@@ -520,6 +595,24 @@ function Dashboard() {
                                 </div>
 
                                 <div className="input-group">
+                                    <label htmlFor="assigned_to">Assigned To</label>
+                                    <select
+                                        id="assigned_to"
+                                        className="input"
+                                        value={newTask.assigned_to}
+                                        onChange={(e) => setNewTask({ ...newTask, assigned_to: e.target.value })}
+                                    >
+                                        <option value="">Unassigned</option>
+                                        {professionals.map(prof => (
+                                            <option key={prof.id} value={prof.id}>{prof.nome}</option>
+                                        ))}
+                                    </select>
+                                    <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', marginTop: 'var(--space-xs)' }}>
+                                        Only active professionals are shown
+                                    </p>
+                                </div>
+
+                                <div className="input-group">
                                     <label htmlFor="priority">Priority</label>
                                     <select
                                         id="priority"
@@ -564,6 +657,61 @@ function Dashboard() {
                                     disabled={creating}
                                 >
                                     {creating ? 'Creating...' : 'Create Task'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Reassign Task Modal */}
+            {showReassignModal && reassigningTask && (
+                <div className="modal-backdrop" onClick={() => setShowReassignModal(false)}>
+                    <div className="modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h3>Reassign Task</h3>
+                        </div>
+                        <form onSubmit={handleReassignTask}>
+                            <div className="modal-body">
+                                <p style={{ marginBottom: 'var(--space-md)', color: 'var(--color-text-secondary)' }}>
+                                    Task: <strong>{reassigningTask.titulo}</strong>
+                                </p>
+
+                                <div className="input-group">
+                                    <label htmlFor="reassign_to">Assign To</label>
+                                    <select
+                                        id="reassign_to"
+                                        className="input"
+                                        value={reassignTo}
+                                        onChange={(e) => setReassignTo(e.target.value)}
+                                        required
+                                    >
+                                        <option value="">Unassigned</option>
+                                        {professionals.map(prof => (
+                                            <option key={prof.id} value={prof.id}>{prof.nome}</option>
+                                        ))}
+                                    </select>
+                                    <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', marginTop: 'var(--space-xs)' }}>
+                                        Only active professionals are shown
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="modal-footer">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowReassignModal(false)}
+                                    className="btn btn-secondary"
+                                    disabled={reassigning}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="btn btn-primary"
+                                    disabled={reassigning}
+                                >
+                                    {reassigning ? 'Reassigning...' : 'Reassign Task'}
                                 </button>
                             </div>
                         </form>
