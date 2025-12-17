@@ -22,16 +22,25 @@ function Dashboard() {
         status: 'pending'
     })
     const [creating, setCreating] = useState(false)
+    const [feedback, setFeedback] = useState({ show: false, type: '', message: '' })
 
     useEffect(() => {
         fetchDashboardData()
     }, [])
 
+    useEffect(() => {
+        if (feedback.show) {
+            const timer = setTimeout(() => {
+                setFeedback({ show: false, type: '', message: '' })
+            }, 5000)
+            return () => clearTimeout(timer)
+        }
+    }, [feedback.show])
+
     async function fetchDashboardData() {
         try {
             setLoading(true)
 
-            // Fetch all tasks for charts
             const { data: allTasks, error: allTasksError } = await supabase
                 .from('tarefas')
                 .select('id, status, titulo, deadline, priority, created_at')
@@ -39,14 +48,12 @@ function Dashboard() {
 
             if (allTasksError) throw allTasksError
 
-            // Fetch professionals count
             const { count: profCount, error: profError } = await supabase
                 .from('profissionais')
                 .select('*', { count: 'exact', head: true })
 
             if (profError) throw profError
 
-            // Calculate stats
             const total = allTasks?.length || 0
             const active = allTasks?.filter(t => t.status === 'in_progress' || t.status === 'pending').length || 0
             const completed = allTasks?.filter(t => t.status === 'completed').length || 0
@@ -58,10 +65,8 @@ function Dashboard() {
                 totalProfessionals: profCount || 0
             })
 
-            // Recent tasks (last 5)
             setRecentTasks(allTasks?.slice(0, 5) || [])
 
-            // Tasks over time (last 30 days)
             const last30Days = getLast30Days()
             const tasksTimeData = last30Days.map(date => {
                 const count = allTasks?.filter(t => {
@@ -75,7 +80,6 @@ function Dashboard() {
             })
             setTasksOverTime(tasksTimeData)
 
-            // Tasks by status
             const statusData = [
                 { name: 'Pending', value: allTasks?.filter(t => t.status === 'pending').length || 0, color: '#6e6e73' },
                 { name: 'In Progress', value: allTasks?.filter(t => t.status === 'in_progress').length || 0, color: '#007aff' },
@@ -84,7 +88,6 @@ function Dashboard() {
             ]
             setTasksByStatus(statusData.filter(s => s.value > 0))
 
-            // Tasks by priority
             const priorityData = [
                 { name: 'Low', value: allTasks?.filter(t => t.priority === 'low').length || 0 },
                 { name: 'Medium', value: allTasks?.filter(t => t.priority === 'medium').length || 0 },
@@ -95,13 +98,24 @@ function Dashboard() {
 
         } catch (error) {
             console.error('Error fetching dashboard data:', error)
+            showFeedback('error', 'Failed to load dashboard data. Please refresh the page.')
         } finally {
             setLoading(false)
         }
     }
 
+    function showFeedback(type, message) {
+        setFeedback({ show: true, type, message })
+    }
+
     async function handleCreateTask(e) {
         e.preventDefault()
+
+        if (!newTask.titulo.trim()) {
+            showFeedback('error', 'Please enter a task title')
+            return
+        }
+
         setCreating(true)
 
         try {
@@ -116,21 +130,23 @@ function Dashboard() {
 
             if (error) throw error
 
-            // Reset form and close modal
             setNewTask({ titulo: '', deadline: '', priority: 'medium', status: 'pending' })
             setShowCreateModal(false)
-
-            // Refresh dashboard
+            showFeedback('success', 'Task created successfully!')
             await fetchDashboardData()
         } catch (error) {
             console.error('Error creating task:', error)
-            alert('Failed to create task')
+            showFeedback('error', 'Failed to create task. Please try again.')
         } finally {
             setCreating(false)
         }
     }
 
-    async function handleUpdateStatus(taskId, newStatus) {
+    async function handleUpdateStatus(taskId, newStatus, taskTitle) {
+        if (!confirm(`Change status of "${taskTitle}" to ${newStatus}?`)) {
+            return
+        }
+
         try {
             const { error } = await supabase
                 .from('tarefas')
@@ -142,16 +158,36 @@ function Dashboard() {
 
             if (error) throw error
 
-            // Refresh dashboard
+            showFeedback('success', `Task status updated to ${newStatus}`)
             await fetchDashboardData()
         } catch (error) {
             console.error('Error updating task:', error)
-            alert('Failed to update task')
+            showFeedback('error', 'Failed to update task status')
         }
     }
 
-    async function handleCompleteTask(taskId) {
-        await handleUpdateStatus(taskId, 'completed')
+    async function handleCompleteTask(taskId, taskTitle) {
+        if (!confirm(`Mark "${taskTitle}" as completed?`)) {
+            return
+        }
+
+        try {
+            const { error } = await supabase
+                .from('tarefas')
+                .update({
+                    status: 'completed',
+                    completed_at: new Date().toISOString()
+                })
+                .eq('id', taskId)
+
+            if (error) throw error
+
+            showFeedback('success', 'Task completed!')
+            await fetchDashboardData()
+        } catch (error) {
+            console.error('Error completing task:', error)
+            showFeedback('error', 'Failed to complete task')
+        }
     }
 
     function getLast30Days() {
@@ -192,7 +228,14 @@ function Dashboard() {
         return (
             <div>
                 <h2>Dashboard</h2>
-                <p>Loading...</p>
+                <div className="card" style={{ textAlign: 'center', padding: 'var(--space-xl)' }}>
+                    <p style={{ color: 'var(--color-text-secondary)', marginBottom: 'var(--space-sm)' }}>
+                        Loading your dashboard...
+                    </p>
+                    <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>
+                        Fetching tasks, KPIs, and charts
+                    </p>
+                </div>
             </div>
         )
     }
@@ -200,6 +243,27 @@ function Dashboard() {
     return (
         <div>
             <h2>Dashboard</h2>
+
+            {/* Feedback Message */}
+            {feedback.show && (
+                <div
+                    className={`card ${feedback.type === 'success' ? 'badge-success' : 'badge-danger'}`}
+                    style={{
+                        marginBottom: 'var(--space-md)',
+                        padding: 'var(--space-md)',
+                        backgroundColor: feedback.type === 'success' ? '#d1f4dd' : '#ffe5e5',
+                        border: `1px solid ${feedback.type === 'success' ? '#34c759' : '#ff3b30'}`
+                    }}
+                >
+                    <p style={{
+                        margin: 0,
+                        color: feedback.type === 'success' ? '#34c759' : '#ff3b30',
+                        fontWeight: 'var(--weight-medium)'
+                    }}>
+                        {feedback.message}
+                    </p>
+                </div>
+            )}
 
             {/* KPI Cards */}
             <div style={{
@@ -209,7 +273,7 @@ function Dashboard() {
                 marginBottom: 'var(--space-xl)'
             }}>
                 <div className="card">
-                    <h3 style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-xs)' }}>
+                    <h3 style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                         Total Tasks
                     </h3>
                     <p style={{ fontSize: 'var(--text-3xl)', fontWeight: 'var(--weight-bold)', margin: 0 }}>
@@ -218,7 +282,7 @@ function Dashboard() {
                 </div>
 
                 <div className="card">
-                    <h3 style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-xs)' }}>
+                    <h3 style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                         Active Tasks
                     </h3>
                     <p style={{ fontSize: 'var(--text-3xl)', fontWeight: 'var(--weight-bold)', margin: 0 }}>
@@ -227,7 +291,7 @@ function Dashboard() {
                 </div>
 
                 <div className="card">
-                    <h3 style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-xs)' }}>
+                    <h3 style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                         Completed
                     </h3>
                     <p style={{ fontSize: 'var(--text-3xl)', fontWeight: 'var(--weight-bold)', margin: 0 }}>
@@ -236,7 +300,7 @@ function Dashboard() {
                 </div>
 
                 <div className="card">
-                    <h3 style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-xs)' }}>
+                    <h3 style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                         Professionals
                     </h3>
                     <p style={{ fontSize: 'var(--text-3xl)', fontWeight: 'var(--weight-bold)', margin: 0 }}>
@@ -252,7 +316,6 @@ function Dashboard() {
                 gap: 'var(--space-md)',
                 marginBottom: 'var(--space-xl)'
             }}>
-                {/* Tasks Over Time */}
                 <div className="card">
                     <h3 style={{ marginBottom: 'var(--space-md)' }}>Tasks Over Time (Last 30 Days)</h3>
                     {tasksOverTime.length > 0 ? (
@@ -276,11 +339,15 @@ function Dashboard() {
                             </LineChart>
                         </ResponsiveContainer>
                     ) : (
-                        <p style={{ color: 'var(--color-text-secondary)', textAlign: 'center' }}>No data available</p>
+                        <div style={{ textAlign: 'center', padding: 'var(--space-xl)', color: 'var(--color-text-secondary)' }}>
+                            <p style={{ marginBottom: 'var(--space-xs)' }}>No task data yet</p>
+                            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>
+                                Create your first task to see trends
+                            </p>
+                        </div>
                     )}
                 </div>
 
-                {/* Tasks by Status */}
                 <div className="card">
                     <h3 style={{ marginBottom: 'var(--space-md)' }}>Tasks by Status</h3>
                     {tasksByStatus.length > 0 ? (
@@ -298,7 +365,12 @@ function Dashboard() {
                             </BarChart>
                         </ResponsiveContainer>
                     ) : (
-                        <p style={{ color: 'var(--color-text-secondary)', textAlign: 'center' }}>No data available</p>
+                        <div style={{ textAlign: 'center', padding: 'var(--space-xl)', color: 'var(--color-text-secondary)' }}>
+                            <p style={{ marginBottom: 'var(--space-xs)' }}>No status data</p>
+                            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>
+                                Tasks will appear here as you create them
+                            </p>
+                        </div>
                     )}
                 </div>
             </div>
@@ -332,7 +404,7 @@ function Dashboard() {
 
             {/* Recent Tasks */}
             <div className="card">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-md)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-lg)' }}>
                     <h3 style={{ margin: 0 }}>Recent Tasks</h3>
                     <button onClick={() => setShowCreateModal(true)} className="btn btn-primary">
                         + New Task
@@ -340,7 +412,15 @@ function Dashboard() {
                 </div>
 
                 {recentTasks.length === 0 ? (
-                    <p style={{ color: 'var(--color-text-secondary)' }}>No tasks found</p>
+                    <div style={{ textAlign: 'center', padding: 'var(--space-2xl)', color: 'var(--color-text-secondary)' }}>
+                        <p style={{ fontSize: 'var(--text-lg)', marginBottom: 'var(--space-sm)' }}>No tasks yet</p>
+                        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', marginBottom: 'var(--space-md)' }}>
+                            Get started by creating your first task
+                        </p>
+                        <button onClick={() => setShowCreateModal(true)} className="btn btn-primary">
+                            Create First Task
+                        </button>
+                    </div>
                 ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
                         {recentTasks.map(task => (
@@ -376,7 +456,7 @@ function Dashboard() {
                                     )}
                                     {task.status !== 'completed' && (
                                         <button
-                                            onClick={() => handleCompleteTask(task.id)}
+                                            onClick={() => handleCompleteTask(task.id, task.titulo)}
                                             className="btn btn-secondary"
                                             style={{ padding: 'var(--space-xs) var(--space-sm)', fontSize: 'var(--text-sm)' }}
                                         >
@@ -385,7 +465,7 @@ function Dashboard() {
                                     )}
                                     <select
                                         value={task.status}
-                                        onChange={(e) => handleUpdateStatus(task.id, e.target.value)}
+                                        onChange={(e) => handleUpdateStatus(task.id, e.target.value, task.titulo)}
                                         style={{
                                             padding: 'var(--space-xs) var(--space-sm)',
                                             fontSize: 'var(--text-sm)',
@@ -415,19 +495,20 @@ function Dashboard() {
                         <form onSubmit={handleCreateTask}>
                             <div className="modal-body">
                                 <div className="input-group">
-                                    <label htmlFor="titulo">Title</label>
+                                    <label htmlFor="titulo">Title *</label>
                                     <input
                                         id="titulo"
                                         type="text"
                                         className="input"
                                         value={newTask.titulo}
                                         onChange={(e) => setNewTask({ ...newTask, titulo: e.target.value })}
+                                        placeholder="Enter task title"
                                         required
                                     />
                                 </div>
 
                                 <div className="input-group">
-                                    <label htmlFor="deadline">Deadline</label>
+                                    <label htmlFor="deadline">Deadline *</label>
                                     <input
                                         id="deadline"
                                         type="datetime-local"
@@ -454,7 +535,7 @@ function Dashboard() {
                                 </div>
 
                                 <div className="input-group">
-                                    <label htmlFor="status">Status</label>
+                                    <label htmlFor="status">Initial Status</label>
                                     <select
                                         id="status"
                                         className="input"
