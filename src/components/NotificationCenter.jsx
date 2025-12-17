@@ -169,160 +169,83 @@ function NotificationCenter() {
 
     return (
         <div style={{ position: 'relative' }}>
-            {/* Notification Bell */}
+            {/* Notification Orb */}
             <button
+                className={`notification-orb ${unreadCount > 0 ? 'has-unread' : ''}`}
                 onClick={() => setShowPanel(!showPanel)}
-                style={{
-                    position: 'relative',
-                    background: 'transparent',
-                    border: 'none',
-                    cursor: 'pointer',
-                    fontSize: 'var(--text-xl)',
-                    padding: 'var(--space-xs)',
-                    color: 'var(--color-text-primary)'
-                }}
+                aria-label="Notificações"
             >
-                🔔
-                {unreadCount > 0 && (
-                    <span
-                        className="badge badge-danger"
-                        style={{
-                            position: 'absolute',
-                            top: '0',
-                            right: '0',
-                            minWidth: '18px',
-                            height: '18px',
-                            borderRadius: '9px',
-                            fontSize: '10px',
-                            padding: '2px 4px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center'
-                        }}
-                    >
-                        {unreadCount > 99 ? '99+' : unreadCount}
-                    </span>
-                )}
+                <span style={{ fontSize: '18px' }}>🔔</span>
+                {unreadCount > 0 && <span className="orb-pulse" />}
             </button>
 
             {/* Notification Panel */}
             {showPanel && (
                 <>
                     <div
-                        style={{
-                            position: 'fixed',
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            zIndex: 999
-                        }}
+                        className="notification-panel-backdrop"
                         onClick={() => setShowPanel(false)}
                     />
-                    <div
-                        className="card"
-                        style={{
-                            position: 'absolute',
-                            top: '100%',
-                            right: 0,
-                            marginTop: 'var(--space-xs)',
-                            width: '360px',
-                            maxWidth: '90vw',
-                            maxHeight: '500px',
-                            zIndex: 1000,
-                            padding: 0,
-                            overflow: 'hidden',
-                            display: 'flex',
-                            flexDirection: 'column'
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                    >
+                    <div className="notification-panel">
                         {/* Header */}
-                        <div style={{
-                            padding: 'var(--space-md)',
-                            borderBottom: '1px solid var(--color-border-light)',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center'
-                        }}>
-                            <h3 style={{ margin: 0, fontSize: 'var(--text-lg)' }}>Notificações</h3>
+                        <div className="notification-header">
+                            <h3>Notificações</h3>
                             {notifications.length > 0 && (
-                                <div style={{ display: 'flex', gap: 'var(--space-xs)' }}>
+                                <div className="notification-actions">
                                     {unreadCount > 0 && (
                                         <button
                                             onClick={markAllAsRead}
-                                            className="btn btn-secondary"
-                                            style={{ padding: 'var(--space-xs) var(--space-sm)', fontSize: 'var(--text-sm)' }}
+                                            className="btn btn-secondary btn-xs"
                                         >
-                                            Marcar todas como lidas
+                                            Ler todas
                                         </button>
                                     )}
                                     <button
                                         onClick={clearAll}
-                                        className="btn btn-secondary"
-                                        style={{ padding: 'var(--space-xs) var(--space-sm)', fontSize: 'var(--text-sm)' }}
+                                        className="btn btn-secondary btn-xs"
                                     >
-                                        Limpar todas
+                                        Limpar
                                     </button>
                                 </div>
                             )}
                         </div>
 
                         {/* Notifications List */}
-                        <div style={{ overflowY: 'auto', flex: 1 }}>
+                        <div className="notification-list">
                             {loading ? (
-                                <div style={{ padding: 'var(--space-xl)', textAlign: 'center', color: 'var(--color-text-secondary)' }}>
+                                <div className="notification-empty">
                                     Carregando...
                                 </div>
                             ) : notifications.length === 0 ? (
-                                <div style={{ padding: 'var(--space-xl)', textAlign: 'center', color: 'var(--color-text-secondary)' }}>
-                                    <p style={{ fontSize: 'var(--text-2xl)', marginBottom: 'var(--space-sm)' }}>🎉</p>
-                                    <p style={{ margin: 0 }}>Sem notificações</p>
+                                <div className="notification-empty">
+                                    <span className="notification-empty-icon">✨</span>
+                                    <p>Tudo limpo por aqui</p>
                                 </div>
                             ) : (
                                 notifications.map(notification => (
                                     <div
                                         key={notification.id}
-                                        style={{
-                                            padding: 'var(--space-md)',
-                                            borderBottom: '1px solid var(--color-border-light)',
-                                            backgroundColor: notification.read_at ? 'transparent' : 'var(--color-bg-subtle)',
-                                            cursor: 'pointer'
-                                        }}
+                                        className={`notification-item ${!notification.read_at ? 'unread' : ''}`}
                                         onClick={() => !notification.read_at && markAsRead(notification.id)}
                                     >
-                                        <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
-                                            <div style={{ fontSize: 'var(--text-xl)' }}>
-                                                {getNotificationIcon(notification.type)}
-                                            </div>
-                                            <div style={{ flex: 1, minWidth: 0 }}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 'var(--space-xs)' }}>
-                                                    <strong style={{ fontSize: 'var(--text-sm)' }}>{notification.title}</strong>
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation()
-                                                            clearNotification(notification.id)
-                                                        }}
-                                                        style={{
-                                                            background: 'transparent',
-                                                            border: 'none',
-                                                            cursor: 'pointer',
-                                                            padding: '0',
-                                                            fontSize: 'var(--text-lg)',
-                                                            color: 'var(--color-text-tertiary)'
-                                                        }}
-                                                    >
-                                                        ×
-                                                    </button>
-                                                </div>
-                                                <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-                                                    {notification.message}
-                                                </p>
-                                                <p style={{ margin: 0, marginTop: 'var(--space-xs)', fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-                                                    {formatTimeAgo(notification.created_at)}
-                                                </p>
-                                            </div>
+                                        <div className="notification-icon">
+                                            {getNotificationIcon(notification.type)}
                                         </div>
+                                        <div className="notification-content">
+                                            <span className="notification-title">{notification.title}</span>
+                                            <span className="notification-message">{notification.message}</span>
+                                            <span className="notification-time">{formatTimeAgo(notification.created_at)}</span>
+                                        </div>
+                                        <button
+                                            className="btn-close-notification"
+                                            onClick={(e) => {
+                                                e.stopPropagation()
+                                                clearNotification(notification.id)
+                                            }}
+                                            aria-label="Remover notificação"
+                                        >
+                                            ×
+                                        </button>
                                     </div>
                                 ))
                             )}

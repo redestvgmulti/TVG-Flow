@@ -1,67 +1,108 @@
-/* Design Tokens - Apple-Inspired Light Theme */
+/* Design Tokens - CityOS Premium Theme */
 :root {
-    /* Colors - Neutral Palette */
-    --color-bg-app: #f5f5f7;
-    --color-bg-surface: #ffffff;
-    --color-bg-subtle: #f9f9f9;
+    /* 
+     * CORES PRINCIPAIS 
+     * Tons sólidos, neutros e de alto contraste
+     */
+    --color-bg-app: #F5F5F7;
+    /* Background principal (cinza Apple claro) */
+    --color-bg-surface: #FFFFFF;
+    /* Superfícies principais de leitura */
+    --color-bg-subtle: #F9F9FA;
+    /* Fundos secundários/hover muito suaves */
+    --color-bg-sidebar: #0F1218;
+    /* Sidebar sólida, escura, premium */
 
-    --color-text-primary: #1d1d1f;
-    --color-text-secondary: #6e6e73;
-    --color-text-tertiary: #86868b;
+    /* Texto */
+    --color-text-primary: #111827;
+    /* Quase preto para leitura máxima */
+    --color-text-secondary: #6B7280;
+    /* Cinza médio para descrições */
+    --color-text-tertiary: #9CA3AF;
+    /* Placeholders e ícones inativos */
+    --color-text-inverse: #FFFFFF;
+    /* Texto sobre fundos escuros */
 
-    --color-border: #d2d2d7;
-    --color-border-light: #e5e5ea;
+    /* Bordas */
+    --color-border: #E5E7EB;
+    --color-border-hover: #D1D5DB;
 
-    /* Colors - Primary Accent */
-    --color-primary: #007aff;
-    --color-primary-hover: #0051d5;
-    --color-primary-light: #e8f4ff;
+    /* Ação / Marca (Azul Institucional Refinado) */
+    --color-primary: #0066CC;
+    /* Azul clássico de sistema */
+    --color-primary-hover: #0052A3;
+    --color-primary-subtle: #E6F0FA;
+    /* Backgrounds de seleção */
 
-    /* Colors - Semantic */
-    --color-success: #34c759;
-    --color-warning: #ff9500;
-    --color-danger: #ff3b30;
+    /* Semântica */
+    --color-success: #10B981;
+    --color-success-bg: #ECFDF5;
+    --color-warning: #F59E0B;
+    --color-warning-bg: #FFFBEB;
+    --color-danger: #EF4444;
+    --color-danger-bg: #FEF2F2;
 
-    /* Spacing Scale */
+    /* 
+     * TIPOGRAFIA 
+     * Satoshi para display, IBM Plex Sans para UI/Leitura 
+     */
+    --font-display: 'Satoshi', sans-serif;
+    --font-body: 'IBM Plex Sans', sans-serif;
+
+    --text-xs: 12px;
+    --text-sm: 14px;
+    --text-base: 15px;
+    /* Tamanho de leitura confortável */
+    --text-lg: 18px;
+    --text-xl: 24px;
+    --text-2xl: 32px;
+    --text-3xl: 40px;
+
+    /* Pesos */
+    --weight-regular: 400;
+    --weight-medium: 500;
+    --weight-bold: 700;
+    --weight-black: 900;
+
+    /* 
+     * ESPAÇAMENTO COMPACTO MAS RESPIRÁVEL 
+     */
     --space-xs: 4px;
     --space-sm: 8px;
     --space-md: 16px;
     --space-lg: 24px;
     --space-xl: 32px;
     --space-2xl: 48px;
-    --space-3xl: 64px;
 
-    /* Border Radius */
+    /* 
+     * BORDAS E SOMBRAS 
+     * Estética suave "OS-like"
+     */
     --radius-sm: 6px;
     --radius-md: 10px;
-    --radius-lg: 14px;
-    --radius-xl: 20px;
+    /* Padrão para inputs, botões */
+    --radius-lg: 16px;
+    /* Padrão para cards */
+    --radius-xl: 24px;
+    /* Modais grandes */
     --radius-full: 9999px;
 
-    /* Typography */
-    --text-xs: 11px;
-    --text-sm: 13px;
-    --text-base: 15px;
-    --text-lg: 17px;
-    --text-xl: 20px;
-    --text-2xl: 28px;
-    --text-3xl: 34px;
+    /* Sombras Premium (Inter) */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
+    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 10px 10px -5px rgba(0, 0, 0, 0.03);
 
-    /* Font Weights */
-    --weight-normal: 400;
-    --weight-medium: 500;
-    --weight-semibold: 600;
-    --weight-bold: 700;
+    /* Específico do CityOS */
+    --shadow-glow: 0 0 20px rgba(0, 102, 204, 0.15);
+    /* Brilho sutil azul */
 
-    /* Shadows - Soft and Subtle */
-    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
-    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.06);
-    --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.08);
-    --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.10);
-    --shadow-xl: 0 12px 24px rgba(0, 0, 0, 0.12);
+    /* Glassmorphism */
+    --glass-bg: rgba(255, 255, 255, 0.85);
+    --glass-border: rgba(255, 255, 255, 0.5);
+    --glass-blur: 16px;
 
     /* Transitions */
     --transition-fast: 150ms ease;
-    --transition-base: 200ms ease;
-    --transition-slow: 300ms ease;
+    --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
 }
