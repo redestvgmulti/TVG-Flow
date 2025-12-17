@@ -8,6 +8,7 @@ import Professionals from './pages/admin/Professionals'
 import Reports from './pages/admin/Reports'
 import Calendar from './pages/admin/Calendar'
 import StaffDashboard from './pages/staff/Dashboard'
+import StaffToday from './pages/staff/Today'
 import ProtectedRoute from './routes/ProtectedRoute'
 import RoleProtectedRoute from './routes/RoleProtectedRoute'
 
@@ -49,6 +50,7 @@ function App() {
           >
             <Route index element={<Navigate to="/staff/dashboard" replace />} />
             <Route path="dashboard" element={<StaffDashboard />} />
+            <Route path="today" element={<StaffToday />} />
           </Route>
 
           <Route path="/" element={<Navigate to="/login" replace />} />
