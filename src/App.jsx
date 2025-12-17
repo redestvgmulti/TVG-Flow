@@ -2,7 +2,10 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import AppLayout from './layout/AppLayout'
 import AdminLayout from './layout/AdminLayout'
 import Login from './pages/Login'
-import Admin from './pages/Admin'
+import Dashboard from './pages/admin/Dashboard'
+import Tasks from './pages/admin/Tasks'
+import Professionals from './pages/admin/Professionals'
+import Reports from './pages/admin/Reports'
 import ProtectedRoute from './routes/ProtectedRoute'
 
 function App() {
@@ -20,9 +23,10 @@ function App() {
               </ProtectedRoute>
             }
           >
-            <Route index element={<Admin />} />
-            <Route path="tasks" element={<div><h2>Tasks</h2></div>} />
-            <Route path="calendar" element={<div><h2>Calendar</h2></div>} />
+            <Route index element={<Dashboard />} />
+            <Route path="tasks" element={<Tasks />} />
+            <Route path="professionals" element={<Professionals />} />
+            <Route path="reports" element={<Reports />} />
           </Route>
 
           <Route path="/" element={<Navigate to="/login" replace />} />

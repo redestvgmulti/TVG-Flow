@@ -18,8 +18,11 @@ function Sidebar() {
                 <NavLink to="/admin/tasks" className="sidebar-link">
                     Tasks
                 </NavLink>
-                <NavLink to="/admin/calendar" className="sidebar-link">
-                    Calendar
+                <NavLink to="/admin/professionals" className="sidebar-link">
+                    Professionals
+                </NavLink>
+                <NavLink to="/admin/reports" className="sidebar-link">
+                    Reports
                 </NavLink>
             </nav>
         </aside>

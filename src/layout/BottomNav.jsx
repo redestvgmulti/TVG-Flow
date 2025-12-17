@@ -9,8 +9,11 @@ function BottomNav() {
             <NavLink to="/admin/tasks" className="bottom-nav-link">
                 Tasks
             </NavLink>
-            <NavLink to="/admin/calendar" className="bottom-nav-link">
-                Calendar
+            <NavLink to="/admin/professionals" className="bottom-nav-link">
+                Professionals
+            </NavLink>
+            <NavLink to="/admin/reports" className="bottom-nav-link">
+                Reports
             </NavLink>
         </nav>
     )
