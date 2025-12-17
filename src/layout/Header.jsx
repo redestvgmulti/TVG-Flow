@@ -1,4 +1,5 @@
 import { useAuth } from '../contexts/AuthContext'
+import NotificationCenter from '../components/NotificationCenter'
 
 function Header() {
     const { user, signOut } = useAuth()
@@ -8,6 +9,7 @@ function Header() {
             <h1>Admin Dashboard</h1>
 
             <div className="header-actions">
+                <NotificationCenter />
                 <span>{user?.email}</span>
                 <button onClick={signOut} className="form-button">
                     Sign Out
