@@ -11,7 +11,8 @@ function Professionals() {
         nome: '',
         email: '',
         role: 'profissional',
-        ativo: true
+        ativo: true,
+        area_id: ''
     })
     const [editStaff, setEditStaff] = useState({
         nome: '',
@@ -21,9 +22,11 @@ function Professionals() {
     const [creating, setCreating] = useState(false)
     const [updating, setUpdating] = useState(false)
     const [feedback, setFeedback] = useState({ show: false, type: '', message: '' })
+    const [areas, setAreas] = useState([])
 
     useEffect(() => {
         fetchProfessionals()
+        fetchAreas()
     }, [])
 
     useEffect(() => {
@@ -53,6 +56,21 @@ function Professionals() {
         }
     }
 
+    async function fetchAreas() {
+        try {
+            const { data, error } = await supabase
+                .from('areas')
+                .select('id, nome')
+                .eq('ativo', true)
+                .order('nome')
+
+            if (error) throw error
+            setAreas(data || [])
+        } catch (error) {
+            console.error('Error fetching areas:', error)
+        }
+    }
+
     function showFeedback(type, message) {
         setFeedback({ show: true, type, message })
     }
@@ -72,6 +90,11 @@ function Professionals() {
 
         if (!newStaff.nome.trim() || !newStaff.email.trim()) {
             showFeedback('error', 'Please fill in all required fields')
+            return
+        }
+
+        if (!newStaff.area_id) {
+            showFeedback('error', 'Please select an area for the professional')
             return
         }
 
@@ -97,12 +120,13 @@ function Professionals() {
                     nome: newStaff.nome,
                     email: newStaff.email,
                     role: newStaff.role,
-                    ativo: newStaff.ativo
+                    ativo: newStaff.ativo,
+                    area_id: newStaff.area_id
                 }])
 
             if (error) throw error
 
-            setNewStaff({ nome: '', email: '', role: 'profissional', ativo: true })
+            setNewStaff({ nome: '', email: '', role: 'profissional', ativo: true, area_id: '' })
             setShowAddModal(false)
             showFeedback('success', 'Staff member added! They must sign up with this email to access the system.')
             await fetchProfessionals()
@@ -313,6 +337,24 @@ function Professionals() {
                                     >
                                         <option value="profissional">Professional</option>
                                         <option value="admin">Admin</option>
+                                    </select>
+                                </div>
+
+                                <div className="input-group">
+                                    <label htmlFor="area">Área *</label>
+                                    <select
+                                        id="area"
+                                        className="input"
+                                        value={newStaff.area_id}
+                                        onChange={(e) => setNewStaff({ ...newStaff, area_id: e.target.value })}
+                                        required
+                                    >
+                                        <option value="">Selecione uma área</option>
+                                        {areas.map(area => (
+                                            <option key={area.id} value={area.id}>
+                                                {area.nome}
+                                            </option>
+                                        ))}
                                     </select>
                                 </div>
 

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../services/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 
-function Today() {
+function Todia() {
     const { professionalId, professionalName } = useAuth()
     const [tasks, setTasks] = useState([])
     const [loading, setLoading] = useState(true)
@@ -10,7 +10,7 @@ function Today() {
 
     useEffect(() => {
         if (professionalId) {
-            fetchTodayTasks()
+            fetchTodiaTasks()
         }
     }, [professionalId])
 
@@ -23,27 +23,27 @@ function Today() {
         }
     }, [feedback.show])
 
-    async function fetchTodayTasks() {
+    async function fetchTodiaTasks() {
         try {
             setLoading(true)
 
-            const today = new Date()
-            today.setHours(0, 0, 0, 0)
-            const todayStr = today.toISOString()
+            const todia = new Date()
+            todia.setHours(0, 0, 0, 0)
+            const todiaStr = todia.toISOString()
 
             const { data, error } = await supabase
                 .from('tarefas')
                 .select('id, titulo, deadline, status, priority, drive_link')
                 .eq('assigned_to', professionalId)
-                .or(`deadline.gte.${todayStr},and(deadline.lt.${todayStr},status.neq.completed)`)
+                .or(`deadline.gte.${todiaStr},and(deadline.lt.${todiaStr},status.neq.completed)`)
                 .order('deadline')
 
             if (error) throw error
 
             // Sort: overdue first, then by deadline
             const sortedTasks = (data || []).sort((a, b) => {
-                const aOverdue = new Date(a.deadline) < today && a.status !== 'completed'
-                const bOverdue = new Date(b.deadline) < today && b.status !== 'completed'
+                const aOverdue = new Date(a.deadline) < todia && a.status !== 'completed'
+                const bOverdue = new Date(b.deadline) < todia && b.status !== 'completed'
 
                 if (aOverdue && !bOverdue) return -1
                 if (!aOverdue && bOverdue) return 1
@@ -53,7 +53,7 @@ function Today() {
 
             setTasks(sortedTasks)
         } catch (error) {
-            console.error('Error fetching today tasks:', error)
+            console.error('Error fetching todia tasks:', error)
             showFeedback('error', 'Failed to load tasks')
         } finally {
             setLoading(false)
@@ -65,12 +65,12 @@ function Today() {
     }
 
     function getOverdueDays(deadline) {
-        const today = new Date()
-        today.setHours(0, 0, 0, 0)
+        const todia = new Date()
+        todia.setHours(0, 0, 0, 0)
         const deadlineDate = new Date(deadline)
         deadlineDate.setHours(0, 0, 0, 0)
 
-        const diffTime = today - deadlineDate
+        const diffTime = todia - deadlineDate
         const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
 
         return diffDays > 0 ? diffDays : 0
@@ -93,14 +93,14 @@ function Today() {
             if (error) throw error
 
             showFeedback('success', `Task status updated to ${newStatus}`)
-            await fetchTodayTasks()
+            await fetchTodiaTasks()
         } catch (error) {
             console.error('Error updating task:', error)
             showFeedback('error', 'Failed to update task status')
         }
     }
 
-    async function handleCompleteTask(taskId, taskTitle) {
+    async function handleConcluirTask(taskId, taskTitle) {
         if (!confirm(`Mark "${taskTitle}" as completed?`)) {
             return
         }
@@ -117,7 +117,7 @@ function Today() {
             if (error) throw error
 
             showFeedback('success', 'Task completed!')
-            await fetchTodayTasks()
+            await fetchTodiaTasks()
         } catch (error) {
             console.error('Error completing task:', error)
             showFeedback('error', 'Failed to complete task')
@@ -151,9 +151,9 @@ function Today() {
     if (loading) {
         return (
             <div>
-                <h2>Today's Tasks</h2>
+                <h2>Tarefas de Hoje</h2>
                 <div className="card" style={{ textAlign: 'center', padding: 'var(--space-xl)' }}>
-                    <p style={{ color: 'var(--color-text-secondary)' }}>Loading your tasks...</p>
+                    <p style={{ color: 'var(--color-text-secondary)' }}>Carregando suas tarefas...</p>
                 </div>
             </div>
         )
@@ -161,9 +161,9 @@ function Today() {
 
     return (
         <div>
-            <h2>Today's Tasks</h2>
+            <h2>Tarefas de Hoje</h2>
             <p style={{ color: 'var(--color-text-secondary)', marginBottom: 'var(--space-lg)' }}>
-                Welcome, {professionalName}! Here are your tasks for today.
+                Bem-vindo, {professionalName}! Aqui estão suas tarefas para hoje.
             </p>
 
             {feedback.show && (
@@ -191,10 +191,10 @@ function Today() {
                     <div style={{ textAlign: 'center', padding: 'var(--space-2xl)', color: 'var(--color-text-secondary)' }}>
                         <p style={{ fontSize: 'var(--text-2xl)', marginBottom: 'var(--space-sm)' }}>🎉</p>
                         <p style={{ fontSize: 'var(--text-lg)', marginBottom: 'var(--space-xs)' }}>
-                            No tasks scheduled for today
+                            Nenhuma tarefa agendada para hoje
                         </p>
                         <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>
-                            Enjoy your day!
+                            Aproveite seu dia!
                         </p>
                     </div>
                 ) : (
@@ -229,7 +229,7 @@ function Today() {
                                             )}
                                             {isOverdue && (
                                                 <span className="badge badge-danger">
-                                                    Overdue by {overdueDays} day{overdueDays > 1 ? 's' : ''}
+                                                    Atrasada há {overdueDays} dia{overdueDays > 1 ? 's' : ''}
                                                 </span>
                                             )}
                                         </div>
@@ -255,11 +255,11 @@ function Today() {
                                     <div style={{ display: 'flex', gap: 'var(--space-xs)', flexWrap: 'wrap' }}>
                                         {task.status !== 'completed' && (
                                             <button
-                                                onClick={() => handleCompleteTask(task.id, task.titulo)}
+                                                onClick={() => handleConcluirTask(task.id, task.titulo)}
                                                 className="btn btn-primary"
                                                 style={{ padding: 'var(--space-xs) var(--space-sm)', fontSize: 'var(--text-sm)' }}
                                             >
-                                                ✓ Complete
+                                                ✓ Concluir
                                             </button>
                                         )}
                                         <select
@@ -274,7 +274,7 @@ function Today() {
                                         >
                                             <option value="pending">Pending</option>
                                             <option value="in_progress">In Progress</option>
-                                            <option value="completed">Completed</option>
+                                            <option value="completed">Concluird</option>
                                             <option value="overdue">Overdue</option>
                                         </select>
                                     </div>
@@ -288,4 +288,4 @@ function Today() {
     )
 }
 
-export default Today
+export default Todia

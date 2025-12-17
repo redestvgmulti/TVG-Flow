@@ -4,19 +4,19 @@ function BottomNav() {
     return (
         <nav className="bottom-nav">
             <NavLink to="/admin" end className="bottom-nav-link">
-                Dashboard
+                Painel
             </NavLink>
             <NavLink to="/admin/tasks" className="bottom-nav-link">
-                Tasks
+                Tarefas
             </NavLink>
             <NavLink to="/admin/professionals" className="bottom-nav-link">
-                Professionals
+                Profissionais
             </NavLink>
             <NavLink to="/admin/calendar" className="bottom-nav-link">
-                Calendar
+                Calendário
             </NavLink>
             <NavLink to="/admin/reports" className="bottom-nav-link">
-                Reports
+                Relatórios
             </NavLink>
         </nav>
     )

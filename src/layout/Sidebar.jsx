@@ -13,19 +13,19 @@ function Sidebar() {
 
             <nav className="sidebar-nav">
                 <NavLink to="/admin" end className="sidebar-link">
-                    Dashboard
+                    Painel
                 </NavLink>
                 <NavLink to="/admin/tasks" className="sidebar-link">
-                    Tasks
+                    Tarefas
                 </NavLink>
                 <NavLink to="/admin/professionals" className="sidebar-link">
-                    Professionals
+                    Profissionais
                 </NavLink>
                 <NavLink to="/admin/calendar" className="sidebar-link">
-                    Calendar
+                    Calendário
                 </NavLink>
                 <NavLink to="/admin/reports" className="sidebar-link">
-                    Reports
+                    Relatórios
                 </NavLink>
             </nav>
         </aside>

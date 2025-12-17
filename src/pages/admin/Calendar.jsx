@@ -122,9 +122,9 @@ function Calendar() {
     if (loading) {
         return (
             <div>
-                <h2>Task Calendar</h2>
+                <h2>Calendário de Tarefas</h2>
                 <div className="card" style={{ textAlign: 'center', padding: 'var(--space-xl)' }}>
-                    <p style={{ color: 'var(--color-text-secondary)' }}>Loading calendar...</p>
+                    <p style={{ color: 'var(--color-text-secondary)' }}>Carregando calendário...</p>
                 </div>
             </div>
         )
@@ -132,7 +132,7 @@ function Calendar() {
 
     return (
         <div>
-            <h2>Task Calendar</h2>
+            <h2>Calendário de Tarefas</h2>
 
             <div className="card" style={{ padding: 'var(--space-lg)', minHeight: '600px' }}>
                 <BigCalendar
@@ -153,7 +153,7 @@ function Calendar() {
                 <div className="modal-backdrop" onClick={() => setShowDetailModal(false)}>
                     <div className="modal" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
-                            <h3>Task Details</h3>
+                            <h3>Detalhes da Tarefa</h3>
                         </div>
                         <div className="modal-body">
                             <div style={{ marginBottom: 'var(--space-md)' }}>
@@ -169,32 +169,32 @@ function Calendar() {
                                 </div>
 
                                 <div>
-                                    <strong>Priority:</strong>{' '}
+                                    <strong>Prioridade:</strong>{' '}
                                     <span className={`badge ${getPriorityBadgeClass(selectedTask.priority)}`}>
                                         {selectedTask.priority}
                                     </span>
                                 </div>
 
                                 <div>
-                                    <strong>Deadline:</strong>{' '}
+                                    <strong>Prazo:</strong>{' '}
                                     {new Date(selectedTask.deadline).toLocaleString()}
                                 </div>
 
                                 <div>
-                                    <strong>Assigned To:</strong>{' '}
+                                    <strong>Atribuída a:</strong>{' '}
                                     {getAssignedToName(selectedTask.assigned_to)}
                                 </div>
 
                                 {selectedTask.drive_link && (
                                     <div>
-                                        <strong>Files:</strong>{' '}
+                                        <strong>Arquivos:</strong>{' '}
                                         <a
                                             href={selectedTask.drive_link}
                                             target="_blank"
                                             rel="noopener noreferrer"
                                             style={{ color: 'var(--color-primary)', textDecoration: 'none' }}
                                         >
-                                            📎 Open Drive Link
+                                            📎 Abrir Link do Drive
                                         </a>
                                     </div>
                                 )}
@@ -206,7 +206,7 @@ function Calendar() {
                                 onClick={() => setShowDetailModal(false)}
                                 className="btn btn-primary"
                             >
-                                Close
+                                Fechar
                             </button>
                         </div>
                     </div>

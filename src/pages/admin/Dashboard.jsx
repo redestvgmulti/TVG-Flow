@@ -2,22 +2,22 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../services/supabase'
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
-function Dashboard() {
+function Painel() {
     const [stats, setStats] = useState({
         totalTasks: 0,
         activeTasks: 0,
         completedTasks: 0,
-        totalProfessionals: 0
+        totalProfissionais: 0
     })
     const [recentTasks, setRecentTasks] = useState([])
     const [tasksOverTime, setTasksOverTime] = useState([])
     const [tasksByStatus, setTasksByStatus] = useState([])
     const [tasksByPriority, setTasksByPriority] = useState([])
-    const [professionals, setProfessionals] = useState([])
+    const [professionals, setProfissionais] = useState([])
     const [loading, setLoading] = useState(true)
     const [showCreateModal, setShowCreateModal] = useState(false)
-    const [showReassignModal, setShowReassignModal] = useState(false)
-    const [reassigningTask, setReassigningTask] = useState(null)
+    const [showReatribuirModal, setShowReatribuirModal] = useState(false)
+    const [reassigningTask, setReatribuiringTask] = useState(null)
     const [newTask, setNewTask] = useState({
         titulo: '',
         deadline: '',
@@ -26,14 +26,14 @@ function Dashboard() {
         assigned_to: '',
         drive_link: ''
     })
-    const [reassignTo, setReassignTo] = useState('')
+    const [reassignTo, setReatribuirTo] = useState('')
     const [creating, setCreating] = useState(false)
-    const [reassigning, setReassigning] = useState(false)
+    const [reassigning, setReatribuiring] = useState(false)
     const [feedback, setFeedback] = useState({ show: false, type: '', message: '' })
 
     useEffect(() => {
-        fetchDashboardData()
-        fetchProfessionals()
+        fetchPainelData()
+        fetchProfissionais()
     }, [])
 
     useEffect(() => {
@@ -45,7 +45,7 @@ function Dashboard() {
         }
     }, [feedback.show])
 
-    async function fetchProfessionals() {
+    async function fetchProfissionais() {
         try {
             const { data, error } = await supabase
                 .from('profissionais')
@@ -55,13 +55,13 @@ function Dashboard() {
                 .order('nome')
 
             if (error) throw error
-            setProfessionals(data || [])
+            setProfissionais(data || [])
         } catch (error) {
             console.error('Error fetching professionals:', error)
         }
     }
 
-    async function fetchDashboardData() {
+    async function fetchPainelData() {
         try {
             setLoading(true)
 
@@ -86,7 +86,7 @@ function Dashboard() {
                 totalTasks: total,
                 activeTasks: active,
                 completedTasks: completed,
-                totalProfessionals: profCount || 0
+                totalProfissionais: profCount || 0
             })
 
             setRecentTasks(allTasks?.slice(0, 5) || [])
@@ -107,7 +107,7 @@ function Dashboard() {
             const statusData = [
                 { name: 'Pending', value: allTasks?.filter(t => t.status === 'pending').length || 0, color: '#6e6e73' },
                 { name: 'In Progress', value: allTasks?.filter(t => t.status === 'in_progress').length || 0, color: '#007aff' },
-                { name: 'Completed', value: allTasks?.filter(t => t.status === 'completed').length || 0, color: '#34c759' },
+                { name: 'Concluídas', value: allTasks?.filter(t => t.status === 'completed').length || 0, color: '#34c759' },
                 { name: 'Overdue', value: allTasks?.filter(t => t.status === 'overdue').length || 0, color: '#ff3b30' }
             ]
             setTasksByStatus(statusData.filter(s => s.value > 0))
@@ -132,10 +132,10 @@ function Dashboard() {
         setFeedback({ show: true, type, message })
     }
 
-    function handleOpenReassignModal(task) {
-        setReassigningTask(task)
-        setReassignTo(task.assigned_to || '')
-        setShowReassignModal(true)
+    function handleOpenReatribuirModal(task) {
+        setReatribuiringTask(task)
+        setReatribuirTo(task.assigned_to || '')
+        setShowReatribuirModal(true)
     }
 
     async function handleCreateTask(e) {
@@ -175,7 +175,7 @@ function Dashboard() {
             setNewTask({ titulo: '', deadline: '', priority: 'medium', status: 'pending', assigned_to: '', drive_link: '' })
             setShowCreateModal(false)
             showFeedback('success', 'Task created successfully!')
-            await fetchDashboardData()
+            await fetchPainelData()
         } catch (error) {
             console.error('Error creating task:', error)
             showFeedback('error', 'Failed to create task. Please try again.')
@@ -184,14 +184,14 @@ function Dashboard() {
         }
     }
 
-    async function handleReassignTask(e) {
+    async function handleReatribuirTask(e) {
         e.preventDefault()
 
-        if (!confirm(`Reassign "${reassigningTask.titulo}" to ${professionals.find(p => p.id === reassignTo)?.nome || 'Unassigned'}?`)) {
+        if (!confirm(`Reatribuir "${reassigningTask.titulo}" to ${professionals.find(p => p.id === reassignTo)?.nome || 'Não atribuída'}?`)) {
             return
         }
 
-        setReassigning(true)
+        setReatribuiring(true)
 
         try {
             const { error } = await supabase
@@ -201,15 +201,15 @@ function Dashboard() {
 
             if (error) throw error
 
-            setShowReassignModal(false)
-            setReassigningTask(null)
+            setShowReatribuirModal(false)
+            setReatribuiringTask(null)
             showFeedback('success', 'Task reassigned successfully!')
-            await fetchDashboardData()
+            await fetchPainelData()
         } catch (error) {
             console.error('Error reassigning task:', error)
             showFeedback('error', 'Failed to reassign task')
         } finally {
-            setReassigning(false)
+            setReatribuiring(false)
         }
     }
 
@@ -230,7 +230,7 @@ function Dashboard() {
             if (error) throw error
 
             showFeedback('success', `Task status updated to ${newStatus}`)
-            await fetchDashboardData()
+            await fetchPainelData()
         } catch (error) {
             console.error('Error updating task:', error)
             showFeedback('error', 'Failed to update task status')
@@ -254,7 +254,7 @@ function Dashboard() {
             if (error) throw error
 
             showFeedback('success', 'Task completed!')
-            await fetchDashboardData()
+            await fetchPainelData()
         } catch (error) {
             console.error('Error completing task:', error)
             showFeedback('error', 'Failed to complete task')
@@ -297,19 +297,19 @@ function Dashboard() {
 
     function getAssignedToName(assignedToId) {
         const prof = professionals.find(p => p.id === assignedToId)
-        return prof ? prof.nome : 'Unassigned'
+        return prof ? prof.nome : 'Não atribuída'
     }
 
     if (loading) {
         return (
             <div>
-                <h2>Dashboard</h2>
+                <h2>Painel</h2>
                 <div className="card" style={{ textAlign: 'center', padding: 'var(--space-xl)' }}>
                     <p style={{ color: 'var(--color-text-secondary)', marginBottom: 'var(--space-sm)' }}>
-                        Loading your dashboard...
+                        Carregando seu painel...
                     </p>
                     <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>
-                        Fetching tasks, KPIs, and charts
+                        Buscando tarefas, KPIs e gráficos
                     </p>
                 </div>
             </div>
@@ -318,7 +318,7 @@ function Dashboard() {
 
     return (
         <div>
-            <h2>Dashboard</h2>
+            <h2>Painel</h2>
 
             {feedback.show && (
                 <div
@@ -349,7 +349,7 @@ function Dashboard() {
             }}>
                 <div className="card">
                     <h3 style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                        Total Tasks
+                        Total de Tarefas
                     </h3>
                     <p style={{ fontSize: 'var(--text-3xl)', fontWeight: 'var(--weight-bold)', margin: 0 }}>
                         {stats.totalTasks}
@@ -358,7 +358,7 @@ function Dashboard() {
 
                 <div className="card">
                     <h3 style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                        Active Tasks
+                        Tarefas Ativas
                     </h3>
                     <p style={{ fontSize: 'var(--text-3xl)', fontWeight: 'var(--weight-bold)', margin: 0 }}>
                         {stats.activeTasks}
@@ -367,7 +367,7 @@ function Dashboard() {
 
                 <div className="card">
                     <h3 style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                        Completed
+                        Concluídas
                     </h3>
                     <p style={{ fontSize: 'var(--text-3xl)', fontWeight: 'var(--weight-bold)', margin: 0 }}>
                         {stats.completedTasks}
@@ -376,10 +376,10 @@ function Dashboard() {
 
                 <div className="card">
                     <h3 style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                        Professionals
+                        Profissionais
                     </h3>
                     <p style={{ fontSize: 'var(--text-3xl)', fontWeight: 'var(--weight-bold)', margin: 0 }}>
-                        {stats.totalProfessionals}
+                        {stats.totalProfissionais}
                     </p>
                 </div>
             </div>
@@ -392,7 +392,7 @@ function Dashboard() {
                 marginBottom: 'var(--space-xl)'
             }}>
                 <div className="card">
-                    <h3 style={{ marginBottom: 'var(--space-md)' }}>Tasks Over Time (Last 30 Days)</h3>
+                    <h3 style={{ marginBottom: 'var(--space-md)' }}>Tarefas ao Longo do Tempo (Últimos 30 Dias)</h3>
                     {tasksOverTime.length > 0 ? (
                         <ResponsiveContainer width="100%" height={250}>
                             <LineChart data={tasksOverTime}>
@@ -415,16 +415,16 @@ function Dashboard() {
                         </ResponsiveContainer>
                     ) : (
                         <div style={{ textAlign: 'center', padding: 'var(--space-xl)', color: 'var(--color-text-secondary)' }}>
-                            <p style={{ marginBottom: 'var(--space-xs)' }}>No task data yet</p>
+                            <p style={{ marginBottom: 'var(--space-xs)' }}>Nenhum dado de tarefa ainda</p>
                             <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>
-                                Create your first task to see trends
+                                Crie sua primeira tarefa para ver tendências
                             </p>
                         </div>
                     )}
                 </div>
 
                 <div className="card">
-                    <h3 style={{ marginBottom: 'var(--space-md)' }}>Tasks by Status</h3>
+                    <h3 style={{ marginBottom: 'var(--space-md)' }}>Tarefas por Status</h3>
                     {tasksByStatus.length > 0 ? (
                         <ResponsiveContainer width="100%" height={250}>
                             <BarChart data={tasksByStatus}>
@@ -441,9 +441,9 @@ function Dashboard() {
                         </ResponsiveContainer>
                     ) : (
                         <div style={{ textAlign: 'center', padding: 'var(--space-xl)', color: 'var(--color-text-secondary)' }}>
-                            <p style={{ marginBottom: 'var(--space-xs)' }}>No status data</p>
+                            <p style={{ marginBottom: 'var(--space-xs)' }}>Nenhum dado de status</p>
                             <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>
-                                Tasks will appear here as you create them
+                                As tarefas aparecerão aqui conforme você as criar
                             </p>
                         </div>
                     )}
@@ -452,7 +452,7 @@ function Dashboard() {
 
             {tasksByPriority.length > 0 && (
                 <div className="card" style={{ marginBottom: 'var(--space-xl)' }}>
-                    <h3 style={{ marginBottom: 'var(--space-md)' }}>Tasks by Priority</h3>
+                    <h3 style={{ marginBottom: 'var(--space-md)' }}>Tarefas por Prioridade</h3>
                     <ResponsiveContainer width="100%" height={250}>
                         <PieChart>
                             <Pie
@@ -476,23 +476,23 @@ function Dashboard() {
                 </div>
             )}
 
-            {/* Recent Tasks */}
+            {/* Tarefas Recentes */}
             <div className="card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-lg)' }}>
-                    <h3 style={{ margin: 0 }}>Recent Tasks</h3>
+                    <h3 style={{ margin: 0 }}>Tarefas Recentes</h3>
                     <button onClick={() => setShowCreateModal(true)} className="btn btn-primary">
-                        + New Task
+                        + Nova Tarefa
                     </button>
                 </div>
 
                 {recentTasks.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: 'var(--space-2xl)', color: 'var(--color-text-secondary)' }}>
-                        <p style={{ fontSize: 'var(--text-lg)', marginBottom: 'var(--space-sm)' }}>No tasks yet</p>
+                        <p style={{ fontSize: 'var(--text-lg)', marginBottom: 'var(--space-sm)' }}>Nenhuma tarefa ainda</p>
                         <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)', marginBottom: 'var(--space-md)' }}>
-                            Get started by creating your first task
+                            Comece criando sua primeira tarefa
                         </p>
                         <button onClick={() => setShowCreateModal(true)} className="btn btn-primary">
-                            Create First Task
+                            Criar Primeira Tarefa
                         </button>
                     </div>
                 ) : (
@@ -516,7 +516,7 @@ function Dashboard() {
                                         {task.titulo}
                                     </p>
                                     <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', margin: 0 }}>
-                                        Deadline: {new Date(task.deadline).toLocaleDateString()} • Assigned: {getAssignedToName(task.assigned_to)}
+                                        Prazo: {new Date(task.deadline).toLocaleDateString()} • Atribuída: {getAssignedToName(task.assigned_to)}
                                         {task.drive_link && (
                                             <>
                                                 {' • '}
@@ -526,7 +526,7 @@ function Dashboard() {
                                                     rel="noopener noreferrer"
                                                     style={{ color: 'var(--color-primary)', textDecoration: 'none' }}
                                                 >
-                                                    📎 Files
+                                                    📎 Arquivos
                                                 </a>
                                             </>
                                         )}
@@ -542,11 +542,11 @@ function Dashboard() {
                                         </span>
                                     )}
                                     <button
-                                        onClick={() => handleOpenReassignModal(task)}
+                                        onClick={() => handleOpenReatribuirModal(task)}
                                         className="btn btn-secondary"
                                         style={{ padding: 'var(--space-xs) var(--space-sm)', fontSize: 'var(--text-sm)' }}
                                     >
-                                        Reassign
+                                        Reatribuir
                                     </button>
                                     {task.status !== 'completed' && (
                                         <button
@@ -569,7 +569,7 @@ function Dashboard() {
                                     >
                                         <option value="pending">Pending</option>
                                         <option value="in_progress">In Progress</option>
-                                        <option value="completed">Completed</option>
+                                        <option value="completed">Concluídas</option>
                                         <option value="overdue">Overdue</option>
                                     </select>
                                 </div>
@@ -621,7 +621,7 @@ function Dashboard() {
                                         value={newTask.assigned_to}
                                         onChange={(e) => setNewTask({ ...newTask, assigned_to: e.target.value })}
                                     >
-                                        <option value="">Unassigned</option>
+                                        <option value="">Não atribuída</option>
                                         {professionals.map(prof => (
                                             <option key={prof.id} value={prof.id}>{prof.nome}</option>
                                         ))}
@@ -632,7 +632,7 @@ function Dashboard() {
                                 </div>
 
                                 <div className="input-group">
-                                    <label htmlFor="drive_link">Drive / Files Link</label>
+                                    <label htmlFor="drive_link">Drive / Arquivos Link</label>
                                     <input
                                         id="drive_link"
                                         type="url"
@@ -671,7 +671,7 @@ function Dashboard() {
                                     >
                                         <option value="pending">Pending</option>
                                         <option value="in_progress">In Progress</option>
-                                        <option value="completed">Completed</option>
+                                        <option value="completed">Concluídas</option>
                                     </select>
                                 </div>
                             </div>
@@ -698,14 +698,14 @@ function Dashboard() {
                 </div>
             )}
 
-            {/* Reassign Task Modal */}
-            {showReassignModal && reassigningTask && (
-                <div className="modal-backdrop" onClick={() => setShowReassignModal(false)}>
+            {/* Reatribuir Task Modal */}
+            {showReatribuirModal && reassigningTask && (
+                <div className="modal-backdrop" onClick={() => setShowReatribuirModal(false)}>
                     <div className="modal" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
-                            <h3>Reassign Task</h3>
+                            <h3>Reatribuir Task</h3>
                         </div>
-                        <form onSubmit={handleReassignTask}>
+                        <form onSubmit={handleReatribuirTask}>
                             <div className="modal-body">
                                 <p style={{ marginBottom: 'var(--space-md)', color: 'var(--color-text-secondary)' }}>
                                     Task: <strong>{reassigningTask.titulo}</strong>
@@ -717,10 +717,10 @@ function Dashboard() {
                                         id="reassign_to"
                                         className="input"
                                         value={reassignTo}
-                                        onChange={(e) => setReassignTo(e.target.value)}
+                                        onChange={(e) => setReatribuirTo(e.target.value)}
                                         required
                                     >
-                                        <option value="">Unassigned</option>
+                                        <option value="">Não atribuída</option>
                                         {professionals.map(prof => (
                                             <option key={prof.id} value={prof.id}>{prof.nome}</option>
                                         ))}
@@ -734,7 +734,7 @@ function Dashboard() {
                             <div className="modal-footer">
                                 <button
                                     type="button"
-                                    onClick={() => setShowReassignModal(false)}
+                                    onClick={() => setShowReatribuirModal(false)}
                                     className="btn btn-secondary"
                                     disabled={reassigning}
                                 >
@@ -745,7 +745,7 @@ function Dashboard() {
                                     className="btn btn-primary"
                                     disabled={reassigning}
                                 >
-                                    {reassigning ? 'Reassigning...' : 'Reassign Task'}
+                                    {reassigning ? 'Reatribuiring...' : 'Reatribuir Task'}
                                 </button>
                             </div>
                         </form>
@@ -756,4 +756,4 @@ function Dashboard() {
     )
 }
 
-export default Dashboard
+export default Painel
