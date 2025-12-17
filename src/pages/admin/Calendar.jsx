@@ -1,19 +1,18 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Calendar as BigCalendar, dateFnsLocalizer } from 'react-big-calendar'
 import { format, parse, startOfWeek, getDay } from 'date-fns'
+import enUS from 'date-fns/locale/en-US'
 import { supabase } from '../../services/supabase'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
-
-const locales = {
-    'en-US': require('date-fns/locale/en-US')
-}
 
 const localizer = dateFnsLocalizer({
     format,
     parse,
     startOfWeek,
     getDay,
-    locales,
+    locales: {
+        'en-US': enUS
+    },
 })
 
 function Calendar() {
