@@ -4,7 +4,10 @@ import AdminLayout from './layout/AdminLayout'
 import Login from './pages/Login'
 import Dashboard from './pages/admin/Dashboard'
 import Tasks from './pages/admin/Tasks'
-import Professionals from './pages/admin/Professionals'
+// import Professionals from './pages/admin/Professionals' // Old
+import ProfessionalsList from './pages/admin/professionals/index'
+import ProfessionalCreate from './pages/admin/professionals/Create'
+import ProfessionalEdit from './pages/admin/professionals/Edit'
 import Reports from './pages/admin/Reports'
 import Calendar from './pages/admin/Calendar'
 import Areas from './pages/admin/Areas'
@@ -37,7 +40,15 @@ function App() {
             <Route index element={<Dashboard />} />
             <Route path="tasks" element={<Tasks />} />
             <Route path="areas" element={<Areas />} />
-            <Route path="professionals" element={<Professionals />} />
+            <Route path="areas" element={<Areas />} />
+
+            {/* Professionals Module */}
+            <Route path="professionals">
+              <Route index element={<ProfessionalsList />} />
+              <Route path="new" element={<ProfessionalCreate />} />
+              <Route path=":id/edit" element={<ProfessionalEdit />} />
+            </Route>
+
             <Route path="calendar" element={<Calendar />} />
             <Route path="reports" element={<Reports />} />
           </Route>

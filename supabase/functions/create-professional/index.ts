@@ -1,3 +1,4 @@
+
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -7,102 +8,113 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
+    // Handle CORS preflight
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
     }
 
     try {
+        // 1. Setup Clients
+        // Service Role for privileged operations (Creating User, Inserting to protected table)
         const supabaseAdmin = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-            {
-                auth: {
-                    autoRefreshToken: false,
-                    persistSession: false
-                }
-            }
+            { auth: { autoRefreshToken: false, persistSession: false } }
         )
 
-        const { nome, email, role, ativo, area_id } = await req.json()
-
-        // Validar dados
-        if (!nome || !email || !role) {
-            throw new Error('Nome, email e role são obrigatórios')
+        // Client for verifying the caller (using the Authorization header from request)
+        const authHeader = req.headers.get('Authorization')
+        if (!authHeader) {
+            throw new Error('Missing Authorization header')
         }
 
-        // 1. Criar ou buscar usuário no Auth
-        let userId = ''
+        const supabaseClient = createClient(
+            Deno.env.get('SUPABASE_URL') ?? '',
+            Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+            { global: { headers: { Authorization: authHeader } } }
+        )
+
+        // 2. Security Check: Verify if caller is authenticated and is an ADMIN
+        const { data: { user }, error: userError } = await supabaseClient.auth.getUser()
+        if (userError || !user) {
+            throw new Error('Unauthorized: Invalid token')
+        }
+
+        // Check role in 'profissionais' table
+        const { data: requesterProfile, error: profileError } = await supabaseAdmin
+            .from('profissionais')
+            .select('role')
+            .eq('id', user.id)
+            .single()
+
+        if (profileError || !requesterProfile || requesterProfile.role !== 'admin') {
+            throw new Error('Unauthorized: Only admins can perform this action')
+        }
+
+        // 3. Parse and Validate Body
+        const { email, password, name, area_id, role, ativo } = await req.json()
+
+        if (!email || !password || !name) {
+            throw new Error('Missing required fields: email, password, name')
+        }
+
+        // 4. Create User in Supabase Auth
+        // We use admin.createUser to skip email verification if needed (email_confirm: true)
         const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
             email,
+            password,
             email_confirm: true,
-            user_metadata: { nome }
+            user_metadata: { nome: name }
         })
 
         if (authError) {
-            // Se o usuário já existe, buscamos o ID dele
+            // Return specific message for duplicates
             if (authError.message.includes('already been registered')) {
-                const { data: existingUser, error: fetchError } = await supabaseAdmin.auth.admin.listUsers()
-                // Nota: listUsers não filtra por email diretamente na API administrativa padrão sem parâmetros, 
-                // mas podemos iterar ou usar a busca se disponível. 
-                // Uma alternativa mais direta é tentar fazer o login falso ou assumir que o erro já confirma a existência.
-                // Mas precisamos do ID.
-
-                // Melhor abordagem: usar 'listUsers' com filtro se possível, ou simplesmente ignorar se não conseguirmos o ID (mas precisamos dele).
-                // Vamos tentar getUserById... não temos o ID.
-                // Vamos listar users (tem limite de paginação).
-                // A melhor forma segura é retornar erro se não conseguirmos recuperar,
-                // mas vamos tentar recuperar via getUserByEmail se existir (não existe no admin).
-
-                // Workaround: Tentar recuperar o usuário dessa forma:
-                // Mas espere, se o usuário já existe, não deveríamos falhar? 
-                // O frontend reclamou de 406 Not Acceptable antes.
-                // Se queremos "Adicionar funcinário" que JÁ existe no Auth, precisamos do ID.
-
-                // Vamos arriscar apenas pegar o ID se for possível, senão retornamos erro específico.
-                // Na verdade, a API admin.listUsers() retorna lista. Podemos filtrar no código.
-                // Isso pode ser lento se tiver muitos usuários.
-
-                // Outra opção: Supabase Admin tem generateLink?
-
-                // Vamos tentar listUsers com page params se suportado, mas aqui vamos simplificar:
-                const { data: users } = await supabaseAdmin.auth.admin.listUsers()
-                const found = users?.users.find(u => u.email === email)
-                if (found) {
-                    userId = found.id
-                } else {
-                    throw authError // Se não achou, lança o erro original
-                }
-            } else {
-                throw authError
+                throw new Error('Este e-mail já está cadastrado no sistema.')
             }
-        } else {
-            userId = authData.user.id
+            throw authError
         }
 
-        // 2. Inserir profissional
-        const { error: insertError } = await supabaseAdmin
+        const userId = authData.user.id
+
+        // 5. Insert into 'profissionais' table
+        const { error: dbError } = await supabaseAdmin
             .from('profissionais')
-            .upsert([{
+            .insert({
                 id: userId,
-                nome,
-                email,
-                role,
-                ativo: ativo ?? true,
-                area_id: area_id || null
-            }])
+                nome: name,
+                email: email,
+                area_id: area_id || null, // Allow null if not assigned yet
+                role: role || 'profissional',
+                ativo: ativo !== undefined ? ativo : true,
+                created_at: new Date().toISOString()
+            })
 
-        if (insertError) throw insertError
+        if (dbError) {
+            // Compensating Transaction: Delete the Auth user if DB insert fails
+            // This prevents "Zombie Users" in Auth that don't satisfy the system's structural requirements
+            console.error('Database insert failed, rolling back Auth creation...', dbError)
+            await supabaseAdmin.auth.admin.deleteUser(userId)
+            throw new Error(`Database Error: ${dbError.message}`)
+        }
 
+        // 6. Success Response
         return new Response(
-            JSON.stringify({ success: true, user_id: userId }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+            JSON.stringify({ success: true, id: userId, message: 'Profissional cadastrado com sucesso' }),
+            {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                status: 200
+            }
         )
 
     } catch (error) {
         console.error('Edge Function Error:', error)
         return new Response(
-            JSON.stringify({ error: error.message }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+            JSON.stringify({ error: error.message, success: false }),
+            {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                status: 400 // Bad Request for business logic errors
+            }
         )
     }
 })
