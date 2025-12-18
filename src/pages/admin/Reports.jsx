@@ -1,5 +1,7 @@
+
 import { useState, useEffect } from 'react'
 import { supabase } from '../../services/supabase'
+import { RefreshCw } from 'lucide-react'
 import {
     BarChart,
     Bar,
@@ -42,7 +44,7 @@ function Reports() {
 
             // Calculate Metrics
             const total = tasks.length
-            const completion = tasks.filter(t => t.status === 'completed').length
+            const completed = tasks.filter(t => t.status === 'completed').length
             const pending = tasks.filter(t => t.status === 'pending' || t.status === 'in_progress').length
             const overdue = tasks.filter(t => t.status === 'overdue').length
 
@@ -99,8 +101,10 @@ function Reports() {
     if (loading) {
         return (
             <div className="animation-fade-in">
-                <div className="dashboard-header">
-                    <h2>Relatórios</h2>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2rem' }}>
+                    <div>
+                        <h2>Relatórios</h2>
+                    </div>
                 </div>
                 <div className="card loading-card">
                     <p className="loading-text-primary">Gerando análises...</p>
@@ -111,10 +115,17 @@ function Reports() {
 
     return (
         <div className="animation-fade-in">
-            <div className="dashboard-header">
-                <h2>Relatórios</h2>
-                <button onClick={fetchMetrics} className="btn btn-secondary btn-sm">
-                    🔄 Atualizar
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2rem' }}>
+                <div>
+                    <h2 className="text-2xl font-bold text-slate-800">Relatórios</h2>
+                </div>
+                <button
+                    onClick={fetchMetrics}
+                    disabled={loading}
+                    className="btn btn-primary flex items-center gap-2 shadow-lg shadow-blue-200/50"
+                >
+                    <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+                    Atualizar Dados
                 </button>
             </div>
 
