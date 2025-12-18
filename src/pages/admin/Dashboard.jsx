@@ -304,11 +304,11 @@ function Painel() {
         return (
             <div>
                 <h2>Painel</h2>
-                <div className="card" style={{ textAlign: 'center', padding: 'var(--space-xl)' }}>
-                    <p style={{ color: 'var(--color-text-secondary)', marginBottom: 'var(--space-sm)' }}>
+                <div className="card loading-card">
+                    <p className="loading-text-primary">
                         Carregando seu painel...
                     </p>
-                    <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>
+                    <p className="loading-text-secondary">
                         Buscando tarefas, KPIs e gráficos
                     </p>
                 </div>
@@ -339,12 +339,12 @@ function Painel() {
 
                 <div className="card metric-card">
                     <h3 className="metric-label">Tarefas Ativas</h3>
-                    <p className="metric-value" style={{ color: 'var(--color-primary)' }}>{stats.activeTasks}</p>
+                    <p className="metric-value metric-value-primary">{stats.activeTasks}</p>
                 </div>
 
                 <div className="card metric-card">
                     <h3 className="metric-label">Concluídas</h3>
-                    <p className="metric-value" style={{ color: 'var(--color-success)' }}>{stats.completedTasks}</p>
+                    <p className="metric-value metric-value-success">{stats.completedTasks}</p>
                 </div>
 
                 <div className="card metric-card">
@@ -462,38 +462,24 @@ function Painel() {
                         </button>
                     </div>
                 ) : (
-                    <div className="task-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div className="task-list">
                         {recentTasks.map(task => (
-                            <div
-                                key={task.id}
-                                className="task-item card"
-                                style={{
-                                    padding: '16px',
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center',
-                                    gap: '16px',
-                                    flexWrap: 'wrap',
-                                    marginBottom: 0,
-                                    boxShadow: 'none',
-                                    border: '1px solid var(--color-border)'
-                                }}
-                            >
-                                <div style={{ flex: 1, minWidth: '200px' }}>
-                                    <p style={{ fontWeight: '600', marginBottom: '4px', color: 'var(--color-text-primary)' }}>
+                            <div key={task.id} className="task-item card">
+                                <div className="task-item-content">
+                                    <p className="task-item-title">
                                         {task.titulo}
                                     </p>
-                                    <p className="text-sm text-muted" style={{ margin: 0 }}>
+                                    <p className="text-sm text-muted task-item-meta">
                                         Prazo: {new Date(task.deadline).toLocaleDateString()} • {getAssignedToName(task.assigned_to)}
                                     </p>
                                 </div>
 
-                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                <div className="task-item-actions">
                                     <span className={`badge ${getStatusBadgeClass(task.status)}`}>
                                         {task.status}
                                     </span>
 
-                                    <div className="btn-group" style={{ display: 'flex', gap: '4px' }}>
+                                    <div className="btn-group">
                                         <button
                                             onClick={() => handleOpenReatribuirModal(task)}
                                             className="btn btn-ghost btn-xs"
@@ -630,7 +616,7 @@ function Painel() {
                         </div>
                         <form onSubmit={handleReatribuirTask}>
                             <div className="modal-body">
-                                <p className="text-muted" style={{ marginBottom: '16px' }}>
+                                <p className="text-muted modal-text-muted">
                                     Tarefa: <strong className="text-primary">{reassigningTask.titulo}</strong>
                                 </p>
 
