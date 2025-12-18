@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../services/supabase'
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { Clock, User, AlertCircle, CheckCircle, ExternalLink, Calendar } from 'lucide-react'
 
 function Painel() {
     const [stats, setStats] = useState({
@@ -30,6 +31,7 @@ function Painel() {
     const [creating, setCreating] = useState(false)
     const [reassigning, setReatribuiring] = useState(false)
     const [feedback, setFeedback] = useState({ show: false, type: '', message: '' })
+    const [selectedTask, setSelectedTask] = useState(null)
 
     useEffect(() => {
         fetchPainelData()
@@ -485,7 +487,7 @@ function Painel() {
                                             className="btn btn-ghost btn-xs"
                                             title="Reatribuir"
                                         >
-                                            👤
+                                            <User size={16} />
                                         </button>
 
                                         {task.status !== 'completed' && (
@@ -494,7 +496,7 @@ function Painel() {
                                                 className="btn btn-ghost btn-xs text-success"
                                                 title="Concluir"
                                             >
-                                                ✅
+                                                <CheckCircle size={16} />
                                             </button>
                                         )}
                                     </div>
@@ -504,6 +506,91 @@ function Painel() {
                     </div>
                 )}
             </div>
+
+            {/* Modal de Detalhes da Tarefa */}
+            {selectedTask && (
+                <div className="modal-backdrop" onClick={() => setSelectedTask(null)}>
+                    <div className="modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h3>Detalhes da Tarefa</h3>
+                            <button className="modal-close" onClick={() => setSelectedTask(null)}>×</button>
+                        </div>
+                        <div className="modal-body">
+                            <div className="detail-group">
+                                <label>Título</label>
+                                <p className="detail-value">{selectedTask.titulo}</p>
+                            </div>
+
+                            <div className="detail-group">
+                                <label>Descrição</label>
+                                <p className="detail-value" style={{ whiteSpace: 'pre-wrap' }}>
+                                    {selectedTask.descricao || 'Sem descrição'}
+                                </p>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="detail-group">
+                                    <label>Status</label>
+                                    <span className={`badge badge-${selectedTask.status === 'completed' ? 'success' : selectedTask.status === 'in_progress' ? 'primary' : 'neutral'}`}>
+                                        {selectedTask.status === 'completed' ? 'Concluída' : selectedTask.status === 'in_progress' ? 'Em Andamento' : 'Pendente'}
+                                    </span>
+                                </div>
+
+                                <div className="detail-group">
+                                    <label>Prioridade</label>
+                                    <span className={`badge badge-${selectedTask.prioridade === 'urgent' ? 'danger' : selectedTask.prioridade === 'high' ? 'warning' : 'neutral'}`}>
+                                        {selectedTask.prioridade === 'urgent' ? 'Urgente' : selectedTask.prioridade === 'high' ? 'Alta' : 'Normal'}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div className="detail-group">
+                                <label>Responsável</label>
+                                <div className="flex items-center gap-2 mt-1">
+                                    <div className="avatar-placeholder w-8 h-8 text-xs">
+                                        {getAssignedToName(selectedTask.assigned_to)?.charAt(0) || '?'}
+                                    </div>
+                                    <p className="detail-value mb-0">
+                                        {getAssignedToName(selectedTask.assigned_to) || 'Não atribuído'}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {selectedTask.drive_link && (
+                                <div className="detail-group">
+                                    <label>Link do Drive</label>
+                                    <a
+                                        href={selectedTask.drive_link}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-primary flex items-center gap-2 hover:underline"
+                                    >
+                                        <ExternalLink size={16} />
+                                        Acessar Arquivos
+                                    </a>
+                                </div>
+                            )}
+
+                            <div className="detail-group">
+                                <label>Prazos</label>
+                                <p className="text-sm text-muted flex items-center gap-2">
+                                    <Calendar size={14} />
+                                    Criado em: {new Date(selectedTask.created_at).toLocaleDateString()}
+                                </p>
+                                <p className="text-sm text-muted flex items-center gap-2">
+                                    <Clock size={14} />
+                                    Vencimento: {new Date(selectedTask.due_date).toLocaleDateString()}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="modal-footer">
+                            <button className="btn btn-secondary w-full" onClick={() => setSelectedTask(null)}>
+                                Fechar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Modals are kept as is, just ensuring classes match */}
             {/* Create Task Modal */}

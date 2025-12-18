@@ -13,9 +13,12 @@ import StaffToday from './pages/staff/Today'
 import ProtectedRoute from './routes/ProtectedRoute'
 import RoleProtectedRoute from './routes/RoleProtectedRoute'
 
+import { Toaster } from 'sonner'
+
 function App() {
   return (
     <BrowserRouter>
+      <Toaster position="top-right" richColors />
       <AppLayout>
         <Routes>
           <Route path="/login" element={<Login />} />
