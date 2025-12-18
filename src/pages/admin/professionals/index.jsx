@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-    Users, UserPlus, Search, Mail, Shield, User, CheckCircle, XCircle, Edit, MoreHorizontal
+    Users, UserPlus, Search, Mail, Shield, User, CheckCircle, XCircle, Edit
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { professionalsService } from '../../../services/professionals'
@@ -37,27 +37,30 @@ export default function ProfessionalsList() {
 
     if (loading) {
         return (
-            <div className="animate-pulse space-y-4 p-6">
-                <div className="h-8 w-1/3 bg-slate-200 rounded"></div>
-                <div className="h-64 bg-slate-100 rounded-xl"></div>
+            <div className="animation-fade-in">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2rem' }}>
+                    <div>
+                        <h2>Gestão de Profissionais</h2>
+                    </div>
+                </div>
+                <div className="card loading-card">
+                    <p className="loading-text-primary">Carregando equipe...</p>
+                </div>
             </div>
         )
     }
 
     return (
-        <div className="space-y-6 fade-in">
+        <div className="animation-fade-in space-y-6">
             {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2rem' }}>
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                        <Users className="text-blue-600" />
-                        Gestão de Profissionais
-                    </h1>
-                    <p className="text-slate-500">Gerencie o acesso e permissões da sua equipe.</p>
+                    <h2 className="text-2xl font-bold text-slate-800">Gestão de Profissionais</h2>
+                    <p className="text-muted mt-1">Gerencie o acesso e permissões da sua equipe.</p>
                 </div>
                 <button
                     onClick={() => navigate('/admin/professionals/new')}
-                    className="btn btn-primary flex items-center gap-2 shadow-lg shadow-blue-200"
+                    className="btn btn-primary flex items-center gap-2 shadow-lg shadow-blue-200/50"
                 >
                     <UserPlus size={18} />
                     Novo Profissional
@@ -65,101 +68,98 @@ export default function ProfessionalsList() {
             </div>
 
             {/* Toolbar */}
-            <div className="bg-white/50 backdrop-blur-sm p-4 rounded-xl border border-white/40 shadow-sm flex items-center gap-4">
+            <div className="card mb-8 p-4 flex items-center gap-4">
                 <div className="relative flex-1 max-w-md">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={18} />
                     <input
                         type="text"
                         placeholder="Buscar por nome ou e-mail..."
-                        className="w-full pl-10 pr-4 py-2 rounded-lg bg-white border border-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                        className="input pl-10"
                         value={searchTerm}
                         onChange={e => setSearchTerm(e.target.value)}
                     />
                 </div>
-                <div className="text-sm text-slate-500 hidden md:block">
+                <div className="text-sm text-muted hidden md:block border-l pl-4 border-slate-200">
                     Mostrando <strong>{filtered.length}</strong> membros
                 </div>
             </div>
 
             {/* Table Card */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full">
-                        <thead className="bg-slate-50 border-b border-slate-200">
-                            <tr>
-                                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Profissional</th>
-                                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Função</th>
-                                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Departamento</th>
-                                <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
-                                <th className="px-6 py-4 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                            {filtered.map(prof => (
-                                <tr key={prof.id} className="hover:bg-slate-50/80 transition-colors group">
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 text-blue-600 flex items-center justify-center font-bold text-sm border border-blue-200">
-                                                {prof.nome.charAt(0).toUpperCase()}
-                                            </div>
-                                            <div>
-                                                <div className="font-medium text-slate-800">{prof.nome}</div>
-                                                <div className="text-sm text-slate-500 flex items-center gap-1">
-                                                    <Mail size={12} /> {prof.email}
+            <div className="table-card">
+                <div className="table-header border-b border-slate-100">
+                    <h3 className="table-title flex items-center gap-2">
+                        <Users size={18} className="text-muted" />
+                        <span className="font-semibold text-slate-700">Equipe Cadastrada</span>
+                    </h3>
+                </div>
+
+                {filtered.length === 0 ? (
+                    <div className="empty-state py-12">
+                        <div className="empty-icon mb-4" style={{ opacity: 0.1 }}><Users size={64} /></div>
+                        <p className="empty-text text-lg font-medium text-slate-600">Nenhum profissional encontrado</p>
+                        <p className="text-slate-400 mb-6">Tente ajustar sua busca ou adicione um novo membro.</p>
+                        {searchTerm && (
+                            <button onClick={() => setSearchTerm('')} className="btn btn-ghost text-primary hover:bg-blue-50">
+                                Limpar busca
+                            </button>
+                        )}
+                    </div>
+                ) : (
+                    <div className="table-container">
+                        <table className="table">
+                            <thead>
+                                <tr>
+                                    <th className="py-4 pl-6">Profissional</th>
+                                    <th className="py-4">Função</th>
+                                    <th className="py-4">Departamento</th>
+                                    <th className="py-4">Status</th>
+                                    <th className="py-4 pr-6" style={{ textAlign: 'right' }}>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {filtered.map(prof => (
+                                    <tr key={prof.id} className="hover:bg-slate-50/80 transition-all border-b border-slate-50 last:border-0">
+                                        <td className="py-5 pl-6">
+                                            <div className="flex flex-col gap-1.5">
+                                                <div className="font-bold text-slate-800 text-base">{prof.nome}</div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }} className="text-sm text-slate-500">
+                                                    <Mail size={14} className="text-slate-400" />
+                                                    {prof.email}
                                                 </div>
                                             </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${prof.role === 'admin'
-                                                ? 'bg-purple-50 text-purple-700 border-purple-200'
-                                                : 'bg-slate-50 text-slate-600 border-slate-200'
-                                            }`}>
-                                            {prof.role === 'admin' ? <Shield size={12} /> : <User size={12} />}
-                                            {prof.role === 'admin' ? 'Administrador' : 'Profissional'}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <div className="text-sm text-slate-600">
-                                            {prof.areas?.nome || <span className="text-slate-400 italic">Sem área</span>}
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${prof.ativo
-                                                ? 'bg-emerald-50 text-emerald-700'
-                                                : 'bg-red-50 text-red-700'
-                                            }`}>
-                                            {prof.ativo ? <CheckCircle size={12} /> : <XCircle size={12} />}
-                                            {prof.ativo ? 'Ativo' : 'Inativo'}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 text-right">
-                                        <button
-                                            onClick={() => navigate(`/admin/professionals/${prof.id}/edit`)}
-                                            className="text-slate-400 hover:text-blue-600 p-2 hover:bg-blue-50 rounded-lg transition-colors"
-                                            title="Editar"
-                                        >
-                                            <Edit size={18} />
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                            {filtered.length === 0 && (
-                                <tr>
-                                    <td colSpan="5" className="px-6 py-12 text-center text-slate-500">
-                                        <div className="flex flex-col items-center gap-3">
-                                            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center">
-                                                <Users size={32} className="text-slate-300" />
-                                            </div>
-                                            <p>Nenhum profissional encontrado.</p>
-                                            {searchTerm && <button onClick={() => setSearchTerm('')} className="text-blue-600 hover:underline text-sm">Limpar busca</button>}
-                                        </div>
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
+                                        </td>
+                                        <td className="py-5">
+                                            <span className={`badge ${prof.role === 'admin' ? 'badge-primary' : 'badge-warning'} gap-1.5 px-3 py-1.5 text-xs ring-1 ring-inset ${prof.role === 'admin' ? 'ring-blue-100' : 'ring-yellow-100'}`}>
+                                                {prof.role === 'admin' ? <Shield size={12} /> : <User size={12} />}
+                                                {prof.role === 'admin' ? 'Administrador' : 'Profissional'}
+                                            </span>
+                                        </td>
+                                        <td className="py-5">
+                                            <span className="text-sm font-medium text-slate-600 bg-slate-100 px-3 py-1 rounded-full">
+                                                {prof.areas?.nome || <span className="text-slate-400 italic font-normal">Sem área</span>}
+                                            </span>
+                                        </td>
+                                        <td className="py-5">
+                                            <span className={`badge ${prof.ativo ? 'badge-success' : 'badge-danger'} gap-1.5 px-3 py-1.5 ring-1 ring-inset ${prof.ativo ? 'ring-green-100' : 'ring-red-100'}`}>
+                                                {prof.ativo ? <CheckCircle size={12} /> : <XCircle size={12} />}
+                                                {prof.ativo ? 'Ativo' : 'Inativo'}
+                                            </span>
+                                        </td>
+                                        <td className="py-5 pr-6" style={{ textAlign: 'right' }}>
+                                            <button
+                                                onClick={() => navigate(`/admin/professionals/${prof.id}/edit`)}
+                                                className="btn-icon p-2.5 hover:bg-white hover:text-blue-600 hover:shadow-md border border-transparent hover:border-slate-100 rounded-lg transition-all text-slate-400 bg-slate-50"
+                                                title="Editar"
+                                            >
+                                                <Edit size={18} />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
             </div>
         </div>
     )

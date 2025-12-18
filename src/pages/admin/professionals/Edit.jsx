@@ -84,24 +84,23 @@ export default function ProfessionalEdit() {
     return (
         <div className="max-w-4xl mx-auto space-y-8 fade-in p-6 md:p-0">
             {/* Header */}
-            <div className="flex items-center gap-4">
+            <div className="dashboard-header flex items-center gap-4">
                 <button
                     onClick={() => navigate('/admin/professionals')}
-                    className="p-2 hover:bg-white/50 rounded-lg transition-colors text-slate-500 hover:text-slate-800"
+                    className="btn-icon bg-white hover:bg-slate-50 text-muted hover:text-primary transition-colors"
                 >
                     <ArrowLeft size={20} />
                 </button>
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                        <EditIcon className="text-blue-600" />
+                    <h2 className="flex items-center gap-2">
                         Editar Profissional
-                    </h1>
-                    <p className="text-slate-500">Atualize as informações e permissões.</p>
+                    </h2>
+                    <p className="text-muted mt-1">Atualize as informações e permissões.</p>
                 </div>
             </div>
 
             {/* Main Form */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-lg p-6 md:p-8">
+            <div className="card">
                 <ProfessionalForm
                     initialData={professional}
                     onSubmit={handleUpdate}
