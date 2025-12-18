@@ -582,3 +582,723 @@ textarea:focus {
         transform: translateY(0);
     }
 }
+
+/* 
+ * REACT-BIG-CALENDAR CUSTOM STYLING
+ * Premium CityOS design for calendar component - V2 (Premium)
+ */
+
+/* Calendar Container */
+.rbc-calendar {
+    font-family: var(--font-base);
+    font-size: var(--text-sm);
+    color: var(--color-text-primary);
+    background: transparent;
+}
+
+/* Toolbar - Floating Glass Island */
+.rbc-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-6);
+    padding: var(--space-3) var(--space-4);
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: 999px;
+    /* Pill shape for the whole bar */
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    box-shadow: var(--shadow-sm);
+}
+
+.rbc-toolbar-label {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    text-align: center;
+    flex: 1;
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+}
+
+/* Toolbar Buttons */
+.rbc-btn-group {
+    display: inline-flex;
+    background: var(--color-bg-subtle);
+    padding: 4px;
+    border-radius: 999px;
+    gap: 2px;
+}
+
+.rbc-toolbar button {
+    padding: 6px 16px;
+    border: none;
+    background: transparent;
+    color: var(--color-text-secondary);
+    border-radius: 999px !important;
+    /* Force pill shape */
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+    box-shadow: none;
+}
+
+.rbc-toolbar button:hover {
+    background: rgba(0, 0, 0, 0.05);
+    /* Subtle hover */
+    color: var(--color-text-primary);
+}
+
+.rbc-toolbar button:active,
+.rbc-toolbar button.rbc-active {
+    background: #fff;
+    color: var(--color-primary);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    /* Lifted effect */
+    transform: none;
+    /* Reset transform if set elsewhere */
+}
+
+.rbc-toolbar button:focus {
+    outline: none;
+}
+
+/* Month View - Clean Card */
+.rbc-month-view {
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+    background: #fff;
+    box-shadow: var(--shadow-card);
+}
+
+.rbc-month-header {
+    background: #fff;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    padding: var(--space-2) 0;
+}
+
+.rbc-header {
+    padding: var(--space-3);
+    font-weight: 700;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-text-tertiary);
+    border: none;
+    /* Cleaner look without vertical lines */
+    text-align: center;
+}
+
+.rbc-header+.rbc-header {
+    border-left: none;
+}
+
+/* Month Rows & Grid */
+.rbc-month-row {
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+    min-height: 100px;
+    /* Taller rows for premium feel */
+}
+
+.rbc-day-bg {
+    border-left: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.rbc-day-bg+.rbc-day-bg {
+    border-left: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.rbc-off-range-bg {
+    background: #FAFAFA;
+    /* Very subtle grey */
+}
+
+.rbc-today {
+    background: transparent;
+    /* Remove default bg */
+}
+
+/* Date Cell */
+.rbc-date-cell {
+    padding: 8px 12px;
+    text-align: right;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+}
+
+.rbc-date-cell>a {
+    color: inherit;
+    text-decoration: none;
+}
+
+/* Highlight Today's Number instead of Cell */
+.rbc-now .rbc-button-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: var(--color-primary);
+    color: #fff !important;
+    border-radius: 50%;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.4);
+}
+
+/* Events - Premium Pills */
+.rbc-event {
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    background: var(--color-primary-light);
+    color: var(--color-primary);
+    border-left: 3px solid var(--color-primary);
+    margin: 1px 4px;
+    transition: all 0.2s;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.rbc-event:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    filter: brightness(0.98);
+}
+
+.rbc-event.rbc-selected {
+    background: var(--color-primary);
+    color: #fff;
+    border-left-color: rgba(255, 255, 255, 0.5);
+}
+
+.rbc-event-label {
+    display: none;
+    /* Hide time for cleaner look unless needed */
+}
+
+/* Show More Link */
+.rbc-show-more {
+    font-weight: 600;
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+    margin: 4px;
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+.rbc-show-more:hover {
+    background: var(--color-bg-subtle);
+    color: var(--color-text-primary);
+    text-decoration: none;
+}
+
+/* Week and Day Views */
+.rbc-time-view {
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+    background: #fff;
+    box-shadow: var(--shadow-card);
+}
+
+.rbc-time-header {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.rbc-time-header-content {
+    border-left: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.rbc-time-content {
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.rbc-timeslot-group {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.03);
+    /* Super light lines */
+}
+
+.rbc-day-slot .rbc-time-slot {
+    border-top: 1px solid transparent;
+    /* Hide internal slot lines */
+}
+
+.rbc-current-time-indicator {
+    background-color: var(--color-danger);
+    height: 1px;
+}
+
+.rbc-current-time-indicator::before {
+    content: '';
+    position: absolute;
+    left: -4px;
+    top: -3px;
+    width: 7px;
+    height: 7px;
+    background: var(--color-danger);
+    border-radius: 50%;
+}
+
+/* Agenda View */
+.rbc-agenda-view {
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+    background: #fff;
+    box-shadow: var(--shadow-card);
+    margin-top: var(--space-4);
+}
+
+.rbc-agenda-table {
+    border-spacing: 0;
+}
+
+.rbc-agenda-date-cell,
+.rbc-agenda-time-cell {
+    padding: var(--space-4);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+}
+
+.rbc-agenda-event-cell {
+    padding: var(--space-4);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.rbc-agenda-empty {
+    padding: var(--space-12);
+    text-align: center;
+    color: var(--color-text-secondary);
+}
+
+/* 
+ * MODAL PREMIUM STYLES (CityOS V2)
+ */
+
+.modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(23, 28, 38, 0.4);
+    /* Darker, richer overlay */
+    backdrop-filter: blur(8px);
+    /* Frosted glass effect */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.modal {
+    background: #fff;
+    border-radius: 24px;
+    /* Extra rounded */
+    box-shadow:
+        0 20px 25px -5px rgba(0, 0, 0, 0.1),
+        0 10px 10px -5px rgba(0, 0, 0, 0.04),
+        0 0 0 1px rgba(0, 0, 0, 0.05);
+
+    /* Subtle border ring */
+    width: 90%;
+    max-width: 600px;
+    max-height: 90vh;
+    overflow-y: auto;
+    animation: modalSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    border: 1px solid rgba(255, 255, 255, 0.8);
+}
+
+@keyframes modalSlideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.96);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.modal-header {
+    padding: var(--space-6) var(--space-8);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.03);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(12px);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.modal-header h3 {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    margin: 0;
+    letter-spacing: -0.02em;
+}
+
+.modal-close {
+    background: var(--color-bg-subtle);
+    border: none;
+    font-size: 20px;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    /* Circular close button */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.modal-close:hover {
+    background: var(--color-bg-hover);
+    color: var(--color-text-primary);
+    transform: rotate(90deg);
+}
+
+.modal-body {
+    padding: var(--space-8);
+}
+
+.modal-footer {
+    padding: var(--space-6) var(--space-8);
+    border-top: 1px solid rgba(0, 0, 0, 0.03);
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-3);
+    background: rgba(250, 250, 250, 0.5);
+    /* Very subtle footer bg */
+}
+
+/* Form Styling in Modals */
+.input-group {
+    margin-bottom: var(--space-5);
+}
+
+.input-group label {
+    display: block;
+    margin-bottom: var(--space-2);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.input,
+select.input,
+textarea.input {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid transparent;
+    background-color: var(--color-bg-subtle);
+    /* Gray background input */
+    border-radius: 12px;
+    /* Smooth rounded corners */
+    font-size: 14px;
+    color: var(--color-text-primary);
+    transition: all 0.2s ease;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.input:focus,
+select.input:focus,
+textarea.input:focus {
+    outline: none;
+    background-color: #fff;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 4px var(--color-primary-light);
+}
+
+.input::placeholder {
+    color: var(--color-text-tertiary);
+}
+
+/* Modal Buttons */
+.modal-footer .btn {
+    border-radius: 999px;
+    /* Pill buttons */
+    padding: 10px 24px;
+    font-weight: 600;
+    font-size: 14px;
+    text-transform: none;
+    letter-spacing: normal;
+}
+
+.modal-footer .btn-secondary {
+    background: transparent;
+    border: 1px solid var(--color-border);
+    color: var(--color-text-secondary);
+}
+
+.modal-footer .btn-secondary:hover {
+    background: var(--color-bg-subtle);
+    color: var(--color-text-primary);
+    border-color: var(--color-text-tertiary);
+}
+
+.modal-footer .btn-primary {
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+.modal-footer .btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4);
+}
+
+/* 
+ * PREMIUM TASKS & DATA VIEWS (CityOS V2)
+ */
+
+/* Glass Toolbar (Filters) */
+.tool-bar {
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    padding: var(--space-5);
+    margin-bottom: var(--space-6);
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.tool-bar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.tool-bar-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
+}
+
+.tool-bar-filters {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--space-4);
+    width: 100%;
+}
+
+/* Premium Table Container */
+.table-card {
+    background: #fff;
+    border-radius: 24px;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    box-shadow: var(--shadow-card);
+    overflow: hidden;
+}
+
+.table-header {
+    padding: var(--space-6);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.table-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+}
+
+/* Premium Table Styles */
+.table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.table th {
+    background: #FAFAFA;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    font-weight: 700;
+    color: var(--color-text-tertiary);
+    padding: 16px 24px;
+    text-align: left;
+}
+
+.table td {
+    padding: 16px 24px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.03);
+    vertical-align: middle;
+    font-size: 14px;
+    color: var(--color-text-secondary);
+    transition: all 0.2s;
+}
+
+.table tr:last-child td {
+    border-bottom: none;
+}
+
+.table tr:hover td {
+    background-color: #FAFAFA;
+    color: var(--color-text-primary);
+}
+
+.table-container {
+    overflow-x: auto;
+}
+
+/* Table Task Link */
+.task-link-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    cursor: pointer;
+    font-size: 14px;
+    text-align: left;
+}
+
+.task-link-btn:hover {
+    color: var(--color-primary);
+    text-decoration: underline;
+}
+
+/* Premium Badges (Pills) */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.badge-success {
+    background: #DCFCE7;
+    color: #166534;
+    border: 1px solid #BBF7D0;
+}
+
+.badge-primary {
+    background: #DBEAFE;
+    color: #1E40AF;
+    border: 1px solid #BFDBFE;
+}
+
+.badge-warning {
+    background: #FEF3C7;
+    color: #92400E;
+    border: 1px solid #FDE68A;
+}
+
+.badge-danger {
+    background: #FEE2E2;
+    color: #991B1B;
+    border: 1px solid #FECACA;
+}
+
+.badge-neutral {
+    background: #F3F4F6;
+    color: #374151;
+    border: 1px solid #E5E7EB;
+}
+
+/* Action Buttons in Table */
+.btn-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-icon:hover {
+    background: var(--color-bg-subtle);
+    color: var(--color-primary);
+    transform: scale(1.1);
+}
+
+
+.rbc-toolbar {
+    border-radius: var(--radius-lg);
+    padding: var(--space-3);
+}
+
+.rbc-toolbar-label {
+    font-size: 14px;
+    margin: var(--space-2) 0;
+}
+
+.rbc-btn-group {
+    width: 100%;
+    justify-content: center;
+}
+
+.rbc-month-row {
+    min-height: 80px;
+}
+
+
+/* Responsive Styles for Tables and Tools */
+@media (max-width: 768px) {
+    .tool-bar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .tool-bar-header {
+        flex-direction: column;
+        gap: var(--space-4);
+        align-items: flex-start;
+    }
+
+    .tool-bar-filters {
+        grid-template-columns: 1fr;
+    }
+
+    .table-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--space-2);
+    }
+
+    .table th,
+    .table td {
+        padding: 12px 16px;
+    }
+}

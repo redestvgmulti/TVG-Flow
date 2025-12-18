@@ -141,8 +141,8 @@ function Calendar() {
         return (
             <div>
                 <h2>Calendário de Tarefas</h2>
-                <div className="card" style={{ textAlign: 'center', padding: 'var(--space-xl)' }}>
-                    <p style={{ color: 'var(--color-text-secondary)' }}>Carregando calendário...</p>
+                <div className="card loading-card">
+                    <p className="loading-text-primary">Carregando calendário...</p>
                 </div>
             </div>
         )
@@ -152,13 +152,13 @@ function Calendar() {
         <div>
             <h2>Calendário de Tarefas</h2>
 
-            <div className="card" style={{ padding: 'var(--space-lg)', minHeight: '600px' }}>
+            <div className="card calendar-container">
                 <BigCalendar
                     localizer={localizer}
                     events={events}
                     startAccessor="start"
                     endAccessor="end"
-                    style={{ height: '100%', minHeight: '550px' }}
+                    className="calendar-full-height"
                     onSelectEvent={handleSelectEvent}
                     eventPropGetter={eventStyleGetter}
                     views={['month', 'week', 'agenda']}
@@ -180,11 +180,11 @@ function Calendar() {
                             <h3>Detalhes da Tarefa</h3>
                         </div>
                         <div className="modal-body">
-                            <div style={{ marginBottom: 'var(--space-md)' }}>
-                                <h4 style={{ marginBottom: 'var(--space-xs)' }}>{selectedTask.titulo}</h4>
+                            <div className="modal-detail-section">
+                                <h4 className="modal-detail-title">{selectedTask.titulo}</h4>
                             </div>
 
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
+                            <div className="modal-detail-rows">
                                 <div>
                                     <strong>Status:</strong>{' '}
                                     <span className={`badge ${getStatusBadgeClass(selectedTask.status)}`}>
@@ -216,7 +216,7 @@ function Calendar() {
                                             href={selectedTask.drive_link}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            style={{ color: 'var(--color-primary)', textDecoration: 'none' }}
+                                            className="modal-detail-link"
                                         >
                                             📎 Abrir Link do Drive
                                         </a>
