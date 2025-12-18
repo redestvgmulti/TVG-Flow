@@ -21,6 +21,7 @@ function Professionals() {
     })
     const [creating, setCreating] = useState(false)
     const [updating, setUpdating] = useState(false)
+    const [deleting, setDeleting] = useState(false)
     const [feedback, setFeedback] = useState({ show: false, type: '', message: '' })
     const [areas, setAreas] = useState([])
 
@@ -106,7 +107,7 @@ function Professionals() {
                 .from('profissionais')
                 .select('id')
                 .eq('email', newStaff.email)
-                .single()
+                .maybeSingle()
 
 
             if (existing) {
@@ -204,6 +205,54 @@ function Professionals() {
             showFeedback('error', 'Failed to update staff member: ' + error.message)
         } finally {
             setUpdating(false)
+        }
+    }
+
+    async function handleDeleteStaff() {
+        if (!editingStaff) return
+
+        const confirmMessage = `ATENÇÃO: Você está prestes a EXCLUIR PERMANENTEMENTE o profissional "${editingStaff.nome}".
+
+Esta ação irá:
+• Remover completamente a conta de acesso
+• Impedir que o usuário faça login no sistema
+• Esta ação NÃO PODE SER DESFEITA
+
+Digite "EXCLUIR" para confirmar:`
+
+        const confirmation = prompt(confirmMessage)
+
+        if (confirmation !== 'EXCLUIR') {
+            showFeedback('info', 'Exclusão cancelada')
+            return
+        }
+
+        setDeleting(true)
+
+        try {
+            const { data, error: functionError } = await supabase.functions.invoke('delete-professional', {
+                body: {
+                    professional_id: editingStaff.id
+                }
+            })
+
+            if (functionError) {
+                throw new Error(functionError.message || 'Erro ao chamar função de exclusão')
+            }
+
+            if (data && typeof data === 'object' && 'error' in data) {
+                throw new Error(data.error)
+            }
+
+            setShowEditModal(false)
+            setEditingStaff(null)
+            showFeedback('success', 'Profissional excluído com sucesso. O usuário não poderá mais fazer login.')
+            await fetchProfessionals()
+        } catch (error) {
+            console.error('Error deleting staff:', error)
+            showFeedback('error', 'Falha ao excluir profissional: ' + (error.message || 'Erro desconhecido'))
+        } finally {
+            setDeleting(false)
         }
     }
 
@@ -483,22 +532,39 @@ function Professionals() {
                                 </div>
                             </div>
 
-                            <div className="modal-footer">
+                            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <button
                                     type="button"
-                                    onClick={() => setShowEditModal(false)}
-                                    className="btn btn-secondary"
-                                    disabled={updating}
+                                    onClick={handleDeleteStaff}
+                                    className="btn"
+                                    disabled={updating || deleting}
+                                    style={{
+                                        backgroundColor: '#ff3b30',
+                                        color: 'white',
+                                        border: 'none'
+                                    }}
+                                    onMouseOver={(e) => e.target.style.backgroundColor = '#cc2f26'}
+                                    onMouseOut={(e) => e.target.style.backgroundColor = '#ff3b30'}
                                 >
-                                    Cancel
+                                    {deleting ? 'Excluindo...' : '🗑️ Excluir Profissional'}
                                 </button>
-                                <button
-                                    type="submit"
-                                    className="btn btn-primary"
-                                    disabled={updating}
-                                >
-                                    {updating ? 'Updating...' : 'Update Staff'}
-                                </button>
+                                <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowEditModal(false)}
+                                        className="btn btn-secondary"
+                                        disabled={updating || deleting}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="btn btn-primary"
+                                        disabled={updating || deleting}
+                                    >
+                                        {updating ? 'Updating...' : 'Update Staff'}
+                                    </button>
+                                </div>
                             </div>
                         </form>
                     </div>
