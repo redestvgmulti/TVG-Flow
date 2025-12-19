@@ -51,11 +51,15 @@ serve(async (req) => {
             throw new Error('Missing required fields: email, name')
         }
 
-        // 4. Invite User (Auth)
-        // This automatically sends the "Invite User" email template
-        const { data: authData, error: authError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-            data: { nome: name }, // Metadata
-            redirectTo: `${Deno.env.get('FRONTEND_URL') || 'http://localhost:5173'}/reset-password`
+        // 4. Generate Invite Link (Auth)
+        // Instead of sending email, we generate the link to return to the admin
+        const { data: authData, error: authError } = await supabaseAdmin.auth.admin.generateLink({
+            type: 'invite',
+            email: email,
+            options: {
+                data: { nome: name }, // Metadata
+                redirectTo: `${Deno.env.get('FRONTEND_URL') || 'http://localhost:5173'}/reset-password`
+            }
         })
 
         if (authError) {
@@ -66,10 +70,11 @@ serve(async (req) => {
         }
 
         const userId = authData.user.id
+        const actionLink = authData.properties.action_link
 
         // 5. Transaction Block (DB Insert)
         try {
-            // Check if profile exists (handling edge case of pre-existing auth user but no profile)
+            // Check if profile exists
             const { data: existingProfile } = await supabaseAdmin
                 .from('profissionais')
                 .select('id')
@@ -77,8 +82,6 @@ serve(async (req) => {
                 .single()
 
             if (existingProfile) {
-                // Return success if already exists to avoid error, but update data?
-                // For now, let's just proceed to update ensuring consistency
                 const { error: updateError } = await supabaseAdmin
                     .from('profissionais')
                     .update({
@@ -91,7 +94,6 @@ serve(async (req) => {
 
                 if (updateError) throw updateError
             } else {
-                // Insert into 'profissionais'
                 const { error: dbError } = await supabaseAdmin
                     .from('profissionais')
                     .insert({
@@ -108,9 +110,8 @@ serve(async (req) => {
             }
 
         } catch (postCreateError) {
-            console.error('Rolling back user invitation due to error:', postCreateError)
+            console.error('Rolling back user creation due to error:', postCreateError)
             // ROLLBACK: Delete the auth user if the DB insert failed
-            // Note: This effectively "cancels" the invite on the Auth side so they can't login without a profile
             await supabaseAdmin.auth.admin.deleteUser(userId)
             throw postCreateError
         }
@@ -119,7 +120,8 @@ serve(async (req) => {
             JSON.stringify({
                 success: true,
                 id: userId,
-                message: 'Convite enviado com sucesso! O usuário receberá um email para definir a senha.'
+                inviteLink: actionLink, // Return the link!
+                message: 'Profissional criado com sucesso! Copie o link de convite.'
             }),
             {
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
