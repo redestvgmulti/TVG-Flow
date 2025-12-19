@@ -7,7 +7,7 @@ import Dashboard from './pages/admin/Dashboard'
 import Tasks from './pages/admin/Tasks'
 // import Professionals from './pages/admin/Professionals' // Old
 import ProfessionalsList from './pages/admin/professionals/index'
-import ProfessionalCreate from './pages/admin/professionals/Create'
+
 import ProfessionalEdit from './pages/admin/professionals/Edit'
 import Reports from './pages/admin/Reports'
 import Calendar from './pages/admin/Calendar'
@@ -47,7 +47,7 @@ function App() {
             {/* Professionals Module */}
             <Route path="professionals">
               <Route index element={<ProfessionalsList />} />
-              <Route path="new" element={<ProfessionalCreate />} />
+
               <Route path=":id/edit" element={<ProfessionalEdit />} />
             </Route>
 

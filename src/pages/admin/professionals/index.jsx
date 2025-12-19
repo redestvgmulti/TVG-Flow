@@ -17,6 +17,12 @@ export default function ProfessionalsList() {
     // Modal State
     const [isEditModalOpen, setIsEditModalOpen] = useState(false)
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+
+    // Create & Success State
+    const [inviteLink, setInviteLink] = useState(null)
+    const [createdName, setCreatedName] = useState('')
+
     const [selectedProfessional, setSelectedProfessional] = useState(null)
     const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -88,6 +94,41 @@ export default function ProfessionalsList() {
         setIsDeleteModalOpen(false)
     }
 
+    // Create Handler
+    const handleCreate = async (formData) => {
+        setIsSubmitting(true)
+        try {
+            const response = await professionalsService.create(formData)
+
+            if (response.inviteLink) {
+                setInviteLink(response.inviteLink)
+                setCreatedName(formData.nome)
+                toast.success('Profissional criado! Copie o link de convite.')
+                await loadData() // Reload list in background
+            } else {
+                toast.success('Profissional criado com sucesso!')
+                setIsCreateModalOpen(false)
+                await loadData()
+            }
+        } catch (error) {
+            console.error('Error creating professional:', error)
+            toast.error(error.message || 'Falha ao criar profissional')
+        } finally {
+            setIsSubmitting(false)
+        }
+    }
+
+    const copyToClipboard = () => {
+        navigator.clipboard.writeText(inviteLink)
+        toast.success('Link copiado!')
+    }
+
+    const handleCloseCreateModal = () => {
+        setIsCreateModalOpen(false)
+        setInviteLink(null)
+        setCreatedName('')
+    }
+
     const filtered = professionals.filter(p =>
         p.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
         p.email.toLowerCase().includes(searchTerm.toLowerCase())
@@ -117,7 +158,11 @@ export default function ProfessionalsList() {
                     <p className="text-muted mt-1">Gerencie o acesso e permissões da sua equipe.</p>
                 </div>
                 <button
-                    onClick={() => navigate('/admin/professionals/new')}
+                    onClick={() => {
+                        setInviteLink(null)
+                        setCreatedName('')
+                        setIsCreateModalOpen(true)
+                    }}
                     className="btn btn-primary flex items-center gap-2 shadow-lg shadow-blue-200/50"
                 >
                     <UserPlus size={18} />
@@ -305,11 +350,88 @@ export default function ProfessionalsList() {
                                 <button
                                     onClick={handleDeleteConfirm}
                                     disabled={isSubmitting}
-                                    className="btn bg-red-600 hover:bg-red-700 text-white"
+                                    className="btn shadow-lg shadow-red-200/50 hover:shadow-xl hover:shadow-red-300/60 transition-all"
+                                    style={{
+                                        backgroundColor: '#dc2626',
+                                        color: 'white',
+                                        borderColor: '#dc2626'
+                                    }}
+                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#b91c1c'}
+                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#dc2626'}
                                 >
                                     {isSubmitting ? 'Excluindo...' : 'Sim, Excluir'}
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* Create Professional Modal */}
+            {isCreateModalOpen && (
+                <div className="modal-backdrop" onClick={handleCloseCreateModal}>
+                    <div
+                        className="modal max-w-2xl bg-white/90 backdrop-blur-md shadow-2xl border border-white/20"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        {/* Header */}
+                        <div className="modal-header border-b border-gray-100 flex items-center justify-between p-6">
+                            <div>
+                                <h3 className="text-xl font-bold text-gray-800">
+                                    {inviteLink ? 'Profissional Criado!' : 'Novo Profissional'}
+                                </h3>
+                                <p className="text-sm text-gray-500 mt-1">
+                                    {inviteLink
+                                        ? 'Envie o link de acesso abaixo.'
+                                        : 'Preencha os dados do novo membro.'}
+                                </p>
+                            </div>
+                            <button
+                                onClick={handleCloseCreateModal}
+                                className="btn-icon text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg p-2 transition-all"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Body */}
+                        <div className="modal-body p-6">
+                            {inviteLink ? (
+                                <div className="text-center space-y-6 animate-in fade-in zoom-in duration-300">
+                                    <div className="inline-flex justify-center items-center w-20 h-20 rounded-full bg-green-50 mb-2 border border-green-100 shadow-sm">
+                                        <UserPlus size={36} className="text-green-600" />
+                                    </div>
+
+                                    <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-6 text-left w-full overflow-hidden">
+                                        <p className="text-gray-600 mb-4 text-sm leading-relaxed">
+                                            Como não há sistema de e-mail configurado, você precisa enviar este link manualmente para <strong className="text-gray-900">{createdName}</strong>.
+                                        </p>
+
+                                        <div className="relative group">
+                                            <div className="bg-white p-4 rounded-lg border border-gray-200 font-mono text-xs text-gray-600 break-all shadow-inner select-all w-full leading-relaxed">
+                                                {inviteLink}
+                                            </div>
+                                            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <span className="text-xs bg-gray-800 text-white px-2 py-1 rounded">Clique para selecionar</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        onClick={copyToClipboard}
+                                        className="btn btn-primary w-full py-3 text-base flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 hover:-translate-y-0.5 transition-all"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2" /><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" /></svg>
+                                        Copiar Link de Convite
+                                    </button>
+                                </div>
+                            ) : (
+                                <ProfessionalForm
+                                    onSubmit={handleCreate}
+                                    onCancel={handleCloseCreateModal}
+                                    isSubmitting={isSubmitting}
+                                    hideCancelButton={true}
+                                />
+                            )}
                         </div>
                     </div>
                 </div>

@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../../../services/supabase'
 
-export default function ProfessionalForm({ initialData, onSubmit, onCancel, onDelete, isSubmitting, isEditMode = false }) {
+export default function ProfessionalForm({ initialData, onSubmit, onCancel, onDelete, isSubmitting, isEditMode = false, hideCancelButton = false }) {
     const [formData, setFormData] = useState({
         nome: '',
         email: '',
@@ -166,7 +166,7 @@ export default function ProfessionalForm({ initialData, onSubmit, onCancel, onDe
             </div>
 
             {/* Actions Footer - Custom for Modal */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '16px', borderTop: '1px solid #f1f5f9', marginTop: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: isEditMode ? 'space-between' : 'flex-end', paddingTop: '16px', borderTop: '1px solid #f1f5f9', marginTop: '8px' }}>
                 {isEditMode ? (
                     <button
                         type="button"
@@ -181,14 +181,16 @@ export default function ProfessionalForm({ initialData, onSubmit, onCancel, onDe
                 ) : <div />}
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <button
-                        type="button"
-                        onClick={onCancel}
-                        className="btn btn-secondary"
-                        disabled={isSubmitting}
-                    >
-                        Cancelar
-                    </button>
+                    {!hideCancelButton && (
+                        <button
+                            type="button"
+                            onClick={onCancel}
+                            className="btn btn-secondary"
+                            disabled={isSubmitting}
+                        >
+                            Cancelar
+                        </button>
+                    )}
                     <button
                         type="submit"
                         disabled={isSubmitting}
