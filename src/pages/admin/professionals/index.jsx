@@ -6,12 +6,18 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { professionalsService } from '../../../services/professionals'
+import ProfessionalForm from './ProfessionalForm'
 
 export default function ProfessionalsList() {
     const navigate = useNavigate()
     const [professionals, setProfessionals] = useState([])
     const [loading, setLoading] = useState(true)
     const [searchTerm, setSearchTerm] = useState('')
+
+    // Modal State
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+    const [selectedProfessional, setSelectedProfessional] = useState(null)
+    const [isSubmitting, setIsSubmitting] = useState(false)
 
     useEffect(() => {
         loadData()
@@ -27,6 +33,54 @@ export default function ProfessionalsList() {
             toast.error('Erro ao carregar lista de profissionais')
         } finally {
             setLoading(false)
+        }
+    }
+
+    const handleEditClick = (professional) => {
+        setSelectedProfessional(professional)
+        setIsEditModalOpen(true)
+    }
+
+    const handleCloseModal = () => {
+        setIsEditModalOpen(false)
+        setSelectedProfessional(null)
+    }
+
+    const handleUpdate = async (formData) => {
+        setIsSubmitting(true)
+        try {
+            await professionalsService.update(selectedProfessional.id, formData)
+            toast.success('Profissional atualizado com sucesso!')
+            handleCloseModal()
+            await loadData()
+        } catch (error) {
+            console.error('Error updating professional:', error)
+            toast.error('Falha ao atualizar profissional')
+        } finally {
+            setIsSubmitting(false)
+        }
+    }
+
+    const handleDelete = async () => {
+        if (!selectedProfessional) return
+
+        const confirmed = window.confirm(
+            `Tem certeza que deseja excluir ${selectedProfessional.nome}? Esta ação removerá o acesso ao sistema e não pode ser desfeita.`
+        )
+
+        if (!confirmed) return
+
+        setIsSubmitting(true)
+        try {
+            await professionalsService.delete(selectedProfessional.id)
+            toast.success('Profissional excluído com sucesso!')
+            handleCloseModal()
+            loadData()
+        } catch (error) {
+            console.error('Error deleting professional:', error)
+            toast.error(error.message || 'Falha ao excluir profissional')
+        } finally {
+            setIsSubmitting(false)
         }
     }
 
@@ -163,7 +217,7 @@ export default function ProfessionalsList() {
                                         </td>
                                         <td style={{ padding: '1.5rem', paddingRight: '2rem', textAlign: 'right' }}>
                                             <button
-                                                onClick={() => navigate(`/admin/professionals/${prof.id}/edit`)}
+                                                onClick={() => handleEditClick(prof)}
                                                 className="btn-icon p-2.5 hover:bg-white hover:text-blue-600 hover:shadow-md border border-transparent hover:border-slate-100 rounded-lg transition-all text-slate-400 bg-slate-50"
                                                 title="Editar"
                                             >
@@ -177,6 +231,40 @@ export default function ProfessionalsList() {
                     </div>
                 )}
             </div>
+
+            {/* Edit Modal */}
+            {isEditModalOpen && (
+                <div className="modal-backdrop" onClick={handleCloseModal}>
+                    <div
+                        className="modal"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="modal-header">
+                            <div>
+                                <h3>Editar Profissional</h3>
+                                <p className="text-sm text-slate-500 mt-1">Atualize as informações do membro da equipe.</p>
+                            </div>
+                            <button
+                                onClick={handleCloseModal}
+                                className="modal-close"
+                            >
+                                <XCircle size={20} />
+                            </button>
+                        </div>
+
+                        <div className="modal-body">
+                            <ProfessionalForm
+                                initialData={selectedProfessional}
+                                onSubmit={handleUpdate}
+                                onCancel={handleCloseModal}
+                                onDelete={handleDelete}
+                                isSubmitting={isSubmitting}
+                                isEditMode={true}
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

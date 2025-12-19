@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../services/supabase'
+import { Edit2, Trash2 } from 'lucide-react'
 
 function Tasks() {
     const [tasks, setTasks] = useState([])
@@ -64,8 +65,9 @@ function Tasks() {
                     .eq('ativo', true)
                     .order('nome'),
                 supabase
-                    .from('departamentos')
+                    .from('areas')
                     .select('id, nome')
+                    .eq('ativo', true)
                     .order('nome'),
                 supabase
                     .from('clientes')
@@ -491,7 +493,7 @@ function Tasks() {
                                                     className="btn-icon"
                                                     title="Editar"
                                                 >
-                                                    ✏️
+                                                    <Edit2 size={18} />
                                                 </button>
                                                 <button
                                                     onClick={() => handleDeleteTask(task)}
@@ -499,7 +501,7 @@ function Tasks() {
                                                     title="Excluir"
                                                     style={{ color: 'var(--color-danger)' }}
                                                 >
-                                                    🗑️
+                                                    <Trash2 size={18} />
                                                 </button>
                                             </div>
                                         </td>

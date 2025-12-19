@@ -105,6 +105,7 @@ export default function ProfessionalEdit() {
                     initialData={professional}
                     onSubmit={handleUpdate}
                     onCancel={() => navigate('/admin/professionals')}
+                    onDelete={handleDelete}
                     isSubmitting={isSubmitting}
                     isEditMode={true}
                 />

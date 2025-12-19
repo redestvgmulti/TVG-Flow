@@ -614,3 +614,61 @@
   max-width: 300px;
   margin: 0 auto var(--space-6);
 }
+
+/* 
+ * BOTTOM NAVIGATION (MOBILE/TABLET)
+ */
+.bottom-nav {
+  display: none;
+}
+
+@media (max-width: 1024px) {
+  .bottom-nav {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 70px; /* Slightly taller for better touch area */
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-top: 1px solid var(--color-border);
+    z-index: 100;
+    padding-bottom: env(safe-area-inset-bottom);
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.05);
+  }
+
+  .bottom-nav-link {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    flex: 1;
+    height: 100%;
+    color: var(--color-text-tertiary);
+    text-decoration: none;
+    font-size: 10px;
+    font-weight: 600;
+    transition: all 0.2s;
+    border-top: 2px solid transparent;
+  }
+
+  .bottom-nav-link:active {
+    background-color: var(--color-bg-subtle);
+  }
+
+  .bottom-nav-link.active {
+    color: var(--color-primary);
+    border-top-color: var(--color-primary);
+    background: linear-gradient(to bottom, var(--color-bg-subtle), transparent);
+  }
+
+  /* Ensure content is not hidden behind the nav */
+  .admin-content {
+    padding-bottom: 90px;
+  }
+}

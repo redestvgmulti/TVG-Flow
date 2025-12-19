@@ -38,15 +38,19 @@ export const professionalsService = {
         return data
     },
 
-    // Update professional (Direct DB update for non-auth fields)
     async update(id, payload) {
         // Payload: { nome, role, ativo, area_id }
-        const { error } = await supabase
-            .from('profissionais')
-            .update(payload)
-            .eq('id', id)
+        // Using Edge Function to bypass potential RLS restrictions
+        const { data, error } = await supabase.functions.invoke('update-professional', {
+            body: {
+                professional_id: id,
+                payload
+            }
+        })
 
-        if (error) throw error
+        if (error) throw new Error(error.message || 'Erro de conexão com o servidor')
+        if (data?.error) throw new Error(data.error)
+
         return true
     },
 

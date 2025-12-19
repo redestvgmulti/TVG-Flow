@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../../../services/supabase'
 
-export default function ProfessionalForm({ initialData, onSubmit, onCancel, isSubmitting, isEditMode = false }) {
+export default function ProfessionalForm({ initialData, onSubmit, onCancel, onDelete, isSubmitting, isEditMode = false }) {
     const [formData, setFormData] = useState({
         nome: '',
         email: '',
@@ -42,67 +42,79 @@ export default function ProfessionalForm({ initialData, onSubmit, onCancel, isSu
 
     const handleSubmit = (e) => {
         e.preventDefault()
-        onSubmit(formData)
+
+        // Remove 'areas' object (join result) and ensure only updatable fields are sent
+        const payload = {
+            nome: formData.nome,
+            email: formData.email,
+            role: formData.role,
+            area_id: formData.area_id,
+            ativo: formData.ativo
+        }
+
+        onSubmit(payload)
     }
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Nome */}
-                <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">Nome Completo</label>
-                    <div className="relative">
-                        <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                        <input
-                            type="text"
-                            required
-                            className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
-                            placeholder="Ex: Ana Silva"
-                            value={formData.nome}
-                            onChange={e => setFormData({ ...formData, nome: e.target.value })}
-                        />
+        <form onSubmit={handleSubmit} className="modal-detail-rows">
+            {/* Nome */}
+            <div className="form-group">
+                <label>Nome Completo</label>
+                <div style={{ position: 'relative' }}>
+                    <User size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                    <input
+                        type="text"
+                        required
+                        className="input"
+                        style={{ paddingLeft: '40px' }}
+                        placeholder="Ex: Ana Silva"
+                        value={formData.nome}
+                        onChange={e => setFormData({ ...formData, nome: e.target.value })}
+                    />
+                </div>
+            </div>
+
+            {/* Email */}
+            <div className="form-group">
+                <label>E-mail Corporativo</label>
+                <div style={{ position: 'relative' }}>
+                    <Mail size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                    <input
+                        type="email"
+                        required
+                        disabled={isEditMode}
+                        className="input"
+                        style={{ paddingLeft: '40px', backgroundColor: isEditMode ? '#f8fafc' : '#fff', color: isEditMode ? '#64748b' : 'inherit' }}
+                        placeholder="ana@tvg.com"
+                        value={formData.email}
+                        onChange={e => setFormData({ ...formData, email: e.target.value })}
+                    />
+                </div>
+                {isEditMode && <span className="text-sm text-muted">O e-mail não pode ser alterado.</span>}
+            </div>
+
+            {/* Senha - Messsage */}
+            {!isEditMode && (
+                <div style={{ padding: '16px', backgroundColor: '#eff6ff', border: '1px solid #dbeafe', borderRadius: '8px', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                    <Mail size={20} className="text-primary" style={{ marginTop: '4px' }} />
+                    <div>
+                        <p style={{ fontWeight: 600, color: '#1e3a8a', fontSize: '14px', marginBottom: '4px' }}>Convite por E-mail</p>
+                        <p style={{ fontSize: '13px', color: '#1d4ed8', margin: 0 }}>
+                            O funcionário receberá um e-mail com instruções para definir sua própria senha de acesso segura.
+                        </p>
                     </div>
                 </div>
+            )}
 
-                {/* Email */}
-                <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">E-mail Corporativo</label>
-                    <div className="relative">
-                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                        <input
-                            type="email"
-                            required
-                            disabled={isEditMode}
-                            className={`w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 outline-none transition-all ${isEditMode ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : 'focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
-                                }`}
-                            placeholder="ana@tvg.com"
-                            value={formData.email}
-                            onChange={e => setFormData({ ...formData, email: e.target.value })}
-                        />
-                    </div>
-                    {isEditMode && <span className="text-xs text-slate-400">O e-mail não pode ser alterado.</span>}
-                </div>
-
-                {/* Senha - REMOVIDO (Fluxo de Convite) */}
-                {!isEditMode && (
-                    <div className="col-span-1 md:col-span-2 p-4 bg-blue-50 border border-blue-100 rounded-lg flex items-start gap-3">
-                        <Mail className="text-blue-600 mt-1 shrink-0" size={20} />
-                        <div>
-                            <p className="font-semibold text-blue-900 text-sm">Convite por E-mail</p>
-                            <p className="text-sm text-blue-700 leading-relaxed mt-0.5">
-                                O funcionário receberá um e-mail com instruções para definir sua própria senha de acesso segura.
-                            </p>
-                        </div>
-                    </div>
-                )}
-
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 {/* Role */}
-                <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">Função / Perfil</label>
-                    <div className="relative">
-                        <Shield className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <div className="form-group">
+                    <label>Função / Perfil</label>
+                    <div style={{ position: 'relative' }}>
+                        <Shield size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
                         <select
-                            className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all appearance-none bg-white"
+                            className="input"
+                            style={{ paddingLeft: '40px' }}
                             value={formData.role}
                             onChange={e => setFormData({ ...formData, role: e.target.value })}
                         >
@@ -111,24 +123,25 @@ export default function ProfessionalForm({ initialData, onSubmit, onCancel, isSu
                         </select>
                     </div>
                     {isEditMode && formData.role !== initialData?.role && (
-                        <p className="text-xs text-orange-500 flex items-center gap-1 mt-1">
-                            <AlertTriangle size={12} /> Alterar o perfil muda as permissões de acesso.
+                        <p style={{ fontSize: '12px', color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
+                            <AlertTriangle size={12} /> Alterar o perfil muda as permissões.
                         </p>
                     )}
                 </div>
 
                 {/* Area */}
-                <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">Departamento / Área</label>
-                    <div className="relative">
-                        <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <div className="form-group">
+                    <label>Departamento</label>
+                    <div style={{ position: 'relative' }}>
+                        <Building2 size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
                         <select
                             required
-                            className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all appearance-none bg-white"
+                            className="input"
+                            style={{ paddingLeft: '40px' }}
                             value={formData.area_id || ''}
                             onChange={e => setFormData({ ...formData, area_id: e.target.value })}
                         >
-                            <option value="">Selecione uma área...</option>
+                            <option value="">Selecione...</option>
                             {areas.map(area => (
                                 <option key={area.id} value={area.id}>{area.nome}</option>
                             ))}
@@ -138,48 +151,59 @@ export default function ProfessionalForm({ initialData, onSubmit, onCancel, isSu
             </div>
 
             {/* Ativo Checkbox */}
-            <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-lg border border-slate-100">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #f1f5f9' }}>
                 <input
                     type="checkbox"
                     id="active-check"
-                    className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 border-gray-300"
+                    style={{ width: '20px', height: '20px', accentColor: 'var(--color-primary)' }}
                     checked={formData.ativo}
                     onChange={e => setFormData({ ...formData, ativo: e.target.checked })}
                 />
-                <label htmlFor="active-check" className="flex flex-col cursor-pointer">
-                    <span className="font-medium text-slate-700">Usuário Ativo</span>
-                    <span className="text-xs text-slate-500">Desmarcar impedirá o login imediatamente.</span>
+                <label htmlFor="active-check" style={{ display: 'flex', flexDirection: 'column', cursor: 'pointer', margin: 0 }}>
+                    <span style={{ fontWeight: 500, color: '#334155' }}>Usuário Ativo</span>
+                    <span style={{ fontSize: '12px', color: '#64748b' }}>Desmarcar impedirá o login imediatamente.</span>
                 </label>
             </div>
 
-            {/* Actions */}
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-                <button
-                    type="button"
-                    onClick={onCancel}
-                    className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors flex items-center gap-2"
-                    disabled={isSubmitting}
-                >
-                    <X size={18} />
-                    Cancelar
-                </button>
-                <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-all flex items-center gap-2 shadow-sm shadow-blue-200"
-                >
-                    {isSubmitting ? (
-                        <>
-                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                            Salvando...
-                        </>
-                    ) : (
-                        <>
-                            <Save size={18} />
-                            {isEditMode ? 'Salvar Alterações' : 'Criar Profissional'}
-                        </>
-                    )}
-                </button>
+            {/* Actions Footer - Custom for Modal */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '16px', borderTop: '1px solid #f1f5f9', marginTop: '8px' }}>
+                {isEditMode ? (
+                    <button
+                        type="button"
+                        onClick={onDelete}
+                        className="btn btn-ghost"
+                        style={{ color: '#ef4444' }}
+                        disabled={isSubmitting}
+                    >
+                        <AlertTriangle size={18} />
+                        Excluir
+                    </button>
+                ) : <div />}
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <button
+                        type="button"
+                        onClick={onCancel}
+                        className="btn btn-secondary"
+                        disabled={isSubmitting}
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        type="submit"
+                        disabled={isSubmitting}
+                        className="btn btn-primary"
+                    >
+                        {isSubmitting ? (
+                            <>Salvando...</>
+                        ) : (
+                            <>
+                                <Save size={18} />
+                                {isEditMode ? 'Salvar' : 'Criar Profissional'}
+                            </>
+                        )}
+                    </button>
+                </div>
             </div>
         </form>
     )
