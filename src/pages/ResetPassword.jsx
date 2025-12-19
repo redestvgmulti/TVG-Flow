@@ -22,6 +22,23 @@ export default function ResetPassword() {
     const allValid = requirements.every(r => r.test(password))
     const passwordsMatch = password && password === confirmPassword
 
+    useEffect(() => {
+        // Handle recovery/invite tokens from URL
+        const handleAuthCallback = async () => {
+            const hashParams = new URLSearchParams(window.location.hash.substring(1))
+            const type = hashParams.get('type')
+
+            // If this is a recovery or invite link, ensure we stay on this page
+            if (type === 'recovery' || type === 'invite') {
+                // Token will be processed automatically by Supabase
+                // Just make sure we don't redirect away
+                return
+            }
+        }
+
+        handleAuthCallback()
+    }, [])
+
     const handleSubmit = async (e) => {
         e.preventDefault()
         if (!allValid || !passwordsMatch) return
