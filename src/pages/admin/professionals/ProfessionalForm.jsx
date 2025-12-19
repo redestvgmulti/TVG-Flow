@@ -1,8 +1,6 @@
 
 import { useState, useEffect } from 'react'
-import {
-    User, Mail, Lock, Shield, Building2, CheckCircle, AlertTriangle, Save, X, RefreshCw, Copy
-} from 'lucide-react'
+import { CheckCircle, Copy, RefreshCw, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import { professionalsService } from '../../../services/professionals'
 import { supabase } from '../../../services/supabase'
@@ -11,7 +9,6 @@ export default function ProfessionalForm({ initialData, onSubmit, onCancel, onDe
     const [formData, setFormData] = useState({
         nome: '',
         email: '',
-        // password removed - handled via email invite
         role: 'profissional',
         area_id: '',
         ativo: true
@@ -30,7 +27,6 @@ export default function ProfessionalForm({ initialData, onSubmit, onCancel, onDe
             const response = await professionalsService.generateRecoveryLink(formData.email)
             if (response.recoveryLink) {
                 setRecoveryLink(response.recoveryLink)
-                toast.success("Link de redefinição gerado!")
             }
         } catch (error) {
             console.error(error)
@@ -73,7 +69,6 @@ export default function ProfessionalForm({ initialData, onSubmit, onCancel, onDe
     const handleSubmit = (e) => {
         e.preventDefault()
 
-        // Remove 'areas' object (join result) and ensure only updatable fields are sent
         const payload = {
             nome: formData.nome,
             email: formData.email,
@@ -86,157 +81,90 @@ export default function ProfessionalForm({ initialData, onSubmit, onCancel, onDe
     }
 
     return (
-        <form onSubmit={handleSubmit} className="modal-detail-rows">
-            {/* Nome */}
-            <div className="form-group">
-                <label>Nome Completo</label>
-                <div style={{ position: 'relative' }}>
-                    <User size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+
+            {/* ═══════════════════════════════════════════════════════════
+                BLOCO 1 — IDENTIDADE (Read-only)
+            ═══════════════════════════════════════════════════════════ */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {/* Nome */}
+                <div className="form-group">
+                    <label style={{ fontSize: '13px', fontWeight: 500, color: '#475569', marginBottom: '8px', display: 'block' }}>
+                        Nome Completo
+                    </label>
                     <input
                         type="text"
                         required
                         className="input"
-                        style={{ paddingLeft: '40px' }}
-                        placeholder="Ex: Ana Silva"
                         value={formData.nome}
                         onChange={e => setFormData({ ...formData, nome: e.target.value })}
+                        placeholder="Ex: Ana Silva"
+                        disabled={isEditMode}
+                        style={isEditMode ? { backgroundColor: '#f8fafc', cursor: 'not-allowed' } : {}}
                     />
                 </div>
-            </div>
 
-            {/* Email */}
-            <div className="form-group">
-                <label>E-mail Corporativo</label>
-                <div style={{ position: 'relative' }}>
-                    <Mail size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                {/* Email */}
+                <div className="form-group">
+                    <label style={{ fontSize: '13px', fontWeight: 500, color: '#475569', marginBottom: '8px', display: 'block' }}>
+                        E-mail Corporativo
+                    </label>
                     <input
                         type="email"
                         required
-                        disabled={isEditMode}
                         className="input"
-                        style={{ paddingLeft: '40px', backgroundColor: isEditMode ? '#f8fafc' : '#fff', color: isEditMode ? '#64748b' : 'inherit' }}
-                        placeholder="ana@tvg.com"
                         value={formData.email}
                         onChange={e => setFormData({ ...formData, email: e.target.value })}
+                        placeholder="usuario@empresa.com"
+                        disabled={isEditMode}
+                        style={isEditMode ? { backgroundColor: '#f8fafc', cursor: 'not-allowed' } : {}}
                     />
-                </div>
-                {isEditMode && <span className="text-sm text-muted">O e-mail não pode ser alterado.</span>}
-            </div>
-
-            {/* Password Reset Link Generation - Edit Mode Only */}
-            {isEditMode && (
-                <div className="form-group">
-                    <label className="flex items-center gap-2">
-                        <Lock size={16} className="text-slate-400" />
-                        Redefinição de Senha
-                    </label>
-
-                    {!recoveryLink ? (
-                        <button
-                            type="button"
-                            onClick={handleGenerateLink}
-                            disabled={isGeneratingLink}
-                            className="input flex items-center justify-center gap-2 cursor-pointer hover:border-primary/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                            style={{ paddingLeft: '40px' }}
-                        >
-                            <RefreshCw size={16} className={isGeneratingLink ? 'animate-spin text-primary' : 'text-slate-400'} />
-                            <span className="text-sm text-slate-600">
-                                {isGeneratingLink ? 'Gerando link de recuperação...' : 'Clique para gerar link de recuperação'}
-                            </span>
-                        </button>
-                    ) : (
-                        <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-                            <div className="flex gap-2">
-                                <div className="relative flex-1">
-                                    <Lock size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-                                    <input
-                                        type="text"
-                                        className="input"
-                                        style={{ paddingLeft: '40px' }}
-                                        value={recoveryLink}
-                                        readOnly
-                                        title="Link de recuperação"
-                                    />
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={copyRecoveryLink}
-                                    className="flex items-center gap-2 px-4 rounded-lg font-medium text-sm transition-all shadow-sm"
-                                    style={{
-                                        backgroundColor: '#3b82f6',
-                                        color: 'white',
-                                        border: 'none',
-                                        whiteSpace: 'nowrap'
-                                    }}
-                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#2563eb'}
-                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#3b82f6'}
-                                >
-                                    <Copy size={16} />
-                                    Copiar
-                                </button>
-                            </div>
-                            <div className="flex items-center justify-between mt-2">
-                                <span className="text-xs text-green-600 flex items-center gap-2">
-                                    <CheckCircle size={12} />
-                                    Link gerado com sucesso
-                                </span>
-                                <button
-                                    type="button"
-                                    onClick={handleGenerateLink}
-                                    className="text-[11px] font-medium rounded-md transition-all"
-                                    style={{
-                                        padding: '4px 12px',
-                                        backgroundColor: '#16a34a',
-                                        color: 'white',
-                                        border: 'none',
-                                        boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
-                                        cursor: 'pointer'
-                                    }}
-                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#15803d'}
-                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#16a34a'}
-                                >
-                                    Gerar novo
-                                </button>
-                            </div>
-                        </div>
+                    {isEditMode && (
+                        <span style={{ fontSize: '12px', color: '#64748b', marginTop: '6px', display: 'block' }}>
+                            O e-mail não pode ser alterado.
+                        </span>
                     )}
                 </div>
-            )}
+            </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                {/* Role */}
-                <div className="form-group">
-                    <label>Função / Perfil</label>
-                    <div style={{ position: 'relative' }}>
-                        <Shield size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+            {/* ═══════════════════════════════════════════════════════════
+                BLOCO 2 — OPERACIONAL (Foco principal)
+            ═══════════════════════════════════════════════════════════ */}
+            <div style={{
+                borderTop: '1px solid #e2e8f0',
+                paddingTop: '24px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '16px'
+            }}>
+                {/* Grid: Função + Departamento */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                    {/* Função / Perfil */}
+                    <div className="form-group">
+                        <label style={{ fontSize: '13px', fontWeight: 500, color: '#475569', marginBottom: '8px', display: 'block' }}>
+                            Função / Perfil
+                        </label>
                         <select
                             className="input"
-                            style={{ paddingLeft: '40px' }}
                             value={formData.role}
                             onChange={e => setFormData({ ...formData, role: e.target.value })}
                         >
                             <option value="profissional">Profissional</option>
-                            <option value="admin">Administrador</option>
+                            <option value="coordenador">Coordenador</option>
+                            <option value="gestor">Gestor</option>
                         </select>
                     </div>
-                    {isEditMode && formData.role !== initialData?.role && (
-                        <p style={{ fontSize: '12px', color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
-                            <AlertTriangle size={12} /> Alterar o perfil muda as permissões.
-                        </p>
-                    )}
-                </div>
 
-                {/* Area */}
-                <div className="form-group">
-                    <label>Departamento</label>
-                    <div style={{ position: 'relative' }}>
-                        <Building2 size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                    {/* Departamento */}
+                    <div className="form-group">
+                        <label style={{ fontSize: '13px', fontWeight: 500, color: '#475569', marginBottom: '8px', display: 'block' }}>
+                            Departamento
+                        </label>
                         <select
-                            required
                             className="input"
-                            style={{ paddingLeft: '40px' }}
-                            value={formData.area_id || ''}
+                            value={formData.area_id}
                             onChange={e => setFormData({ ...formData, area_id: e.target.value })}
+                            required
                         >
                             <option value="">Selecione...</option>
                             {areas.map(area => (
@@ -245,39 +173,163 @@ export default function ProfessionalForm({ initialData, onSubmit, onCancel, onDe
                         </select>
                     </div>
                 </div>
+
+                {/* Checkbox: Usuário Ativo */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                    <input
+                        type="checkbox"
+                        id="ativo"
+                        checked={formData.ativo}
+                        onChange={e => setFormData({ ...formData, ativo: e.target.checked })}
+                        style={{ marginTop: '2px', cursor: 'pointer' }}
+                    />
+                    <label htmlFor="ativo" style={{ fontSize: '14px', color: '#334155', cursor: 'pointer', lineHeight: '1.5' }}>
+                        <strong>Usuário Ativo</strong>
+                        <br />
+                        <span style={{ fontSize: '12px', color: '#64748b' }}>
+                            Desmarcar impedirá o login imediatamente.
+                        </span>
+                    </label>
+                </div>
             </div>
 
-            {/* Ativo Checkbox */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #f1f5f9' }}>
-                <input
-                    type="checkbox"
-                    id="active-check"
-                    style={{ width: '20px', height: '20px', accentColor: 'var(--color-primary)' }}
-                    checked={formData.ativo}
-                    onChange={e => setFormData({ ...formData, ativo: e.target.checked })}
-                />
-                <label htmlFor="active-check" style={{ display: 'flex', flexDirection: 'column', cursor: 'pointer', margin: 0 }}>
-                    <span style={{ fontWeight: 500, color: '#334155' }}>Usuário Ativo</span>
-                    <span style={{ fontSize: '12px', color: '#64748b' }}>Desmarcar impedirá o login imediatamente.</span>
-                </label>
-            </div>
+            {/* ═══════════════════════════════════════════════════════════
+                BLOCO 3 — ACESSO (Ação contextual - apenas edit mode)
+            ═══════════════════════════════════════════════════════════ */}
+            {isEditMode && (
+                <div style={{
+                    borderTop: '1px solid #e2e8f0',
+                    paddingTop: '24px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px'
+                }}>
+                    <h3 style={{ fontSize: '13px', fontWeight: 500, color: '#475569', margin: 0 }}>
+                        Acesso
+                    </h3>
 
-            {/* Actions Footer - Custom for Modal */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: isEditMode ? 'space-between' : 'flex-end', paddingTop: '16px', borderTop: '1px solid #f1f5f9', marginTop: '8px' }}>
-                {isEditMode ? (
+                    {!recoveryLink ? (
+                        <button
+                            type="button"
+                            onClick={handleGenerateLink}
+                            disabled={isGeneratingLink}
+                            className="input"
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px',
+                                cursor: 'pointer',
+                                backgroundColor: 'white',
+                                border: '1px solid #cbd5e1',
+                                color: '#475569',
+                                fontSize: '14px',
+                                fontWeight: 500,
+                                transition: 'all 0.2s',
+                                opacity: isGeneratingLink ? 0.6 : 1
+                            }}
+                            onMouseEnter={(e) => !isGeneratingLink && (e.currentTarget.style.borderColor = '#3b82f6')}
+                            onMouseLeave={(e) => (e.currentTarget.style.borderColor = '#cbd5e1')}
+                        >
+                            <RefreshCw size={16} className={isGeneratingLink ? 'animate-spin' : ''} />
+                            {isGeneratingLink ? 'Gerando...' : 'Gerar novo link de redefinição'}
+                        </button>
+                    ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            {/* Feedback de sucesso */}
+                            <div style={{
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                gap: '8px',
+                                padding: '12px',
+                                backgroundColor: '#f0fdf4',
+                                borderRadius: '8px',
+                                border: '1px solid #bbf7d0'
+                            }}>
+                                <CheckCircle size={16} style={{ color: '#16a34a', marginTop: '2px', flexShrink: 0 }} />
+                                <div style={{ flex: 1 }}>
+                                    <p style={{ margin: 0, fontSize: '13px', color: '#15803d', fontWeight: 500 }}>
+                                        Link de redefinição gerado.
+                                    </p>
+                                    <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#16a34a' }}>
+                                        Use o botão abaixo para copiar e enviar ao usuário.
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Botão Copiar */}
+                            <button
+                                type="button"
+                                onClick={copyRecoveryLink}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '8px',
+                                    padding: '10px 16px',
+                                    backgroundColor: '#3b82f6',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    fontSize: '14px',
+                                    fontWeight: 500,
+                                    cursor: 'pointer',
+                                    transition: 'background-color 0.2s',
+                                    boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.05)'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#2563eb'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#3b82f6'}
+                            >
+                                <Copy size={16} />
+                                Copiar link
+                            </button>
+
+                            {/* Microcopy de segurança */}
+                            <p style={{ margin: 0, fontSize: '11px', color: '#64748b', textAlign: 'center' }}>
+                                O link expira automaticamente por segurança.
+                            </p>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* ═══════════════════════════════════════════════════════════
+                RODAPÉ — Danger Zone + CTA Final
+            ═══════════════════════════════════════════════════════════ */}
+            <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderTop: '1px solid #e2e8f0',
+                paddingTop: '24px'
+            }}>
+                {/* Excluir (esquerda) */}
+                {isEditMode && onDelete ? (
                     <button
                         type="button"
                         onClick={onDelete}
-                        className="btn btn-ghost"
-                        style={{ color: '#ef4444' }}
-                        disabled={isSubmitting}
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            background: 'none',
+                            border: 'none',
+                            color: '#dc2626',
+                            fontSize: '13px',
+                            fontWeight: 500,
+                            cursor: 'pointer',
+                            padding: 0
+                        }}
                     >
-                        <AlertTriangle size={18} />
+                        <AlertTriangle size={16} />
                         Excluir
                     </button>
-                ) : <div />}
+                ) : (
+                    <div />
+                )}
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {/* Cancelar + Salvar (direita) */}
+                <div style={{ display: 'flex', gap: '12px' }}>
                     {!hideCancelButton && (
                         <button
                             type="button"
@@ -290,17 +342,10 @@ export default function ProfessionalForm({ initialData, onSubmit, onCancel, onDe
                     )}
                     <button
                         type="submit"
-                        disabled={isSubmitting}
                         className="btn btn-primary"
+                        disabled={isSubmitting}
                     >
-                        {isSubmitting ? (
-                            <>Salvando...</>
-                        ) : (
-                            <>
-                                <Save size={18} />
-                                {isEditMode ? 'Salvar' : 'Criar Profissional'}
-                            </>
-                        )}
+                        {isSubmitting ? 'Salvando...' : 'Salvar'}
                     </button>
                 </div>
             </div>

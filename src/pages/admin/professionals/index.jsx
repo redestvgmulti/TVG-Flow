@@ -394,35 +394,70 @@ export default function ProfessionalsList() {
                         </div>
 
                         {/* Body */}
-                        <div className="modal-body p-4 sm:p-6">
+                        <div className="modal-body p-6">
                             {inviteLink ? (
-                                <div className="text-center space-y-6 animate-in fade-in zoom-in duration-300">
-                                    <div className="inline-flex justify-center items-center w-20 h-20 rounded-full bg-green-50 mb-2 border border-green-100 shadow-sm">
-                                        <UserPlus size={36} className="text-green-600" />
+                                <div className="space-y-5">
+                                    {/* Título de sucesso */}
+                                    <div>
+                                        <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#0f172a', margin: 0 }}>
+                                            Profissional Criado!
+                                        </h3>
+                                        <p style={{ fontSize: '13px', color: '#64748b', marginTop: '6px', marginBottom: 0 }}>
+                                            Envie o link de acesso abaixo para <strong style={{ color: '#334155' }}>{createdName}</strong>.
+                                        </p>
                                     </div>
 
-                                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-left w-full overflow-hidden">
-                                        <p className="text-gray-600 mb-4 text-sm leading-relaxed">
-                                            Como não há sistema de e-mail configurado, você precisa enviar este link manualmente para <strong className="text-gray-900">{createdName}</strong>.
-                                        </p>
-
-                                        <div className="relative w-full group cursor-pointer" onClick={copyToClipboard} title="Clique para copiar">
-                                            <div className="bg-white p-3 pr-9 rounded-lg border border-gray-200 font-mono text-xs text-slate-500 break-all shadow-sm w-full leading-relaxed whitespace-normal hover:border-blue-400 transition-colors">
-                                                {inviteLink}
-                                            </div>
-                                            <div className="absolute top-2.5 right-2.5 text-slate-400 group-hover:text-blue-500 transition-colors bg-white pl-1">
-                                                <Copy size={14} />
+                                    {/* Feedback + Botão Copiar */}
+                                    <div style={{
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: '12px',
+                                        padding: '16px',
+                                        backgroundColor: '#f0fdf4',
+                                        borderRadius: '8px',
+                                        border: '1px solid #bbf7d0'
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                                            <CheckCircle size={16} style={{ color: '#16a34a', marginTop: '2px', flexShrink: 0 }} />
+                                            <div style={{ flex: 1 }}>
+                                                <p style={{ margin: 0, fontSize: '13px', color: '#15803d', fontWeight: 500 }}>
+                                                    Link de convite gerado.
+                                                </p>
+                                                <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#16a34a' }}>
+                                                    Use o botão abaixo para copiar e enviar ao usuário.
+                                                </p>
                                             </div>
                                         </div>
-                                    </div>
 
-                                    <button
-                                        onClick={copyToClipboard}
-                                        className="btn btn-primary w-full py-3 text-base flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 hover:-translate-y-0.5 transition-all"
-                                    >
-                                        <Copy size={18} />
-                                        Copiar Link de Convite
-                                    </button>
+                                        <button
+                                            onClick={copyToClipboard}
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                gap: '8px',
+                                                padding: '10px 16px',
+                                                backgroundColor: '#3b82f6',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '8px',
+                                                fontSize: '14px',
+                                                fontWeight: 500,
+                                                cursor: 'pointer',
+                                                transition: 'background-color 0.2s',
+                                                boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.05)'
+                                            }}
+                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#2563eb'}
+                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#3b82f6'}
+                                        >
+                                            <Copy size={16} />
+                                            Copiar link de convite
+                                        </button>
+
+                                        <p style={{ margin: 0, fontSize: '11px', color: '#64748b', textAlign: 'center' }}>
+                                            O link expira automaticamente por segurança.
+                                        </p>
+                                    </div>
                                 </div>
                             ) : (
                                 <ProfessionalForm
