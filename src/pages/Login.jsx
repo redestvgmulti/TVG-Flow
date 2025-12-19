@@ -16,13 +16,12 @@ function Login() {
         setError(null)
         setLoading(true)
 
-        const { error } = await signIn(email, password)
-
-        if (error) {
+        try {
+            await signIn(email, password)
+            navigate('/admin')
+        } catch (error) {
             setError(error.message)
             setLoading(false)
-        } else {
-            navigate('/admin')
         }
     }
 
