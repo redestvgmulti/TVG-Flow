@@ -51,4 +51,12 @@ export default defineConfig({
       }
     })
   ],
+  build: {
+    // Remove all console statements in production for security
+    minify: 'esbuild',
+    target: 'esnext'
+  },
+  esbuild: {
+    drop: process.env.NODE_ENV === 'production' ? ['console', 'debugger'] : []
+  }
 })

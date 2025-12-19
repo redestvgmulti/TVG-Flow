@@ -10,8 +10,6 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-console.log('Supabase Config:', { url: supabaseUrl, hasKey: !!supabaseAnonKey });
-
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
@@ -49,7 +47,6 @@ export const getUserProfile = async () => {
     .single();
 
   if (error) {
-    console.error('Erro ao buscar perfil:', error);
     return null;
   }
 
