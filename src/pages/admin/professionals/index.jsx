@@ -16,6 +16,7 @@ export default function ProfessionalsList() {
 
     // Modal State
     const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
     const [selectedProfessional, setSelectedProfessional] = useState(null)
     const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -61,27 +62,30 @@ export default function ProfessionalsList() {
         }
     }
 
-    const handleDelete = async () => {
+    const handleDeleteClick = () => {
+        setIsDeleteModalOpen(true)
+    }
+
+    const handleDeleteConfirm = async () => {
         if (!selectedProfessional) return
-
-        const confirmed = window.confirm(
-            `Tem certeza que deseja excluir ${selectedProfessional.nome}? Esta ação removerá o acesso ao sistema e não pode ser desfeita.`
-        )
-
-        if (!confirmed) return
 
         setIsSubmitting(true)
         try {
             await professionalsService.delete(selectedProfessional.id)
             toast.success('Profissional excluído com sucesso!')
+            setIsDeleteModalOpen(false)
             handleCloseModal()
-            loadData()
+            await loadData()
         } catch (error) {
             console.error('Error deleting professional:', error)
             toast.error(error.message || 'Falha ao excluir profissional')
         } finally {
             setIsSubmitting(false)
         }
+    }
+
+    const handleDeleteCancel = () => {
+        setIsDeleteModalOpen(false)
     }
 
     const filtered = professionals.filter(p =>
@@ -257,10 +261,55 @@ export default function ProfessionalsList() {
                                 initialData={selectedProfessional}
                                 onSubmit={handleUpdate}
                                 onCancel={handleCloseModal}
-                                onDelete={handleDelete}
+                                onDelete={handleDeleteClick}
                                 isSubmitting={isSubmitting}
                                 isEditMode={true}
                             />
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Delete Confirmation Modal */}
+            {isDeleteModalOpen && selectedProfessional && (
+                <div className="modal-backdrop" onClick={handleDeleteCancel}>
+                    <div
+                        className="modal max-w-md"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="modal-header border-b border-red-100 bg-red-50">
+                            <div>
+                                <h3 className="text-red-800 font-bold">Confirmar Exclusão</h3>
+                                <p className="text-sm text-red-600 mt-1">Esta ação não pode ser desfeita</p>
+                            </div>
+                        </div>
+
+                        <div className="modal-body">
+                            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                                <p className="text-slate-700 font-medium mb-2">
+                                    Tem certeza que deseja excluir <strong>{selectedProfessional.nome}</strong>?
+                                </p>
+                                <p className="text-sm text-slate-600">
+                                    Esta ação removerá permanentemente o acesso ao sistema e não pode ser desfeita.
+                                </p>
+                            </div>
+
+                            <div className="flex gap-3 justify-end">
+                                <button
+                                    onClick={handleDeleteCancel}
+                                    disabled={isSubmitting}
+                                    className="btn btn-ghost"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={handleDeleteConfirm}
+                                    disabled={isSubmitting}
+                                    className="btn bg-red-600 hover:bg-red-700 text-white"
+                                >
+                                    {isSubmitting ? 'Excluindo...' : 'Sim, Excluir'}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

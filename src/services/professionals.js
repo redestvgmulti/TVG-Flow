@@ -35,6 +35,7 @@ export const professionalsService = {
         if (error) throw new Error(error.message || 'Erro de conexão com o servidor')
         if (data?.error) throw new Error(data.error)
 
+        // Return the full data object which includes inviteLink
         return data
     },
 

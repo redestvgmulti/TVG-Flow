@@ -45,10 +45,10 @@ serve(async (req) => {
         }
 
         // 3. Parse Body
-        const { email, name, area_id, role, ativo } = await req.json()
+        const { email, nome, area_id, role, ativo } = await req.json()
 
-        if (!email || !name) {
-            throw new Error('Missing required fields: email, name')
+        if (!email || !nome) {
+            throw new Error('Missing required fields: email, nome')
         }
 
         // 4. Generate Invite Link (Auth)
@@ -57,7 +57,7 @@ serve(async (req) => {
             type: 'invite',
             email: email,
             options: {
-                data: { nome: name }, // Metadata
+                data: { nome: nome }, // Metadata
                 redirectTo: `${Deno.env.get('FRONTEND_URL') || 'http://localhost:5173'}/reset-password`
             }
         })
@@ -85,7 +85,7 @@ serve(async (req) => {
                 const { error: updateError } = await supabaseAdmin
                     .from('profissionais')
                     .update({
-                        nome: name,
+                        nome: nome,
                         area_id: area_id || null,
                         role: role || 'profissional',
                         ativo: ativo !== undefined ? ativo : true
@@ -98,7 +98,7 @@ serve(async (req) => {
                     .from('profissionais')
                     .insert({
                         id: userId,
-                        nome: name,
+                        nome: nome,
                         email: email,
                         area_id: area_id || null,
                         role: role || 'profissional',
