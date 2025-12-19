@@ -1,6 +1,15 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../services/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import {
+    CheckCircle2,
+    Clock,
+    AlertCircle,
+    Calendar,
+    FileText,
+    ExternalLink,
+    Search
+} from 'lucide-react'
 
 function StaffDashboard() {
     const { professionalId, professionalName } = useAuth()
@@ -10,8 +19,18 @@ function StaffDashboard() {
         completed: 0
     })
     const [myTasks, setMyTasks] = useState([])
+    const [originalTasks, setOriginalTasks] = useState([])
     const [loading, setLoading] = useState(true)
+    const [searchTerm, setSearchTerm] = useState('')
     const [feedback, setFeedback] = useState({ show: false, type: '', message: '' })
+
+    // Date formatting for header
+    const today = new Date().toLocaleDateString('pt-BR', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    })
 
     useEffect(() => {
         if (professionalId) {
@@ -28,13 +47,25 @@ function StaffDashboard() {
         }
     }, [feedback.show])
 
+    // Filter tasks when searchTerm changes
+    useEffect(() => {
+        if (!searchTerm) {
+            setMyTasks(originalTasks)
+        } else {
+            const filtered = originalTasks.filter(task =>
+                task.titulo.toLowerCase().includes(searchTerm.toLowerCase())
+            )
+            setMyTasks(filtered)
+        }
+    }, [searchTerm, originalTasks])
+
     async function fetchMyTasks() {
         try {
             setLoading(true)
 
             const { data: tasks, error } = await supabase
                 .from('tarefas')
-                .select('id, titulo, deadline, status, priority, created_at, drive_link')
+                .select('id, titulo, deadline, status, priority, created_at, drive_link, descricao')
                 .eq('assigned_to', professionalId)
                 .order('created_at', { ascending: false })
 
@@ -50,10 +81,11 @@ function StaffDashboard() {
                 completed
             })
 
+            setOriginalTasks(tasks || [])
             setMyTasks(tasks || [])
         } catch (error) {
             console.error('Error fetching tasks:', error)
-            showFeedback('error', 'Failed to load your tasks')
+            showFeedback('error', 'Falha ao carregar suas tarefas')
         } finally {
             setLoading(false)
         }
@@ -64,7 +96,8 @@ function StaffDashboard() {
     }
 
     async function handleUpdateStatus(taskId, newStatus, taskTitle) {
-        if (!confirm(`Change status of "${taskTitle}" to ${newStatus}?`)) {
+        if (newStatus === 'completed') {
+            await handleCompleteTask(taskId, taskTitle)
             return
         }
 
@@ -73,22 +106,22 @@ function StaffDashboard() {
                 .from('tarefas')
                 .update({
                     status: newStatus,
-                    completed_at: newStatus === 'completed' ? new Date().toISOString() : null
+                    completed_at: null // Reset if moving back from completed
                 })
                 .eq('id', taskId)
 
             if (error) throw error
 
-            showFeedback('success', `Task status updated to ${newStatus}`)
+            showFeedback('success', 'Status da tarefa atualizado')
             await fetchMyTasks()
         } catch (error) {
             console.error('Error updating task:', error)
-            showFeedback('error', 'Failed to update task status')
+            showFeedback('error', 'Falha ao atualizar status')
         }
     }
 
     async function handleCompleteTask(taskId, taskTitle) {
-        if (!confirm(`Mark "${taskTitle}" as completed?`)) {
+        if (!confirm(`Marcar "${taskTitle}" como concluída?`)) {
             return
         }
 
@@ -103,192 +136,242 @@ function StaffDashboard() {
 
             if (error) throw error
 
-            showFeedback('success', 'Task completed!')
+            showFeedback('success', 'Tarefa concluída com sucesso! 🎉')
             await fetchMyTasks()
         } catch (error) {
             console.error('Error completing task:', error)
-            showFeedback('error', 'Failed to complete task')
+            showFeedback('error', 'Falha ao concluir tarefa')
         }
     }
 
     function getStatusBadgeClass(status) {
         switch (status) {
-            case 'completed':
-                return 'badge-success'
-            case 'in_progress':
-                return 'badge-primary'
-            case 'overdue':
-                return 'badge-danger'
-            default:
-                return ''
+            case 'completed': return 'badge-success'
+            case 'in_progress': return 'badge-primary'
+            case 'overdue': return 'badge-danger'
+            default: return 'badge-neutral'
+        }
+    }
+
+    function getStatusLabel(status) {
+        switch (status) {
+            case 'completed': return 'Concluída'
+            case 'in_progress': return 'Em Progresso'
+            case 'overdue': return 'Atrasada'
+            case 'pending': return 'Pendente'
+            default: return status
         }
     }
 
     function getPriorityBadgeClass(priority) {
         switch (priority) {
-            case 'urgent':
-                return 'badge-danger'
-            case 'high':
-                return 'badge-warning'
-            default:
-                return ''
+            case 'urgent': return 'badge-danger'
+            case 'high': return 'badge-warning'
+            default: return 'badge-neutral'
+        }
+    }
+
+    function getPriorityLabel(priority) {
+        switch (priority) {
+            case 'urgent': return 'Urgente'
+            case 'high': return 'Alta'
+            case 'medium': return 'Média'
+            case 'low': return 'Baixa'
+            default: return priority
         }
     }
 
     if (loading) {
         return (
-            <div>
-                <h2>My Dashboard</h2>
-                <div className="card" style={{ textAlign: 'center', padding: 'var(--space-xl)' }}>
-                    <p style={{ color: 'var(--color-text-secondary)' }}>Loading your tasks...</p>
+            <div className="flex justify-center items-center h-full p-8">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                    <p className="text-tertiary">Carregando painel...</p>
                 </div>
             </div>
         )
     }
 
     return (
-        <div>
-            <h2>Welcome, {professionalName || 'Professional'}!</h2>
+        <div className="animation-fade-in pb-8">
+            {/* Header Section */}
+            <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <div>
+                    <p className="text-sm text-tertiary uppercase tracking-wide font-semibold mb-1">
+                        {today}
+                    </p>
+                    <h1 className="text-3xl font-bold text-primary">
+                        Olá, {professionalName?.split(' ')[0] || 'Colaborador'}! 👋
+                    </h1>
+                    <p className="text-secondary mt-1">
+                        Aqui está o resumo das suas atividades hoje.
+                    </p>
+                </div>
+            </div>
 
             {feedback.show && (
-                <div
-                    className="card"
-                    style={{
-                        marginBottom: 'var(--space-md)',
-                        padding: 'var(--space-md)',
-                        backgroundColor: feedback.type === 'success' ? '#d1f4dd' : '#ffe5e5',
-                        border: `1px solid ${feedback.type === 'success' ? '#34c759' : '#ff3b30'}`
-                    }}
-                >
-                    <p style={{
-                        margin: 0,
-                        color: feedback.type === 'success' ? '#34c759' : '#ff3b30',
-                        fontWeight: 'var(--weight-medium)'
-                    }}>
+                <div className={`card mb-6 p-4 border-${feedback.type === 'success' ? 'success' : 'danger'} bg-${feedback.type === 'success' ? 'success' : 'danger'}-subtle`}>
+                    <p className={`text-${feedback.type === 'success' ? 'success' : 'danger'} font-medium m-0 flex items-center gap-2`}>
+                        {feedback.type === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
                         {feedback.message}
                     </p>
                 </div>
             )}
 
             {/* KPI Cards */}
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                gap: 'var(--space-md)',
-                marginBottom: 'var(--space-xl)'
-            }}>
-                <div className="card">
-                    <h3 style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                        Assigned Tasks
-                    </h3>
-                    <p style={{ fontSize: 'var(--text-3xl)', fontWeight: 'var(--weight-bold)', margin: 0 }}>
-                        {stats.totalAssigned}
-                    </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div className="card p-6 flex flex-col justify-between hover:shadow-md transition-all duration-200">
+                    <div>
+                        <div className="flex items-center justify-between mb-2">
+                            <h3 className="text-sm font-bold text-tertiary uppercase tracking-wide">
+                                Pendentes
+                            </h3>
+                            <div className="p-2 bg-neutral-100 rounded-full text-tertiary">
+                                <Clock size={20} />
+                            </div>
+                        </div>
+                        <p className="text-3xl font-bold text-primary">{stats.pending}</p>
+                    </div>
                 </div>
 
-                <div className="card">
-                    <h3 style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                        Pending
-                    </h3>
-                    <p style={{ fontSize: 'var(--text-3xl)', fontWeight: 'var(--weight-bold)', margin: 0 }}>
-                        {stats.pending}
-                    </p>
+                <div className="card p-6 flex flex-col justify-between hover:shadow-md transition-all duration-200">
+                    <div>
+                        <div className="flex items-center justify-between mb-2">
+                            <h3 className="text-sm font-bold text-tertiary uppercase tracking-wide">
+                                Concluídas
+                            </h3>
+                            <div className="p-2 bg-green-50 rounded-full text-success">
+                                <CheckCircle2 size={20} />
+                            </div>
+                        </div>
+                        <p className="text-3xl font-bold text-primary">{stats.completed}</p>
+                    </div>
                 </div>
 
-                <div className="card">
-                    <h3 style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-xs)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                        Completed
-                    </h3>
-                    <p style={{ fontSize: 'var(--text-3xl)', fontWeight: 'var(--weight-bold)', margin: 0 }}>
-                        {stats.completed}
-                    </p>
+                <div className="card p-6 flex flex-col justify-between hover:shadow-md transition-all duration-200">
+                    <div>
+                        <div className="flex items-center justify-between mb-2">
+                            <h3 className="text-sm font-bold text-tertiary uppercase tracking-wide">
+                                Total Atribuído
+                            </h3>
+                            <div className="p-2 bg-blue-50 rounded-full text-brand">
+                                <FileText size={20} />
+                            </div>
+                        </div>
+                        <p className="text-3xl font-bold text-primary">{stats.totalAssigned}</p>
+                    </div>
                 </div>
             </div>
 
-            {/* My Tasks */}
-            <div className="card">
-                <h3 style={{ marginBottom: 'var(--space-lg)' }}>My Tasks</h3>
+            {/* Tasks Section */}
+            <div className="card overflow-hidden">
+                <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <h2 className="text-xl font-bold text-primary flex items-center gap-2">
+                        <Calendar className="text-brand" size={24} />
+                        Minhas Tarefas
+                    </h2>
+
+                    {/* Search Bar */}
+                    <div className="relative w-full md:w-64">
+                        <input
+                            type="text"
+                            placeholder="Buscar tarefa..."
+                            className="input w-full pl-10"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-tertiary" size={16} />
+                    </div>
+                </div>
 
                 {myTasks.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: 'var(--space-2xl)', color: 'var(--color-text-secondary)' }}>
-                        <p style={{ fontSize: 'var(--text-lg)', marginBottom: 'var(--space-sm)' }}>No tasks assigned yet</p>
-                        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-tertiary)' }}>
-                            Tasks assigned to you will appear here
+                    <div className="p-12 text-center">
+                        <div className="inline-flex justify-center items-center w-16 h-16 rounded-full bg-neutral-100 mb-4">
+                            <CheckCircle2 size={32} className="text-tertiary" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-primary mb-1">
+                            {searchTerm ? 'Nenhuma tarefa encontrada' : 'Tudo limpo por aqui!'}
+                        </h3>
+                        <p className="text-tertiary max-w-md mx-auto">
+                            {searchTerm
+                                ? 'Tente buscar por outro termo.'
+                                : 'Você não tem tarefas pendentes no momento. Aproveite seu dia!'}
                         </p>
                     </div>
                 ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
-                        {myTasks.map(task => (
-                            <div
-                                key={task.id}
-                                style={{
-                                    padding: 'var(--space-md)',
-                                    border: '1px solid var(--color-border-light)',
-                                    borderRadius: 'var(--radius-md)',
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center',
-                                    gap: 'var(--space-md)',
-                                    flexWrap: 'wrap'
-                                }}
-                            >
-                                <div style={{ flex: 1, minWidth: '200px' }}>
-                                    <p style={{ fontWeight: 'var(--weight-medium)', marginBottom: 'var(--space-xs)' }}>
-                                        {task.titulo}
-                                    </p>
-                                    <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', margin: 0 }}>
-                                        Deadline: {new Date(task.deadline).toLocaleDateString()}
-                                        {task.drive_link && (
-                                            <>
-                                                {' • '}
+                    <div className="overflow-x-auto">
+                        <table className="table w-full">
+                            <thead>
+                                <tr className="text-left bg-subtle border-b border-gray-100">
+                                    <th className="p-4 font-semibold text-secondary text-sm">Tarefa</th>
+                                    <th className="p-4 font-semibold text-secondary text-sm">Prazo</th>
+                                    <th className="p-4 font-semibold text-secondary text-sm">Status</th>
+                                    <th className="p-4 font-semibold text-secondary text-sm">Prioridade</th>
+                                    <th className="p-4 font-semibold text-secondary text-sm text-right">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {myTasks.map(task => (
+                                    <tr key={task.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                                        <td className="p-4">
+                                            <div className="font-medium text-primary mb-1">{task.titulo}</div>
+                                            {task.drive_link && (
                                                 <a
                                                     href={task.drive_link}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
-                                                    style={{ color: 'var(--color-primary)', textDecoration: 'none' }}
+                                                    className="inline-flex items-center gap-1 text-xs text-brand hover:underline"
                                                 >
-                                                    📎 Files
+                                                    <ExternalLink size={12} />
+                                                    Ver Arquivos
                                                 </a>
-                                            </>
-                                        )}
-                                    </p>
-                                </div>
-                                <div style={{ display: 'flex', gap: 'var(--space-xs)', alignItems: 'center', flexWrap: 'wrap' }}>
-                                    <span className={`badge ${getStatusBadgeClass(task.status)}`}>
-                                        {task.status}
-                                    </span>
-                                    {task.priority !== 'medium' && task.priority !== 'low' && (
-                                        <span className={`badge ${getPriorityBadgeClass(task.priority)}`}>
-                                            {task.priority}
-                                        </span>
-                                    )}
-                                    {task.status !== 'completed' && (
-                                        <button
-                                            onClick={() => handleCompleteTask(task.id, task.titulo)}
-                                            className="btn btn-secondary"
-                                            style={{ padding: 'var(--space-xs) var(--space-sm)', fontSize: 'var(--text-sm)' }}
-                                        >
-                                            Complete
-                                        </button>
-                                    )}
-                                    <select
-                                        value={task.status}
-                                        onChange={(e) => handleUpdateStatus(task.id, e.target.value, task.titulo)}
-                                        style={{
-                                            padding: 'var(--space-xs) var(--space-sm)',
-                                            fontSize: 'var(--text-sm)',
-                                            borderRadius: 'var(--radius-sm)',
-                                            border: '1px solid var(--color-border)'
-                                        }}
-                                    >
-                                        <option value="pending">Pending</option>
-                                        <option value="in_progress">In Progress</option>
-                                        <option value="completed">Completed</option>
-                                        <option value="overdue">Overdue</option>
-                                    </select>
-                                </div>
-                            </div>
-                        ))}
+                                            )}
+                                        </td>
+                                        <td className="p-4 text-sm text-secondary">
+                                            {new Date(task.deadline).toLocaleDateString()}
+                                            <div className="text-xs text-tertiary">
+                                                {new Date(task.deadline).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </div>
+                                        </td>
+                                        <td className="p-4">
+                                            <span className={`badge ${getStatusBadgeClass(task.status)}`}>
+                                                {getStatusLabel(task.status)}
+                                            </span>
+                                        </td>
+                                        <td className="p-4">
+                                            <span className={`badge ${getPriorityBadgeClass(task.priority)}`}>
+                                                {getPriorityLabel(task.priority)}
+                                            </span>
+                                        </td>
+                                        <td className="p-4 text-right">
+                                            <div className="flex items-center justify-end gap-2">
+                                                {task.status !== 'completed' && (
+                                                    <button
+                                                        onClick={() => handleCompleteTask(task.id, task.titulo)}
+                                                        className="btn btn-sm btn-outline-success hover:bg-green-50 text-success border-success"
+                                                        title="Concluir Tarefa"
+                                                    >
+                                                        <CheckCircle2 size={16} />
+                                                        <span className="hidden md:inline ml-1">Concluir</span>
+                                                    </button>
+                                                )}
+
+                                                <select
+                                                    value={task.status}
+                                                    onChange={(e) => handleUpdateStatus(task.id, e.target.value, task.titulo)}
+                                                    className="input py-1 px-2 text-xs w-auto h-auto"
+                                                    style={{ minWidth: '100px' }}
+                                                >
+                                                    <option value="pending">Pendente</option>
+                                                    <option value="in_progress">Em Progresso</option>
+                                                    <option value="completed">Concluída</option>
+                                                </select>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
                 )}
             </div>
