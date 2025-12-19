@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../services/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { Bell, ClipboardList, CheckCircle2, Trash2, Check, X } from 'lucide-react'
 
 function NotificationCenter() {
     const { professionalId } = useAuth()
@@ -144,11 +145,12 @@ function NotificationCenter() {
     function getNotificationIcon(type) {
         switch (type) {
             case 'task_assigned':
-                return '📋'
+            case 'task_updated':
+                return <ClipboardList size={18} />
             case 'task_completed':
-                return '✅'
+                return <CheckCircle2 size={18} />
             default:
-                return '🔔'
+                return <Bell size={18} />
         }
     }
 
@@ -175,7 +177,7 @@ function NotificationCenter() {
                 onClick={() => setShowPanel(!showPanel)}
                 aria-label="Notificações"
             >
-                <span style={{ fontSize: '18px' }}>🔔</span>
+                <Bell size={20} />
                 {unreadCount > 0 && <span className="orb-pulse" />}
             </button>
 
@@ -195,16 +197,18 @@ function NotificationCenter() {
                                     {unreadCount > 0 && (
                                         <button
                                             onClick={markAllAsRead}
-                                            className="btn btn-secondary btn-xs"
+                                            className="btn-text-action"
+                                            title="Marcar todas como lidas"
                                         >
-                                            Ler todas
+                                            <Check size={16} /> Ler todas
                                         </button>
                                     )}
                                     <button
                                         onClick={clearAll}
-                                        className="btn btn-secondary btn-xs"
+                                        className="btn-text-action"
+                                        title="Limpar tudo"
                                     >
-                                        Limpar
+                                        <Trash2 size={16} /> Limpar
                                     </button>
                                 </div>
                             )}
@@ -218,7 +222,9 @@ function NotificationCenter() {
                                 </div>
                             ) : notifications.length === 0 ? (
                                 <div className="notification-empty">
-                                    <span className="notification-empty-icon">✨</span>
+                                    <span className="notification-empty-icon">
+                                        <Bell size={48} strokeWidth={1} style={{ opacity: 0.2 }} />
+                                    </span>
                                     <p>Tudo limpo por aqui</p>
                                 </div>
                             ) : (
@@ -228,7 +234,7 @@ function NotificationCenter() {
                                         className={`notification-item ${!notification.read_at ? 'unread' : ''}`}
                                         onClick={() => !notification.read_at && markAsRead(notification.id)}
                                     >
-                                        <div className="notification-icon">
+                                        <div className="notification-icon-wrapper">
                                             {getNotificationIcon(notification.type)}
                                         </div>
                                         <div className="notification-content">
@@ -244,7 +250,7 @@ function NotificationCenter() {
                                             }}
                                             aria-label="Remover notificação"
                                         >
-                                            ×
+                                            <X size={14} />
                                         </button>
                                     </div>
                                 ))

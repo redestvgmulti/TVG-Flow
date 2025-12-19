@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../services/supabase'
-import { Edit2, Trash2 } from 'lucide-react'
+import { Edit2, Trash2, ClipboardList, FileText, CheckCircle2 } from 'lucide-react'
 
 function Tasks() {
     const [tasks, setTasks] = useState([])
@@ -341,8 +341,13 @@ function Tasks() {
 
     return (
         <div className="animation-fade-in">
+            {/* Standard Dashboard Header */}
             <div className="dashboard-header">
                 <h2>Gerenciamento de Tarefas</h2>
+                <button onClick={handleOpenCreateModal} className="btn btn-primary">
+                    <ClipboardList size={20} style={{ marginRight: '8px' }} />
+                    Nova Tarefa
+                </button>
             </div>
 
             {feedback.show && (
@@ -353,32 +358,29 @@ function Tasks() {
                 </div>
             )}
 
-            {/* Premium Glass Toolbar */}
+            {/* Standard Toolbar */}
             <div className="tool-bar">
                 <div className="tool-bar-header">
                     <span className="tool-bar-title">Filtros e Busca</span>
-                    <button onClick={handleOpenCreateModal} className="btn btn-primary">
-                        + Nova Tarefa
-                    </button>
                 </div>
 
                 <div className="tool-bar-filters">
                     <div className="input-group" style={{ marginBottom: 0 }}>
-                        <label htmlFor="search" style={{ fontSize: '11px', marginBottom: '4px' }}>Buscar por título</label>
+                        <label htmlFor="search">Buscar</label>
                         <input
                             id="search"
                             type="text"
                             className="input"
-                            placeholder="Digite para buscar..."
+                            placeholder="Buscar por título..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
                     </div>
 
                     <div className="input-group" style={{ marginBottom: 0 }}>
-                        <label htmlFor="status-filter" style={{ fontSize: '11px', marginBottom: '4px' }}>Status</label>
+                        <label htmlFor="status">Status</label>
                         <select
-                            id="status-filter"
+                            id="status"
                             className="input"
                             value={statusFilter}
                             onChange={(e) => setStatusFilter(e.target.value)}
@@ -392,9 +394,9 @@ function Tasks() {
                     </div>
 
                     <div className="input-group" style={{ marginBottom: 0 }}>
-                        <label htmlFor="priority-filter" style={{ fontSize: '11px', marginBottom: '4px' }}>Prioridade</label>
+                        <label htmlFor="priority">Prioridade</label>
                         <select
-                            id="priority-filter"
+                            id="priority"
                             className="input"
                             value={priorityFilter}
                             onChange={(e) => setPriorityFilter(e.target.value)}
@@ -408,9 +410,9 @@ function Tasks() {
                     </div>
 
                     <div className="input-group" style={{ marginBottom: 0 }}>
-                        <label htmlFor="assigned-filter" style={{ fontSize: '11px', marginBottom: '4px' }}>Atribuída a</label>
+                        <label htmlFor="assigned">Responsável</label>
                         <select
-                            id="assigned-filter"
+                            id="assigned"
                             className="input"
                             value={assignedToFilter}
                             onChange={(e) => setAssignedToFilter(e.target.value)}
@@ -424,17 +426,19 @@ function Tasks() {
                 </div>
             </div>
 
-            {/* Premium Table Card */}
-            <div className="table-card">
-                <div className="table-header">
-                    <h3 className="table-title">
+            {/* Standard Table Card */}
+            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                <div style={{ padding: '20px', borderBottom: '1px solid #eee' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#333' }}>
                         {filteredTasks.length} {filteredTasks.length === 1 ? 'tarefa encontrada' : 'tarefas encontradas'}
                     </h3>
                 </div>
 
                 {filteredTasks.length === 0 ? (
                     <div className="empty-state">
-                        <span className="empty-icon" style={{ fontSize: '48px', opacity: 0.2 }}>📝</span>
+                        <span className="empty-icon" style={{ display: 'inline-flex', justifyContent: 'center', marginBottom: '16px' }}>
+                            <ClipboardList size={64} className="text-slate-300" strokeWidth={1} />
+                        </span>
                         <p className="empty-text">
                             {searchTerm || statusFilter !== 'all' || priorityFilter !== 'all' || assignedToFilter !== 'all'
                                 ? 'Nenhuma tarefa encontrada com os filtros aplicados.'
@@ -467,7 +471,7 @@ function Tasks() {
                                         <td>
                                             <button
                                                 onClick={() => handleOpenDetailModal(task)}
-                                                className="task-link-btn"
+                                                style={{ background: 'none', border: 'none', color: 'var(--color-primary)', fontWeight: 500, cursor: 'pointer', padding: 0 }}
                                             >
                                                 {task.titulo}
                                             </button>
@@ -487,7 +491,7 @@ function Tasks() {
                                             </span>
                                         </td>
                                         <td style={{ textAlign: 'right' }}>
-                                            <div style={{ display: 'inline-flex', gap: '8px' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
                                                 <button
                                                     onClick={() => handleOpenEditModal(task)}
                                                     className="btn-icon"
