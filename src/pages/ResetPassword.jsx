@@ -22,19 +22,6 @@ export default function ResetPassword() {
     const allValid = requirements.every(r => r.test(password))
     const passwordsMatch = password && password === confirmPassword
 
-    useEffect(() => {
-        // Verify if user is authenticated (via the recovery link magic)
-        checkSession()
-    }, [])
-
-    const checkSession = async () => {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (!session) {
-            // If no session, the link might be invalid or expired
-            setError('Link inválido ou expirado. Solicite um novo convite.')
-        }
-    }
-
     const handleSubmit = async (e) => {
         e.preventDefault()
         if (!allValid || !passwordsMatch) return
@@ -46,12 +33,12 @@ export default function ResetPassword() {
 
             toast.success('Senha definida com sucesso! Faça login para continuar.')
 
-            // CORREÇÃO B: Logout explícito e redirecionamento para login
+            // Logout and redirect to login
             await supabase.auth.signOut()
             navigate('/login')
 
         } catch (err) {
-            console.error(err)
+            setError('Erro ao definir senha. O link pode ter expirado.')
             toast.error('Erro ao definir senha: ' + err.message)
         } finally {
             setIsSubmitting(false)

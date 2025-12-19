@@ -12,6 +12,12 @@ function RoleProtectedRoute({ children, allowedRole }) {
         return <Navigate to="/login" replace />
     }
 
+    // Wait for role to be loaded before making routing decisions
+    // If user exists but role is still null, we're still loading professional data
+    if (user && role === null) {
+        return null // Show nothing while loading role
+    }
+
     if (role !== allowedRole) {
         // Redirect to correct dashboard based on role
         if (role === 'admin') {
@@ -20,7 +26,7 @@ function RoleProtectedRoute({ children, allowedRole }) {
         if (role === 'profissional') {
             return <Navigate to="/staff/dashboard" replace />
         }
-        // If no role, redirect to login
+        // If role is loaded but doesn't match anything, redirect to login
         return <Navigate to="/login" replace />
     }
 

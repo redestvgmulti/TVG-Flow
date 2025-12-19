@@ -53,7 +53,6 @@ export function AuthProvider({ children }) {
                 .maybeSingle()
 
             if (error) {
-                console.error('Error fetching professional data:', error)
                 setRole(null)
                 setProfessionalId(null)
                 setProfessionalName(null)
@@ -63,7 +62,6 @@ export function AuthProvider({ children }) {
 
             // If no professional found, clear state
             if (!professional) {
-                console.warn('No professional record found for user')
                 setRole(null)
                 setProfessionalId(null)
                 setProfessionalName(null)
@@ -73,7 +71,6 @@ export function AuthProvider({ children }) {
 
             // SECURITY: Check if user is active
             if (!professional.ativo) {
-                console.warn('User is inactive, forcing logout')
                 await signOut()
                 return
             }
@@ -82,7 +79,6 @@ export function AuthProvider({ children }) {
             setProfessionalId(professional.id || null)
             setProfessionalName(professional.nome || null)
         } catch (error) {
-            console.error('Error in fetchProfessionalData:', error)
             setRole(null)
             setProfessionalId(null)
             setProfessionalName(null)
