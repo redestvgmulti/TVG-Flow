@@ -35,19 +35,21 @@ src/
 
 ## 2. Fluxo Lógico Detalhado
 
-### 2.1. Criação de Profissional (Happy Path)
+### 2.1. Criação de Profissional (Fluxo com Convite)
 
 1.  **Admin** acessa rota `/admin/professionals/new`.
-2.  Preenche formulário:
-    *   Nome, E-mail, Senha Provisória.
-    *   Área (Select vindo de `public.areas`).
-    *   Perfil (`admin` ou `profissional`).
-3.  **Frontend** valida dados (zod/react-hook-form).
-4.  **Frontend** chama `supabase.functions.invoke('create-professional', payload)`.
-5.  **Edge Function** processa a requisição (Server-side).
-6.  **Retorno**:
-    *   Sucesso: Toast de confirmação + Redirecionamento para lista.
-    *   Erro: Toast de erro (ex: "E-mail já cadastrado").
+2.  Preenche formulário (Nome, E-mail, Área, Perfil) - **SEM SENHA**.
+3.  **Frontend** chama `supabase.functions.invoke('create-professional', payload)`.
+4.  **Edge Function**:
+    *   Valida Admin.
+    *   Cria usuário em `auth.users` SEM senha e com `email_confirm: false`.
+    *   Insere registro em `public.profissionais`.
+    *   **Envio de Email:** Dispara `resetPasswordForEmail` (template padrão 'Reset Password' do Supabase).
+    *   **Rollback:** Em caso de falha no DB ou Email, remove o usuário criado para garantir consistência.
+5.  **Funcionário** recebe email com link.
+6.  **Funcionário** clica no link e é direcionado para `/reset-password`.
+7.  **Funcionário** define sua senha.
+8.  **Sistema** realiza logout e redireciona para `/login`.
 
 ### 2.2. Edição de Profissional
 

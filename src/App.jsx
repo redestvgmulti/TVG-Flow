@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import AppLayout from './layout/AppLayout'
 import AdminLayout from './layout/AdminLayout'
 import Login from './pages/Login'
+import ResetPassword from './pages/ResetPassword'
 import Dashboard from './pages/admin/Dashboard'
 import Tasks from './pages/admin/Tasks'
 // import Professionals from './pages/admin/Professionals' // Old
@@ -25,6 +26,7 @@ function App() {
       <AppLayout>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
 
           {/* Admin Routes */}
           <Route

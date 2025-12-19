@@ -27,7 +27,7 @@ export const professionalsService = {
 
     // Create professional (via Edge Function)
     async create(payload) {
-        // Payload: { nome, email, password, role, area_id }
+        // Payload: { nome, email, role, area_id } - Password handled via Email Invite
         const { data, error } = await supabase.functions.invoke('create-professional', {
             body: payload
         })

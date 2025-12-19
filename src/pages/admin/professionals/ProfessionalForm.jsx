@@ -9,7 +9,7 @@ export default function ProfessionalForm({ initialData, onSubmit, onCancel, isSu
     const [formData, setFormData] = useState({
         nome: '',
         email: '',
-        password: '',
+        // password removed - handled via email invite
         role: 'profissional',
         area_id: '',
         ativo: true
@@ -21,8 +21,7 @@ export default function ProfessionalForm({ initialData, onSubmit, onCancel, isSu
         if (initialData) {
             setFormData(prev => ({
                 ...prev,
-                ...initialData,
-                password: '' // Never populate password
+                ...initialData
             }))
         }
         fetchAreas()
@@ -84,21 +83,15 @@ export default function ProfessionalForm({ initialData, onSubmit, onCancel, isSu
                     {isEditMode && <span className="text-xs text-slate-400">O e-mail não pode ser alterado.</span>}
                 </div>
 
-                {/* Senha (Only Create) */}
+                {/* Senha - REMOVIDO (Fluxo de Convite) */}
                 {!isEditMode && (
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-700">Senha Provisória</label>
-                        <div className="relative">
-                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                            <input
-                                type="password"
-                                required={!isEditMode}
-                                minLength={6}
-                                className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
-                                placeholder="Mínimo 6 caracteres"
-                                value={formData.password}
-                                onChange={e => setFormData({ ...formData, password: e.target.value })}
-                            />
+                    <div className="col-span-1 md:col-span-2 p-4 bg-blue-50 border border-blue-100 rounded-lg flex items-start gap-3">
+                        <Mail className="text-blue-600 mt-1 shrink-0" size={20} />
+                        <div>
+                            <p className="font-semibold text-blue-900 text-sm">Convite por E-mail</p>
+                            <p className="text-sm text-blue-700 leading-relaxed mt-0.5">
+                                O funcionário receberá um e-mail com instruções para definir sua própria senha de acesso segura.
+                            </p>
                         </div>
                     </div>
                 )}

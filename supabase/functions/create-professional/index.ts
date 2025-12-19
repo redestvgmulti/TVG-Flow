@@ -15,18 +15,14 @@ serve(async (req) => {
 
     try {
         // 1. Setup Clients
-        // Service Role for privileged operations (Creating User, Inserting to protected table)
         const supabaseAdmin = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
             { auth: { autoRefreshToken: false, persistSession: false } }
         )
 
-        // Client for verifying the caller (using the Authorization header from request)
         const authHeader = req.headers.get('Authorization')
-        if (!authHeader) {
-            throw new Error('Missing Authorization header')
-        }
+        if (!authHeader) throw new Error('Missing Authorization header')
 
         const supabaseClient = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
@@ -34,13 +30,10 @@ serve(async (req) => {
             { global: { headers: { Authorization: authHeader } } }
         )
 
-        // 2. Security Check: Verify if caller is authenticated and is an ADMIN
+        // 2. Security Check: Admin Only
         const { data: { user }, error: userError } = await supabaseClient.auth.getUser()
-        if (userError || !user) {
-            throw new Error('Unauthorized: Invalid token')
-        }
+        if (userError || !user) throw new Error('Unauthorized: Invalid token')
 
-        // Check role in 'profissionais' table
         const { data: requesterProfile, error: profileError } = await supabaseAdmin
             .from('profissionais')
             .select('role')
@@ -51,24 +44,22 @@ serve(async (req) => {
             throw new Error('Unauthorized: Only admins can perform this action')
         }
 
-        // 3. Parse and Validate Body
-        const { email, password, name, area_id, role, ativo } = await req.json()
+        // 3. Parse Body (NO PASSWORD)
+        const { email, name, area_id, role, ativo } = await req.json()
 
-        if (!email || !password || !name) {
-            throw new Error('Missing required fields: email, password, name')
+        if (!email || !name) {
+            throw new Error('Missing required fields: email, name')
         }
 
-        // 4. Create User in Supabase Auth
-        // We use admin.createUser to skip email verification if needed (email_confirm: true)
+        // 4. Create User (Auth) - SEM SENHA, email_confirm: false
+        // Correcão C: email_confirm: false é intencional. O link de recovery validará o email.
         const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
             email,
-            password,
-            email_confirm: true,
+            email_confirm: false,
             user_metadata: { nome: name }
         })
 
         if (authError) {
-            // Return specific message for duplicates
             if (authError.message.includes('already been registered')) {
                 throw new Error('Este e-mail já está cadastrado no sistema.')
             }
@@ -77,30 +68,45 @@ serve(async (req) => {
 
         const userId = authData.user.id
 
-        // 5. Insert into 'profissionais' table
-        const { error: dbError } = await supabaseAdmin
-            .from('profissionais')
-            .insert({
-                id: userId,
-                nome: name,
-                email: email,
-                area_id: area_id || null, // Allow null if not assigned yet
-                role: role || 'profissional',
-                ativo: ativo !== undefined ? ativo : true,
-                created_at: new Date().toISOString()
+        // 5. Transaction Block (DB Insert + Email) - CORREÇÃO A: ROLLBACK TOTAL
+        try {
+            // A. Insert into 'profissionais'
+            const { error: dbError } = await supabaseAdmin
+                .from('profissionais')
+                .insert({
+                    id: userId,
+                    nome: name,
+                    email: email,
+                    area_id: area_id || null,
+                    role: role || 'profissional',
+                    ativo: ativo !== undefined ? ativo : true,
+                    created_at: new Date().toISOString()
+                })
+
+            if (dbError) throw new Error(`Database Error: ${dbError.message}`)
+
+            // B. Send Recovery Email (Simulating Invite)
+            // Usamos resetPasswordForEmail para o Supabase enviar o email (Beta/Default SMTP)
+            // Redireciona para /reset-password
+            const { error: emailError } = await supabaseAdmin.auth.resetPasswordForEmail(email, {
+                redirectTo: `${Deno.env.get('FRONTEND_URL') || 'http://localhost:5173'}/reset-password`
             })
 
-        if (dbError) {
-            // Compensating Transaction: Delete the Auth user if DB insert fails
-            // This prevents "Zombie Users" in Auth that don't satisfy the system's structural requirements
-            console.error('Database insert failed, rolling back Auth creation...', dbError)
+            if (emailError) throw new Error(`Email Error: ${emailError.message}`)
+
+        } catch (postCreateError) {
+            console.error('Rolling back user creation due to error:', postCreateError)
+            // ROLLBACK TOTAL: Deletes the auth user to prevent zombies
             await supabaseAdmin.auth.admin.deleteUser(userId)
-            throw new Error(`Database Error: ${dbError.message}`)
+            throw postCreateError
         }
 
-        // 6. Success Response
         return new Response(
-            JSON.stringify({ success: true, id: userId, message: 'Profissional cadastrado com sucesso' }),
+            JSON.stringify({
+                success: true,
+                id: userId,
+                message: 'Profissional convidado com sucesso! Email de definição de senha enviado.'
+            }),
             {
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
                 status: 200
@@ -113,7 +119,7 @@ serve(async (req) => {
             JSON.stringify({ error: error.message, success: false }),
             {
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-                status: 400 // Bad Request for business logic errors
+                status: 400
             }
         )
     }

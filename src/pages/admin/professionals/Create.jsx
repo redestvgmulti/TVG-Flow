@@ -14,7 +14,7 @@ export default function ProfessionalCreate() {
         setIsSubmitting(true)
         try {
             await professionalsService.create(formData)
-            toast.success('Profissional criado com sucesso!')
+            toast.success('Convite enviado com sucesso! O funcionário receberá um e-mail.')
             navigate('/admin/professionals')
         } catch (error) {
             console.error('Error creating professional:', error)
