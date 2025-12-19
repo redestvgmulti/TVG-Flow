@@ -65,5 +65,17 @@ export const professionalsService = {
         if (data?.error) throw new Error(data.error)
 
         return true
+    },
+
+    // Generate manual recovery link (via Edge Function)
+    async generateRecoveryLink(email) {
+        const { data, error } = await supabase.functions.invoke('generate-recovery-link', {
+            body: { email }
+        })
+
+        if (error) throw new Error(error.message || 'Erro de conexão com o servidor')
+        if (data?.error) throw new Error(data.error)
+
+        return data
     }
 }

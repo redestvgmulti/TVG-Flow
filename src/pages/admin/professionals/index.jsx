@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-    Users, UserPlus, Search, Mail, Shield, User, CheckCircle, XCircle, Edit
+    Users, UserPlus, Search, Mail, Shield, User, CheckCircle, XCircle, Edit, X, Copy
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { professionalsService } from '../../../services/professionals'
@@ -394,24 +394,24 @@ export default function ProfessionalsList() {
                         </div>
 
                         {/* Body */}
-                        <div className="modal-body p-6">
+                        <div className="modal-body p-4 sm:p-6">
                             {inviteLink ? (
                                 <div className="text-center space-y-6 animate-in fade-in zoom-in duration-300">
                                     <div className="inline-flex justify-center items-center w-20 h-20 rounded-full bg-green-50 mb-2 border border-green-100 shadow-sm">
                                         <UserPlus size={36} className="text-green-600" />
                                     </div>
 
-                                    <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-6 text-left w-full overflow-hidden">
+                                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-left w-full overflow-hidden">
                                         <p className="text-gray-600 mb-4 text-sm leading-relaxed">
                                             Como não há sistema de e-mail configurado, você precisa enviar este link manualmente para <strong className="text-gray-900">{createdName}</strong>.
                                         </p>
 
-                                        <div className="relative group">
-                                            <div className="bg-white p-4 rounded-lg border border-gray-200 font-mono text-xs text-gray-600 break-all shadow-inner select-all w-full leading-relaxed">
+                                        <div className="relative w-full group cursor-pointer" onClick={copyToClipboard} title="Clique para copiar">
+                                            <div className="bg-white p-3 pr-9 rounded-lg border border-gray-200 font-mono text-xs text-slate-500 break-all shadow-sm w-full leading-relaxed whitespace-normal hover:border-blue-400 transition-colors">
                                                 {inviteLink}
                                             </div>
-                                            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <span className="text-xs bg-gray-800 text-white px-2 py-1 rounded">Clique para selecionar</span>
+                                            <div className="absolute top-2.5 right-2.5 text-slate-400 group-hover:text-blue-500 transition-colors bg-white pl-1">
+                                                <Copy size={14} />
                                             </div>
                                         </div>
                                     </div>
@@ -420,7 +420,7 @@ export default function ProfessionalsList() {
                                         onClick={copyToClipboard}
                                         className="btn btn-primary w-full py-3 text-base flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 hover:-translate-y-0.5 transition-all"
                                     >
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2" /><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" /></svg>
+                                        <Copy size={18} />
                                         Copiar Link de Convite
                                     </button>
                                 </div>

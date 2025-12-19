@@ -1,8 +1,10 @@
 
 import { useState, useEffect } from 'react'
 import {
-    User, Mail, Lock, Shield, Building2, CheckCircle, AlertTriangle, Save, X
+    User, Mail, Lock, Shield, Building2, CheckCircle, AlertTriangle, Save, X, RefreshCw, Copy
 } from 'lucide-react'
+import { toast } from 'sonner'
+import { professionalsService } from '../../../services/professionals'
 import { supabase } from '../../../services/supabase'
 
 export default function ProfessionalForm({ initialData, onSubmit, onCancel, onDelete, isSubmitting, isEditMode = false, hideCancelButton = false }) {
@@ -16,6 +18,34 @@ export default function ProfessionalForm({ initialData, onSubmit, onCancel, onDe
     })
 
     const [areas, setAreas] = useState([])
+    const [recoveryLink, setRecoveryLink] = useState(null)
+    const [isGeneratingLink, setIsGeneratingLink] = useState(false)
+
+    const handleGenerateLink = async () => {
+        if (!formData.email) return
+
+        setIsGeneratingLink(true)
+        setRecoveryLink(null)
+        try {
+            const response = await professionalsService.generateRecoveryLink(formData.email)
+            if (response.recoveryLink) {
+                setRecoveryLink(response.recoveryLink)
+                toast.success("Link de redefinição gerado!")
+            }
+        } catch (error) {
+            console.error(error)
+            toast.error("Erro ao gerar link: " + error.message)
+        } finally {
+            setIsGeneratingLink(false)
+        }
+    }
+
+    const copyRecoveryLink = () => {
+        if (recoveryLink) {
+            navigator.clipboard.writeText(recoveryLink)
+            toast.success('Link copiado para a área de transferência')
+        }
+    }
 
     useEffect(() => {
         if (initialData) {
@@ -93,16 +123,83 @@ export default function ProfessionalForm({ initialData, onSubmit, onCancel, onDe
                 {isEditMode && <span className="text-sm text-muted">O e-mail não pode ser alterado.</span>}
             </div>
 
-            {/* Senha - Messsage */}
-            {!isEditMode && (
-                <div style={{ padding: '16px', backgroundColor: '#eff6ff', border: '1px solid #dbeafe', borderRadius: '8px', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-                    <Mail size={20} className="text-primary" style={{ marginTop: '4px' }} />
-                    <div>
-                        <p style={{ fontWeight: 600, color: '#1e3a8a', fontSize: '14px', marginBottom: '4px' }}>Convite por E-mail</p>
-                        <p style={{ fontSize: '13px', color: '#1d4ed8', margin: 0 }}>
-                            O funcionário receberá um e-mail com instruções para definir sua própria senha de acesso segura.
-                        </p>
-                    </div>
+            {/* Password Reset Link Generation - Edit Mode Only */}
+            {isEditMode && (
+                <div className="form-group">
+                    <label className="flex items-center gap-2">
+                        <Lock size={16} className="text-slate-400" />
+                        Redefinição de Senha
+                    </label>
+
+                    {!recoveryLink ? (
+                        <button
+                            type="button"
+                            onClick={handleGenerateLink}
+                            disabled={isGeneratingLink}
+                            className="input flex items-center justify-center gap-2 cursor-pointer hover:border-primary/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            style={{ paddingLeft: '40px' }}
+                        >
+                            <RefreshCw size={16} className={isGeneratingLink ? 'animate-spin text-primary' : 'text-slate-400'} />
+                            <span className="text-sm text-slate-600">
+                                {isGeneratingLink ? 'Gerando link de recuperação...' : 'Clique para gerar link de recuperação'}
+                            </span>
+                        </button>
+                    ) : (
+                        <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                            <div className="flex gap-2">
+                                <div className="relative flex-1">
+                                    <Lock size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                                    <input
+                                        type="text"
+                                        className="input"
+                                        style={{ paddingLeft: '40px' }}
+                                        value={recoveryLink}
+                                        readOnly
+                                        title="Link de recuperação"
+                                    />
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={copyRecoveryLink}
+                                    className="flex items-center gap-2 px-4 rounded-lg font-medium text-sm transition-all shadow-sm"
+                                    style={{
+                                        backgroundColor: '#3b82f6',
+                                        color: 'white',
+                                        border: 'none',
+                                        whiteSpace: 'nowrap'
+                                    }}
+                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#2563eb'}
+                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#3b82f6'}
+                                >
+                                    <Copy size={16} />
+                                    Copiar
+                                </button>
+                            </div>
+                            <div className="flex items-center justify-between mt-2">
+                                <span className="text-xs text-green-600 flex items-center gap-2">
+                                    <CheckCircle size={12} />
+                                    Link gerado com sucesso
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={handleGenerateLink}
+                                    className="text-[11px] font-medium rounded-md transition-all"
+                                    style={{
+                                        padding: '4px 12px',
+                                        backgroundColor: '#16a34a',
+                                        color: 'white',
+                                        border: 'none',
+                                        boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
+                                        cursor: 'pointer'
+                                    }}
+                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#15803d'}
+                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#16a34a'}
+                                >
+                                    Gerar novo
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
 
