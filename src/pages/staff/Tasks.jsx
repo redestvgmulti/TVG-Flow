@@ -280,8 +280,19 @@ export default function StaffTasks() {
                         return (
                             <div
                                 key={task.id}
-                                onClick={() => openTaskModal(task)} // Open modal on click
-                                className="task-item card hover:border-brand-light/50 transition-colors group bg-white !no-underline hover:!no-underline cursor-pointer"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    openTaskModal(task);
+                                }}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault();
+                                        openTaskModal(task);
+                                    }
+                                }}
+                                role="button"
+                                tabIndex={0}
+                                className="task-item card relative z-0 hover:border-brand-light/50 transition-all duration-200 group bg-white !no-underline hover:!no-underline cursor-pointer active:scale-[0.99]"
                             >
                                 <div className="task-item-content">
                                     <div className="flex flex-wrap items-center gap-2 mb-1">
@@ -373,6 +384,7 @@ export default function StaffTasks() {
                     <div
                         className="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity"
                         onClick={() => setSelectedTask(null)}
+                    /* Force HMR */
                     />
 
                     <div className="relative bg-white w-full h-full md:h-auto md:max-h-[85vh] md:max-w-3xl md:rounded-2xl shadow-2xl flex flex-col overflow-hidden animation-slide-up md:animation-scale-in font-sans">
