@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { supabase } from '../services/supabase'
 import {
     LayoutGrid,
     CheckSquare,
@@ -18,6 +19,44 @@ function Sidebar() {
     const { user, role, professionalName, signOut } = useAuth()
     const [adminPanelOpen, setAdminPanelOpen] = useState(true)
     const [profileOpen, setProfileOpen] = useState(false)
+    const [incompleteTaskCount, setIncompleteTaskCount] = useState(0)
+
+    // Fetch incomplete task count for staff
+    useEffect(() => {
+        if (role === 'profissional') {
+            fetchIncompleteTaskCount()
+
+            // Subscribe to real-time updates
+            const subscription = supabase
+                .channel('task_changes')
+                .on('postgres_changes', {
+                    event: '*',
+                    schema: 'public',
+                    table: 'tarefas'
+                }, () => {
+                    fetchIncompleteTaskCount()
+                })
+                .subscribe()
+
+            return () => {
+                subscription.unsubscribe()
+            }
+        }
+    }, [role])
+
+    async function fetchIncompleteTaskCount() {
+        try {
+            const { count, error } = await supabase
+                .from('tarefas')
+                .select('*', { count: 'exact', head: true })
+                .neq('status', 'completed')
+
+            if (error) throw error
+            setIncompleteTaskCount(count || 0)
+        } catch (error) {
+            console.error('Error fetching task count:', error)
+        }
+    }
 
     // Helper to get initials
     const getInitials = (name) => {
@@ -104,6 +143,24 @@ function Sidebar() {
                         <NavLink to="/staff/tasks" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
                             <CheckSquare size={20} className="nav-icon" />
                             <span className="nav-text">Minhas Tarefas</span>
+                            {incompleteTaskCount > 0 && (
+                                <span
+                                    className="ml-auto flex items-center justify-center"
+                                    style={{
+                                        minWidth: '20px',
+                                        height: '20px',
+                                        padding: '0 6px',
+                                        borderRadius: '10px',
+                                        background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                                        color: '#ffffff',
+                                        fontSize: '11px',
+                                        fontWeight: '700',
+                                        boxShadow: '0 2px 4px rgba(239, 68, 68, 0.3)'
+                                    }}
+                                >
+                                    {incompleteTaskCount}
+                                </span>
+                            )}
                         </NavLink>
                     </div>
                 )}
