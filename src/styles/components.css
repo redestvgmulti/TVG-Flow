@@ -688,20 +688,40 @@ textarea:focus {
  */
 .empty-state {
     text-align: center;
-    padding: var(--space-2xl);
+    padding: 48px 24px;
     color: var(--color-text-secondary);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-lg);
+    border: 2px dashed var(--color-border);
+    background-color: rgba(255, 255, 255, 0.5);
+    margin: var(--space-4) 0;
 }
 
 .empty-icon {
-    font-size: var(--text-2xl);
-    margin-bottom: var(--space-sm);
-    display: block;
+    font-size: 32px;
+    margin-bottom: var(--space-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background-color: var(--color-bg-subtle);
+    color: var(--color-text-tertiary);
+    box-shadow: var(--shadow-sm);
 }
 
 .empty-text {
     font-size: var(--text-base);
-    margin-bottom: var(--space-lg);
-    line-height: 1.6;
+    font-weight: 500;
+    margin-bottom: var(--space-md);
+    line-height: 1.5;
+    max-width: 320px;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 /* 
