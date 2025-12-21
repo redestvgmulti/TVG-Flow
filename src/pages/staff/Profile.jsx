@@ -21,14 +21,15 @@ function StaffProfile() {
                 <p className="text-secondary">Suas informações de acesso.</p>
             </div>
 
-            <div className="max-w-2xl mx-auto">
-                <div className="card p-8 text-center mb-6">
-                    <div className="w-24 h-24 bg-brand-light text-brand rounded-full flex items-center justify-center text-3xl font-bold mx-auto mb-4 border-4 border-white shadow-lg">
+            <div className="w-full max-w-2xl mx-auto">
+                <div className="card p-8 flex flex-col items-center justify-center text-center mb-6 relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-full h-24 bg-gradient-to-b from-brand-light/30 to-transparent"></div>
+                    <div className="relative z-10 w-24 h-24 bg-white text-brand rounded-full flex items-center justify-center text-3xl font-bold mb-4 border-4 border-brand-light/20 shadow-xl">
                         {getInitials(professionalName)}
                     </div>
-                    <h2 className="text-2xl font-bold text-primary mb-1">{professionalName}</h2>
-                    <p className="text-secondary flex items-center justify-center gap-2">
-                        <span className="badge badge-primary uppercase text-xs tracking-wider px-2 py-0.5">
+                    <h2 className="relative z-10 text-2xl font-bold text-primary mb-1">{professionalName}</h2>
+                    <p className="relative z-10 text-secondary flex items-center justify-center gap-2">
+                        <span className="badge badge-primary uppercase text-[10px] tracking-wider px-2 py-1 font-semibold">
                             {role === 'profissional' ? 'Colaborador' : role}
                         </span>
                     </p>

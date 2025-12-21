@@ -94,8 +94,8 @@ export default function StaffTasks() {
 
             {/* Controls Bar */}
             <div className="card p-4 mb-6 sticky top-4 z-10 backdrop-blur-md bg-white/80 border-gray-100 shadow-sm">
-                <div className="flex flex-col md:flex-row gap-4 justify-between">
-                    <div className="relative flex-1">
+                <div className="flex flex-col gap-4">
+                    <div className="relative w-full">
                         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-tertiary" size={18} />
                         <input
                             type="text"
@@ -106,13 +106,13 @@ export default function StaffTasks() {
                         />
                     </div>
 
-                    <div className="flex gap-2 overflow-x-auto pb-1 md:pb-0">
+                    <div className="grid grid-cols-2 gap-3">
                         <select
-                            className="input w-auto min-w-[140px]"
+                            className="input w-full text-sm"
                             value={statusFilter}
                             onChange={(e) => setStatusFilter(e.target.value)}
                         >
-                            <option value="all">Todos Status</option>
+                            <option value="all">Status</option>
                             <option value="active">Em Aberto</option>
                             <option value="pending">Pendente</option>
                             <option value="in_progress">Em Andamento</option>
@@ -120,11 +120,11 @@ export default function StaffTasks() {
                         </select>
 
                         <select
-                            className="input w-auto min-w-[140px]"
+                            className="input w-full text-sm"
                             value={priorityFilter}
                             onChange={(e) => setPriorityFilter(e.target.value)}
                         >
-                            <option value="all">Todas Prioridades</option>
+                            <option value="all">Prioridade</option>
                             <option value="urgent">Urgente</option>
                             <option value="high">Alta</option>
                             <option value="medium">Média</option>
