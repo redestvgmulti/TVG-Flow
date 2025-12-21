@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import {
@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 
 function StaffDashboard() {
+    const navigate = useNavigate()
     const { professionalName, professionalId } = useAuth()
     const [stats, setStats] = useState({
         pending: 0,
@@ -156,9 +157,9 @@ function StaffDashboard() {
                         <ListTodo size={18} />
                         Próximas Tarefas
                     </h3>
-                    <Link to="/staff/tasks" className="btn btn-ghost btn-sm text-brand text-xs font-semibold !no-underline hover:!no-underline" style={{ textDecoration: 'none' }}>
+                    <button onClick={() => navigate('/staff/tasks')} className="btn btn-ghost btn-sm text-brand text-xs font-semibold !no-underline hover:!no-underline" style={{ textDecoration: 'none' }}>
                         Ver todas
-                    </Link>
+                    </button>
                 </div>
 
                 {recentTasks.length === 0 ? (
@@ -172,8 +173,8 @@ function StaffDashboard() {
                             const isOverdue = task.deadline && new Date(task.deadline) < new Date()
 
                             return (
-                                <Link
-                                    to={`/staff/tasks/${task.id}`}
+                                <div
+                                    onClick={() => navigate(`/staff/tasks/${task.id}`)}
                                     key={task.id}
                                     style={{ textDecoration: 'none' }}
                                     className="task-item card hover:border-brand-light/50 transition-colors group bg-white !no-underline hover:!no-underline cursor-pointer"
@@ -222,7 +223,7 @@ function StaffDashboard() {
                                             <ArrowRight size={16} />
                                         </div>
                                     </div>
-                                </Link>
+                                </div>
                             )
                         })}
                     </div>

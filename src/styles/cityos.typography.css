@@ -1,0 +1,180 @@
+/* ===================================================================
+   CITYOS TYPOGRAPHY SYSTEM
+   Centralized typography for staff task modal and future components
+   =================================================================== */
+
+/* ===== MODAL/PAGE TITLES ===== */
+.modal-title {
+    font-size: 24px;
+    font-weight: 600;
+    line-height: 1.3;
+    color: #111827;
+    /* gray-900 */
+    letter-spacing: -0.02em;
+    margin-top: 0;
+    margin-bottom: 20px;
+}
+
+/* ===== SUBHEADLINES (metadata rows) ===== */
+.modal-subheadline {
+    font-size: 14px;
+    font-weight: 400;
+    color: #6B7280;
+    /* gray-500 */
+    margin-top: 4px;
+}
+
+/* ===== SECTION TITLES (DESCRIÇÃO, ATIVIDADE, etc) ===== */
+.section-title {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #6B7280;
+    /* gray-500 */
+    margin-top: 0;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* ===== CONTENT TEXT ===== */
+.content-text {
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.6;
+    color: #374151;
+    /* gray-700 */
+}
+
+.content-text-strong {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.6;
+    color: #111827;
+    /* gray-900 */
+}
+
+/* ===== LABELS / METADATA ===== */
+.label-text {
+    font-size: 10px;
+    font-weight: 700;
+    color: #6B7280;
+    /* gray-500 */
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    line-height: 1;
+    margin-bottom: 4px;
+}
+
+.label-value {
+    font-size: 14px;
+    font-weight: 600;
+    color: #111827;
+    /* gray-900 */
+    line-height: 1.4;
+}
+
+.label-value-secondary {
+    font-size: 14px;
+    font-weight: 500;
+    color: #6B7280;
+    /* gray-500 */
+}
+
+/* ===== PRIORITY BADGE ===== */
+.priority-badge {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 6px 14px;
+    border-radius: 9999px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border-width: 1px;
+    border-style: solid;
+}
+
+.priority-badge-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background-color: currentColor;
+}
+
+/* ===== STATUS LABELS ===== */
+.status-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: #6B7280;
+    /* gray-500 */
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+/* ===== VERTICAL RHYTHM ===== */
+.section-spacing {
+    margin-top: 24px;
+}
+
+.block-spacing {
+    margin-top: 32px;
+}
+
+.content-spacing {
+    margin-top: 8px;
+}
+
+/* ===== EMPTY STATES ===== */
+.empty-state-text {
+    font-size: 14px;
+    font-weight: 400;
+    color: #9CA3AF;
+    /* gray-400 */
+    font-style: italic;
+}
+
+/* ===== ACTIVITY TIMELINE ===== */
+.activity-author {
+    font-size: 12px;
+    font-weight: 600;
+    color: #111827;
+    /* gray-900 */
+}
+
+.activity-author-system {
+    font-size: 12px;
+    font-weight: 500;
+    color: #6B7280;
+    /* gray-500 */
+    font-style: italic;
+}
+
+.activity-timestamp {
+    font-size: 9px;
+    font-weight: 600;
+    color: #9CA3AF;
+    /* gray-400 */
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.activity-content {
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.5;
+    color: #374151;
+    /* gray-700 */
+}
+
+.activity-content-system {
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.5;
+    color: #9CA3AF;
+    /* gray-400 */
+    font-style: italic;
+}

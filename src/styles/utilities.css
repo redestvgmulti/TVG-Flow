@@ -388,3 +388,16 @@
 .grid-cols-3 {
     grid-template-columns: repeat(3, 1fr);
 }
+
+/* --- SCROLLBAR --- */
+.scrollbar-hide {
+    /* Hide scrollbar for Chrome, Safari and Opera */
+    -ms-overflow-style: none;
+    /* IE and Edge */
+    scrollbar-width: none;
+    /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}

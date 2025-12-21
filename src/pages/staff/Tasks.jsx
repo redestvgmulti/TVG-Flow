@@ -377,30 +377,39 @@ export default function StaffTasks() {
 
             {/* Task Detail Modal - Teleported to Body */}
             {selectedTask && createPortal(
-                <div
-                    className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-6 animation-fade-in"
-                    style={{ zIndex: 9999 }}
-                >
+                <div className="modal-backdrop" onClick={() => setSelectedTask(null)}>
                     <div
-                        className="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity"
-                        onClick={() => setSelectedTask(null)}
-                    /* Force HMR */
-                    />
-
-                    <div className="relative bg-white w-full h-full md:h-auto md:max-h-[85vh] md:max-w-3xl md:rounded-2xl shadow-2xl flex flex-col overflow-hidden animation-slide-up md:animation-scale-in font-sans">
+                        className="modal"
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            maxWidth: '48rem',
+                            maxHeight: '90vh',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            overflow: 'hidden'
+                        }}
+                    >
                         {/* Glass Header */}
                         <div
-                            className="px-6 py-5 border-b border-gray-100 flex items-start justify-between z-10 shrink-0 sticky top-0"
+                            className="border-b flex items-start justify-between z-10 shrink-0 sticky top-0"
                             style={{
-                                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                                backgroundColor: 'rgba(255, 255, 255, 0.8)',
                                 backdropFilter: 'blur(20px)',
-                                WebkitBackdropFilter: 'blur(20px)'
+                                WebkitBackdropFilter: 'blur(20px)',
+                                borderBottom: '1px solid rgba(0, 0, 0, 0.06)',
+                                paddingLeft: '32px',
+                                paddingRight: '32px',
+                                paddingTop: '24px',
+                                paddingBottom: '24px'
                             }}
                         >
-                            <div className="flex-1 min-w-0 mr-6">
-                                <div className="flex flex-wrap items-center gap-2 mb-2">
+                            <div className="flex-1 min-w-0" style={{ marginRight: '16px' }}>
+                                <div className="flex items-center gap-3 mb-3">
+                                    <h2 className="modal-title flex-1 min-w-0 truncate m-0">
+                                        {selectedTask.titulo}
+                                    </h2>
                                     <span
-                                        className="rounded-full font-bold border flex items-center gap-1.5"
+                                        className="priority-badge flex-shrink-0"
                                         style={{
                                             backgroundColor: selectedTask.priority === 'urgent' ? '#FEF2F2' :
                                                 selectedTask.priority === 'high' ? '#FFF7ED' :
@@ -410,104 +419,72 @@ export default function StaffTasks() {
                                                     selectedTask.priority === 'medium' ? '#CA8A04' : '#6B7280',
                                             borderColor: selectedTask.priority === 'urgent' ? '#FECACA' :
                                                 selectedTask.priority === 'high' ? '#FED7AA' :
-                                                    selectedTask.priority === 'medium' ? '#FEF08A' : '#E5E7EB',
-                                            fontSize: '11px',
-                                            padding: '4px 10px',
-                                            textTransform: 'uppercase',
-                                            letterSpacing: '0.05em'
+                                                    selectedTask.priority === 'medium' ? '#FEF08A' : '#E5E7EB'
                                         }}
                                     >
-                                        <div style={{
-                                            width: '6px', height: '6px', borderRadius: '50%',
-                                            backgroundColor: 'currentColor'
-                                        }}></div>
+                                        <div className="priority-badge-dot" style={{ boxShadow: '0 0 8px currentColor' }}></div>
                                         {selectedTask.priority === 'urgent' ? 'Urgente' :
                                             selectedTask.priority === 'high' ? 'Alta' :
                                                 selectedTask.priority === 'medium' ? 'Média' : 'Baixa'}
                                     </span>
                                 </div>
-                                <h2 className="text-2xl md:text-3xl font-bold text-gray-900 leading-tight mb-3 tracking-tight">
-                                    {selectedTask.titulo}
-                                </h2>
 
-                                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-gray-500">
+                                <div className="flex items-start gap-8 text-sm text-gray-500 mt-4">
                                     {selectedTask.deadline && (
-                                        <div className="flex items-center gap-2">
-                                            <div className="p-1.5 rounded-md bg-gray-50 text-gray-400">
-                                                <Calendar size={14} />
-                                            </div>
-                                            <div className="flex flex-col">
-                                                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 leading-none mb-0.5">Prazo Final</span>
-                                                <span className="font-medium text-gray-700">
-                                                    {new Date(selectedTask.deadline).toLocaleDateString('pt-BR')}
-                                                    <span className="text-gray-400 ml-1 font-normal">
-                                                        {new Date(selectedTask.deadline).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                                                    </span>
+                                        <div className="flex flex-col flex-1">
+                                            <span className="label-text">Prazo Final</span>
+                                            <span className="label-value">
+                                                {new Date(selectedTask.deadline).toLocaleDateString('pt-BR')}
+                                                {' '}
+                                                <span className="label-value-secondary">
+                                                    {new Date(selectedTask.deadline).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                                                 </span>
-                                            </div>
-                                        </div>
-                                    )}
-                                    <div className="flex items-center gap-2">
-                                        <div className="p-1.5 rounded-md bg-gray-50 text-gray-400">
-                                            <Clock size={14} />
-                                        </div>
-                                        <div className="flex flex-col">
-                                            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 leading-none mb-0.5">Criada em</span>
-                                            <span className="font-medium text-gray-700">
-                                                {new Date(selectedTask.created_at).toLocaleDateString('pt-BR')}
                                             </span>
                                         </div>
+                                    )}
+                                    <div className="flex flex-col flex-1">
+                                        <span className="label-text">Criada em</span>
+                                        <span className="label-value">
+                                            {new Date(selectedTask.created_at).toLocaleDateString('pt-BR')}
+                                        </span>
                                     </div>
                                 </div>
                             </div>
 
-                            <button
-                                onClick={() => setSelectedTask(null)}
-                                className="group relative p-2 rounded-full hover:bg-gray-100 transition-all duration-200 border border-transparent hover:border-gray-200"
-                                aria-label="Fechar"
-                            >
-                                <div className="absolute inset-0 rounded-full bg-gray-500/0 group-hover:bg-gray-500/5 transition-colors" />
-                                <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    width="24"
-                                    height="24"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="2"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    className="text-gray-400 group-hover:text-gray-800 transition-colors"
-                                >
-                                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                                </svg>
-                            </button>
+
+                            <button className="modal-close" onClick={() => setSelectedTask(null)}>×</button>
                         </div>
 
                         {/* Body - Scrollable */}
-                        <div className="flex-1 overflow-y-auto p-0 scrollbar-hide">
-                            <div className="flex flex-col md:flex-row h-full">
+                        <div
+                            className="flex-1 scrollbar-hide"
+                            style={{
+                                overflowY: 'auto',
+                                maxHeight: 'calc(90vh - 120px)',
+                                padding: '24px 32px'
+                            }}
+                        >
+                            <div className="flex flex-col md:flex-row gap-6">
                                 {/* Left: Content & Status */}
-                                <div className="flex-1 p-6 md:p-8 space-y-8">
+                                <div className="flex-1">
                                     {/* Status Box */}
-                                    <div className="bg-subtle p-6 rounded-xl border border-gray-100 flex flex-col items-center gap-4 text-center">
-                                        <span className="text-xs font-bold text-tertiary uppercase tracking-wider">Status Atual</span>
+                                    <div className="bg-white p-8 rounded-xl border border-gray-200 flex flex-col items-center gap-6 text-center shadow-sm">
+                                        <div className="w-full">
+                                            <span className="status-label block mb-4">Status Atual</span>
 
-                                        <div className="relative w-full max-w-xs">
-                                            <select
-                                                value={selectedTask.status}
-                                                onChange={(e) => handleStatusChange(selectedTask.id, e.target.value)}
-                                                disabled={updating}
-                                                className={`input w-full h-12 text-center font-medium appearance-none cursor-pointer ${selectedTask.status === 'completed' ? 'text-success border-success bg-success/5' : 'text-primary'
-                                                    }`}
-                                            >
-                                                <option value="pending">Pendente</option>
-                                                <option value="in_progress">Em andamento</option>
-                                                <option value="completed">Concluída</option>
-                                            </select>
-                                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-tertiary">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                            <div className="relative w-full max-w-xs mx-auto">
+                                                <select
+                                                    value={selectedTask.status}
+                                                    onChange={(e) => handleStatusChange(selectedTask.id, e.target.value)}
+                                                    disabled={updating}
+                                                    className={`input w-full h-12 text-center font-medium appearance-none cursor-pointer ${selectedTask.status === 'completed' ? 'text-success border-success bg-success/5' : 'text-primary'
+                                                        }`}
+                                                >
+                                                    <option value="pending">Pendente</option>
+                                                    <option value="in_progress">Em andamento</option>
+                                                    <option value="completed">Concluída</option>
+                                                </select>
+
                                             </div>
                                         </div>
 
@@ -515,7 +492,23 @@ export default function StaffTasks() {
                                             <button
                                                 onClick={() => handleStatusChange(selectedTask.id, 'completed')}
                                                 disabled={updating}
-                                                className="btn btn-black w-full max-w-xs flex items-center justify-center gap-2 py-3 shadow-lg hover:shadow-xl transition-all"
+                                                className="btn w-full max-w-xs flex items-center justify-center gap-2"
+                                                style={{
+                                                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                                                    color: '#ffffff',
+                                                    boxShadow: '0 2px 4px rgba(16, 185, 129, 0.2)',
+                                                    border: 'none'
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                    if (!updating) {
+                                                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.3)';
+                                                        e.currentTarget.style.transform = 'translateY(-1px)';
+                                                    }
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    e.currentTarget.style.boxShadow = '0 2px 4px rgba(16, 185, 129, 0.2)';
+                                                    e.currentTarget.style.transform = 'translateY(0)';
+                                                }}
                                             >
                                                 <CheckCircle2 size={18} />
                                                 Concluir Tarefa
@@ -524,23 +517,22 @@ export default function StaffTasks() {
                                     </div>
 
                                     {/* Description */}
-                                    <div>
-                                        <h3 className="text-sm font-bold text-primary uppercase tracking-wider mb-3 flex items-center gap-2 text-tertiary">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><line x1="10" y1="9" x2="8" y2="9"></line></svg>
+                                    <div className="mt-8">
+                                        <h3 className="section-title">
                                             Descrição
                                         </h3>
-                                        <div className="min-h-[100px] p-4 rounded-lg border border-gray-100/50">
+                                        <div className="min-h-[100px] p-4 rounded-lg border border-gray-100/50 bg-white">
                                             {selectedTask.descricao ? (
-                                                <p className="text-secondary whitespace-pre-wrap leading-relaxed">{selectedTask.descricao}</p>
+                                                <p className="content-text whitespace-pre-wrap">{selectedTask.descricao}</p>
                                             ) : (
-                                                <p className="italic text-tertiary">Sem descrição fornecida.</p>
+                                                <p className="empty-state-text">Sem descrição fornecida.</p>
                                             )}
                                         </div>
                                     </div>
 
                                     {/* Link */}
                                     {selectedTask.drive_link && (
-                                        <div>
+                                        <div className="mt-6">
                                             <a
                                                 href={selectedTask.drive_link}
                                                 target="_blank"
@@ -561,37 +553,44 @@ export default function StaffTasks() {
 
                                 {/* Right: Activity (Gray Background) */}
                                 <div className="w-full md:w-[320px] bg-subtle/50 border-l border-gray-100 flex flex-col">
-                                    <div className="p-4 border-b border-gray-100 bg-subtle/30">
-                                        <h3 className="text-xs font-bold text-tertiary uppercase tracking-wider flex items-center gap-2">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                                    <div className="p-6">
+                                        <h3 className="section-title">
                                             Atividade
                                         </h3>
                                     </div>
 
-                                    <div className="flex-1 overflow-y-auto p-4 space-y-4 max-h-[400px] md:max-h-none">
+                                    <div
+                                        className="flex-1 overflow-y-auto space-y-3 max-h-[400px] md:max-h-none"
+                                        style={{ paddingLeft: '24px', paddingRight: '24px', paddingTop: '16px', paddingBottom: '16px' }}
+                                    >
                                         {loadingTimeline ? (
                                             <div className="flex justify-center py-4"><div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div></div>
                                         ) : timeline.length === 0 ? (
-                                            <div className="text-center py-8 text-tertiary text-xs">Nenhuma atividade recente.</div>
+                                            <div className="empty-state-text text-center py-8">Nenhuma atividade recente.</div>
                                         ) : (
                                             timeline.map((item) => (
-                                                <div key={item.id} className="flex gap-2.5 text-sm animate-fade-in text-left">
-                                                    <div className="flex-1">
-                                                        <div className="flex items-center justify-between mb-1">
-                                                            <span className={`text-xs font-medium ${item.type === 'comment' ? 'text-primary' : 'text-secondary italic'}`}>
-                                                                {item.type === 'comment' ? (item.profissionais?.nome || 'Você') : 'Sistema'}
-                                                            </span>
-                                                            <span className="text-[9px] text-tertiary uppercase">
-                                                                {new Date(item.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
-                                                            </span>
-                                                        </div>
-                                                        <div className={`p-2.5 rounded-lg text-xs leading-relaxed ${item.type === 'comment'
-                                                            ? 'bg-white shadow-sm border border-gray-100 text-secondary'
-                                                            : 'text-tertiary italic border-l-2 border-gray-200 pl-2'
-                                                            }`}>
-                                                            {item.type === 'comment' ? item.content : item.event}
-                                                        </div>
+                                                <div
+                                                    key={item.id}
+                                                    className="pb-4 border-b border-gray-100 last:border-0 last:pb-0"
+                                                    style={item.type === 'comment' ? {
+                                                        backgroundColor: '#f9fafb',
+                                                        padding: '12px',
+                                                        borderRadius: '8px',
+                                                        marginLeft: '-12px',
+                                                        marginRight: '-12px'
+                                                    } : {}}
+                                                >
+                                                    <div className="flex items-start justify-between mb-2">
+                                                        <span className="text-sm font-medium text-gray-900">
+                                                            {item.type === 'comment' ? (item.profissionais?.nome || 'Você') : 'Sistema'}
+                                                        </span>
+                                                        <span className="text-xs text-gray-400">
+                                                            {new Date(item.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                                                        </span>
                                                     </div>
+                                                    <p className={`text-sm ${item.type === 'comment' ? 'text-gray-700' : 'text-gray-500 italic'}`}>
+                                                        {item.type === 'comment' ? item.content : item.event}
+                                                    </p>
                                                 </div>
                                             ))
                                         )}

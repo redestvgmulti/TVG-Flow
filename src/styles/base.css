@@ -4,6 +4,7 @@
    Note: In a real prod environment, self-hosting is better for performance. */
 @import url('https://api.fontshare.com/v2/css?f[]=satoshi@900,700,500,400&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+@import './cityos.typography.css';
 
 /* Modern Reset */
 *,
@@ -86,6 +87,7 @@ p {
 
 .text-gradient {
     background: linear-gradient(135deg, var(--color-primary) 0%, #60A5FA 100%);
+    background-clip: text;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
 }
