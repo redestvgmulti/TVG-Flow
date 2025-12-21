@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 
 function Sidebar() {
-    const { user, professionalName, signOut } = useAuth()
+    const { user, role, professionalName, signOut } = useAuth()
     const [adminPanelOpen, setAdminPanelOpen] = useState(true)
     const [profileOpen, setProfileOpen] = useState(false)
 
@@ -37,7 +37,7 @@ function Sidebar() {
             {/* Navigation */}
             <nav className="sidebar-nav">
                 {/* ADMIN MENU */}
-                {user?.role === 'admin' && (
+                {role === 'admin' && (
                     <>
                         <div className="nav-section">
                             <p className="nav-label">MENU PRINCIPAL</p>
@@ -93,7 +93,7 @@ function Sidebar() {
                 )}
 
                 {/* STAFF MENU */}
-                {user?.role === 'profissional' && (
+                {role === 'profissional' && (
                     <div className="nav-section">
                         <p className="nav-label">MEU ESPAÇO</p>
                         <NavLink to="/staff/dashboard" end className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>

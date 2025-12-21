@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../services/supabase'
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { Clock, User, AlertCircle, CheckCircle, ExternalLink, Calendar } from 'lucide-react'
+import { Clock, User, AlertCircle, CheckCircle, ExternalLink, Calendar, Activity, ListTodo } from 'lucide-react'
 
 function Painel() {
     const [stats, setStats] = useState({
@@ -404,7 +404,10 @@ function Painel() {
 
                 <div className="card">
                     <div className="card-header">
-                        <h3 className="card-title">Status Atual</h3>
+                        <h3 className="card-title flex items-center gap-2">
+                            <Activity size={18} />
+                            Status Atual
+                        </h3>
                     </div>
                     {tasksByStatus.length > 0 ? (
                         <ResponsiveContainer width="100%" height={250}>
@@ -449,7 +452,10 @@ function Painel() {
             {/* Recent Tasks */}
             <div className="card">
                 <div className="card-header">
-                    <h3 className="card-title">Tarefas Recentes</h3>
+                    <h3 className="card-title flex items-center gap-2">
+                        <ListTodo size={18} />
+                        Tarefas Recentes
+                    </h3>
                     <button onClick={() => setShowCreateModal(true)} className="btn btn-primary">
                         + Nova Tarefa
                     </button>
