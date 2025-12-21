@@ -36,56 +36,77 @@ function Sidebar() {
 
             {/* Navigation */}
             <nav className="sidebar-nav">
-                <div className="nav-section">
-                    <p className="nav-label">MENU PRINCIPAL</p>
-                    <NavLink to="/admin" end className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-                        <LayoutGrid size={20} className="nav-icon" />
-                        <span className="nav-text">Dashboard</span>
-                    </NavLink>
+                {/* ADMIN MENU */}
+                {user?.role === 'admin' && (
+                    <>
+                        <div className="nav-section">
+                            <p className="nav-label">MENU PRINCIPAL</p>
+                            <NavLink to="/admin" end className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+                                <LayoutGrid size={20} className="nav-icon" />
+                                <span className="nav-text">Dashboard</span>
+                            </NavLink>
 
-                    <NavLink to="/admin/tasks" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-                        <CheckSquare size={20} className="nav-icon" />
-                        <span className="nav-text">Tarefas</span>
-                    </NavLink>
+                            <NavLink to="/admin/tasks" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+                                <CheckSquare size={20} className="nav-icon" />
+                                <span className="nav-text">Tarefas</span>
+                            </NavLink>
 
-                    <NavLink to="/admin/calendar" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
-                        <Calendar size={20} className="nav-icon" />
-                        <span className="nav-text">Calendário</span>
-                    </NavLink>
-                </div>
+                            <NavLink to="/admin/calendar" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+                                <Calendar size={20} className="nav-icon" />
+                                <span className="nav-text">Calendário</span>
+                            </NavLink>
+                        </div>
 
-                <div className="nav-section">
-                    <p className="nav-label">GERENCIAMENTO</p>
+                        <div className="nav-section">
+                            <p className="nav-label">GERENCIAMENTO</p>
 
-                    {/* Admin Panel Group */}
-                    <div className={`nav-group ${adminPanelOpen ? 'open' : ''}`}>
-                        <button
-                            className="nav-group-trigger"
-                            onClick={() => setAdminPanelOpen(!adminPanelOpen)}
-                        >
-                            <Settings size={20} className="nav-icon" />
-                            <span className="nav-text">Administração</span>
-                            <ChevronRight size={16} className="nav-arrow" />
-                        </button>
+                            {/* Admin Panel Group */}
+                            <div className={`nav-group ${adminPanelOpen ? 'open' : ''}`}>
+                                <button
+                                    className="nav-group-trigger"
+                                    onClick={() => setAdminPanelOpen(!adminPanelOpen)}
+                                >
+                                    <Settings size={20} className="nav-icon" />
+                                    <span className="nav-text">Administração</span>
+                                    <ChevronRight size={16} className="nav-arrow" />
+                                </button>
 
-                        {adminPanelOpen && (
-                            <div className="nav-sub">
-                                <NavLink to="/admin/areas" className="nav-sub-item">
-                                    <Map size={16} />
-                                    <span>Setores</span>
-                                </NavLink>
-                                <NavLink to="/admin/professionals" className="nav-sub-item">
-                                    <Users size={16} />
-                                    <span>Funcionários</span>
-                                </NavLink>
-                                <NavLink to="/admin/reports" className="nav-sub-item">
-                                    <BarChart size={16} />
-                                    <span>Relatórios</span>
-                                </NavLink>
+                                {adminPanelOpen && (
+                                    <div className="nav-sub">
+                                        <NavLink to="/admin/areas" className="nav-sub-item">
+                                            <Map size={16} />
+                                            <span>Setores</span>
+                                        </NavLink>
+                                        <NavLink to="/admin/professionals" className="nav-sub-item">
+                                            <Users size={16} />
+                                            <span>Funcionários</span>
+                                        </NavLink>
+                                        <NavLink to="/admin/reports" className="nav-sub-item">
+                                            <BarChart size={16} />
+                                            <span>Relatórios</span>
+                                        </NavLink>
+                                    </div>
+                                )}
                             </div>
-                        )}
+                        </div>
+                    </>
+                )}
+
+                {/* STAFF MENU */}
+                {user?.role === 'profissional' && (
+                    <div className="nav-section">
+                        <p className="nav-label">MEU ESPAÇO</p>
+                        <NavLink to="/staff/dashboard" end className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+                            <LayoutGrid size={20} className="nav-icon" />
+                            <span className="nav-text">Dashboard</span>
+                        </NavLink>
+
+                        <NavLink to="/staff/tasks" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+                            <CheckSquare size={20} className="nav-icon" />
+                            <span className="nav-text">Minhas Tarefas</span>
+                        </NavLink>
                     </div>
-                </div>
+                )}
             </nav>
 
             {/* User Profile Footer */}

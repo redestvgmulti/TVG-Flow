@@ -1,377 +1,229 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import {
-    CheckCircle2,
     Clock,
-    AlertCircle,
+    CheckCircle2,
     Calendar,
-    FileText,
-    ExternalLink,
-    Search
+    ArrowRight,
+    TrendingUp,
+    AlertTriangle
 } from 'lucide-react'
 
 function StaffDashboard() {
-    const { professionalId, professionalName } = useAuth()
+    const { professionalName, professionalId } = useAuth()
     const [stats, setStats] = useState({
-        totalAssigned: 0,
         pending: 0,
-        completed: 0
+        completed: 0,
+        overdue: 0,
+        completionRate: 0
     })
-    const [myTasks, setMyTasks] = useState([])
-    const [originalTasks, setOriginalTasks] = useState([])
+    const [recentTasks, setRecentTasks] = useState([])
     const [loading, setLoading] = useState(true)
-    const [searchTerm, setSearchTerm] = useState('')
-    const [feedback, setFeedback] = useState({ show: false, type: '', message: '' })
 
-    // Date formatting for header
     const today = new Date().toLocaleDateString('pt-BR', {
         weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
+        day: 'numeric',
+        month: 'long'
     })
 
     useEffect(() => {
-        if (professionalId) {
-            fetchMyTasks()
-        }
-    }, [professionalId])
+        fetchDashboardData()
+    }, [])
 
-    useEffect(() => {
-        if (feedback.show) {
-            const timer = setTimeout(() => {
-                setFeedback({ show: false, type: '', message: '' })
-            }, 5000)
-            return () => clearTimeout(timer)
-        }
-    }, [feedback.show])
-
-    // Filter tasks when searchTerm changes
-    useEffect(() => {
-        if (!searchTerm) {
-            setMyTasks(originalTasks)
-        } else {
-            const filtered = originalTasks.filter(task =>
-                task.titulo.toLowerCase().includes(searchTerm.toLowerCase())
-            )
-            setMyTasks(filtered)
-        }
-    }, [searchTerm, originalTasks])
-
-    async function fetchMyTasks() {
+    async function fetchDashboardData() {
         try {
             setLoading(true)
 
+            // RLS will automatically filter tasks for the current user
+            // We fetch all tasks to calculate client-side stats quickly
+            // For production with massive data, this should be an RPC
             const { data: tasks, error } = await supabase
                 .from('tarefas')
-                .select('id, titulo, deadline, status, priority, created_at, drive_link, descricao')
-                .eq('assigned_to', professionalId)
-                .order('created_at', { ascending: false })
+                .select('id, titulo, deadline, status, priority, created_at')
+                .order('deadline', { ascending: true })
 
             if (error) throw error
 
-            const total = tasks?.length || 0
-            const pending = tasks?.filter(t => t.status === 'pending' || t.status === 'in_progress').length || 0
-            const completed = tasks?.filter(t => t.status === 'completed').length || 0
+            const now = new Date()
 
-            setStats({
-                totalAssigned: total,
-                pending,
-                completed
+            // Calculate Stats
+            const pendingTasks = tasks.filter(t => t.status === 'pending' || t.status === 'in_progress')
+            const completedTasks = tasks.filter(t => t.status === 'completed')
+
+            // Check overdue (only for non-completed tasks)
+            const overdueTasks = pendingTasks.filter(t => {
+                if (!t.deadline) return false
+                return new Date(t.deadline) < now
             })
 
-            setOriginalTasks(tasks || [])
-            setMyTasks(tasks || [])
+            // Very basic "Productivity" metric (last 7 days completions)
+            const sevenDaysAgo = new Date()
+            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+            const recentCompletions = completedTasks.filter(t => new Date(t.completed_at || t.created_at) > sevenDaysAgo).length // Fallback to created_at if completed_at missing
+
+            setStats({
+                pending: pendingTasks.length,
+                completed: completedTasks.length,
+                overdue: overdueTasks.length,
+                productivity: recentCompletions
+            })
+
+            // Set Recent/Upcoming Tasks (Top 5 pending)
+            setRecentTasks(pendingTasks.slice(0, 5))
+
         } catch (error) {
-            console.error('Error fetching tasks:', error)
-            showFeedback('error', 'Falha ao carregar suas tarefas')
+            console.error('Error fetching dashboard data:', error)
         } finally {
             setLoading(false)
         }
     }
 
-    function showFeedback(type, message) {
-        setFeedback({ show: true, type, message })
-    }
-
-    async function handleUpdateStatus(taskId, newStatus, taskTitle) {
-        if (newStatus === 'completed') {
-            await handleCompleteTask(taskId, taskTitle)
-            return
-        }
-
-        try {
-            const { error } = await supabase
-                .from('tarefas')
-                .update({
-                    status: newStatus,
-                    completed_at: null // Reset if moving back from completed
-                })
-                .eq('id', taskId)
-
-            if (error) throw error
-
-            showFeedback('success', 'Status da tarefa atualizado')
-            await fetchMyTasks()
-        } catch (error) {
-            console.error('Error updating task:', error)
-            showFeedback('error', 'Falha ao atualizar status')
-        }
-    }
-
-    async function handleCompleteTask(taskId, taskTitle) {
-        if (!confirm(`Marcar "${taskTitle}" como concluída?`)) {
-            return
-        }
-
-        try {
-            const { error } = await supabase
-                .from('tarefas')
-                .update({
-                    status: 'completed',
-                    completed_at: new Date().toISOString()
-                })
-                .eq('id', taskId)
-
-            if (error) throw error
-
-            showFeedback('success', 'Tarefa concluída com sucesso! 🎉')
-            await fetchMyTasks()
-        } catch (error) {
-            console.error('Error completing task:', error)
-            showFeedback('error', 'Falha ao concluir tarefa')
-        }
-    }
-
-    function getStatusBadgeClass(status) {
-        switch (status) {
-            case 'completed': return 'badge-success'
-            case 'in_progress': return 'badge-primary'
-            case 'overdue': return 'badge-danger'
-            default: return 'badge-neutral'
-        }
-    }
-
-    function getStatusLabel(status) {
-        switch (status) {
-            case 'completed': return 'Concluída'
-            case 'in_progress': return 'Em Progresso'
-            case 'overdue': return 'Atrasada'
-            case 'pending': return 'Pendente'
-            default: return status
-        }
-    }
-
-    function getPriorityBadgeClass(priority) {
-        switch (priority) {
-            case 'urgent': return 'badge-danger'
-            case 'high': return 'badge-warning'
-            default: return 'badge-neutral'
-        }
-    }
-
-    function getPriorityLabel(priority) {
-        switch (priority) {
-            case 'urgent': return 'Urgente'
-            case 'high': return 'Alta'
-            case 'medium': return 'Média'
-            case 'low': return 'Baixa'
-            default: return priority
-        }
-    }
-
     if (loading) {
         return (
-            <div className="flex justify-center items-center h-full p-8">
-                <div className="text-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-                    <p className="text-tertiary">Carregando painel...</p>
-                </div>
+            <div className="flex justify-center items-center h-64">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             </div>
         )
     }
 
+    const firstName = professionalName?.split(' ')[0] || 'Colaborador'
+
     return (
-        <div className="animation-fade-in pb-8">
-            {/* Header Section */}
-            <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
-                <div>
-                    <p className="text-sm text-tertiary uppercase tracking-wide font-semibold mb-1">
-                        {today}
-                    </p>
-                    <h1 className="text-3xl font-bold text-primary">
-                        Olá, {professionalName?.split(' ')[0] || 'Colaborador'}! 👋
-                    </h1>
-                    <p className="text-secondary mt-1">
-                        Aqui está o resumo das suas atividades hoje.
-                    </p>
+        <div className="staff-dashboard animation-fade-in pb-12">
+            {/* Header */}
+            <header className="mb-10">
+                <p className="text-sm text-tertiary uppercase tracking-wide font-semibold mb-1">
+                    {today}
+                </p>
+                <h1 className="text-3xl font-bold text-primary">
+                    Olá, {firstName}.
+                </h1>
+                <p className="text-secondary mt-2 text-lg">
+                    Aqui está o panorama das suas atividades.
+                </p>
+            </header>
+
+            {/* BLOCK 1: Overview Cards (CityOS Silent Style) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+                {/* Pending */}
+                <div className="card p-6 border-l-4 border-brand hover:translate-y-[-2px] transition-transform duration-300">
+                    <div className="flex justify-between items-start mb-4">
+                        <span className="text-secondary font-medium">Em Aberto</span>
+                        <Clock size={20} className="text-brand opacity-80" />
+                    </div>
+                    <div className="text-4xl font-bold text-primary mb-1">{stats.pending}</div>
+                    <div className="text-xs text-tertiary">Tarefas aguardando ação</div>
+                </div>
+
+                {/* Overdue */}
+                <div className="card p-6 border-l-4 border-danger hover:translate-y-[-2px] transition-transform duration-300">
+                    <div className="flex justify-between items-start mb-4">
+                        <span className="text-secondary font-medium">Atrasadas</span>
+                        <AlertTriangle size={20} className="text-danger opacity-80" />
+                    </div>
+                    <div className="text-4xl font-bold text-primary mb-1">{stats.overdue}</div>
+                    <div className="text-xs text-tertiary">Precisam de atenção imediata</div>
+                </div>
+
+                {/* Completed Total */}
+                <div className="card p-6 border-l-4 border-success hover:translate-y-[-2px] transition-transform duration-300">
+                    <div className="flex justify-between items-start mb-4">
+                        <span className="text-secondary font-medium">Concluídas</span>
+                        <CheckCircle2 size={20} className="text-success opacity-80" />
+                    </div>
+                    <div className="text-4xl font-bold text-primary mb-1">{stats.completed}</div>
+                    <div className="text-xs text-tertiary">Total histórico</div>
+                </div>
+
+                {/* Productivity (Last 7 Days) */}
+                <div className="card p-6 border-l-4 border-purple-500 hover:translate-y-[-2px] transition-transform duration-300">
+                    <div className="flex justify-between items-start mb-4">
+                        <span className="text-secondary font-medium">Produtividade</span>
+                        <TrendingUp size={20} className="text-purple-500 opacity-80" />
+                    </div>
+                    <div className="text-4xl font-bold text-primary mb-1">{stats.productivity}</div>
+                    <div className="text-xs text-tertiary">Concluídas nos últimos 7 dias</div>
                 </div>
             </div>
 
-            {feedback.show && (
-                <div className={`card mb-6 p-4 border-${feedback.type === 'success' ? 'success' : 'danger'} bg-${feedback.type === 'success' ? 'success' : 'danger'}-subtle`}>
-                    <p className={`text-${feedback.type === 'success' ? 'success' : 'danger'} font-medium m-0 flex items-center gap-2`}>
-                        {feedback.type === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
-                        {feedback.message}
-                    </p>
-                </div>
-            )}
-
-            {/* KPI Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <div className="card p-6 flex flex-col justify-between hover:shadow-md transition-all duration-200">
-                    <div>
-                        <div className="flex items-center justify-between mb-2">
-                            <h3 className="text-sm font-bold text-tertiary uppercase tracking-wide">
-                                Pendentes
-                            </h3>
-                            <div className="p-2 bg-neutral-100 rounded-full text-tertiary">
-                                <Clock size={20} />
-                            </div>
-                        </div>
-                        <p className="text-3xl font-bold text-primary">{stats.pending}</p>
-                    </div>
+            {/* BLOCK 2: My Tasks (Preview) */}
+            <div className="mb-8">
+                <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-xl font-bold text-primary">Próximas Tarefas</h2>
+                    <Link to="/staff/tasks" className="text-sm font-medium text-brand hover:text-brand-dark flex items-center gap-1 transition-colors">
+                        Ver todas
+                        <ArrowRight size={16} />
+                    </Link>
                 </div>
 
-                <div className="card p-6 flex flex-col justify-between hover:shadow-md transition-all duration-200">
-                    <div>
-                        <div className="flex items-center justify-between mb-2">
-                            <h3 className="text-sm font-bold text-tertiary uppercase tracking-wide">
-                                Concluídas
-                            </h3>
-                            <div className="p-2 bg-green-50 rounded-full text-success">
-                                <CheckCircle2 size={20} />
-                            </div>
-                        </div>
-                        <p className="text-3xl font-bold text-primary">{stats.completed}</p>
-                    </div>
-                </div>
-
-                <div className="card p-6 flex flex-col justify-between hover:shadow-md transition-all duration-200">
-                    <div>
-                        <div className="flex items-center justify-between mb-2">
-                            <h3 className="text-sm font-bold text-tertiary uppercase tracking-wide">
-                                Total Atribuído
-                            </h3>
-                            <div className="p-2 bg-blue-50 rounded-full text-brand">
-                                <FileText size={20} />
-                            </div>
-                        </div>
-                        <p className="text-3xl font-bold text-primary">{stats.totalAssigned}</p>
-                    </div>
-                </div>
-            </div>
-
-            {/* Tasks Section */}
-            <div className="card overflow-hidden">
-                <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <h2 className="text-xl font-bold text-primary flex items-center gap-2">
-                        <Calendar className="text-brand" size={24} />
-                        Minhas Tarefas
-                    </h2>
-
-                    {/* Search Bar */}
-                    <div className="relative w-full md:w-64">
-                        <input
-                            type="text"
-                            placeholder="Buscar tarefa..."
-                            className="input w-full pl-10"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-tertiary" size={16} />
-                    </div>
-                </div>
-
-                {myTasks.length === 0 ? (
-                    <div className="p-12 text-center">
-                        <div className="inline-flex justify-center items-center w-16 h-16 rounded-full bg-neutral-100 mb-4">
-                            <CheckCircle2 size={32} className="text-tertiary" />
-                        </div>
-                        <h3 className="text-lg font-semibold text-primary mb-1">
-                            {searchTerm ? 'Nenhuma tarefa encontrada' : 'Tudo limpo por aqui!'}
-                        </h3>
-                        <p className="text-tertiary max-w-md mx-auto">
-                            {searchTerm
-                                ? 'Tente buscar por outro termo.'
-                                : 'Você não tem tarefas pendentes no momento. Aproveite seu dia!'}
-                        </p>
+                {recentTasks.length === 0 ? (
+                    <div className="card p-12 text-center bg-subtle border-dashed">
+                        <CheckCircle2 size={48} className="text-tertiary mx-auto mb-4 opacity-50" />
+                        <h3 className="text-lg font-medium text-secondary">Tudo em dia!</h3>
+                        <p className="text-tertiary">Você não tem tarefas pendentes próximas.</p>
                     </div>
                 ) : (
-                    <div className="overflow-x-auto">
-                        <table className="table w-full">
-                            <thead>
-                                <tr className="text-left bg-subtle border-b border-gray-100">
-                                    <th className="p-4 font-semibold text-secondary text-sm">Tarefa</th>
-                                    <th className="p-4 font-semibold text-secondary text-sm">Prazo</th>
-                                    <th className="p-4 font-semibold text-secondary text-sm">Status</th>
-                                    <th className="p-4 font-semibold text-secondary text-sm">Prioridade</th>
-                                    <th className="p-4 font-semibold text-secondary text-sm text-right">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {myTasks.map(task => (
-                                    <tr key={task.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                                        <td className="p-4">
-                                            <div className="font-medium text-primary mb-1">{task.titulo}</div>
-                                            {task.drive_link && (
-                                                <a
-                                                    href={task.drive_link}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="inline-flex items-center gap-1 text-xs text-brand hover:underline"
-                                                >
-                                                    <ExternalLink size={12} />
-                                                    Ver Arquivos
-                                                </a>
-                                            )}
-                                        </td>
-                                        <td className="p-4 text-sm text-secondary">
-                                            {new Date(task.deadline).toLocaleDateString()}
-                                            <div className="text-xs text-tertiary">
-                                                {new Date(task.deadline).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                            </div>
-                                        </td>
-                                        <td className="p-4">
-                                            <span className={`badge ${getStatusBadgeClass(task.status)}`}>
-                                                {getStatusLabel(task.status)}
-                                            </span>
-                                        </td>
-                                        <td className="p-4">
-                                            <span className={`badge ${getPriorityBadgeClass(task.priority)}`}>
-                                                {getPriorityLabel(task.priority)}
-                                            </span>
-                                        </td>
-                                        <td className="p-4 text-right">
-                                            <div className="flex items-center justify-end gap-2">
-                                                {task.status !== 'completed' && (
-                                                    <button
-                                                        onClick={() => handleCompleteTask(task.id, task.titulo)}
-                                                        className="btn btn-sm btn-outline-success hover:bg-green-50 text-success border-success"
-                                                        title="Concluir Tarefa"
-                                                    >
-                                                        <CheckCircle2 size={16} />
-                                                        <span className="hidden md:inline ml-1">Concluir</span>
-                                                    </button>
-                                                )}
+                    <div className="grid gap-4">
+                        {recentTasks.map(task => {
+                            const isOverdue = task.deadline && new Date(task.deadline) < new Date()
 
-                                                <select
-                                                    value={task.status}
-                                                    onChange={(e) => handleUpdateStatus(task.id, e.target.value, task.titulo)}
-                                                    className="input py-1 px-2 text-xs w-auto h-auto"
-                                                    style={{ minWidth: '100px' }}
-                                                >
-                                                    <option value="pending">Pendente</option>
-                                                    <option value="in_progress">Em Progresso</option>
-                                                    <option value="completed">Concluída</option>
-                                                </select>
+                            return (
+                                <Link
+                                    to={`/staff/tasks/${task.id}`}
+                                    key={task.id}
+                                    className="card p-5 hover:border-brand-light transition-all duration-200 group relative overflow-hidden"
+                                >
+                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-3 mb-1">
+                                                <h3 className="font-semibold text-primary group-hover:text-brand transition-colors text-lg">
+                                                    {task.titulo}
+                                                </h3>
+                                                {isOverdue && (
+                                                    <span className="badge badge-danger text-[10px] px-2 py-0.5 uppercase tracking-wide">
+                                                        Atrasada
+                                                    </span>
+                                                )}
                                             </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                            <div className="flex items-center gap-4 text-sm text-secondary">
+                                                {task.deadline && (
+                                                    <span className={`flex items-center gap-1.5 ${isOverdue ? 'text-danger' : ''}`}>
+                                                        <Calendar size={14} />
+                                                        {new Date(task.deadline).toLocaleDateString('pt-BR')}
+                                                        <span className="text-tertiary hidden sm:inline">
+                                                            às {new Date(task.deadline).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                                        </span>
+                                                    </span>
+                                                )}
+                                                <span className={`badge ${task.priority === 'urgent' ? 'badge-danger' :
+                                                        task.priority === 'high' ? 'badge-warning' : 'badge-neutral'
+                                                    } text-[10px]`}>
+                                                    {task.priority === 'urgent' ? 'Urgente' :
+                                                        task.priority === 'high' ? 'Alta' :
+                                                            task.priority === 'medium' ? 'Média' : 'Baixa'}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-4">
+                                            <div className="hidden md:block">
+                                                <span className={`px-3 py-1 rounded-full text-xs font-medium border ${task.status === 'in_progress'
+                                                        ? 'bg-blue-50 text-blue-600 border-blue-100'
+                                                        : 'bg-gray-50 text-gray-500 border-gray-100'
+                                                    }`}>
+                                                    {task.status === 'in_progress' ? 'Em andamento' : 'Pendente'}
+                                                </span>
+                                            </div>
+                                            <div className="text-brand opacity-0 group-hover:opacity-100 transition-opacity transform translate-x-[-10px] group-hover:translate-x-0">
+                                                <ArrowRight size={20} />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </Link>
+                            )
+                        })}
                     </div>
                 )}
             </div>

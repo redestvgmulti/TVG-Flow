@@ -13,6 +13,8 @@ import Reports from './pages/admin/Reports'
 import Calendar from './pages/admin/Calendar'
 import Areas from './pages/admin/Areas'
 import StaffDashboard from './pages/staff/Dashboard'
+import StaffTasks from './pages/staff/Tasks'
+import StaffTaskDetail from './pages/staff/TaskDetail'
 import StaffToday from './pages/staff/Today'
 import ProtectedRoute from './routes/ProtectedRoute'
 import RoleProtectedRoute from './routes/RoleProtectedRoute'
@@ -68,6 +70,8 @@ function App() {
           >
             <Route index element={<Navigate to="/staff/dashboard" replace />} />
             <Route path="dashboard" element={<StaffDashboard />} />
+            <Route path="tasks" element={<StaffTasks />} />
+            <Route path="tasks/:id" element={<StaffTaskDetail />} />
             <Route path="today" element={<StaffToday />} />
           </Route>
 
