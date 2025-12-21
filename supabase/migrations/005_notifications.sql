@@ -101,8 +101,8 @@ BEGIN
       VALUES (
         NEW.assigned_to,
         'task_assigned',
-        'New task assigned',
-        'You have been assigned: ' || NEW.titulo,
+        'Nova tarefa atribuída',
+        'Você foi designado para: ' || NEW.titulo,
         'task',
         NEW.id
       );
@@ -140,8 +140,8 @@ BEGIN
     SELECT
       id,
       'task_completed',
-      'Task completed',
-      NEW.titulo || ' has been completed',
+      'Tarefa concluída',
+      NEW.titulo || ' foi concluída',
       'task',
       NEW.id
     FROM profissionais
