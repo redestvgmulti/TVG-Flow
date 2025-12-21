@@ -179,31 +179,32 @@ function StaffDashboard() {
                                     key={task.id}
                                     className="block p-5 hover:bg-subtle transition-colors duration-200 group"
                                 >
-                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                        <div className="flex-1">
-                                            <div className="flex items-center gap-3 mb-1">
-                                                <h3 className="font-semibold text-primary group-hover:text-brand transition-colors text-base">
+                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative">
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex flex-wrap items-center gap-2 mb-2">
+                                                <h3 className="font-semibold text-primary group-hover:text-brand transition-colors text-base truncate max-w-full">
                                                     {task.titulo}
                                                 </h3>
                                                 {isOverdue && (
-                                                    <span className="badge badge-danger text-[10px] px-2 py-0.5 uppercase tracking-wide">
+                                                    <span className="badge badge-danger text-[10px] px-1.5 py-0.5 uppercase tracking-wide">
                                                         Atrasada
                                                     </span>
                                                 )}
                                                 <span className={`badge ${task.priority === 'urgent' ? 'badge-danger' :
                                                     task.priority === 'high' ? 'badge-warning' : 'badge-neutral'
-                                                    } text-[10px]`}>
+                                                    } text-[10px] px-1.5 py-0.5`}>
                                                     {task.priority === 'urgent' ? 'Urgente' :
                                                         task.priority === 'high' ? 'Alta' :
                                                             task.priority === 'medium' ? 'Média' : 'Baixa'}
                                                 </span>
                                             </div>
+
                                             <div className="flex items-center gap-4 text-sm text-secondary">
                                                 {task.deadline && (
                                                     <span className={`flex items-center gap-1.5 ${isOverdue ? 'text-danger' : ''}`}>
                                                         <Calendar size={14} className="opacity-70" />
                                                         {new Date(task.deadline).toLocaleDateString('pt-BR')}
-                                                        <span className="text-tertiary hidden sm:inline">
+                                                        <span className="text-tertiary">
                                                             às {new Date(task.deadline).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                                                         </span>
                                                     </span>
@@ -211,16 +212,16 @@ function StaffDashboard() {
                                             </div>
                                         </div>
 
-                                        <div className="flex items-center gap-4">
-                                            <div className="hidden md:block">
-                                                <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${task.status === 'in_progress'
-                                                    ? 'bg-blue-50 text-blue-600 border-blue-100'
-                                                    : 'bg-gray-50 text-gray-500 border-gray-100'
-                                                    }`}>
-                                                    {task.status === 'in_progress' ? 'Em andamento' : 'Pendente'}
-                                                </span>
-                                            </div>
-                                            <div className="text-brand opacity-0 group-hover:opacity-100 transition-opacity transform translate-x-[-10px] group-hover:translate-x-0">
+                                        <div className="flex items-center justify-between md:justify-end gap-3 mt-2 md:mt-0 pt-3 md:pt-0 border-t border-gray-50 md:border-0 w-full md:w-auto">
+                                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border flex items-center gap-1.5 ${task.status === 'in_progress'
+                                                ? 'bg-blue-50 text-blue-600 border-blue-100'
+                                                : 'bg-gray-50 text-gray-500 border-gray-100'
+                                                }`}>
+                                                {task.status === 'in_progress' ? <Clock size={12} /> : <CheckCircle2 size={12} />}
+                                                {task.status === 'in_progress' ? 'Em andamento' : 'Pendente'}
+                                            </span>
+
+                                            <div className="text-brand opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity transform md:translate-x-[-10px] group-hover:translate-x-0">
                                                 <ArrowRight size={18} />
                                             </div>
                                         </div>
