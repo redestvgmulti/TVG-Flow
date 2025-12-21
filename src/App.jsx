@@ -16,6 +16,9 @@ import StaffDashboard from './pages/staff/Dashboard'
 import StaffTasks from './pages/staff/Tasks'
 import StaffTaskDetail from './pages/staff/TaskDetail'
 import StaffToday from './pages/staff/Today'
+import StaffCalendar from './pages/staff/Calendar'
+import StaffProfile from './pages/staff/Profile'
+import StaffRequestCreate from './pages/staff/RequestCreate'
 import ProtectedRoute from './routes/ProtectedRoute'
 import RoleProtectedRoute from './routes/RoleProtectedRoute'
 
@@ -72,6 +75,9 @@ function App() {
             <Route path="dashboard" element={<StaffDashboard />} />
             <Route path="tasks" element={<StaffTasks />} />
             <Route path="tasks/:id" element={<StaffTaskDetail />} />
+            <Route path="requests/new" element={<StaffRequestCreate />} />
+            <Route path="calendar" element={<StaffCalendar />} />
+            <Route path="profile" element={<StaffProfile />} />
             <Route path="today" element={<StaffToday />} />
           </Route>
 

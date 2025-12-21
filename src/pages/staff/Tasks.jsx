@@ -154,7 +154,7 @@ export default function StaffTasks() {
                     </button>
                 </div>
             ) : (
-                <div className="grid gap-4">
+                <div className="flex flex-col gap-4">
                     {filteredTasks.map(task => {
                         const isOverdue = task.deadline && new Date(task.deadline) < new Date() && task.status !== 'completed'
 
@@ -162,75 +162,57 @@ export default function StaffTasks() {
                             <Link
                                 to={`/staff/tasks/${task.id}`}
                                 key={task.id}
-                                className="group card p-0 hover:border-brand-light hover:shadow-md transition-all duration-200 overflow-hidden"
+                                className="block card p-5 hover:border-brand-light transition-all duration-200 group relative overflow-hidden text-left"
                             >
-                                <div className="flex flex-col sm:flex-row">
-                                    {/* Left Status Stripe */}
-                                    <div className={`w-full sm:w-1.5 h-1 sm:h-auto ${task.status === 'completed' ? 'bg-success' :
-                                            isOverdue ? 'bg-danger' :
-                                                task.priority === 'urgent' ? 'bg-danger' : 'bg-brand'
-                                        }`}></div>
-
-                                    <div className="p-5 flex-1 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-3 mb-1.5">
-                                                <h3 className="text-lg font-semibold text-primary truncate pr-4 group-hover:text-brand transition-colors">
-                                                    {task.titulo}
-                                                </h3>
-                                                {isOverdue && (
-                                                    <span className="flex-shrink-0 badge badge-danger text-[10px] px-2 py-0.5 uppercase tracking-wide">
-                                                        Atrasada
-                                                    </span>
-                                                )}
-                                            </div>
-
-                                            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-secondary">
-                                                {task.deadline ? (
-                                                    <div className={`flex items-center gap-1.5 ${isOverdue ? 'text-danger font-medium' : ''}`}>
-                                                        <Calendar size={15} className="opacity-70" />
-                                                        <span>{new Date(task.deadline).toLocaleDateString('pt-BR')}</span>
-                                                        <span className="text-tertiary text-xs">
-                                                            {new Date(task.deadline).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                                                        </span>
-                                                    </div>
-                                                ) : (
-                                                    <div className="flex items-center gap-1.5 text-tertiary">
-                                                        <Clock size={15} className="opacity-70" />
-                                                        <span>Sem data</span>
-                                                    </div>
-                                                )}
-
-                                                <div className="flex items-center gap-1.5">
-                                                    <ArrowUpCircle size={15} className={`
-                                                        ${task.priority === 'urgent' ? 'text-danger' :
-                                                            task.priority === 'high' ? 'text-warning' : 'text-tertiary'}
-                                                    `} />
-                                                    <span className="capitalize">{
-                                                        task.priority === 'urgent' ? 'Urgente' :
-                                                            task.priority === 'high' ? 'Alta' :
-                                                                task.priority === 'medium' ? 'Média' : 'Baixa'
-                                                    }</span>
-                                                </div>
-                                            </div>
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative">
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                                            <h3 className="font-semibold text-primary group-hover:text-brand transition-colors text-base truncate max-w-full">
+                                                {task.titulo}
+                                            </h3>
+                                            {isOverdue && (
+                                                <span className="badge badge-danger text-[10px] px-1.5 py-0.5 uppercase tracking-wide">
+                                                    Atrasada
+                                                </span>
+                                            )}
+                                            <span className={`badge ${task.priority === 'urgent' ? 'badge-danger' :
+                                                task.priority === 'high' ? 'badge-warning' : 'badge-neutral'
+                                                } text-[10px] px-1.5 py-0.5`}>
+                                                {task.priority === 'urgent' ? 'Urgente' :
+                                                    task.priority === 'high' ? 'Alta' :
+                                                        task.priority === 'medium' ? 'Média' : 'Baixa'}
+                                            </span>
                                         </div>
 
-                                        <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end mt-2 sm:mt-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-50">
-                                            <span className={`px-3 py-1.5 rounded-full text-xs font-medium border flex items-center gap-1.5 ${task.status === 'completed' ? 'bg-green-50 text-success border-success-subtle' :
-                                                    task.status === 'in_progress' ? 'bg-blue-50 text-brand border-blue-100' :
-                                                        'bg-gray-50 text-secondary border-gray-200'
-                                                }`}>
-                                                {task.status === 'completed' ? <CheckCircle2 size={12} /> :
-                                                    task.status === 'in_progress' ? <Clock size={12} /> :
-                                                        <AlertCircle size={12} />}
+                                        <div className="flex items-center gap-4 text-sm text-secondary">
+                                            {task.deadline && (
+                                                <span className={`flex items-center gap-1.5 ${isOverdue ? 'text-danger' : ''}`}>
+                                                    <Calendar size={14} className="opacity-70" />
+                                                    {new Date(task.deadline).toLocaleDateString('pt-BR')}
+                                                    <span className="text-tertiary">
+                                                        às {new Date(task.deadline).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                                    </span>
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
 
-                                                {task.status === 'completed' ? 'Concluída' :
-                                                    task.status === 'in_progress' ? 'Em andamento' :
-                                                        task.status === 'pending' ? 'Pendente' : task.status}
-                                            </span>
+                                    <div className="flex items-center justify-between md:justify-end gap-3 mt-2 md:mt-0 pt-3 md:pt-0 border-t border-gray-50 md:border-0 w-full md:w-auto">
+                                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border flex items-center gap-1.5 ${task.status === 'completed' ? 'bg-green-50 text-success border-success-subtle' :
+                                            task.status === 'in_progress' ? 'bg-blue-50 text-brand border-blue-100' :
+                                                'bg-gray-50 text-secondary border-gray-200'
+                                            }`}>
+                                            {task.status === 'completed' ? <CheckCircle2 size={12} /> :
+                                                task.status === 'in_progress' ? <Clock size={12} /> :
+                                                    <AlertCircle size={12} />}
 
-                                            <div className="text-brand opacity-0 group-hover:opacity-100 transition-opacity transform translate-x-[-10px] group-hover:translate-x-0 hidden sm:block">
-                                                <ArrowRight size={20} />
-                                            </div>
+                                            {task.status === 'completed' ? 'Concluída' :
+                                                task.status === 'in_progress' ? 'Em andamento' :
+                                                    task.status === 'pending' ? 'Pendente' : task.status}
+                                        </span>
+
+                                        <div className="text-brand opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity transform md:translate-x-[-10px] group-hover:translate-x-0">
+                                            <ArrowRight size={18} />
                                         </div>
                                     </div>
                                 </div>
