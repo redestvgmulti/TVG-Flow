@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 import {
     ArrowLeft,
     Calendar,
@@ -10,21 +11,32 @@ import {
     FileText,
     ExternalLink,
     MessageSquare,
-    Save
+    Send,
+    History
 } from 'lucide-react'
-import { toast } from 'sonner' // Assuming sonner is installed as per App.jsx
+import { toast } from 'sonner'
 
 export default function StaffTaskDetail() {
     const { id } = useParams()
     const navigate = useNavigate()
+    const { user, professionalName } = useAuth()
 
     const [task, setTask] = useState(null)
     const [loading, setLoading] = useState(true)
-    const [status, setStatus] = useState('') // Local state for immediate UI feedback
+    const [status, setStatus] = useState('')
     const [updating, setUpdating] = useState(false)
 
+    // Timeline State
+    const [timeline, setTimeline] = useState([])
+    const [loadingTimeline, setLoadingTimeline] = useState(true)
+    const [newComment, setNewComment] = useState('')
+    const [sendingComment, setSendingComment] = useState(false)
+
     useEffect(() => {
-        if (id) fetchTaskDetails()
+        if (id) {
+            fetchTaskDetails()
+            fetchTimeline()
+        }
     }, [id])
 
     async function fetchTaskDetails() {
@@ -34,17 +46,55 @@ export default function StaffTaskDetail() {
                 .from('tarefas')
                 .select('*')
                 .eq('id', id)
-                .single() // We can use .single() here because RLS will ensure it fails if not authorized
+                .single()
 
             if (error) throw error
             setTask(data)
             setStatus(data.status)
         } catch (error) {
             console.error('Error fetching task:', error)
-            toast.error('Erro ao carregar tarefa or acesso negado')
+            toast.error('Erro ao carregar tarefa ou acesso negado')
             navigate('/staff/tasks')
         } finally {
             setLoading(false)
+        }
+    }
+
+    async function fetchTimeline() {
+        try {
+            setLoadingTimeline(true)
+
+            // 1. Fetch Comments
+            const { data: comments, error: commentsError } = await supabase
+                .from('task_comments')
+                .select('id, content, created_at, author_id, profissionais(nome)')
+                .eq('task_id', id)
+                .order('created_at', { ascending: true })
+
+            if (commentsError) throw commentsError
+
+            // 2. Fetch History
+            const { data: history, error: historyError } = await supabase
+                .from('task_history')
+                .select('id, event, created_at')
+                .eq('task_id', id)
+                .order('created_at', { ascending: true })
+
+            if (historyError) throw historyError
+
+            // 3. Merge and Sort
+            const combined = [
+                ...(comments || []).map(c => ({ ...c, type: 'comment' })),
+                ...(history || []).map(h => ({ ...h, type: 'history' }))
+            ].sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+
+            setTimeline(combined)
+
+        } catch (error) {
+            console.error('Error fetching timeline:', error)
+            // Silent error as requested, but we could log it
+        } finally {
+            setLoadingTimeline(false)
         }
     }
 
@@ -66,9 +116,12 @@ export default function StaffTaskDetail() {
             setStatus(newStatus)
             setTask(prev => ({ ...prev, ...updates }))
 
+            // Refresh timeline to see auto-generated history
+            setTimeout(fetchTimeline, 500)
+
             if (newStatus === 'completed') {
                 toast.success('Tarefa concluída! Bom trabalho 🎉')
-                navigate('/staff/dashboard') // Redirect to Dashboard on completion to foster flow
+                navigate('/staff/dashboard')
             } else {
                 toast.success('Status atualizado')
             }
@@ -78,6 +131,34 @@ export default function StaffTaskDetail() {
             toast.error('Erro ao atualizar status')
         } finally {
             setUpdating(false)
+        }
+    }
+
+    async function handleSendComment(e) {
+        e.preventDefault()
+        if (!newComment.trim()) return
+
+        setSendingComment(true)
+        try {
+            const { error } = await supabase
+                .from('task_comments')
+                .insert({
+                    task_id: id,
+                    author_id: user.id, // Auth context ensures we have the ID
+                    content: newComment.trim()
+                })
+
+            if (error) throw error
+
+            setNewComment('')
+            fetchTimeline() // Refresh timeline
+            toast.success('Nota adicionada')
+
+        } catch (error) {
+            console.error('Error sending comment:', error)
+            toast.error('Não foi possível enviar o comentário')
+        } finally {
+            setSendingComment(false)
         }
     }
 
@@ -233,28 +314,79 @@ export default function StaffTaskDetail() {
                         )}
                     </div>
 
-                    {/* Sidebar / Additional Info */}
-                    <div className="md:col-span-1 space-y-6">
-                        {/* Comments Placeholder - Block 5 */}
-                        <div className="bg-subtle rounded-xl p-5 border border-dashed border-gray-200">
-                            <h3 className="text-sm font-bold text-tertiary uppercase tracking-wider mb-4 flex items-center gap-2">
-                                <MessageSquare size={16} />
-                                Observações
-                            </h3>
-                            <div className="text-center py-6">
-                                <p className="text-sm text-tertiary mb-3">Comentários ainda não estão disponíveis.</p>
-                                <button className="btn btn-sm btn-outline-secondary w-full opacity-50 cursor-not-allowed">
-                                    Adicionar Nota
-                                </button>
+                    {/* Timeline / Activity Section */}
+                    <div className="md:col-span-1 flex flex-col h-full">
+                        <div className="bg-subtle rounded-xl border border-gray-100 flex flex-col h-full max-h-[600px]">
+                            {/* Timeline Header */}
+                            <div className="p-4 border-b border-gray-100 bg-white/50 rounded-t-xl backdrop-blur-sm">
+                                <h3 className="text-sm font-bold text-tertiary uppercase tracking-wider flex items-center gap-2">
+                                    <History size={16} />
+                                    Atividade
+                                </h3>
                             </div>
-                        </div>
 
-                        {/* Tips */}
-                        <div className="bg-blue-50 rounded-xl p-5 border border-blue-100">
-                            <h4 className="font-semibold text-brand-dark mb-2 text-sm">Dica CityOS</h4>
-                            <p className="text-xs text-blue-800 leading-relaxed">
-                                Mantenha o status atualizado para que seu gestor saiba o progresso sem precisar perguntar.
-                            </p>
+                            {/* Timeline Content */}
+                            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                                {loadingTimeline ? (
+                                    <div className="text-center py-4">
+                                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto"></div>
+                                    </div>
+                                ) : timeline.length === 0 ? (
+                                    <div className="text-center py-8 text-tertiary text-sm">
+                                        Nenhuma atividade recente.
+                                    </div>
+                                ) : (
+                                    timeline.map((item) => (
+                                        <div key={item.id} className={`flex gap-3 text-sm animate-fade-in ${item.type === 'history' ? 'opacity-75' : ''}`}>
+                                            <div className="flex-1">
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <span className={`font-medium ${item.type === 'comment' ? 'text-primary' : 'text-secondary italic'
+                                                        }`}>
+                                                        {item.type === 'comment'
+                                                            ? (item.profissionais?.nome || 'Usuário')
+                                                            : 'Sistema'}
+                                                    </span>
+                                                    <span className="text-[10px] text-tertiary">
+                                                        {new Date(item.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} • {new Date(item.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                                    </span>
+                                                </div>
+                                                <div className={`p-3 rounded-lg ${item.type === 'comment'
+                                                        ? 'bg-white shadow-sm border border-gray-100 text-secondary'
+                                                        : 'bg-transparent text-tertiary italic text-xs border-l-2 border-gray-200 pl-3 rounded-none'
+                                                    }`}>
+                                                    {item.type === 'comment' ? item.content : item.event}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+
+                            {/* Input Area */}
+                            <div className="p-4 border-t border-gray-100 bg-white rounded-b-xl">
+                                <form onSubmit={handleSendComment} className="relative">
+                                    <textarea
+                                        className="input w-full pr-10 resize-none py-3 text-sm min-h-[80px]"
+                                        placeholder="Adicionar nota..."
+                                        value={newComment}
+                                        onChange={(e) => setNewComment(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                                e.preventDefault();
+                                                handleSendComment(e);
+                                            }
+                                        }}
+                                        disabled={sendingComment}
+                                    />
+                                    <button
+                                        type="submit"
+                                        disabled={!newComment.trim() || sendingComment}
+                                        className="absolute right-3 bottom-3 text-brand hover:text-brand-dark disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                        <Send size={18} />
+                                    </button>
+                                </form>
+                            </div>
                         </div>
                     </div>
                 </div>
