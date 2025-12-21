@@ -8,7 +8,8 @@ import {
     Calendar,
     ArrowRight,
     TrendingUp,
-    AlertTriangle
+    AlertTriangle,
+    ListTodo
 } from 'lucide-react'
 
 function StaffDashboard() {
@@ -149,9 +150,12 @@ function StaffDashboard() {
             </div>
 
             {/* BLOCK 2: My Tasks (Preview) */}
-            <div className="mb-8">
-                <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-xl font-bold text-primary">Próximas Tarefas</h2>
+            <div className="card mb-8 p-0 overflow-hidden">
+                <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+                    <h2 className="text-lg font-bold text-primary flex items-center gap-2">
+                        <ListTodo size={20} />
+                        Próximas Tarefas
+                    </h2>
                     <Link to="/staff/tasks" className="text-sm font-medium text-brand hover:text-brand-dark flex items-center gap-1 transition-colors">
                         Ver todas
                         <ArrowRight size={16} />
@@ -159,13 +163,13 @@ function StaffDashboard() {
                 </div>
 
                 {recentTasks.length === 0 ? (
-                    <div className="card p-12 text-center bg-subtle border-dashed">
+                    <div className="p-12 text-center bg-subtle">
                         <CheckCircle2 size={48} className="text-tertiary mx-auto mb-4 opacity-50" />
                         <h3 className="text-lg font-medium text-secondary">Tudo em dia!</h3>
                         <p className="text-tertiary">Você não tem tarefas pendentes próximas.</p>
                     </div>
                 ) : (
-                    <div className="grid gap-4">
+                    <div className="divide-y divide-gray-100">
                         {recentTasks.map(task => {
                             const isOverdue = task.deadline && new Date(task.deadline) < new Date()
 
@@ -173,12 +177,12 @@ function StaffDashboard() {
                                 <Link
                                     to={`/staff/tasks/${task.id}`}
                                     key={task.id}
-                                    className="card p-5 hover:border-brand-light transition-all duration-200 group relative overflow-hidden"
+                                    className="block p-5 hover:bg-subtle transition-colors duration-200 group"
                                 >
                                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                                         <div className="flex-1">
                                             <div className="flex items-center gap-3 mb-1">
-                                                <h3 className="font-semibold text-primary group-hover:text-brand transition-colors text-lg">
+                                                <h3 className="font-semibold text-primary group-hover:text-brand transition-colors text-base">
                                                     {task.titulo}
                                                 </h3>
                                                 {isOverdue && (
@@ -186,38 +190,38 @@ function StaffDashboard() {
                                                         Atrasada
                                                     </span>
                                                 )}
-                                            </div>
-                                            <div className="flex items-center gap-4 text-sm text-secondary">
-                                                {task.deadline && (
-                                                    <span className={`flex items-center gap-1.5 ${isOverdue ? 'text-danger' : ''}`}>
-                                                        <Calendar size={14} />
-                                                        {new Date(task.deadline).toLocaleDateString('pt-BR')}
-                                                        <span className="text-tertiary hidden sm:inline">
-                                                            às {new Date(task.deadline).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                                                        </span>
-                                                    </span>
-                                                )}
                                                 <span className={`badge ${task.priority === 'urgent' ? 'badge-danger' :
-                                                        task.priority === 'high' ? 'badge-warning' : 'badge-neutral'
+                                                    task.priority === 'high' ? 'badge-warning' : 'badge-neutral'
                                                     } text-[10px]`}>
                                                     {task.priority === 'urgent' ? 'Urgente' :
                                                         task.priority === 'high' ? 'Alta' :
                                                             task.priority === 'medium' ? 'Média' : 'Baixa'}
                                                 </span>
                                             </div>
+                                            <div className="flex items-center gap-4 text-sm text-secondary">
+                                                {task.deadline && (
+                                                    <span className={`flex items-center gap-1.5 ${isOverdue ? 'text-danger' : ''}`}>
+                                                        <Calendar size={14} className="opacity-70" />
+                                                        {new Date(task.deadline).toLocaleDateString('pt-BR')}
+                                                        <span className="text-tertiary hidden sm:inline">
+                                                            às {new Date(task.deadline).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                                        </span>
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
 
                                         <div className="flex items-center gap-4">
                                             <div className="hidden md:block">
-                                                <span className={`px-3 py-1 rounded-full text-xs font-medium border ${task.status === 'in_progress'
-                                                        ? 'bg-blue-50 text-blue-600 border-blue-100'
-                                                        : 'bg-gray-50 text-gray-500 border-gray-100'
+                                                <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${task.status === 'in_progress'
+                                                    ? 'bg-blue-50 text-blue-600 border-blue-100'
+                                                    : 'bg-gray-50 text-gray-500 border-gray-100'
                                                     }`}>
                                                     {task.status === 'in_progress' ? 'Em andamento' : 'Pendente'}
                                                 </span>
                                             </div>
                                             <div className="text-brand opacity-0 group-hover:opacity-100 transition-opacity transform translate-x-[-10px] group-hover:translate-x-0">
-                                                <ArrowRight size={20} />
+                                                <ArrowRight size={18} />
                                             </div>
                                         </div>
                                     </div>
