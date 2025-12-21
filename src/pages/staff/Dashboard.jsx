@@ -150,26 +150,24 @@ function StaffDashboard() {
             </div>
 
             {/* BLOCK 2: My Tasks (Preview) */}
-            <div className="card mb-8 p-0 overflow-hidden">
-                <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-                    <h2 className="text-lg font-bold text-primary flex items-center gap-2">
-                        <ListTodo size={20} />
+            <div className="card mb-8 mt-8">
+                <div className="card-header flex items-center justify-between">
+                    <h3 className="card-title flex items-center gap-2">
+                        <ListTodo size={18} />
                         Próximas Tarefas
-                    </h2>
-                    <Link to="/staff/tasks" className="text-sm font-medium text-brand hover:text-brand-dark flex items-center gap-1 transition-colors">
+                    </h3>
+                    <Link to="/staff/tasks" className="btn btn-ghost btn-sm text-brand text-xs font-semibold !no-underline hover:!no-underline" style={{ textDecoration: 'none' }}>
                         Ver todas
-                        <ArrowRight size={16} />
                     </Link>
                 </div>
 
                 {recentTasks.length === 0 ? (
-                    <div className="p-12 text-center bg-subtle">
-                        <CheckCircle2 size={48} className="text-tertiary mx-auto mb-4 opacity-50" />
-                        <h3 className="text-lg font-medium text-secondary">Tudo em dia!</h3>
-                        <p className="text-tertiary">Você não tem tarefas pendentes próximas.</p>
+                    <div className="empty-state">
+                        <span className="empty-icon">📝</span>
+                        <p className="empty-text">Você não tem tarefas pendentes próximas.</p>
                     </div>
                 ) : (
-                    <div className="divide-y divide-gray-100">
+                    <div className="task-list">
                         {recentTasks.map(task => {
                             const isOverdue = task.deadline && new Date(task.deadline) < new Date()
 
@@ -177,53 +175,51 @@ function StaffDashboard() {
                                 <Link
                                     to={`/staff/tasks/${task.id}`}
                                     key={task.id}
-                                    className="block p-5 hover:bg-subtle transition-colors duration-200 group"
+                                    style={{ textDecoration: 'none' }}
+                                    className="task-item card hover:border-brand-light/50 transition-colors group bg-white !no-underline hover:!no-underline cursor-pointer"
                                 >
-                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative">
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex flex-wrap items-center gap-2 mb-2">
-                                                <h3 className="font-semibold text-primary group-hover:text-brand transition-colors text-base truncate max-w-full">
-                                                    {task.titulo}
-                                                </h3>
-                                                {isOverdue && (
-                                                    <span className="badge badge-danger text-[10px] px-1.5 py-0.5 uppercase tracking-wide">
-                                                        Atrasada
+                                    <div className="task-item-content">
+                                        <h3 className="task-item-title group-hover:text-brand transition-colors flex items-center gap-2">
+                                            {task.titulo}
+                                            {isOverdue && (
+                                                <AlertTriangle size={14} className="text-danger" />
+                                            )}
+                                        </h3>
+
+                                        <div className="task-item-meta flex items-center gap-3">
+                                            {task.deadline && (
+                                                <span className={`flex items-center gap-1.5 ${isOverdue ? 'text-danger' : 'text-tertiary'}`}>
+                                                    <Calendar size={13} className="opacity-70" />
+                                                    <span className="font-medium">{new Date(task.deadline).toLocaleDateString('pt-BR')}</span>
+                                                    <span className="opacity-60 hidden xs:inline">
+                                                        • {new Date(task.deadline).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                                                     </span>
-                                                )}
-                                                <span className={`badge ${task.priority === 'urgent' ? 'badge-danger' :
-                                                    task.priority === 'high' ? 'badge-warning' : 'badge-neutral'
-                                                    } text-[10px] px-1.5 py-0.5`}>
-                                                    {task.priority === 'urgent' ? 'Urgente' :
-                                                        task.priority === 'high' ? 'Alta' :
-                                                            task.priority === 'medium' ? 'Média' : 'Baixa'}
                                                 </span>
-                                            </div>
-
-                                            <div className="flex items-center gap-4 text-sm text-secondary">
-                                                {task.deadline && (
-                                                    <span className={`flex items-center gap-1.5 ${isOverdue ? 'text-danger' : ''}`}>
-                                                        <Calendar size={14} className="opacity-70" />
-                                                        {new Date(task.deadline).toLocaleDateString('pt-BR')}
-                                                        <span className="text-tertiary">
-                                                            às {new Date(task.deadline).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                                                        </span>
-                                                    </span>
-                                                )}
-                                            </div>
+                                            )}
                                         </div>
+                                    </div>
 
-                                        <div className="flex items-center justify-between md:justify-end gap-3 mt-2 md:mt-0 pt-3 md:pt-0 border-t border-gray-50 md:border-0 w-full md:w-auto">
-                                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border flex items-center gap-1.5 ${task.status === 'in_progress'
-                                                ? 'bg-blue-50 text-blue-600 border-blue-100'
-                                                : 'bg-gray-50 text-gray-500 border-gray-100'
-                                                }`}>
-                                                {task.status === 'in_progress' ? <Clock size={12} /> : <CheckCircle2 size={12} />}
+                                    <div className="task-item-actions flex-col items-end gap-2">
+                                        <span
+                                            className="relative overflow-hidden px-3.5 py-1 rounded-full text-[10px] font-semibold border shadow-sm transition-all duration-300"
+                                            style={{
+                                                backgroundColor: task.status === 'in_progress' ? '#eff6ff' : '#fff7ed',
+                                                color: task.status === 'in_progress' ? '#2563eb' : '#c2410c',
+                                                borderColor: task.status === 'in_progress' ? '#bfdbfe' : '#fed7aa',
+                                                fontSize: '10px',
+                                                fontWeight: 600,
+                                                padding: '4px 12px',
+                                                textTransform: 'none'
+                                            }}
+                                        >
+                                            <span className="relative z-10 flex items-center gap-1.5">
+                                                {task.status === 'in_progress' ? <Clock size={11} className="animate-pulse" /> : <div className="w-1.5 h-1.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.5)]"></div>}
                                                 {task.status === 'in_progress' ? 'Em andamento' : 'Pendente'}
                                             </span>
+                                        </span>
 
-                                            <div className="text-brand opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity transform md:translate-x-[-10px] group-hover:translate-x-0">
-                                                <ArrowRight size={18} />
-                                            </div>
+                                        <div className="text-brand opacity-0 group-hover:opacity-100 transition-opacity translate-x-[-10px] group-hover:translate-x-0 duration-200">
+                                            <ArrowRight size={16} />
                                         </div>
                                     </div>
                                 </Link>
