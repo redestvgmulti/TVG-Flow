@@ -175,9 +175,24 @@ function NotificationCenter() {
         const notification = payload.new
         console.log('[NotificationCenter] New notification received:', notification)
 
-        // Update state
-        setNotifications(prev => [notification, ...prev])
-        setUnreadCount(prev => prev + 1)
+        // DEDUPLICATION: Check if notification already exists
+        setNotifications(prev => {
+            const exists = prev.some(n => n.id === notification.id)
+            if (exists) {
+                console.log('[NotificationCenter] Duplicate notification ignored:', notification.id)
+                return prev // Don't add duplicate
+            }
+
+            // Add new notification to the list
+            return [notification, ...prev]
+        })
+
+        // Update unread count only if it's a new notification
+        setUnreadCount(prev => {
+            // Check if this notification is already counted
+            const alreadyCounted = notifications.some(n => n.id === notification.id)
+            return alreadyCounted ? prev : prev + 1
+        })
 
         // Show in-app banner
         console.log('[NotificationCenter] Showing in-app notification')
