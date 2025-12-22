@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from '../../services/supabase'
 import {
@@ -14,7 +14,9 @@ import {
     History,
     FileText,
     ExternalLink,
-    Maximize2
+    Maximize2,
+    ChevronDown,
+    X
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '../../contexts/AuthContext'
@@ -59,6 +61,13 @@ export default function StaffTasks() {
         try {
             if (!silent) setLoading(true)
 
+            // Ensure user is loaded
+            if (!user?.id) {
+                console.warn('User not loaded yet')
+                setTasks([])
+                return
+            }
+
             // CRITICAL SECURITY FIX: Only fetch tasks where the professional has a micro-task assigned
             // First, get all micro-tasks for this professional
             const { data: microTasks, error: microError } = await supabase
@@ -66,7 +75,10 @@ export default function StaffTasks() {
                 .select('tarefa_id')
                 .eq('profissional_id', user.id)
 
-            if (microError) throw microError
+            if (microError) {
+                console.error('Error fetching micro-tasks:', microError)
+                throw microError
+            }
 
             // Extract unique task IDs
             const taskIds = [...new Set(microTasks?.map(mt => mt.tarefa_id) || [])]
@@ -74,6 +86,7 @@ export default function StaffTasks() {
             if (taskIds.length === 0) {
                 // No tasks assigned to this professional
                 setTasks([])
+                if (!silent) setLoading(false)
                 return
             }
 
@@ -84,11 +97,16 @@ export default function StaffTasks() {
                 .in('id', taskIds)
                 .order('deadline_at', { ascending: true, nullsFirst: false })
 
-            if (error) throw error
+            if (error) {
+                console.error('Error fetching tasks:', error)
+                throw error
+            }
+
             setTasks(data || [])
         } catch (error) {
-            console.error('Error fetching tasks:', error)
-            toast.error('Erro ao atualizar tarefas')
+            console.error('Error in fetchTasks:', error)
+            toast.error('Erro ao carregar tarefas')
+            setTasks([])
         } finally {
             if (!silent) setLoading(false)
         }
@@ -245,43 +263,56 @@ export default function StaffTasks() {
             </div>
 
             {/* Controls Bar */}
-            <div className="card p-4 mb-6 sticky top-4 z-10 backdrop-blur-md bg-white/80 border-gray-100 shadow-sm">
+            <div className="card p-5 mb-8 sticky top-4 z-20 backdrop-blur-xl bg-white/80 border border-white/20 shadow-lg shadow-brand/5 rounded-2xl transition-all duration-300">
                 <div className="flex flex-col gap-4">
-                    <div className="relative w-full">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-tertiary" size={18} />
+                    {/* Search Input - Premium Style */}
+                    <div className="relative group w-full">
+                        <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none z-10">
+                            <Search className="text-gray-400 group-focus-within:text-brand transition-colors duration-300" size={18} />
+                        </div>
                         <input
                             type="text"
                             placeholder="Buscar tarefa..."
-                            className="input pl-10 w-full"
+                            className="input-premium-search text-gray-700 placeholder:text-gray-400 font-medium"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                         />
+                        {search && (
+                            <button
+                                onClick={() => setSearch('')}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-full hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors z-10"
+                            >
+                                <X size={14} />
+                            </button>
+                        )}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
-                        <select
-                            className="input w-full text-sm"
+                    <div className="grid grid-cols-2 gap-4">
+                        <CustomSelect
                             value={statusFilter}
-                            onChange={(e) => setStatusFilter(e.target.value)}
-                        >
-                            <option value="all">Status</option>
-                            <option value="active">Em Aberto</option>
-                            <option value="pending">Pendente</option>
-                            <option value="in_progress">Em Andamento</option>
-                            <option value="completed">Concluída</option>
-                        </select>
+                            onChange={setStatusFilter}
+                            options={[
+                                { value: 'all', label: 'Todos os Status' },
+                                { value: 'active', label: 'Em Aberto' },
+                                { value: 'pending', label: 'Pendente' },
+                                { value: 'in_progress', label: 'Em Andamento' },
+                                { value: 'completed', label: 'Concluída' }
+                            ]}
+                            icon={Filter}
+                        />
 
-                        <select
-                            className="input w-full text-sm"
+                        <CustomSelect
                             value={priorityFilter}
-                            onChange={(e) => setPriorityFilter(e.target.value)}
-                        >
-                            <option value="all">Prioridade</option>
-                            <option value="urgent">Urgente</option>
-                            <option value="high">Alta</option>
-                            <option value="medium">Média</option>
-                            <option value="low">Baixa</option>
-                        </select>
+                            onChange={setPriorityFilter}
+                            options={[
+                                { value: 'all', label: 'Todas Prioridades' },
+                                { value: 'urgent', label: 'Urgente' },
+                                { value: 'high', label: 'Alta' },
+                                { value: 'medium', label: 'Média' },
+                                { value: 'low', label: 'Baixa' }
+                            ]}
+                            icon={AlertCircle}
+                        />
                     </div>
                 </div>
             </div>
@@ -664,3 +695,70 @@ export default function StaffTasks() {
         </div>
     )
 }
+
+function CustomSelect({ value, onChange, options, icon: Icon }) {
+    const [isOpen, setIsOpen] = useState(false);
+    const containerRef = useRef(null);
+
+    useEffect(() => {
+        function handleClickOutside(event) {
+            if (containerRef.current && !containerRef.current.contains(event.target)) {
+                setIsOpen(false);
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    const selectedOption = options.find(o => o.value === value) || options[0];
+
+    return (
+        <div className="relative" ref={containerRef}>
+            <button
+                onClick={() => setIsOpen(!isOpen)}
+                type="button"
+                className={`btn-premium-select ${isOpen ? 'active' : ''}`}
+            >
+                <div className="flex items-center gap-3 truncate">
+                    {Icon && (
+                        <div className={`p-1 rounded-md transition-colors ${isOpen || value !== 'all' ? 'bg-brand/10 text-brand' : 'text-gray-400 bg-gray-100'}`}>
+                            <Icon size={14} className="shrink-0" />
+                        </div>
+                    )}
+                    <span className={`truncate ${value !== 'all' ? 'text-gray-900 font-medium' : 'text-gray-500 font-normal'}`}>
+                        {selectedOption.label}
+                    </span>
+                </div>
+                <ChevronDown
+                    size={16}
+                    className={`text-gray-400 transition-transform duration-300 ${isOpen ? 'rotate-180 text-brand' : ''}`}
+                />
+            </button>
+
+            {isOpen && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white/90 backdrop-blur-xl border border-gray-100 rounded-xl shadow-xl shadow-gray-200/50 overflow-hidden z-20 animation-scale-in origin-top">
+                    <div className="max-h-[240px] overflow-y-auto py-1 custom-scrollbar">
+                        {options.map((option) => (
+                            <button
+                                key={option.value}
+                                onClick={() => {
+                                    onChange(option.value);
+                                    setIsOpen(false);
+                                }}
+                                className={`w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors text-left
+                                    ${value === option.value
+                                        ? 'bg-brand/5 text-brand font-medium'
+                                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                    }`}
+                            >
+                                <span>{option.label}</span>
+                                {value === option.value && <div className="w-1.5 h-1.5 rounded-full bg-brand shadow-sm"></div>}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+

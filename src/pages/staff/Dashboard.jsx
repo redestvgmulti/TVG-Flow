@@ -47,6 +47,19 @@ function StaffDashboard() {
         try {
             if (!silent) setLoading(true)
 
+            // Ensure professionalId is loaded
+            if (!professionalId) {
+                console.warn('Professional ID not loaded yet')
+                setStats({
+                    pending: 0,
+                    completed: 0,
+                    overdue: 0,
+                    productivity: 0
+                })
+                setRecentTasks([])
+                return
+            }
+
             // CRITICAL SECURITY FIX: Only fetch tasks where the professional has a micro-task assigned
             // First, get all micro-tasks for this professional
             const { data: microTasks, error: microError } = await supabase
@@ -54,7 +67,10 @@ function StaffDashboard() {
                 .select('tarefa_id')
                 .eq('profissional_id', professionalId)
 
-            if (microError) throw microError
+            if (microError) {
+                console.error('Error fetching micro-tasks:', microError)
+                throw microError
+            }
 
             // Extract unique task IDs
             const taskIds = [...new Set(microTasks?.map(mt => mt.tarefa_id) || [])]
@@ -68,6 +84,7 @@ function StaffDashboard() {
                     productivity: 0
                 })
                 setRecentTasks([])
+                if (!silent) setLoading(false)
                 return
             }
 
@@ -78,7 +95,10 @@ function StaffDashboard() {
                 .in('id', taskIds)
                 .order('deadline_at', { ascending: true, nullsFirst: false })
 
-            if (error) throw error
+            if (error) {
+                console.error('Error fetching tasks:', error)
+                throw error
+            }
 
             const now = new Date()
 
@@ -109,6 +129,13 @@ function StaffDashboard() {
 
         } catch (error) {
             console.error('Error fetching dashboard data:', error)
+            setStats({
+                pending: 0,
+                completed: 0,
+                overdue: 0,
+                productivity: 0
+            })
+            setRecentTasks([])
         } finally {
             setLoading(false)
         }
