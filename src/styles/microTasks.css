@@ -1,0 +1,213 @@
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * Micro-Tasks (Collaborative Tasks) Styles - CityOS Pattern
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* Progress Indicator */
+.micro-tasks-progress {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--color-bg-secondary, #f8f9fa);
+    border-radius: 8px;
+    margin-bottom: 16px;
+}
+
+.micro-tasks-progress-bar {
+    flex: 1;
+    height: 8px;
+    background: var(--color-border-light);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.micro-tasks-progress-fill {
+    height: 100%;
+    background: var(--color-success);
+    transition: width 0.3s ease;
+}
+
+.micro-tasks-progress-text {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    white-space: nowrap;
+}
+
+/* Micro-Tasks List */
+.micro-tasks-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* Micro-Task Card */
+.micro-task-card {
+    padding: 16px;
+    border: 1px solid var(--color-border-light);
+    border-radius: 8px;
+    background: white;
+    transition: all 0.2s;
+}
+
+.micro-task-card:hover {
+    border-color: var(--color-primary);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.micro-task-card.completed {
+    background: var(--color-bg-secondary, #f8f9fa);
+    opacity: 0.8;
+}
+
+.micro-task-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.micro-task-professional {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.micro-task-professional-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin: 0;
+}
+
+.micro-task-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.micro-task-status-badge.pendente {
+    background: #FEF3C7;
+    color: #92400E;
+}
+
+.micro-task-status-badge.concluida {
+    background: var(--color-success-bg);
+    color: var(--color-success);
+}
+
+.micro-task-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.micro-task-link {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--color-text-secondary);
+}
+
+.micro-task-link a {
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
+.micro-task-link a:hover {
+    text-decoration: underline;
+}
+
+.micro-task-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+/* Professional Assignment (in task form) */
+.professional-assignment {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid var(--color-border-light);
+}
+
+.professional-assignment-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin: 0 0 12px 0;
+}
+
+.professional-assignment-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 250px;
+    overflow-y: auto;
+    padding: 8px;
+    background: var(--color-bg-secondary, #f8f9fa);
+    border-radius: 6px;
+}
+
+.professional-assignment-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    background: white;
+    border-radius: 4px;
+    border: 1px solid var(--color-border-light);
+}
+
+.professional-assignment-checkbox {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--color-primary);
+}
+
+.professional-assignment-name {
+    flex: 1;
+    font-size: 14px;
+    color: var(--color-text-primary);
+}
+
+/* Empty State */
+.micro-tasks-empty {
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--color-text-secondary);
+}
+
+.micro-tasks-empty-icon {
+    font-size: 48px;
+    opacity: 0.3;
+    margin-bottom: 12px;
+}
+
+.micro-tasks-empty-text {
+    font-size: 14px;
+    margin: 0;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+    .micro-task-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .micro-task-actions {
+        width: 100%;
+    }
+
+    .micro-task-actions button {
+        flex: 1;
+    }
+}

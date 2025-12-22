@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { Eye, EyeOff } from 'lucide-react'
 
 function Login() {
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
+    const [showPassword, setShowPassword] = useState(false)
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState(null)
 
@@ -48,15 +50,26 @@ function Login() {
 
                     <div className="form-group">
                         <label htmlFor="password">Password</label>
-                        <input
-                            id="password"
-                            type="password"
-                            className="form-input"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            disabled={loading}
-                            required
-                        />
+                        <div className="password-input-wrapper">
+                            <input
+                                id="password"
+                                type={showPassword ? 'text' : 'password'}
+                                className="form-input"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                disabled={loading}
+                                required
+                            />
+                            <button
+                                type="button"
+                                className="password-toggle-btn"
+                                onClick={() => setShowPassword(!showPassword)}
+                                aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                                tabIndex={-1}
+                            >
+                                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                            </button>
+                        </div>
                     </div>
 
                     <button type="submit" className="form-button" disabled={loading}>

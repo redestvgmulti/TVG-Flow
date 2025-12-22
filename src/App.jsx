@@ -12,6 +12,8 @@ import ProfessionalEdit from './pages/admin/professionals/Edit'
 import Reports from './pages/admin/Reports'
 import Calendar from './pages/admin/Calendar'
 import Areas from './pages/admin/Areas'
+import Companies from './pages/admin/Companies'
+import CompanyDetails from './pages/admin/CompanyDetails'
 import StaffDashboard from './pages/staff/Dashboard'
 import StaffTasks from './pages/staff/Tasks'
 
@@ -58,8 +60,13 @@ function App() {
                 {/* Professionals Module */}
                 <Route path="professionals">
                   <Route index element={<ProfessionalsList />} />
-
                   <Route path=":id/edit" element={<ProfessionalEdit />} />
+                </Route>
+
+                {/* Companies Module */}
+                <Route path="companies">
+                  <Route index element={<Companies />} />
+                  <Route path=":id" element={<CompanyDetails />} />
                 </Route>
 
                 <Route path="calendar" element={<Calendar />} />
