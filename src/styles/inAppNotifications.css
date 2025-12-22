@@ -17,10 +17,11 @@
     width: calc(100vw - var(--space-8));
 }
 
-/* Mobile: Full width at top */
+/* Mobile: Full width at top with iOS safe area support */
 @media (max-width: 768px) {
     .in-app-notifications-container {
-        top: var(--space-2);
+        /* Respect iOS notch/Dynamic Island */
+        top: max(var(--space-2), env(safe-area-inset-top));
         right: var(--space-2);
         left: var(--space-2);
         max-width: none;

@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom'
 import { useInAppNotification } from '../contexts/InAppNotificationContext'
 import { X, Bell, CheckCircle2, AlertTriangle, AlertCircle, ClipboardList } from 'lucide-react'
 import '../styles/inAppNotifications.css'
@@ -43,7 +44,7 @@ export default function InAppNotificationBanner() {
         return null
     }
 
-    return (
+    return createPortal(
         <div className="in-app-notifications-container">
             {notifications.map(notification => (
                 <div
@@ -86,6 +87,7 @@ export default function InAppNotificationBanner() {
                     )}
                 </div>
             ))}
-        </div>
+        </div>,
+        document.body
     )
 }

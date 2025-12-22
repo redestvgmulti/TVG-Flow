@@ -12,6 +12,8 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
+    storage: window.localStorage, // CRITICAL: Explicit localStorage for iOS PWA persistence
+    storageKey: 'tvg-flow-auth', // Custom key to avoid conflicts
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true // CRITICAL: Must be true for recovery/invite links to work

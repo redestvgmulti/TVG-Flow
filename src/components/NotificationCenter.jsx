@@ -13,6 +13,13 @@ import {
     isPushSubscribed
 } from '../services/pushNotifications'
 
+// Helper: Detect iOS PWA (standalone mode)
+const isIOSPWA = () => {
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+    const isStandalone = window.navigator.standalone === true
+    return isIOS && isStandalone
+}
+
 function NotificationCenter() {
     const { professionalId } = useAuth()
     const { showNotification } = useInAppNotification()
@@ -24,8 +31,16 @@ function NotificationCenter() {
     const [pushLoading, setPushLoading] = useState(false)
     const [showOptInPrompt, setShowOptInPrompt] = useState(false)
     const [inAppNotificationCount, setInAppNotificationCount] = useState(0)
+    const [isIOSPWAMode] = useState(isIOSPWA())
 
     useEffect(() => {
+        // Debug logging
+        console.log('[NotificationCenter] Mounted', {
+            professionalId,
+            isIOSPWA: isIOSPWAMode,
+            notificationPermission: typeof Notification !== 'undefined' ? Notification.permission : 'N/A'
+        })
+
         if (professionalId) {
             fetchNotifications()
             checkPushStatus()
@@ -39,9 +54,12 @@ function NotificationCenter() {
                     table: 'notifications',
                     filter: `profissional_id=eq.${professionalId}`
                 }, handleNewNotification)
-                .subscribe()
+                .subscribe((status) => {
+                    console.log('[NotificationCenter] Realtime subscription status:', status)
+                })
 
             return () => {
+                console.log('[NotificationCenter] Unmounting, removing channel')
                 supabase.removeChannel(channel)
             }
         }
@@ -155,12 +173,14 @@ function NotificationCenter() {
 
     function handleNewNotification(payload) {
         const notification = payload.new
+        console.log('[NotificationCenter] New notification received:', notification)
 
         // Update state
         setNotifications(prev => [notification, ...prev])
         setUnreadCount(prev => prev + 1)
 
         // Show in-app banner
+        console.log('[NotificationCenter] Showing in-app notification')
         showNotification({
             notification_id: notification.id, // CRITICAL: For deduplication with push
             title: notification.title,
@@ -320,16 +340,18 @@ function NotificationCenter() {
                             <h3>Notificações</h3>
                             {notifications.length > 0 && (
                                 <div className="notification-actions">
-                                    {/* Push Notification Toggle */}
-                                    <button
-                                        onClick={handleTogglePush}
-                                        className="btn-text-action"
-                                        title={pushEnabled ? 'Desativar notificações push' : 'Ativar notificações push'}
-                                        disabled={pushLoading}
-                                    >
-                                        <BellRing size={16} className={pushEnabled ? 'text-brand' : ''} />
-                                        {pushLoading ? '...' : pushEnabled ? 'Push On' : 'Push Off'}
-                                    </button>
+                                    {/* Push Notification Toggle - Hidden on iOS PWA */}
+                                    {!isIOSPWAMode && (
+                                        <button
+                                            onClick={handleTogglePush}
+                                            className="btn-text-action"
+                                            title={pushEnabled ? 'Desativar notificações push' : 'Ativar notificações push'}
+                                            disabled={pushLoading}
+                                        >
+                                            <BellRing size={16} className={pushEnabled ? 'text-brand' : ''} />
+                                            {pushLoading ? '...' : pushEnabled ? 'Push On' : 'Push Off'}
+                                        </button>
+                                    )}
 
                                     {unreadCount > 0 && (
                                         <button
