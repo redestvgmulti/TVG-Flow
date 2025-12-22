@@ -91,6 +91,11 @@ export async function subscribeToPush(professionalId) {
             endpoint: subscriptionData.endpoint
         })
 
+        if (!subscriptionData.keys || !subscriptionData.keys.p256dh || !subscriptionData.keys.auth) {
+            console.error('Push subscription missing keys', subscriptionData)
+            throw new Error('Push subscription missing encryption keys')
+        }
+
         // Check if keys are ArrayBuffer (rare but possible in some polyfills/browsers)
         const p256dh = typeof subscriptionData.keys.p256dh === 'string'
             ? subscriptionData.keys.p256dh
@@ -107,7 +112,7 @@ export async function subscribeToPush(professionalId) {
             auth_key: auth,
             updated_at: new Date().toISOString(),
         }, {
-            onConflict: 'profissional_id, endpoint'
+            onConflict: 'profissional_id,endpoint'
         })
 
         if (error) {
