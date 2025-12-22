@@ -7,10 +7,50 @@
     margin-right: 8px;
 }
 
+/* Header Title Spacing */
+.dashboard-header h2 {
+    margin-bottom: 0;
+}
+
+
 /* Filter Groups */
 .admin-tasks-filter-group {
     margin-bottom: 0;
 }
+
+/* Custom Select Styling */
+.admin-tasks-filter-group select,
+.input-group select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 12px;
+    padding-right: 36px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.admin-tasks-filter-group select:hover,
+.input-group select:hover {
+    border-color: var(--color-primary);
+    background-color: var(--color-bg-hover, #f8f9fa);
+}
+
+.admin-tasks-filter-group select:focus,
+.input-group select:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    outline: none;
+}
+
+.admin-tasks-filter-group select option,
+.input-group select option {
+    padding: 8px 12px;
+}
+
 
 /* Table Card */
 .admin-tasks-table-card {
@@ -184,8 +224,26 @@
     text-align: center;
 }
 
+/* Section Spacing */
+.admin-tasks-section-spacing {
+    margin-bottom: 32px;
+}
+
+/* Tool Bar Padding */
+.tool-bar.admin-tasks-section-spacing {
+    margin-top: 24px;
+    padding: 20px 24px;
+}
+
 /* Mobile Responsiveness */
 @media (max-width: 768px) {
+
+    /* Better padding for filter section on mobile */
+    .tool-bar-filters {
+        gap: 16px;
+        padding: 0 4px;
+    }
+
     .admin-tasks-bulk-actions-bar {
         left: 16px;
         right: 16px;

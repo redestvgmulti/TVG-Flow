@@ -390,7 +390,7 @@ function Tasks() {
     return (
         <div className="animation-fade-in">
             {/* Header */}
-            <div className="dashboard-header">
+            <div className="dashboard-header admin-tasks-section-spacing">
                 <h2>Gerenciamento de Tarefas</h2>
                 <button onClick={handleOpenCreateModal} className="btn btn-primary">
                     <ClipboardList size={20} className="admin-tasks-icon-spacing" />
@@ -399,7 +399,7 @@ function Tasks() {
             </div>
 
             {/* Filters */}
-            <div className="tool-bar">
+            <div className="tool-bar admin-tasks-section-spacing">
                 <div className="tool-bar-header">
                     <span className="tool-bar-title">Filtros e Busca</span>
                 </div>
@@ -467,7 +467,7 @@ function Tasks() {
             </div>
 
             {/* Table */}
-            <div className="card admin-tasks-table-card">
+            <div className="card admin-tasks-table-card admin-tasks-section-spacing">
                 <div className="admin-tasks-table-header">
                     <h3 className="admin-tasks-count-title">
                         {filteredTasks.length} {filteredTasks.length === 1 ? 'tarefa encontrada' : 'tarefas encontradas'}
@@ -1050,3 +1050,4 @@ function Tasks() {
 }
 
 export default Tasks
+
