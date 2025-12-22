@@ -1,0 +1,268 @@
+/* In-App Notifications - CityOS Solid Design */
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   CONTAINER
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.in-app-notifications-container {
+    position: fixed;
+    top: var(--space-4);
+    right: var(--space-4);
+    z-index: 9999;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    max-width: 400px;
+    width: calc(100vw - var(--space-8));
+}
+
+/* Mobile: Full width at top */
+@media (max-width: 768px) {
+    .in-app-notifications-container {
+        top: var(--space-2);
+        right: var(--space-2);
+        left: var(--space-2);
+        max-width: none;
+        width: auto;
+    }
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   NOTIFICATION BANNER - SOLID SURFACE (CityOS)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.in-app-notification {
+    background: var(--color-bg-surface);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+    box-shadow:
+        0 2px 4px rgba(0, 0, 0, 0.08),
+        0 0 0 1px rgba(0, 0, 0, 0.04);
+    pointer-events: auto;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+    .in-app-notification {
+        background: var(--color-bg-surface);
+        box-shadow:
+            0 2px 4px rgba(0, 0, 0, 0.3),
+            0 0 0 1px rgba(255, 255, 255, 0.08);
+    }
+}
+
+.in-app-notification:hover {
+    transform: translateY(-1px);
+    box-shadow:
+        0 4px 8px rgba(0, 0, 0, 0.12),
+        0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+/* Accent bar (left border) */
+.in-app-notification::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: var(--color-primary);
+    border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+}
+
+.in-app-notification.type-success::before {
+    background: var(--color-success);
+}
+
+.in-app-notification.type-warning::before {
+    background: var(--color-warning);
+}
+
+.in-app-notification.type-error::before {
+    background: var(--color-danger);
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   CONTENT LAYOUT
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.in-app-notification-content {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    padding-left: var(--space-2);
+}
+
+.in-app-notification-icon {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    color: var(--color-primary);
+    margin-top: 2px;
+}
+
+.in-app-notification.type-success .in-app-notification-icon {
+    color: var(--color-success);
+}
+
+.in-app-notification.type-warning .in-app-notification-icon {
+    color: var(--color-warning);
+}
+
+.in-app-notification.type-error .in-app-notification-icon {
+    color: var(--color-danger);
+}
+
+.in-app-notification-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.in-app-notification-title {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin: 0 0 var(--space-1) 0;
+    line-height: 1.4;
+}
+
+.in-app-notification-message {
+    font-size: var(--text-xs);
+    color: var(--color-text-secondary);
+    margin: 0;
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    line-clamp: 2;
+    overflow: hidden;
+}
+
+.in-app-notification-close {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+    transition: color 0.2s;
+    background: none;
+    border: none;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.in-app-notification-close:hover {
+    color: var(--color-text-primary);
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   ANIMATIONS
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* Slide in from right (desktop) */
+@keyframes slideInRight {
+    from {
+        transform: translateX(calc(100% + var(--space-4)));
+        opacity: 0;
+    }
+
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* Slide in from top (mobile) */
+@keyframes slideInTop {
+    from {
+        transform: translateY(calc(-100% - var(--space-4)));
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+/* Slide out to right (desktop) */
+@keyframes slideOutRight {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+
+    to {
+        transform: translateX(calc(100% + var(--space-4)));
+        opacity: 0;
+    }
+}
+
+/* Slide out to top (mobile) */
+@keyframes slideOutTop {
+    from {
+        transform: translateY(0);
+        opacity: 1;
+    }
+
+    to {
+        transform: translateY(calc(-100% - var(--space-4)));
+        opacity: 0;
+    }
+}
+
+.in-app-notification.entering {
+    animation: slideInRight 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.in-app-notification.exiting {
+    animation: slideOutRight 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@media (max-width: 768px) {
+    .in-app-notification.entering {
+        animation: slideInTop 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
+
+    .in-app-notification.exiting {
+        animation: slideOutTop 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   PROGRESS BAR (Auto-dismiss indicator)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.in-app-notification-progress {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+}
+
+@media (prefers-color-scheme: dark) {
+    .in-app-notification-progress {
+        background: rgba(255, 255, 255, 0.1);
+    }
+}
+
+.in-app-notification-progress-bar {
+    height: 100%;
+    background: var(--color-primary);
+    transform-origin: left;
+}
+
+/* Pause animation on hover */
+.in-app-notification:hover .in-app-notification-progress-bar {
+    animation-play-state: paused;
+}

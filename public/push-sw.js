@@ -1,75 +1,113 @@
 // Service Worker for Push Notifications
-// This file handles push events and displays notifications
+// CityOS Architecture: Smart decision-making with clients.matchAll()
+// HARDENED: Comprehensive error handling, improved deep links
 
-self.addEventListener('install', (event) => {
-    console.log('Service Worker installing...')
-    self.skipWaiting()
-})
-
-self.addEventListener('activate', (event) => {
-    console.log('Service Worker activating...')
-    event.waitUntil(clients.claim())
-})
-
-// Handle push notifications
-self.addEventListener('push', (event) => {
-    console.log('Push notification received:', event)
-
+self.addEventListener('push', async (event) => {
     if (!event.data) {
-        console.log('No data in push event')
+        console.warn('[SW] Push event without data')
         return
     }
 
     try {
         const data = event.data.json()
-        console.log('Push data:', data)
 
-        const options = {
-            body: data.message || 'Nova notificação',
-            icon: data.icon || '/icon-192x192.png',
-            badge: data.badge || '/badge-72x72.png',
-            vibrate: [200, 100, 200],
-            tag: 'tvg-flow-notification',
-            requireInteraction: false,
-            data: {
-                url: data.url || '/',
-                timestamp: data.timestamp || Date.now(),
-            },
+        // CRITICAL: Check if app is currently open
+        const clients = await self.clients.matchAll({
+            type: 'window',
+            includeUncontrolled: true
+        })
+
+        const hasVisibleClient = clients.some(client => client.visibilityState === 'visible')
+
+        // If app is open and visible, DON'T show push notification
+        // The in-app notification will handle it
+        if (hasVisibleClient) {
+            console.log('[SW] App is visible, skipping push notification')
+            return
         }
 
-        event.waitUntil(
-            self.registration.showNotification(data.title || 'TVG Flow', options)
+        // Build deep link URL based on entity type
+        let targetUrl = '/'
+        if (data.entity_type === 'task' && data.entity_id) {
+            targetUrl = `/staff/tasks/${data.entity_id}`
+        } else if (data.url) {
+            targetUrl = data.url
+        }
+
+        // App is closed or hidden, show push notification
+        const notificationOptions = {
+            body: data.message || data.body || '',
+            icon: '/icons/icon-192x192.png',
+            badge: '/icons/icon-192x192.png',
+            tag: data.notification_id || 'default', // Use notification_id for deduplication
+            requireInteraction: false,
+            vibrate: [200, 100, 200], // Subtle vibration pattern
+            data: {
+                url: targetUrl,
+                notification_id: data.notification_id,
+                entity_type: data.entity_type,
+                entity_id: data.entity_id
+            }
+        }
+
+        await self.registration.showNotification(
+            data.title || 'TVG Flow',
+            notificationOptions
         )
     } catch (error) {
-        console.error('Error showing notification:', error)
+        console.error('[SW] Error handling push:', error)
+        // Silent error - never break UX
     }
 })
 
-// Handle notification clicks
 self.addEventListener('notificationclick', (event) => {
-    console.log('Notification clicked:', event)
-
     event.notification.close()
 
-    const urlToOpen = event.notification.data?.url || '/'
+    const targetUrl = event.notification.data?.url || '/'
+    const fullUrl = new URL(targetUrl, self.location.origin).href
 
     event.waitUntil(
-        clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-            // Check if there's already a window open
-            for (const client of clientList) {
-                if (client.url === urlToOpen && 'focus' in client) {
+        self.clients.matchAll({
+            type: 'window',
+            includeUncontrolled: true
+        }).then((clients) => {
+            // Try to find existing window with same origin
+            for (const client of clients) {
+                const clientUrl = new URL(client.url)
+                const targetUrlObj = new URL(fullUrl)
+
+                // If same origin, navigate existing window
+                if (clientUrl.origin === targetUrlObj.origin && 'navigate' in client) {
+                    client.navigate(fullUrl)
                     return client.focus()
                 }
             }
-            // If not, open a new window
-            if (clients.openWindow) {
-                return clients.openWindow(urlToOpen)
+
+            // No matching window, open new one
+            if (self.clients.openWindow) {
+                return self.clients.openWindow(fullUrl)
+            }
+        }).catch(error => {
+            console.error('[SW] Navigation failed:', error)
+            // Fallback: try to open window anyway
+            if (self.clients.openWindow) {
+                return self.clients.openWindow(fullUrl)
             }
         })
     )
 })
 
-// Handle notification close
-self.addEventListener('notificationclose', (event) => {
-    console.log('Notification closed:', event)
+// Handle service worker activation
+self.addEventListener('activate', (event) => {
+    console.log('[SW] Activated')
+    event.waitUntil(self.clients.claim())
+})
+
+// Handle errors
+self.addEventListener('error', (event) => {
+    console.error('[SW] Error:', event.error)
+})
+
+self.addEventListener('unhandledrejection', (event) => {
+    console.error('[SW] Unhandled rejection:', event.reason)
 })

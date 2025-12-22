@@ -1,7 +1,6 @@
 import { supabase } from './supabase'
 
-// VAPID Public Key - You need to generate this with web-push
-// Run: npx web-push generate-vapid-keys
+// VAPID Public Key
 const VAPID_PUBLIC_KEY = 'BL_jX1CHwA3_0Na2LqMtRp20o5z6lVMjzRXjqCW2yeLro-3O7-EGasNmCViwLzBzuehZgO1e5pU2kYMsaA15zxc'
 
 /**
@@ -22,81 +21,85 @@ function urlBase64ToUint8Array(base64String) {
 
 /**
  * Register Service Worker
+ * HARDENED: Never throws, returns null on error
  */
 export async function registerServiceWorker() {
     if (!('serviceWorker' in navigator)) {
-        throw new Error('Service Worker não suportado neste navegador')
+        console.warn('[Push] Service Worker not supported')
+        return null
     }
 
     try {
-        // Em produção, o VitePWA gera o sw.js (que importa o push-sw.js)
-        // Em desenvolvimento, usamos diretamente o push-sw.js
         const swUrl = import.meta.env.PROD ? '/sw.js' : '/push-sw.js'
-
         const registration = await navigator.serviceWorker.register(swUrl)
-
-        // Wait for it to be ready
         await navigator.serviceWorker.ready
-
         return registration
     } catch (error) {
-        console.error('Erro ao registrar Service Worker:', error)
-        throw error
+        console.error('[Push] SW registration failed:', error)
+        // Silent error - never break UX
+        return null
     }
 }
 
 /**
  * Request notification permission
+ * HARDENED: Never throws, returns 'denied' on error
  */
 export async function requestNotificationPermission() {
     if (!('Notification' in window)) {
-        console.warn('Notifications not supported')
+        console.warn('[Push] Notifications not supported')
         return 'denied'
     }
 
-    if (Notification.permission === 'granted') {
-        return 'granted'
-    }
+    try {
+        if (Notification.permission === 'granted') {
+            return 'granted'
+        }
 
-    if (Notification.permission !== 'denied') {
-        const permission = await Notification.requestPermission()
-        return permission
-    }
+        if (Notification.permission !== 'denied') {
+            const permission = await Notification.requestPermission()
+            return permission
+        }
 
-    return Notification.permission
+        return Notification.permission
+    } catch (error) {
+        console.error('[Push] Permission request failed:', error)
+        return 'denied'
+    }
 }
 
 /**
  * Subscribe to push notifications
+ * HARDENED: Comprehensive error handling
  */
 export async function subscribeToPush(professionalId) {
+    if (!professionalId) {
+        console.error('[Push] Missing professionalId')
+        return null
+    }
+
     try {
-        // Check if already subscribed
         const registration = await navigator.serviceWorker.ready
+        if (!registration) {
+            throw new Error('Service Worker not ready')
+        }
+
         let subscription = await registration.pushManager.getSubscription()
 
         if (!subscription) {
-            // Create new subscription
             subscription = await registration.pushManager.subscribe({
                 userVisibleOnly: true,
                 applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
             })
         }
 
-        // Save subscription to database
         const subscriptionData = subscription.toJSON()
 
-        console.log('Sending subscription to server:', {
-            profissional_id: professionalId,
-            endpoint: subscriptionData.endpoint
-        })
-
         if (!subscriptionData.keys || !subscriptionData.keys.p256dh || !subscriptionData.keys.auth) {
-            console.error('Push subscription missing keys', subscriptionData)
             throw new Error('Push subscription missing encryption keys')
         }
 
-        // Check if keys are ArrayBuffer (rare but possible in some polyfills/browsers)
+        // Convert keys to base64 strings if needed
         const p256dh = typeof subscriptionData.keys.p256dh === 'string'
             ? subscriptionData.keys.p256dh
             : btoa(String.fromCharCode.apply(null, new Uint8Array(subscriptionData.keys.p256dh)))
@@ -116,57 +119,68 @@ export async function subscribeToPush(professionalId) {
         })
 
         if (error) {
-            console.error('Supabase upsert error:', error)
+            console.error('[Push] Database upsert error:', error)
             throw error
         }
 
-        console.log('Push subscription saved successfully')
+        console.log('[Push] Subscription saved successfully')
         return subscription
     } catch (error) {
-        console.error('Error subscribing to push:', error)
-        throw error
+        console.error('[Push] Subscribe failed:', error)
+        // Silent error - never break UX
+        return null
     }
 }
 
 /**
  * Unsubscribe from push notifications
+ * HARDENED: Never throws
  */
 export async function unsubscribeFromPush() {
     try {
         const registration = await navigator.serviceWorker.ready
+        if (!registration) {
+            return
+        }
+
         const subscription = await registration.pushManager.getSubscription()
 
         if (subscription) {
             await subscription.unsubscribe()
 
-            // Remove from database
             const subscriptionData = subscription.toJSON()
             await supabase
                 .from('push_subscriptions')
                 .delete()
                 .eq('endpoint', subscriptionData.endpoint)
 
-            console.log('Unsubscribed from push')
+            console.log('[Push] Unsubscribed successfully')
         }
     } catch (error) {
-        console.error('Error unsubscribing:', error)
-        throw error
+        console.error('[Push] Unsubscribe failed:', error)
+        // Silent error - never break UX
     }
 }
 
 /**
  * Check if user is subscribed to push
+ * HARDENED: Never throws, returns false on error
  */
 export async function isPushSubscribed() {
     try {
-        if (!('serviceWorker' in navigator)) return false
+        if (!('serviceWorker' in navigator)) {
+            return false
+        }
 
         const registration = await navigator.serviceWorker.ready
-        const subscription = await registration.pushManager.getSubscription()
+        if (!registration) {
+            return false
+        }
 
+        const subscription = await registration.pushManager.getSubscription()
         return !!subscription
     } catch (error) {
-        console.error('Error checking subscription:', error)
+        console.error('[Push] Check subscription failed:', error)
         return false
     }
 }

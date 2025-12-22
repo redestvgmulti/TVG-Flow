@@ -3,6 +3,8 @@ import { supabase } from '../services/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { Bell, ClipboardList, CheckCircle2, Trash2, Check, X, BellRing } from 'lucide-react'
 import { toast } from 'sonner'
+import { useInAppNotification } from '../contexts/InAppNotificationContext'
+import PushOptInPrompt from './PushOptInPrompt'
 import {
     registerServiceWorker,
     requestNotificationPermission,
@@ -13,18 +15,20 @@ import {
 
 function NotificationCenter() {
     const { professionalId } = useAuth()
+    const { showNotification } = useInAppNotification()
     const [notifications, setNotifications] = useState([])
     const [unreadCount, setUnreadCount] = useState(0)
     const [showPanel, setShowPanel] = useState(false)
     const [loading, setLoading] = useState(false)
     const [pushEnabled, setPushEnabled] = useState(false)
     const [pushLoading, setPushLoading] = useState(false)
+    const [showOptInPrompt, setShowOptInPrompt] = useState(false)
+    const [inAppNotificationCount, setInAppNotificationCount] = useState(0)
 
     useEffect(() => {
         if (professionalId) {
             fetchNotifications()
             checkPushStatus()
-            initializeServiceWorker()
 
             // Subscribe to real-time notifications
             const channel = supabase
@@ -43,38 +47,64 @@ function NotificationCenter() {
         }
     }, [professionalId])
 
-    async function initializeServiceWorker() {
-        await registerServiceWorker()
-    }
+
 
     async function checkPushStatus() {
         const subscribed = await isPushSubscribed()
         setPushEnabled(subscribed)
     }
 
-    async function handleTogglePush() {
+    async function handleOptInAccept() {
         setPushLoading(true)
         try {
-            if (pushEnabled) {
-                await unsubscribeFromPush()
-                setPushEnabled(false)
+            // Register service worker first
+            await registerServiceWorker()
+
+            const permission = await requestNotificationPermission()
+            if (permission === 'granted') {
+                await subscribeToPush(professionalId)
+                setPushEnabled(true)
+                setShowOptInPrompt(false)
+                toast.success('Alertas push ativados!')
+            } else if (permission === 'denied') {
+                setShowOptInPrompt(false)
+                toast.error('Permissão negada. Ative nas configurações do navegador.')
             } else {
-                const permission = await requestNotificationPermission()
-                if (permission === 'granted') {
-                    await subscribeToPush(professionalId)
-                    setPushEnabled(true)
-                    toast.success('Notificações ativadas com sucesso!')
-                } else if (permission === 'denied') {
-                    toast.error('Permissão negada. Ative as notificações nas configurações do navegador.')
-                } else {
-                    toast.message('Para receber notificações, você precisa permitir o acesso.')
-                }
+                setShowOptInPrompt(false)
+                toast.message('Permissão necessária para ativar alertas.')
             }
         } catch (error) {
-            console.error('Error toggling push:', error)
-            toast.error('Erro ao configurar notificações push')
+            console.error('Error enabling push:', error)
+            setShowOptInPrompt(false)
+            toast.error('Erro ao ativar alertas push')
         } finally {
             setPushLoading(false)
+        }
+    }
+
+    function handleOptInDecline() {
+        setShowOptInPrompt(false)
+        // Store preference to not show again for this session
+        sessionStorage.setItem('push-opt-in-declined', 'true')
+    }
+
+    async function handleTogglePush() {
+        if (pushEnabled) {
+            // Disable push
+            setPushLoading(true)
+            try {
+                await unsubscribeFromPush()
+                setPushEnabled(false)
+                toast.success('Alertas push desativados')
+            } catch (error) {
+                console.error('Error disabling push:', error)
+                toast.error('Erro ao desativar alertas')
+            } finally {
+                setPushLoading(false)
+            }
+        } else {
+            // Show opt-in prompt
+            setShowOptInPrompt(true)
         }
     }
 
@@ -102,8 +132,37 @@ function NotificationCenter() {
     }
 
     function handleNewNotification(payload) {
-        setNotifications(prev => [payload.new, ...prev])
+        const notification = payload.new
+
+        // Update state
+        setNotifications(prev => [notification, ...prev])
         setUnreadCount(prev => prev + 1)
+
+        // Show in-app banner
+        showNotification({
+            notification_id: notification.id, // CRITICAL: For deduplication with push
+            title: notification.title,
+            message: notification.message,
+            type: notification.type || 'info',
+            onClick: () => {
+                // Navigate to related entity if available
+                if (notification.entity_type === 'task' && notification.entity_id) {
+                    window.location.href = `/staff/tasks/${notification.entity_id}`
+                }
+            }
+        })
+
+        // Smart opt-in trigger: after 3 in-app notifications
+        setInAppNotificationCount(prev => {
+            const newCount = prev + 1
+            if (newCount === 3 && !pushEnabled && !sessionStorage.getItem('push-opt-in-declined')) {
+                // Show opt-in prompt after a short delay (let user see the notification first)
+                setTimeout(() => {
+                    setShowOptInPrompt(true)
+                }, 2000)
+            }
+            return newCount
+        })
     }
 
     async function markAsRead(notificationId) {
@@ -314,6 +373,15 @@ function NotificationCenter() {
                         </div>
                     </div>
                 </>
+            )}
+
+            {/* Push Opt-In Prompt */}
+            {showOptInPrompt && (
+                <PushOptInPrompt
+                    onAccept={handleOptInAccept}
+                    onDecline={handleOptInDecline}
+                    loading={pushLoading}
+                />
             )}
         </div>
     )
