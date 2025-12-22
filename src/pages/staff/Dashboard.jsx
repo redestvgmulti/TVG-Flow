@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import { useRefresh } from '../../contexts/RefreshContext'
 import {
     Clock,
     CheckCircle2,
@@ -15,6 +16,7 @@ import {
 function StaffDashboard() {
     const navigate = useNavigate()
     const { professionalName, professionalId } = useAuth()
+    const { registerRefresh, unregisterRefresh } = useRefresh()
     const [stats, setStats] = useState({
         pending: 0,
         completed: 0,
@@ -32,11 +34,18 @@ function StaffDashboard() {
 
     useEffect(() => {
         fetchDashboardData()
+
+        // Register pull-to-refresh
+        registerRefresh(async () => {
+            await fetchDashboardData(true) // Silent refresh
+        })
+
+        return () => unregisterRefresh()
     }, [])
 
-    async function fetchDashboardData() {
+    async function fetchDashboardData(silent = false) {
         try {
-            setLoading(true)
+            if (!silent) setLoading(true)
 
             // RLS will automatically filter tasks for the current user
             // We fetch all tasks to calculate client-side stats quickly

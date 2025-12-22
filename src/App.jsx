@@ -24,65 +24,69 @@ import RoleProtectedRoute from './routes/RoleProtectedRoute'
 
 import { Toaster } from 'sonner'
 
+import { RefreshProvider } from './contexts/RefreshContext'
+
 function App() {
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-      <Toaster position="top-right" richColors />
-      <AppLayout>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
+      <RefreshProvider>
+        <Toaster position="top-right" richColors />
+        <AppLayout>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
 
-          {/* Admin Routes */}
-          <Route
-            path="/admin"
-            element={
-              <ProtectedRoute>
-                <RoleProtectedRoute allowedRole="admin">
-                  <AdminLayout />
-                </RoleProtectedRoute>
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<Dashboard />} />
-            <Route path="tasks" element={<Tasks />} />
-            <Route path="areas" element={<Areas />} />
+            {/* Admin Routes */}
+            <Route
+              path="/admin"
+              element={
+                <ProtectedRoute>
+                  <RoleProtectedRoute allowedRole="admin">
+                    <AdminLayout />
+                  </RoleProtectedRoute>
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<Dashboard />} />
+              <Route path="tasks" element={<Tasks />} />
+              <Route path="areas" element={<Areas />} />
 
-            {/* Professionals Module */}
-            <Route path="professionals">
-              <Route index element={<ProfessionalsList />} />
+              {/* Professionals Module */}
+              <Route path="professionals">
+                <Route index element={<ProfessionalsList />} />
 
-              <Route path=":id/edit" element={<ProfessionalEdit />} />
+                <Route path=":id/edit" element={<ProfessionalEdit />} />
+              </Route>
+
+              <Route path="calendar" element={<Calendar />} />
+              <Route path="reports" element={<Reports />} />
             </Route>
 
-            <Route path="calendar" element={<Calendar />} />
-            <Route path="reports" element={<Reports />} />
-          </Route>
+            {/* Staff Routes */}
+            <Route
+              path="/staff"
+              element={
+                <ProtectedRoute>
+                  <RoleProtectedRoute allowedRole="profissional">
+                    <AdminLayout />
+                  </RoleProtectedRoute>
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<Navigate to="/staff/dashboard" replace />} />
+              <Route path="dashboard" element={<StaffDashboard />} />
+              <Route path="tasks" element={<StaffTasks />} />
 
-          {/* Staff Routes */}
-          <Route
-            path="/staff"
-            element={
-              <ProtectedRoute>
-                <RoleProtectedRoute allowedRole="profissional">
-                  <AdminLayout />
-                </RoleProtectedRoute>
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<Navigate to="/staff/dashboard" replace />} />
-            <Route path="dashboard" element={<StaffDashboard />} />
-            <Route path="tasks" element={<StaffTasks />} />
+              <Route path="requests/new" element={<StaffRequestCreate />} />
+              <Route path="calendar" element={<StaffCalendar />} />
+              <Route path="profile" element={<StaffProfile />} />
+              <Route path="today" element={<StaffToday />} />
+            </Route>
 
-            <Route path="requests/new" element={<StaffRequestCreate />} />
-            <Route path="calendar" element={<StaffCalendar />} />
-            <Route path="profile" element={<StaffProfile />} />
-            <Route path="today" element={<StaffToday />} />
-          </Route>
-
-          <Route path="/" element={<Navigate to="/login" replace />} />
-        </Routes>
-      </AppLayout>
+            <Route path="/" element={<Navigate to="/login" replace />} />
+          </Routes>
+        </AppLayout>
+      </RefreshProvider>
     </BrowserRouter>
   )
 }

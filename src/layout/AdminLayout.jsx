@@ -2,6 +2,7 @@ import { Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Header from './Header'
 import BottomNav from './BottomNav'
+import PullToRefresh from '../components/PullToRefresh'
 
 function AdminLayout() {
     return (
@@ -11,9 +12,9 @@ function AdminLayout() {
             <div className="admin-main">
                 <Header />
 
-                <main className="admin-content">
+                <PullToRefresh className="admin-content">
                     <Outlet />
-                </main>
+                </PullToRefresh>
             </div>
 
             <BottomNav />

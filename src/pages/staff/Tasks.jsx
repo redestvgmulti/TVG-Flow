@@ -18,9 +18,11 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '../../contexts/AuthContext'
+import { useRefresh } from '../../contexts/RefreshContext'
 
 export default function StaffTasks() {
     const { user } = useAuth()
+    const { registerRefresh, unregisterRefresh } = useRefresh()
     const [tasks, setTasks] = useState([])
     const [filteredTasks, setFilteredTasks] = useState([])
     const [loading, setLoading] = useState(true)
@@ -40,15 +42,22 @@ export default function StaffTasks() {
 
     useEffect(() => {
         fetchTasks()
+
+        // Register pull-to-refresh
+        registerRefresh(async () => {
+            await fetchTasks(true) // Silent refresh
+        })
+
+        return () => unregisterRefresh()
     }, [])
 
     useEffect(() => {
         filterTasks()
     }, [search, statusFilter, priorityFilter, tasks])
 
-    async function fetchTasks() {
+    async function fetchTasks(silent = false) {
         try {
-            setLoading(true)
+            if (!silent) setLoading(true)
             const { data, error } = await supabase
                 .from('tarefas')
                 .select('*')
@@ -58,8 +67,9 @@ export default function StaffTasks() {
             setTasks(data || [])
         } catch (error) {
             console.error('Error fetching tasks:', error)
+            toast.error('Erro ao atualizar tarefas')
         } finally {
-            setLoading(false)
+            if (!silent) setLoading(false)
         }
     }
 
