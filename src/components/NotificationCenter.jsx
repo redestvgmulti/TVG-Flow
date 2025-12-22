@@ -1,7 +1,14 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../services/supabase'
 import { useAuth } from '../contexts/AuthContext'
-import { Bell, ClipboardList, CheckCircle2, Trash2, Check, X } from 'lucide-react'
+import { Bell, ClipboardList, CheckCircle2, Trash2, Check, X, BellRing } from 'lucide-react'
+import {
+    registerServiceWorker,
+    requestNotificationPermission,
+    subscribeToPush,
+    unsubscribeFromPush,
+    isPushSubscribed
+} from '../services/pushNotifications'
 
 function NotificationCenter() {
     const { professionalId } = useAuth()
@@ -9,10 +16,14 @@ function NotificationCenter() {
     const [unreadCount, setUnreadCount] = useState(0)
     const [showPanel, setShowPanel] = useState(false)
     const [loading, setLoading] = useState(false)
+    const [pushEnabled, setPushEnabled] = useState(false)
+    const [pushLoading, setPushLoading] = useState(false)
 
     useEffect(() => {
         if (professionalId) {
             fetchNotifications()
+            checkPushStatus()
+            initializeServiceWorker()
 
             // Subscribe to real-time notifications
             const channel = supabase
@@ -30,6 +41,38 @@ function NotificationCenter() {
             }
         }
     }, [professionalId])
+
+    async function initializeServiceWorker() {
+        await registerServiceWorker()
+    }
+
+    async function checkPushStatus() {
+        const subscribed = await isPushSubscribed()
+        setPushEnabled(subscribed)
+    }
+
+    async function handleTogglePush() {
+        setPushLoading(true)
+        try {
+            if (pushEnabled) {
+                await unsubscribeFromPush()
+                setPushEnabled(false)
+            } else {
+                const permission = await requestNotificationPermission()
+                if (permission === 'granted') {
+                    await subscribeToPush(professionalId)
+                    setPushEnabled(true)
+                } else {
+                    alert('Permissão de notificações negada')
+                }
+            }
+        } catch (error) {
+            console.error('Error toggling push:', error)
+            alert('Erro ao configurar notificações push')
+        } finally {
+            setPushLoading(false)
+        }
+    }
 
     async function fetchNotifications() {
         try {
@@ -192,6 +235,17 @@ function NotificationCenter() {
                             <h3>Notificações</h3>
                             {notifications.length > 0 && (
                                 <div className="notification-actions">
+                                    {/* Push Notification Toggle */}
+                                    <button
+                                        onClick={handleTogglePush}
+                                        className="btn-text-action"
+                                        title={pushEnabled ? 'Desativar notificações push' : 'Ativar notificações push'}
+                                        disabled={pushLoading}
+                                    >
+                                        <BellRing size={16} className={pushEnabled ? 'text-brand' : ''} />
+                                        {pushLoading ? '...' : pushEnabled ? 'Push On' : 'Push Off'}
+                                    </button>
+
                                     {unreadCount > 0 && (
                                         <button
                                             onClick={markAllAsRead}
