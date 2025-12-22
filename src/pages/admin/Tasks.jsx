@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../services/supabase'
-import { Edit2, Trash2, ClipboardList, FileText, CheckCircle2 } from 'lucide-react'
+import { Edit2, Trash2, ClipboardList, AlertTriangle, X } from 'lucide-react'
+import { toast } from 'sonner'
+import '../../styles/adminTasks.css'
 
 function Tasks() {
     const [tasks, setTasks] = useState([])
@@ -19,7 +21,12 @@ function Tasks() {
     const [showCreateModal, setShowCreateModal] = useState(false)
     const [showEditModal, setShowEditModal] = useState(false)
     const [showDetailModal, setShowDetailModal] = useState(false)
+    const [showDeleteModal, setShowDeleteModal] = useState(false)
+    const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false)
     const [selectedTask, setSelectedTask] = useState(null)
+
+    // Bulk selection
+    const [selectedTasks, setSelectedTasks] = useState([])
 
     // Form state
     const [formData, setFormData] = useState({
@@ -35,20 +42,10 @@ function Tasks() {
     })
 
     const [submitting, setSubmitting] = useState(false)
-    const [feedback, setFeedback] = useState({ show: false, type: '', message: '' })
 
     useEffect(() => {
         fetchData()
     }, [])
-
-    useEffect(() => {
-        if (feedback.show) {
-            const timer = setTimeout(() => {
-                setFeedback({ show: false, type: '', message: '' })
-            }, 5000)
-            return () => clearTimeout(timer)
-        }
-    }, [feedback.show])
 
     async function fetchData() {
         try {
@@ -86,14 +83,10 @@ function Tasks() {
             setClients(clientsResult.data || [])
         } catch (error) {
             console.error('Error fetching data:', error)
-            showFeedback('error', 'Erro ao carregar dados. Por favor, recarregue a página.')
+            toast.error('Erro ao carregar dados. Por favor, recarregue a página.')
         } finally {
             setLoading(false)
         }
-    }
-
-    function showFeedback(type, message) {
-        setFeedback({ show: true, type, message })
     }
 
     function resetForm() {
@@ -136,16 +129,25 @@ function Tasks() {
         setShowDetailModal(true)
     }
 
+    function handleOpenDeleteModal(task) {
+        setSelectedTask(task)
+        setShowDeleteModal(true)
+    }
+
+    function handleOpenBulkDeleteModal() {
+        setShowBulkDeleteModal(true)
+    }
+
     async function handleCreateTask(e) {
         e.preventDefault()
 
         if (!formData.titulo.trim()) {
-            showFeedback('error', 'Por favor, insira um título para a tarefa')
+            toast.error('Por favor, insira um título para a tarefa')
             return
         }
 
         if (!formData.deadline) {
-            showFeedback('error', 'Por favor, defina um prazo para a tarefa')
+            toast.error('Por favor, defina um prazo para a tarefa')
             return
         }
 
@@ -170,13 +172,13 @@ function Tasks() {
 
             if (error) throw error
 
-            showFeedback('success', 'Tarefa criada com sucesso!')
+            toast.success('Tarefa criada com sucesso!')
             setShowCreateModal(false)
             resetForm()
             await fetchData()
         } catch (error) {
             console.error('Error creating task:', error)
-            showFeedback('error', 'Erro ao criar tarefa. Tente novamente.')
+            toast.error('Erro ao criar tarefa. Tente novamente.')
         } finally {
             setSubmitting(false)
         }
@@ -186,7 +188,7 @@ function Tasks() {
         e.preventDefault()
 
         if (!formData.titulo.trim()) {
-            showFeedback('error', 'Por favor, insira um título para a tarefa')
+            toast.error('Por favor, insira um título para a tarefa')
             return
         }
 
@@ -213,52 +215,97 @@ function Tasks() {
 
             if (error) throw error
 
-            showFeedback('success', 'Tarefa atualizada com sucesso!')
+            toast.success('Tarefa atualizada com sucesso!')
             setShowEditModal(false)
             setSelectedTask(null)
             resetForm()
             await fetchData()
         } catch (error) {
             console.error('Error updating task:', error)
-            showFeedback('error', 'Erro ao atualizar tarefa. Tente novamente.')
+            toast.error('Erro ao atualizar tarefa. Tente novamente.')
         } finally {
             setSubmitting(false)
         }
     }
 
-    async function handleDeleteTask(task) {
-        if (!confirm(`Tem certeza que deseja excluir a tarefa "${task.titulo}"? Esta ação não pode ser desfeita.`)) {
-            return
-        }
+    async function handleConfirmDelete() {
+        if (!selectedTask) return
+
+        setSubmitting(true)
 
         try {
             const { error } = await supabase
                 .from('tarefas')
                 .delete()
-                .eq('id', task.id)
+                .eq('id', selectedTask.id)
 
             if (error) throw error
 
-            showFeedback('success', 'Tarefa excluída com sucesso!')
+            toast.success('Tarefa excluída com sucesso!')
+            setShowDeleteModal(false)
+            setSelectedTask(null)
             await fetchData()
         } catch (error) {
             console.error('Error deleting task:', error)
-            showFeedback('error', 'Erro ao excluir tarefa. Tente novamente.')
+            toast.error('Erro ao excluir tarefa. Tente novamente.')
+        } finally {
+            setSubmitting(false)
         }
+    }
+
+    async function handleConfirmBulkDelete() {
+        if (selectedTasks.length === 0) return
+
+        setSubmitting(true)
+
+        try {
+            const { error } = await supabase
+                .from('tarefas')
+                .delete()
+                .in('id', selectedTasks)
+
+            if (error) throw error
+
+            toast.success(`${selectedTasks.length} ${selectedTasks.length === 1 ? 'tarefa excluída' : 'tarefas excluídas'} com sucesso!`)
+            setShowBulkDeleteModal(false)
+            setSelectedTasks([])
+            await fetchData()
+        } catch (error) {
+            console.error('Error deleting tasks:', error)
+            toast.error('Erro ao excluir tarefas. Tente novamente.')
+        } finally {
+            setSubmitting(false)
+        }
+    }
+
+    function handleSelectTask(taskId) {
+        setSelectedTasks(prev => {
+            if (prev.includes(taskId)) {
+                return prev.filter(id => id !== taskId)
+            } else {
+                return [...prev, taskId]
+            }
+        })
+    }
+
+    function handleSelectAll() {
+        const filteredTaskIds = getFilteredTasks().map(task => task.id)
+        if (selectedTasks.length === filteredTaskIds.length) {
+            setSelectedTasks([])
+        } else {
+            setSelectedTasks(filteredTaskIds)
+        }
+    }
+
+    function handleCancelSelection() {
+        setSelectedTasks([])
     }
 
     function getFilteredTasks() {
         return tasks.filter(task => {
-            // Search filter
             const matchesSearch = task.titulo.toLowerCase().includes(searchTerm.toLowerCase())
-
-            // Status filter
             const matchesStatus = statusFilter === 'all' || task.status === statusFilter
-
-            // Priority filter
             const matchesPriority = priorityFilter === 'all' || task.priority === priorityFilter
-
-            // Assigned to filter
             const matchesAssignedTo = assignedToFilter === 'all' || task.assigned_to === assignedToFilter
 
             return matchesSearch && matchesStatus && matchesPriority && matchesAssignedTo
@@ -325,6 +372,7 @@ function Tasks() {
     }
 
     const filteredTasks = getFilteredTasks()
+    const allFilteredSelected = filteredTasks.length > 0 && selectedTasks.length === filteredTasks.length
 
     if (loading) {
         return (
@@ -341,31 +389,23 @@ function Tasks() {
 
     return (
         <div className="animation-fade-in">
-            {/* Standard Dashboard Header */}
+            {/* Header */}
             <div className="dashboard-header">
                 <h2>Gerenciamento de Tarefas</h2>
                 <button onClick={handleOpenCreateModal} className="btn btn-primary">
-                    <ClipboardList size={20} style={{ marginRight: '8px' }} />
+                    <ClipboardList size={20} className="admin-tasks-icon-spacing" />
                     Nova Tarefa
                 </button>
             </div>
 
-            {feedback.show && (
-                <div className={`card mb-6 p-4 border-${feedback.type === 'success' ? 'success' : 'danger'} bg-${feedback.type === 'success' ? 'success' : 'danger'}-subtle`}>
-                    <p className={`text-${feedback.type === 'success' ? 'success' : 'danger'} font-medium m-0`}>
-                        {feedback.message}
-                    </p>
-                </div>
-            )}
-
-            {/* Standard Toolbar */}
+            {/* Filters */}
             <div className="tool-bar">
                 <div className="tool-bar-header">
                     <span className="tool-bar-title">Filtros e Busca</span>
                 </div>
 
                 <div className="tool-bar-filters">
-                    <div className="input-group" style={{ marginBottom: 0 }}>
+                    <div className="input-group admin-tasks-filter-group">
                         <label htmlFor="search">Buscar</label>
                         <input
                             id="search"
@@ -377,7 +417,7 @@ function Tasks() {
                         />
                     </div>
 
-                    <div className="input-group" style={{ marginBottom: 0 }}>
+                    <div className="input-group admin-tasks-filter-group">
                         <label htmlFor="status">Status</label>
                         <select
                             id="status"
@@ -393,7 +433,7 @@ function Tasks() {
                         </select>
                     </div>
 
-                    <div className="input-group" style={{ marginBottom: 0 }}>
+                    <div className="input-group admin-tasks-filter-group">
                         <label htmlFor="priority">Prioridade</label>
                         <select
                             id="priority"
@@ -409,7 +449,7 @@ function Tasks() {
                         </select>
                     </div>
 
-                    <div className="input-group" style={{ marginBottom: 0 }}>
+                    <div className="input-group admin-tasks-filter-group">
                         <label htmlFor="assigned">Responsável</label>
                         <select
                             id="assigned"
@@ -426,17 +466,17 @@ function Tasks() {
                 </div>
             </div>
 
-            {/* Standard Table Card */}
-            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-                <div style={{ padding: '20px', borderBottom: '1px solid #eee' }}>
-                    <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#333' }}>
+            {/* Table */}
+            <div className="card admin-tasks-table-card">
+                <div className="admin-tasks-table-header">
+                    <h3 className="admin-tasks-count-title">
                         {filteredTasks.length} {filteredTasks.length === 1 ? 'tarefa encontrada' : 'tarefas encontradas'}
                     </h3>
                 </div>
 
                 {filteredTasks.length === 0 ? (
                     <div className="empty-state">
-                        <span className="empty-icon" style={{ display: 'inline-flex', justifyContent: 'center', marginBottom: '16px' }}>
+                        <span className="admin-tasks-empty-icon">
                             <ClipboardList size={64} className="text-slate-300" strokeWidth={1} />
                         </span>
                         <p className="empty-text">
@@ -455,6 +495,15 @@ function Tasks() {
                         <table className="table">
                             <thead>
                                 <tr>
+                                    <th className="admin-tasks-checkbox-cell">
+                                        <input
+                                            type="checkbox"
+                                            className="admin-tasks-checkbox"
+                                            checked={allFilteredSelected}
+                                            onChange={handleSelectAll}
+                                            title={allFilteredSelected ? "Desmarcar todas" : "Selecionar todas"}
+                                        />
+                                    </th>
                                     <th>Título</th>
                                     <th>Cliente</th>
                                     <th>Departamento</th>
@@ -462,16 +511,24 @@ function Tasks() {
                                     <th>Prazo</th>
                                     <th>Status</th>
                                     <th>Prioridade</th>
-                                    <th style={{ textAlign: 'right' }}>Ações</th>
+                                    <th className="admin-tasks-actions-cell">Ações</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {filteredTasks.map(task => (
                                     <tr key={task.id}>
+                                        <td className="admin-tasks-checkbox-cell">
+                                            <input
+                                                type="checkbox"
+                                                className="admin-tasks-checkbox"
+                                                checked={selectedTasks.includes(task.id)}
+                                                onChange={() => handleSelectTask(task.id)}
+                                            />
+                                        </td>
                                         <td>
                                             <button
                                                 onClick={() => handleOpenDetailModal(task)}
-                                                style={{ background: 'none', border: 'none', color: 'var(--color-primary)', fontWeight: 500, cursor: 'pointer', padding: 0 }}
+                                                className="admin-tasks-title-button"
                                             >
                                                 {task.titulo}
                                             </button>
@@ -490,8 +547,8 @@ function Tasks() {
                                                 {getPriorityLabel(task.priority)}
                                             </span>
                                         </td>
-                                        <td style={{ textAlign: 'right' }}>
-                                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                                        <td className="admin-tasks-actions-cell">
+                                            <div className="admin-tasks-actions-container">
                                                 <button
                                                     onClick={() => handleOpenEditModal(task)}
                                                     className="btn-icon"
@@ -500,10 +557,9 @@ function Tasks() {
                                                     <Edit2 size={18} />
                                                 </button>
                                                 <button
-                                                    onClick={() => handleDeleteTask(task)}
-                                                    className="btn-icon"
+                                                    onClick={() => handleOpenDeleteModal(task)}
+                                                    className="btn-icon admin-tasks-delete-button"
                                                     title="Excluir"
-                                                    style={{ color: 'var(--color-danger)' }}
                                                 >
                                                     <Trash2 size={18} />
                                                 </button>
@@ -516,6 +572,24 @@ function Tasks() {
                     </div>
                 )}
             </div>
+
+            {/* Bulk Actions Bar */}
+            {selectedTasks.length > 0 && (
+                <div className="admin-tasks-bulk-actions-bar">
+                    <p className="admin-tasks-bulk-actions-text">
+                        {selectedTasks.length} {selectedTasks.length === 1 ? 'tarefa selecionada' : 'tarefas selecionadas'}
+                    </p>
+                    <div className="admin-tasks-bulk-actions-buttons">
+                        <button onClick={handleCancelSelection} className="btn btn-secondary">
+                            Cancelar
+                        </button>
+                        <button onClick={handleOpenBulkDeleteModal} className="btn btn-primary">
+                            <Trash2 size={18} className="admin-tasks-icon-spacing" />
+                            Excluir Selecionadas
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* Create Modal */}
             {showCreateModal && (
@@ -890,6 +964,82 @@ function Tasks() {
                                 className="btn btn-primary"
                             >
                                 Fechar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Delete Confirmation Modal */}
+            {showDeleteModal && selectedTask && (
+                <div className="modal-backdrop" onClick={() => setShowDeleteModal(false)}>
+                    <div className="modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-body">
+                            <div className="admin-tasks-delete-modal-icon">
+                                <AlertTriangle size={24} />
+                            </div>
+                            <h3 className="admin-tasks-delete-modal-title">Excluir Tarefa</h3>
+                            <p className="admin-tasks-delete-modal-message">
+                                Tem certeza que deseja excluir a tarefa{' '}
+                                <span className="admin-tasks-delete-modal-task-name">"{selectedTask.titulo}"</span>?
+                            </p>
+                            <p className="admin-tasks-delete-modal-warning">
+                                ⚠️ Esta ação não pode ser desfeita.
+                            </p>
+                        </div>
+                        <div className="modal-footer">
+                            <button
+                                onClick={() => setShowDeleteModal(false)}
+                                className="btn btn-secondary"
+                                disabled={submitting}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleConfirmDelete}
+                                className="btn btn-primary"
+                                disabled={submitting}
+                            >
+                                {submitting ? 'Excluindo...' : 'Excluir'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Bulk Delete Confirmation Modal */}
+            {showBulkDeleteModal && (
+                <div className="modal-backdrop" onClick={() => setShowBulkDeleteModal(false)}>
+                    <div className="modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-body">
+                            <div className="admin-tasks-delete-modal-icon">
+                                <AlertTriangle size={24} />
+                            </div>
+                            <h3 className="admin-tasks-delete-modal-title">Excluir Tarefas</h3>
+                            <p className="admin-tasks-delete-modal-message">
+                                Tem certeza que deseja excluir{' '}
+                                <span className="admin-tasks-delete-modal-task-name">
+                                    {selectedTasks.length} {selectedTasks.length === 1 ? 'tarefa selecionada' : 'tarefas selecionadas'}
+                                </span>?
+                            </p>
+                            <p className="admin-tasks-delete-modal-warning">
+                                ⚠️ Esta ação não pode ser desfeita.
+                            </p>
+                        </div>
+                        <div className="modal-footer">
+                            <button
+                                onClick={() => setShowBulkDeleteModal(false)}
+                                className="btn btn-secondary"
+                                disabled={submitting}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleConfirmBulkDelete}
+                                className="btn btn-primary"
+                                disabled={submitting}
+                            >
+                                {submitting ? 'Excluindo...' : 'Excluir Todas'}
                             </button>
                         </div>
                     </div>
