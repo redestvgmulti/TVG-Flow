@@ -1,8 +1,9 @@
+import { createPortal } from 'react-dom'
 import { BellRing } from 'lucide-react'
 import '../styles/pushOptIn.css'
 
 export default function PushOptInPrompt({ onAccept, onDecline, loading = false }) {
-    return (
+    return createPortal(
         <div className="push-opt-in-overlay" onClick={onDecline}>
             <div className="push-opt-in-modal" onClick={(e) => e.stopPropagation()}>
                 <div className="push-opt-in-icon">
@@ -35,6 +36,7 @@ export default function PushOptInPrompt({ onAccept, onDecline, loading = false }
                     </button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     )
 }

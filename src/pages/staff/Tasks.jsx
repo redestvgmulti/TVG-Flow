@@ -302,54 +302,62 @@ export default function StaffTasks() {
                                 }}
                                 role="button"
                                 tabIndex={0}
-                                className="task-item card relative z-0 hover:border-brand-light/50 transition-all duration-200 group bg-white !no-underline hover:!no-underline cursor-pointer active:scale-[0.99]"
+                                className="task-item card relative z-0 hover:border-brand-light/50 transition-all duration-200 group bg-white !no-underline hover:!no-underline cursor-pointer active:scale-[0.99] flex flex-col md:flex-row md:items-center gap-3 md:gap-4 p-4"
                             >
-                                <div className="task-item-content">
-                                    <div className="flex flex-wrap items-center gap-2 mb-1">
-                                        <h3 className="task-item-title group-hover:text-brand transition-colors text-base flex items-center gap-2">
-                                            {task.titulo}
-                                        </h3>
+                                {/* Content - Title & Date */}
+                                <div className="flex-1 w-full min-w-0">
+                                    <h3 className="task-item-title group-hover:text-brand transition-colors text-base font-semibold leading-tight mb-2 md:mb-1 pr-8 md:pr-0">
+                                        {task.titulo}
                                         {isOverdue && (
-                                            <span className="text-danger flex items-center gap-1" title="Atrasada">
+                                            <span className="text-danger inline-flex align-middle ml-2" title="Atrasada">
                                                 <AlertCircle size={14} />
                                             </span>
                                         )}
-                                        <span
-                                            className="rounded-full font-semibold border"
-                                            style={{
-                                                backgroundColor: task.priority === 'urgent' ? '#fef2f2' :
-                                                    task.priority === 'high' ? '#fff7ed' :
-                                                        task.priority === 'medium' ? '#fefce8' : '#f9fafb',
-                                                color: task.priority === 'urgent' ? '#dc2626' :
-                                                    task.priority === 'high' ? '#ea580c' :
-                                                        task.priority === 'medium' ? '#ca8a04' : '#6b7280',
-                                                borderColor: task.priority === 'urgent' ? '#fecaca' :
-                                                    task.priority === 'high' ? '#fed7aa' :
-                                                        task.priority === 'medium' ? '#fef08a' : '#e5e7eb',
-                                                fontSize: '10px',
-                                                padding: '3px 10px',
-                                                textTransform: 'none'
-                                            }}
-                                        >                                          {task.priority === 'urgent' ? 'Urgente' :
-                                            task.priority === 'high' ? 'Alta' :
-                                                task.priority === 'medium' ? 'Média' : 'Baixa'}
-                                        </span>
-                                    </div>
+                                    </h3>
 
-                                    <div className="task-item-meta flex items-center gap-3">
-                                        {task.deadline && (
-                                            <span className={`flex items-center gap-1.5 ${isOverdue ? 'text-danger' : 'text-tertiary'}`}>
+                                    <div className="task-item-meta flex items-center gap-2 text-tertiary text-xs md:text-sm">
+                                        {task.deadline ? (
+                                            <>
                                                 <Calendar size={13} className="opacity-70" />
-                                                <span className="font-medium">{new Date(task.deadline).toLocaleDateString('pt-BR')}</span>
+                                                <span className={`${isOverdue ? 'text-danger font-medium' : ''}`}>
+                                                    {new Date(task.deadline).toLocaleDateString('pt-BR')}
+                                                </span>
                                                 <span className="opacity-60 hidden xs:inline">
                                                     • {new Date(task.deadline).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                                                 </span>
-                                            </span>
+                                            </>
+                                        ) : (
+                                            <span className="italic opacity-50">Sem prazo definido</span>
                                         )}
                                     </div>
                                 </div>
 
-                                <div className="task-item-actions flex-col items-end gap-2 mt-3 md:mt-0">
+                                {/* Actions - Badges */}
+                                <div className="flex items-center justify-between md:justify-end w-full md:w-auto gap-3 mt-1 md:mt-0">
+                                    {/* Priority Badge */}
+                                    <span
+                                        className="rounded-full font-semibold border"
+                                        style={{
+                                            backgroundColor: task.priority === 'urgent' ? '#fef2f2' :
+                                                task.priority === 'high' ? '#fff7ed' :
+                                                    task.priority === 'medium' ? '#fefce8' : '#f9fafb',
+                                            color: task.priority === 'urgent' ? '#dc2626' :
+                                                task.priority === 'high' ? '#ea580c' :
+                                                    task.priority === 'medium' ? '#ca8a04' : '#6b7280',
+                                            borderColor: task.priority === 'urgent' ? '#fecaca' :
+                                                task.priority === 'high' ? '#fed7aa' :
+                                                    task.priority === 'medium' ? '#fef08a' : '#e5e7eb',
+                                            fontSize: '10px',
+                                            padding: '3px 10px',
+                                            textTransform: 'none'
+                                        }}
+                                    >
+                                        {task.priority === 'urgent' ? 'Urgente' :
+                                            task.priority === 'high' ? 'Alta' :
+                                                task.priority === 'medium' ? 'Média' : 'Baixa'}
+                                    </span>
+
+                                    {/* Status Badge */}
                                     <span
                                         className="relative overflow-hidden px-3.5 py-1 rounded-full text-[10px] font-semibold border shadow-sm transition-all duration-300"
                                         style={{
@@ -375,7 +383,7 @@ export default function StaffTasks() {
                                         </span>
                                     </span>
 
-                                    <div className="text-brand opacity-0 group-hover:opacity-100 transition-opacity translate-x-[-10px] group-hover:translate-x-0 duration-200 hidden md:block">
+                                    <div className="text-brand opacity-0 group-hover:opacity-100 transition-opacity translate-x-[-10px] group-hover:translate-x-0 duration-200 hidden md:block ml-2">
                                         <ArrowRight size={16} />
                                     </div>
                                 </div>

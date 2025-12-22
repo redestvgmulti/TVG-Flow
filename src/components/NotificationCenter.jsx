@@ -55,6 +55,16 @@ function NotificationCenter() {
     }
 
     async function handleOptInAccept() {
+        // 1. Session Safety Check
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) {
+            toast.error('Sessão expirada. Por favor, faça login novamente.')
+            setShowOptInPrompt(false)
+            // Optional: Force reload to clear state
+            setTimeout(() => window.location.reload(), 1500)
+            return
+        }
+
         setPushLoading(true)
         try {
             // Register service worker first
@@ -62,10 +72,16 @@ function NotificationCenter() {
 
             const permission = await requestNotificationPermission()
             if (permission === 'granted') {
-                await subscribeToPush(professionalId)
-                setPushEnabled(true)
-                setShowOptInPrompt(false)
-                toast.success('Alertas push ativados!')
+                const subscription = await subscribeToPush(professionalId)
+
+                if (subscription) {
+                    setPushEnabled(true)
+                    setShowOptInPrompt(false)
+                    toast.success('Alertas push ativados!')
+                } else {
+                    // Subscription failed (likely database error or network)
+                    throw new Error('Falha ao salvar inscrição no servidor')
+                }
             } else if (permission === 'denied') {
                 setShowOptInPrompt(false)
                 toast.error('Permissão negada. Ative nas configurações do navegador.')
@@ -76,7 +92,13 @@ function NotificationCenter() {
         } catch (error) {
             console.error('Error enabling push:', error)
             setShowOptInPrompt(false)
-            toast.error('Erro ao ativar alertas push')
+
+            // Helpful error message for user
+            if (error.message.includes('servidor') || error.message.includes('inscrição')) {
+                toast.error('Erro de conexão. Tente novamente.')
+            } else {
+                toast.error('Erro ao ativar alertas push')
+            }
         } finally {
             setPushLoading(false)
         }
