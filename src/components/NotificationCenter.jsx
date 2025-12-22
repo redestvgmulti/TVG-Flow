@@ -45,21 +45,30 @@ function NotificationCenter() {
             fetchNotifications()
             checkPushStatus()
 
-            // Subscribe to real-time notifications
+            // Subscribe to real-time notifications with unique channel name
+            const channelName = `notifications:${professionalId}`
+            console.log('[NotificationCenter] Creating Realtime channel:', channelName)
+
             const channel = supabase
-                .channel('notifications')
+                .channel(channelName)
                 .on('postgres_changes', {
                     event: 'INSERT',
                     schema: 'public',
                     table: 'notifications',
                     filter: `profissional_id=eq.${professionalId}`
                 }, handleNewNotification)
-                .subscribe((status) => {
+                .subscribe((status, err) => {
                     console.log('[NotificationCenter] Realtime subscription status:', status)
+                    if (err) {
+                        console.error('[NotificationCenter] Realtime subscription error:', err)
+                    }
+                    if (status === 'SUBSCRIBED') {
+                        console.log('[NotificationCenter] ✅ Successfully subscribed to real-time notifications')
+                    }
                 })
 
             return () => {
-                console.log('[NotificationCenter] Unmounting, removing channel')
+                console.log('[NotificationCenter] Unmounting, removing channel:', channelName)
                 supabase.removeChannel(channel)
             }
         }
