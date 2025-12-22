@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../services/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { Bell, ClipboardList, CheckCircle2, Trash2, Check, X, BellRing } from 'lucide-react'
+import { toast } from 'sonner'
 import {
     registerServiceWorker,
     requestNotificationPermission,
@@ -62,13 +63,16 @@ function NotificationCenter() {
                 if (permission === 'granted') {
                     await subscribeToPush(professionalId)
                     setPushEnabled(true)
+                    toast.success('Notificações ativadas com sucesso!')
+                } else if (permission === 'denied') {
+                    toast.error('Permissão negada. Ative as notificações nas configurações do navegador.')
                 } else {
-                    alert('Permissão de notificações negada')
+                    toast.message('Para receber notificações, você precisa permitir o acesso.')
                 }
             }
         } catch (error) {
             console.error('Error toggling push:', error)
-            alert('Erro ao configurar notificações push')
+            toast.error('Erro ao configurar notificações push')
         } finally {
             setPushLoading(false)
         }
