@@ -58,10 +58,31 @@ export default function StaffTasks() {
     async function fetchTasks(silent = false) {
         try {
             if (!silent) setLoading(true)
+
+            // CRITICAL SECURITY FIX: Only fetch tasks where the professional has a micro-task assigned
+            // First, get all micro-tasks for this professional
+            const { data: microTasks, error: microError } = await supabase
+                .from('tarefas_itens')
+                .select('tarefa_id')
+                .eq('profissional_id', user.id)
+
+            if (microError) throw microError
+
+            // Extract unique task IDs
+            const taskIds = [...new Set(microTasks?.map(mt => mt.tarefa_id) || [])]
+
+            if (taskIds.length === 0) {
+                // No tasks assigned to this professional
+                setTasks([])
+                return
+            }
+
+            // Now fetch only those specific tasks
             const { data, error } = await supabase
                 .from('tarefas')
                 .select('*')
-                .order('deadline', { ascending: true }) // Upcoming deadlines first
+                .in('id', taskIds)
+                .order('deadline_at', { ascending: true, nullsFirst: false })
 
             if (error) throw error
             setTasks(data || [])
