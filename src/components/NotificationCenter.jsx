@@ -121,8 +121,6 @@ function NotificationCenter() {
     }
 
     async function clearAll() {
-        if (!confirm('Limpar todas as notificações? Esta ação não pode ser desfeita.')) return
-
         try {
             const ids = notifications.map(n => n.id)
 

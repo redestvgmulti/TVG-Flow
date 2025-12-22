@@ -96,9 +96,6 @@ function StaffDashboard() {
         <div className="staff-dashboard animation-fade-in pb-12">
             {/* Header */}
             <header className="mb-10">
-                <p className="text-sm text-tertiary uppercase tracking-wide font-semibold mb-1">
-                    {today}
-                </p>
                 <h1 className="text-3xl font-bold text-primary">
                     Olá, {firstName}.
                 </h1>
