@@ -47,7 +47,6 @@ function App() {
             <Route index element={<Dashboard />} />
             <Route path="tasks" element={<Tasks />} />
             <Route path="areas" element={<Areas />} />
-            <Route path="areas" element={<Areas />} />
 
             {/* Professionals Module */}
             <Route path="professionals">
