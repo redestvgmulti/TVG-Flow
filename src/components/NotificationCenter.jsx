@@ -373,6 +373,17 @@ function NotificationCenter() {
                             )}
                         </div>
 
+                        {/* iOS PWA Limitation Notice */}
+                        {isIOSPWAMode && (
+                            <div className="notification-ios-notice">
+                                <Bell size={16} />
+                                <span>
+                                    Notificações push não estão disponíveis no iOS.
+                                    Você receberá alertas dentro do app enquanto estiver usando.
+                                </span>
+                            </div>
+                        )}
+
                         {/* Notifications List */}
                         <div className="notification-list">
                             {loading ? (
