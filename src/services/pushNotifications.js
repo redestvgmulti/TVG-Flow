@@ -25,17 +25,23 @@ function urlBase64ToUint8Array(base64String) {
  */
 export async function registerServiceWorker() {
     if (!('serviceWorker' in navigator)) {
-        console.warn('Service Workers not supported')
-        return null
+        throw new Error('Service Worker não suportado neste navegador')
     }
 
     try {
-        const registration = await navigator.serviceWorker.register('/sw.js')
-        console.log('Service Worker registered:', registration)
+        // Em produção, o VitePWA gera o sw.js (que importa o push-sw.js)
+        // Em desenvolvimento, usamos diretamente o push-sw.js
+        const swUrl = import.meta.env.PROD ? '/sw.js' : '/push-sw.js'
+
+        const registration = await navigator.serviceWorker.register(swUrl)
+
+        // Wait for it to be ready
+        await navigator.serviceWorker.ready
+
         return registration
     } catch (error) {
-        console.error('Service Worker registration failed:', error)
-        return null
+        console.error('Erro ao registrar Service Worker:', error)
+        throw error
     }
 }
 

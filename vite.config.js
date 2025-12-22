@@ -14,6 +14,7 @@ export default defineConfig({
       },
       manifest: false, // Usa o manifest.json do /public
       workbox: {
+        importScripts: ['/push-sw.js'], // Import push notification logic
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         runtimeCaching: [
           {
