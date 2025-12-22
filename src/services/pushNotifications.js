@@ -86,17 +86,36 @@ export async function subscribeToPush(professionalId) {
         // Save subscription to database
         const subscriptionData = subscription.toJSON()
 
+        console.log('Sending subscription to server:', {
+            profissional_id: professionalId,
+            endpoint: subscriptionData.endpoint
+        })
+
+        // Check if keys are ArrayBuffer (rare but possible in some polyfills/browsers)
+        const p256dh = typeof subscriptionData.keys.p256dh === 'string'
+            ? subscriptionData.keys.p256dh
+            : btoa(String.fromCharCode.apply(null, new Uint8Array(subscriptionData.keys.p256dh)))
+
+        const auth = typeof subscriptionData.keys.auth === 'string'
+            ? subscriptionData.keys.auth
+            : btoa(String.fromCharCode.apply(null, new Uint8Array(subscriptionData.keys.auth)))
+
         const { error } = await supabase.from('push_subscriptions').upsert({
             profissional_id: professionalId,
             endpoint: subscriptionData.endpoint,
-            p256dh_key: subscriptionData.keys.p256dh,
-            auth_key: subscriptionData.keys.auth,
+            p256dh_key: p256dh,
+            auth_key: auth,
             updated_at: new Date().toISOString(),
+        }, {
+            onConflict: 'profissional_id, endpoint'
         })
 
-        if (error) throw error
+        if (error) {
+            console.error('Supabase upsert error:', error)
+            throw error
+        }
 
-        console.log('Push subscription saved')
+        console.log('Push subscription saved successfully')
         return subscription
     } catch (error) {
         console.error('Error subscribing to push:', error)
