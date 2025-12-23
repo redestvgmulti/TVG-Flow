@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom'
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
@@ -141,84 +142,87 @@ function Companies() {
     }
 
     return (
-        <div className="animation-fade-in">
-            {/* Header */}
-            <div className="companies-header">
-                <h2 className="companies-title">Empresas</h2>
-                <button onClick={() => handleOpenModal()} className="btn btn-primary">
-                    <Plus size={20} style={{ marginRight: '8px' }} />
-                    Nova Empresa
-                </button>
-            </div>
-
-            {/* Search */}
-            <div className="card company-search-card">
-                <div className="search-wrapper">
-                    <Search className="search-icon" size={20} />
-                    <input
-                        type="text"
-                        placeholder="Buscar por nome..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="search-input"
-                    />
+        <>
+            <div className="animation-fade-in">
+                {/* Header */}
+                <div className="companies-header">
+                    <h2 className="companies-title">Empresas</h2>
+                    <button onClick={() => handleOpenModal()} className="btn btn-primary">
+                        <Plus size={20} style={{ marginRight: '8px' }} />
+                        Nova Empresa
+                    </button>
                 </div>
-            </div>
 
-            {/* Companies Grid */}
-            {filteredCompanies.length > 0 ? (
-                <div className="companies-grid">
-                    {filteredCompanies.map(company => (
-                        <div
-                            key={company.id}
-                            className="card company-card"
-                            onClick={() => handleCompanyClick(company)}
-                        >
-                            <div className="company-card-header">
-                                <div>
-                                    <h3 className="company-name">{company.nome}</h3>
-                                    {company.cnpj && <p style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>CNPJ: {company.cnpj}</p>}
-                                    <span className={`company-status ${company.ativo ? 'active' : 'inactive'}`}>
-                                        {company.ativo ? 'Ativa' : 'Inativa'}
-                                    </span>
-                                </div>
-                            </div>
-
-                            <div className="company-stats">
-                                <div className="company-stat">
-                                    <Users size={16} />
-                                    <span>{company.professionalCount} profissionais</span>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            ) : (
-                <div className="card">
-                    <div className="companies-empty-state">
-                        <div className="companies-empty-icon">
-                            <Building2 size={64} />
-                        </div>
-                        <p className="companies-empty-text">
-                            {searchTerm ? 'Nenhuma empresa encontrada' : 'Nenhuma empresa cadastrada'}
-                        </p>
-                        <p className="companies-empty-subtitle">
-                            {searchTerm
-                                ? 'Tente ajustar sua busca'
-                                : 'Comece criando sua primeira empresa'}
-                        </p>
-                        {!searchTerm && (
-                            <button onClick={() => handleOpenModal()} className="btn btn-primary">
-                                <Plus size={20} style={{ marginRight: '8px' }} />
-                                Nova Empresa
-                            </button>
-                        )}
+                {/* Search */}
+                <div className="card company-search-card">
+                    <div className="search-wrapper">
+                        <Search className="search-icon" size={20} />
+                        <input
+                            type="text"
+                            placeholder="Buscar por nome..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="search-input"
+                        />
                     </div>
                 </div>
-            )}
+
+                {/* Companies Grid */}
+                {filteredCompanies.length > 0 ? (
+                    <div className="companies-grid">
+                        {filteredCompanies.map(company => (
+                            <div
+                                key={company.id}
+                                className="card company-card"
+                                onClick={() => handleCompanyClick(company)}
+                            >
+                                <div className="company-card-header">
+                                    <div>
+                                        <h3 className="company-name">{company.nome}</h3>
+                                        {company.cnpj && <p style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>CNPJ: {company.cnpj}</p>}
+                                        <span className={`company-status ${company.ativo ? 'active' : 'inactive'}`}>
+                                            {company.ativo ? 'Ativa' : 'Inativa'}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="company-stats">
+                                    <div className="company-stat">
+                                        <Users size={16} />
+                                        <span>{company.professionalCount} profissionais</span>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="card">
+                        <div className="companies-empty-state">
+                            <div className="companies-empty-icon">
+                                <Building2 size={64} />
+                            </div>
+                            <p className="companies-empty-text">
+                                {searchTerm ? 'Nenhuma empresa encontrada' : 'Nenhuma empresa cadastrada'}
+                            </p>
+                            <p className="companies-empty-subtitle">
+                                {searchTerm
+                                    ? 'Tente ajustar sua busca'
+                                    : 'Comece criando sua primeira empresa'}
+                            </p>
+                            {!searchTerm && (
+                                <button onClick={() => handleOpenModal()} className="btn btn-primary">
+                                    <Plus size={20} style={{ marginRight: '8px' }} />
+                                    Nova Empresa
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+            </div>
 
             {/* Create/Edit Modal */}
-            {showModal && (
+            {showModal && createPortal(
                 <div className="modal-backdrop" onClick={handleCloseModal}>
                     <div className="modal" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
@@ -277,9 +281,9 @@ function Companies() {
                             </div>
                         </form>
                     </div>
-                </div>
+                </div>, document.body
             )}
-        </div>
+        </>
     )
 }
 
