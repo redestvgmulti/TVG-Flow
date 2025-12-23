@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
 import { Edit2, Trash2, ClipboardList, AlertTriangle, X } from 'lucide-react'
 import { toast } from 'sonner'
 import '../../styles/adminTasks.css'
 
 function Tasks() {
+    const navigate = useNavigate()
     const [tasks, setTasks] = useState([])
     const [professionals, setProfessionals] = useState([])
     const [departments, setDepartments] = useState([])
@@ -104,8 +106,7 @@ function Tasks() {
     }
 
     function handleOpenCreateModal() {
-        resetForm()
-        setShowCreateModal(true)
+        navigate('/admin/tasks/new')
     }
 
     function handleOpenEditModal(task) {

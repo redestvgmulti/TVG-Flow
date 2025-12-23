@@ -10,13 +10,21 @@ export default function ProfessionalForm({ initialData, onSubmit, onCancel, onDe
         nome: '',
         email: '',
         role: 'profissional',
-        area_id: '',
+        area_id: null,
         ativo: true
     })
 
-    const [areas, setAreas] = useState([])
     const [recoveryLink, setRecoveryLink] = useState(null)
     const [isGeneratingLink, setIsGeneratingLink] = useState(false)
+
+    useEffect(() => {
+        if (initialData) {
+            setFormData(prev => ({
+                ...prev,
+                ...initialData
+            }))
+        }
+    }, [initialData])
 
     const handleGenerateLink = async () => {
         if (!formData.email) return
@@ -43,29 +51,6 @@ export default function ProfessionalForm({ initialData, onSubmit, onCancel, onDe
         }
     }
 
-    useEffect(() => {
-        if (initialData) {
-            setFormData(prev => ({
-                ...prev,
-                ...initialData
-            }))
-        }
-        fetchAreas()
-    }, [initialData])
-
-    async function fetchAreas() {
-        try {
-            const { data } = await supabase
-                .from('areas')
-                .select('id, nome')
-                .eq('ativo', true)
-                .order('nome')
-            if (data) setAreas(data)
-        } catch (err) {
-            console.error('Error loading areas', err)
-        }
-    }
-
     const handleSubmit = (e) => {
         e.preventDefault()
 
@@ -73,7 +58,7 @@ export default function ProfessionalForm({ initialData, onSubmit, onCancel, onDe
             nome: formData.nome,
             email: formData.email,
             role: formData.role,
-            area_id: formData.area_id,
+            area_id: formData.area_id, // Keeping usage but defaulting to null
             ativo: formData.ativo
         }
 
@@ -128,53 +113,56 @@ export default function ProfessionalForm({ initialData, onSubmit, onCancel, onDe
             </div>
 
             {/* ═══════════════════════════════════════════════════════════
-                BLOCO 2 — OPERACIONAL (Foco principal)
+                BLOCO 2 — PERMISSÕES DO SISTEMA
             ═══════════════════════════════════════════════════════════ */}
-            <div style={{
-                borderTop: '1px solid #e2e8f0',
-                paddingTop: '24px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '16px'
-            }}>
-                {/* Grid: Função + Departamento */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                    {/* Função / Perfil */}
-                    <div className="form-group">
-                        <label style={{ fontSize: '13px', fontWeight: 500, color: '#475569', marginBottom: '8px', display: 'block' }}>
-                            Função / Perfil
-                        </label>
-                        <select
-                            className="input"
-                            value={formData.role}
-                            onChange={e => setFormData({ ...formData, role: e.target.value })}
-                        >
-                            <option value="profissional">Profissional</option>
-                            <option value="coordenador">Coordenador</option>
-                            <option value="gestor">Gestor</option>
-                        </select>
-                    </div>
+            {isEditMode && (
+                <div style={{
+                    borderTop: '1px solid #e2e8f0',
+                    paddingTop: '24px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '16px'
+                }}>
+                    {/* Grid: Função + Ativo */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                        {/* Função / Perfil (System Role) */}
+                        <div className="form-group">
+                            <label style={{ fontSize: '13px', fontWeight: 500, color: '#475569', marginBottom: '8px', display: 'block' }}>
+                                Acesso ao Sistema
+                            </label>
+                            <select
+                                className="input"
+                                value={formData.role}
+                                onChange={e => setFormData({ ...formData, role: e.target.value })}
+                            >
+                                <option value="profissional">Profissional (Acesso Básico)</option>
+                                <option value="admin">Administrador (Acesso Total)</option>
+                            </select>
+                        </div>
 
-                    {/* Departamento */}
-                    <div className="form-group">
-                        <label style={{ fontSize: '13px', fontWeight: 500, color: '#475569', marginBottom: '8px', display: 'block' }}>
-                            Departamento
-                        </label>
-                        <select
-                            className="input"
-                            value={formData.area_id}
-                            onChange={e => setFormData({ ...formData, area_id: e.target.value })}
-                            required
-                        >
-                            <option value="">Selecione...</option>
-                            {areas.map(area => (
-                                <option key={area.id} value={area.id}>{area.nome}</option>
-                            ))}
-                        </select>
+                        {/* Checkbox: Usuário Ativo */}
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', paddingTop: '30px' }}>
+                            <input
+                                type="checkbox"
+                                id="ativo"
+                                checked={formData.ativo}
+                                onChange={e => setFormData({ ...formData, ativo: e.target.checked })}
+                                style={{ marginTop: '2px', cursor: 'pointer' }}
+                            />
+                            <label htmlFor="ativo" style={{ fontSize: '14px', color: '#334155', cursor: 'pointer', lineHeight: '1.5' }}>
+                                <strong>Usuário Ativo</strong>
+                                <br />
+                                <span style={{ fontSize: '12px', color: '#64748b' }}>
+                                    Login habilitado
+                                </span>
+                            </label>
+                        </div>
                     </div>
                 </div>
+            )}
 
-                {/* Checkbox: Usuário Ativo */}
+            {/* Creation Mode Status Toggle */}
+            {!isEditMode && (
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
                     <input
                         type="checkbox"
@@ -185,13 +173,9 @@ export default function ProfessionalForm({ initialData, onSubmit, onCancel, onDe
                     />
                     <label htmlFor="ativo" style={{ fontSize: '14px', color: '#334155', cursor: 'pointer', lineHeight: '1.5' }}>
                         <strong>Usuário Ativo</strong>
-                        <br />
-                        <span style={{ fontSize: '12px', color: '#64748b' }}>
-                            Desmarcar impedirá o login imediatamente.
-                        </span>
                     </label>
                 </div>
-            </div>
+            )}
 
             {/* ═══════════════════════════════════════════════════════════
                 BLOCO 3 — ACESSO (Ação contextual - apenas edit mode)

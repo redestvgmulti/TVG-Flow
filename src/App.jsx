@@ -5,6 +5,7 @@ import Login from './pages/Login'
 import ResetPassword from './pages/ResetPassword'
 import Dashboard from './pages/admin/Dashboard'
 import Tasks from './pages/admin/Tasks'
+import NewOS from './pages/admin/tasks/NewOS'
 // import Professionals from './pages/admin/Professionals' // Old
 import ProfessionalsList from './pages/admin/professionals/index'
 
@@ -55,6 +56,7 @@ function App() {
               >
                 <Route index element={<Dashboard />} />
                 <Route path="tasks" element={<Tasks />} />
+                <Route path="tasks/new" element={<NewOS />} />
                 <Route path="areas" element={<Areas />} />
 
                 {/* Professionals Module */}

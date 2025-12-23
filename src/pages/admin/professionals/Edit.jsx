@@ -5,6 +5,7 @@ import { ArrowLeft, Edit as EditIcon, Trash2, AlertOctagon } from 'lucide-react'
 import { toast } from 'sonner'
 import { professionalsService } from '../../../services/professionals'
 import ProfessionalForm from './ProfessionalForm'
+import ProfessionalCompanyLinks from '../../../components/ProfessionalCompanyLinks'
 
 export default function ProfessionalEdit() {
     const { id } = useParams()
@@ -109,6 +110,11 @@ export default function ProfessionalEdit() {
                     isSubmitting={isSubmitting}
                     isEditMode={true}
                 />
+            </div>
+
+            {/* Vínculos com Empresas (Architecture Refactor) */}
+            <div className="card">
+                <ProfessionalCompanyLinks professionalId={id} />
             </div>
 
             {/* Danger Zone */}

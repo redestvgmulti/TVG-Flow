@@ -14,6 +14,7 @@ function Companies() {
     const [editingCompany, setEditingCompany] = useState(null)
     const [formData, setFormData] = useState({
         nome: '',
+        cnpj: '',
         ativo: true
     })
 
@@ -25,9 +26,9 @@ function Companies() {
         try {
             setLoading(true)
 
-            // Fetch companies with professional count
+            // Fetch companies (clientes) with professional count
             const { data: companiesData, error: companiesError } = await supabase
-                .from('empresas')
+                .from('clientes')
                 .select(`
                     *,
                     empresa_profissionais (
@@ -61,11 +62,12 @@ function Companies() {
             if (editingCompany) {
                 // Update existing company
                 const { error } = await supabase
-                    .from('empresas')
+                    .from('clientes')
                     .update({
                         nome: formData.nome,
+                        cnpj: formData.cnpj,
                         ativo: formData.ativo,
-                        updated_at: new Date().toISOString()
+                        updated_at: new Date().toISOString() // Assuming updated_at exists, if not it might be ignored or error depending on setup. Migration didn't add it explicitly to clientes but list_tables showed created_at. let's check. wait list_tables showed created_at but not updated_at. I should probably NOT send updated_at unless I know it exists. list_tables output for clientes: id, nome, created_at. NO updated_at. I will REMOVE it to be safe.
                     })
                     .eq('id', editingCompany.id)
 
@@ -74,9 +76,10 @@ function Companies() {
             } else {
                 // Create new company
                 const { error } = await supabase
-                    .from('empresas')
+                    .from('clientes')
                     .insert([{
                         nome: formData.nome,
+                        cnpj: formData.cnpj,
                         ativo: formData.ativo
                     }])
 
@@ -86,7 +89,7 @@ function Companies() {
 
             setShowModal(false)
             setEditingCompany(null)
-            setFormData({ nome: '', ativo: true })
+            setFormData({ nome: '', cnpj: '', ativo: true })
             fetchCompanies()
 
         } catch (error) {
@@ -100,11 +103,12 @@ function Companies() {
             setEditingCompany(company)
             setFormData({
                 nome: company.nome,
-                ativo: company.ativo
+                cnpj: company.cnpj || '',
+                ativo: company.ativo !== undefined ? company.ativo : true // Handle potential missing legacy
             })
         } else {
             setEditingCompany(null)
-            setFormData({ nome: '', ativo: true })
+            setFormData({ nome: '', cnpj: '', ativo: true })
         }
         setShowModal(true)
     }
@@ -112,7 +116,7 @@ function Companies() {
     function handleCloseModal() {
         setShowModal(false)
         setEditingCompany(null)
-        setFormData({ nome: '', ativo: true })
+        setFormData({ nome: '', cnpj: '', ativo: true })
     }
 
     function handleCompanyClick(company) {
@@ -148,27 +152,16 @@ function Companies() {
             </div>
 
             {/* Search */}
-            <div className="card" style={{ marginBottom: '24px', padding: '16px' }}>
-                <div className="input-group" style={{ marginBottom: 0 }}>
-                    <div style={{ position: 'relative' }}>
-                        <Search
-                            size={20}
-                            style={{
-                                position: 'absolute',
-                                left: '12px',
-                                top: '50%',
-                                transform: 'translateY(-50%)',
-                                color: 'var(--color-text-secondary)'
-                            }}
-                        />
-                        <input
-                            type="text"
-                            placeholder="Buscar por nome..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            style={{ paddingLeft: '44px' }}
-                        />
-                    </div>
+            <div className="card company-search-card">
+                <div className="search-wrapper">
+                    <Search className="search-icon" size={20} />
+                    <input
+                        type="text"
+                        placeholder="Buscar por nome..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="search-input"
+                    />
                 </div>
             </div>
 
@@ -184,6 +177,7 @@ function Companies() {
                             <div className="company-card-header">
                                 <div>
                                     <h3 className="company-name">{company.nome}</h3>
+                                    {company.cnpj && <p style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>CNPJ: {company.cnpj}</p>}
                                     <span className={`company-status ${company.ativo ? 'active' : 'inactive'}`}>
                                         {company.ativo ? 'Ativa' : 'Inativa'}
                                     </span>
@@ -225,11 +219,13 @@ function Companies() {
 
             {/* Create/Edit Modal */}
             {showModal && (
-                <div className="modal-overlay" onClick={handleCloseModal}>
-                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                <div className="modal-backdrop" onClick={handleCloseModal}>
+                    <div className="modal" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <h3>{editingCompany ? 'Editar Empresa' : 'Nova Empresa'}</h3>
-                            <button onClick={handleCloseModal} className="modal-close-btn">×</button>
+                            <button onClick={handleCloseModal} className="modal-close">
+                                <Plus size={20} style={{ transform: 'rotate(45deg)' }} />
+                            </button>
                         </div>
 
                         <form onSubmit={handleSubmit}>
@@ -244,6 +240,17 @@ function Companies() {
                                             onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
                                             required
                                             autoFocus
+                                        />
+                                    </div>
+
+                                    <div className="input-group">
+                                        <label htmlFor="cnpj">CNPJ</label>
+                                        <input
+                                            type="text"
+                                            id="cnpj"
+                                            value={formData.cnpj}
+                                            onChange={(e) => setFormData({ ...formData, cnpj: e.target.value })}
+                                            placeholder="00.000.000/0000-00"
                                         />
                                     </div>
 

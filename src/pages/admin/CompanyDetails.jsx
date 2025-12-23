@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
-import { ArrowLeft, Users, Plus, Trash2, Edit } from 'lucide-react'
+import { ArrowLeft, Users, Plus, Trash2, Edit, Briefcase, UserCheck } from 'lucide-react'
 import { toast } from 'sonner'
 import '../../styles/companies.css'
 
@@ -14,7 +14,7 @@ function CompanyDetails() {
     const [allProfessionals, setAllProfessionals] = useState([])
     const [showAssignModal, setShowAssignModal] = useState(false)
     const [selectedProfessionals, setSelectedProfessionals] = useState({})
-    const [sectors, setSectors] = useState({})
+    const [functions, setFunctions] = useState({}) // Renamed from sectors
 
     useEffect(() => {
         fetchCompanyDetails()
@@ -25,9 +25,9 @@ function CompanyDetails() {
         try {
             setLoading(true)
 
-            // Fetch company info
+            // Fetch company info (from clientes)
             const { data: companyData, error: companyError } = await supabase
-                .from('empresas')
+                .from('clientes')
                 .select('*')
                 .eq('id', id)
                 .single()
@@ -35,12 +35,12 @@ function CompanyDetails() {
             if (companyError) throw companyError
             setCompany(companyData)
 
-            // Fetch company professionals
+            // Fetch company professionals (links)
             const { data: professionalsData, error: professionalsError } = await supabase
                 .from('empresa_profissionais')
                 .select(`
                     *,
-                    usuarios (
+                    usuarios:profissionais (
                         id,
                         nome,
                         email
@@ -61,10 +61,10 @@ function CompanyDetails() {
 
     async function fetchAllProfessionals() {
         try {
+            // Fetch professionals from 'profissionais' view/table
             const { data, error } = await supabase
-                .from('usuarios')
+                .from('profissionais')
                 .select('id, nome, email')
-                .eq('tipo_perfil', 'profissional')
                 .eq('ativo', true)
                 .order('nome')
 
@@ -78,13 +78,25 @@ function CompanyDetails() {
 
     async function handleAssignProfessionals() {
         try {
-            const assignmentsToCreate = Object.entries(selectedProfessionals)
-                .filter(([_, isSelected]) => isSelected)
-                .map(([professionalId]) => ({
-                    empresa_id: id,
-                    profissional_id: professionalId,
-                    setor: sectors[professionalId] || null
-                }))
+            const assignmentsToCreate = []
+            console.log('Selected:', selectedProfessionals)
+            console.log('Functions:', functions)
+
+            for (const [profId, isSelected] of Object.entries(selectedProfessionals)) {
+                if (isSelected) {
+                    const func = functions[profId]
+                    if (!func || !func.trim()) {
+                        toast.error(`Informe a função para todos os profissionais selecionados`)
+                        return
+                    }
+                    assignmentsToCreate.push({
+                        empresa_id: id,
+                        profissional_id: profId,
+                        funcao: func.trim(),
+                        ativo: true
+                    })
+                }
+            }
 
             if (assignmentsToCreate.length === 0) {
                 toast.error('Selecione pelo menos um profissional')
@@ -100,13 +112,13 @@ function CompanyDetails() {
             toast.success(`${assignmentsToCreate.length} profissional(is) vinculado(s) com sucesso`)
             setShowAssignModal(false)
             setSelectedProfessionals({})
-            setSectors({})
+            setFunctions({})
             fetchCompanyDetails()
 
         } catch (error) {
             console.error('Error assigning professionals:', error)
             if (error.code === '23505') {
-                toast.error('Um ou mais profissionais já estão vinculados a esta empresa')
+                toast.error('Um ou mais profissionais já estão vinculados a esta empresa com esta função')
             } else {
                 toast.error('Erro ao vincular profissionais')
             }
@@ -119,7 +131,7 @@ function CompanyDetails() {
         try {
             const { error } = await supabase
                 .from('empresa_profissionais')
-                .delete()
+                .delete() // Assuming permissions allow delete
                 .eq('id', associationId)
 
             if (error) throw error
@@ -140,17 +152,31 @@ function CompanyDetails() {
         }))
     }
 
-    function handleSectorChange(professionalId, sector) {
-        setSectors(prev => ({
+    function handleFunctionChange(professionalId, funcValue) {
+        setFunctions(prev => ({
             ...prev,
-            [professionalId]: sector
+            [professionalId]: funcValue
         }))
     }
 
-    // Filter out already assigned professionals
-    const availableProfessionals = allProfessionals.filter(prof =>
-        !professionals.some(p => p.profissional_id === prof.id)
-    )
+    // Filter out already assigned professionals (optional logic: maybe allow same pro with DIFFERENT function? 
+    // The UNIQUE constraint is (empresa_id, profissional_id, funcao).
+    // So yes, a pro can be added multiple times with DIFFERENT functions.
+    // Ideally we list all, but simpler to just show all active pros in the modal.
+    // If I filter out those who are "fully linked" it's hard. 
+    // For now, I will show ALL professionals, but maybe visually indicate if they are already linked?
+    // Or just Keep it simple: Show all. If constraint fails, toaster says error.
+
+    // Actually, preserving the "availableProfessionals" logic from before implies "one link per pro per company". but user said: "um funcionário pode estar em mais de uma empresa com funcoes diferentes"
+    // AND "inclusive o funcionário nessa empresa... com funções diferentes".
+    // Wait. "um funcionário pode estar em mais de uma empresa" (This is standard M:N).
+    // What if "um funcionário pode estar na MESMA empresa com funções diferentes"? 
+    // The UNIQUE constraint is (empresa_id, profissional_id, funcao). So YES, they can have multiple roles in the SAME company.
+    // So I should NOT filter them out completely.
+    // But to keep UI simple, let's list all professionals.
+
+    // However, existing code filtered them. I will REMOVE the filter to allow multiple roles.
+    const availableProfessionals = allProfessionals
 
     if (loading) {
         return (
@@ -186,16 +212,17 @@ function CompanyDetails() {
                 <div className="company-details-info">
                     <h2 className="company-details-name">{company.nome}</h2>
                     <div className="company-details-meta">
+                        {company.cnpj && <span className="company-cnpj">CNPJ: {company.cnpj}</span>}
                         <span className={`company-status ${company.ativo ? 'active' : 'inactive'}`}>
                             {company.ativo ? 'Ativa' : 'Inativa'}
                         </span>
-                        <span>{professionals.length} profissionais</span>
+                        <span>{professionals.length} vínculos</span>
                     </div>
                 </div>
 
                 <button onClick={() => setShowAssignModal(true)} className="btn btn-primary">
                     <Plus size={20} style={{ marginRight: '8px' }} />
-                    Vincular Profissionais
+                    Vincular Profissional
                 </button>
             </div>
 
@@ -213,32 +240,32 @@ function CompanyDetails() {
                             <tr>
                                 <th>Nome</th>
                                 <th>Email</th>
-                                <th>Setor</th>
+                                <th>Função na Empresa</th>
+                                <th>Status</th>
                                 <th style={{ width: '100px', textAlign: 'right' }}>Ações</th>
                             </tr>
                         </thead>
                         <tbody>
                             {professionals.map(prof => (
                                 <tr key={prof.id}>
-                                    <td style={{ fontWeight: 500 }}>{prof.usuarios.nome}</td>
+                                    <td style={{ fontWeight: 500 }}>
+                                        {prof.usuarios?.nome || 'Usuário Removido'}
+                                    </td>
                                     <td style={{ color: 'var(--color-text-secondary)' }}>
-                                        {prof.usuarios.email}
+                                        {prof.usuarios?.email || '-'}
                                     </td>
                                     <td>
-                                        {prof.setor ? (
-                                            <span style={{
-                                                padding: '4px 12px',
-                                                background: 'var(--color-bg-secondary, #f8f9fa)',
-                                                borderRadius: '12px',
-                                                fontSize: '13px'
-                                            }}>
-                                                {prof.setor}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <Briefcase size={14} className="text-muted" />
+                                            <span style={{ fontWeight: 500, color: '#475569' }}>
+                                                {prof.funcao}
                                             </span>
-                                        ) : (
-                                            <span style={{ color: 'var(--color-text-secondary)', fontSize: '13px' }}>
-                                                Não definido
-                                            </span>
-                                        )}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span className={`status-badge ${prof.ativo ? 'status-success' : 'status-error'}`}>
+                                            {prof.ativo ? 'Ativo' : 'Inativo'}
+                                        </span>
                                     </td>
                                     <td style={{ textAlign: 'right' }}>
                                         <button
@@ -265,7 +292,7 @@ function CompanyDetails() {
                             style={{ marginTop: '16px' }}
                         >
                             <Plus size={20} style={{ marginRight: '8px' }} />
-                            Vincular Profissionais
+                            Vincular Profissional
                         </button>
                     </div>
                 )}
@@ -281,37 +308,53 @@ function CompanyDetails() {
                         </div>
 
                         <div className="modal-body">
+                            <p className="text-sm text-muted mb-4">
+                                Selecione os profissionais e defina a função que exercerão <strong>nesta empresa</strong>.
+                                <br />
+                                <span className="text-xs text-slate-400">Um mesmo profissional pode ter múltiplas funções.</span>
+                            </p>
+
                             {availableProfessionals.length > 0 ? (
                                 <div className="professional-list">
                                     {availableProfessionals.map(prof => (
-                                        <div key={prof.id} className="professional-item">
-                                            <input
-                                                type="checkbox"
-                                                className="professional-item-checkbox"
-                                                checked={selectedProfessionals[prof.id] || false}
-                                                onChange={() => handleToggleProfessional(prof.id)}
-                                            />
-                                            <div className="professional-item-info">
-                                                <p className="professional-item-name">{prof.nome}</p>
-                                                <p className="professional-item-email">{prof.email}</p>
+                                        <div key={prof.id} className="professional-item" style={{ alignItems: 'flex-start' }}>
+                                            <div style={{ paddingTop: '4px' }}>
+                                                <input
+                                                    type="checkbox"
+                                                    className="professional-item-checkbox"
+                                                    checked={selectedProfessionals[prof.id] || false}
+                                                    onChange={() => handleToggleProfessional(prof.id)}
+                                                />
                                             </div>
-                                            {selectedProfessionals[prof.id] && (
-                                                <div className="professional-item-sector">
-                                                    <input
-                                                        type="text"
-                                                        placeholder="Setor (opcional)"
-                                                        value={sectors[prof.id] || ''}
-                                                        onChange={(e) => handleSectorChange(prof.id, e.target.value)}
-                                                    />
+                                            <div style={{ flex: 1 }}>
+                                                <div className="professional-item-info">
+                                                    <p className="professional-item-name">{prof.nome}</p>
+                                                    <p className="professional-item-email">{prof.email}</p>
                                                 </div>
-                                            )}
+
+                                                {selectedProfessionals[prof.id] && (
+                                                    <div className="professional-item-sector animate-in fade-in slide-in-from-top-1" style={{ marginTop: '8px' }}>
+                                                        <label className="text-xs font-medium text-slate-500 mb-1 block">
+                                                            Função Específica *
+                                                        </label>
+                                                        <input
+                                                            type="text"
+                                                            className="input input-sm w-full"
+                                                            placeholder="Ex: Redator, Tech Lead..."
+                                                            value={functions[prof.id] || ''}
+                                                            onChange={(e) => handleFunctionChange(prof.id, e.target.value)}
+                                                            autoFocus
+                                                        />
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
                             ) : (
                                 <div style={{ padding: '40px', textAlign: 'center' }}>
                                     <p style={{ color: 'var(--color-text-secondary)' }}>
-                                        Todos os profissionais ativos já estão vinculados a esta empresa
+                                        Nenhum profissional cadastrado no sistema.
                                     </p>
                                 </div>
                             )}
@@ -330,6 +373,7 @@ function CompanyDetails() {
                                 className="btn btn-primary"
                                 disabled={Object.values(selectedProfessionals).filter(Boolean).length === 0}
                             >
+                                <Plus size={16} style={{ marginRight: '6px' }} />
                                 Vincular Selecionados
                             </button>
                         </div>

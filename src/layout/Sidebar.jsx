@@ -12,7 +12,8 @@ import {
     Map,
     ChevronRight,
     LogOut,
-    User
+    User,
+    Building
 } from 'lucide-react'
 
 function Sidebar({ mobileMenuOpen, onClose }) {
@@ -127,6 +128,10 @@ function Sidebar({ mobileMenuOpen, onClose }) {
 
                                     {adminPanelOpen && (
                                         <div className="nav-sub">
+                                            <NavLink to="/admin/companies" className="nav-sub-item" onClick={handleNavClick}>
+                                                <Building size={16} />
+                                                <span>Empresas</span>
+                                            </NavLink>
                                             <NavLink to="/admin/areas" className="nav-sub-item" onClick={handleNavClick}>
                                                 <Map size={16} />
                                                 <span>Setores</span>

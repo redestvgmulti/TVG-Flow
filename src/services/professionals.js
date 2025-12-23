@@ -77,5 +77,73 @@ export const professionalsService = {
         if (data?.error) throw new Error(data.error)
 
         return data
+    },
+    // ============================================================
+    // Vínculos Empresa-Profissional (Architecture Refactor)
+    // ============================================================
+
+    // Listar vínculos de um profissional
+    async getLinks(professionalId) {
+        const { data, error } = await supabase
+            .from('empresa_profissionais')
+            .select(`
+                *,
+                clientes (id, nome)
+            `)
+            .eq('profissional_id', professionalId)
+            .order('created_at', { ascending: true })
+
+        if (error) throw error
+        return data
+    },
+
+    // Adicionar vínculo
+    async addLink(payload) {
+        // payload: { empresa_id, profissional_id, funcao, ativo }
+        const { data, error } = await supabase
+            .from('empresa_profissionais')
+            .insert([payload])
+            .select()
+            .single()
+
+        if (error) throw error
+        return data
+    },
+
+    // Remover vínculo
+    async removeLink(linkId) {
+        const { error } = await supabase
+            .from('empresa_profissionais')
+            .delete()
+            .eq('id', linkId)
+
+        if (error) throw error
+        return true
+    },
+
+    // Alternar status do vínculo
+    async toggleLinkStatus(linkId, currentStatus) {
+        const { data, error } = await supabase
+            .from('empresa_profissionais')
+            .update({ ativo: !currentStatus })
+            .eq('id', linkId)
+            .select()
+            .single()
+
+        if (error) throw error
+        return data
+    },
+
+    // Buscar funções disponíveis em uma empresa
+    async getFunctionsByCompany(companyId) {
+        const { data, error } = await supabase
+            .from('empresa_profissionais')
+            .select('funcao')
+            .eq('empresa_id', companyId)
+            .eq('ativo', true)
+
+        if (error) throw error
+        // Retorna lista única de funções
+        return [...new Set(data.map(item => item.funcao))]
     }
 }

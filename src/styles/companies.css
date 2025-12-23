@@ -304,3 +304,192 @@
         overflow-x: auto;
     }
 }
+
+/* 
+ * Search Section 
+ */
+.company-search-card {
+    margin-bottom: 24px;
+    padding: 16px;
+}
+
+.search-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.search-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--color-text-secondary);
+    pointer-events: none;
+}
+
+.search-input {
+    width: 100%;
+    padding: 10px 14px 10px 44px;
+    /* padding-left handles icon space */
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background-color: #fff;
+    font-size: var(--text-base);
+    color: var(--color-text-primary);
+    transition: all 0.2s ease;
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-light);
+}
+
+/* 
+ * Modal Styles (Specific Overrides or Extras if needed, mostly using components.css) 
+ */
+.company-form-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.company-form-grid .input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.company-form-grid label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.company-form-grid input[type="text"] {
+    padding: 12px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-size: 14px;
+    color: var(--color-text-primary);
+    transition: all 0.2s;
+    background-color: #f8fafc;
+}
+
+.company-form-grid input[type="text"]:focus {
+    background-color: #fff;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    outline: none;
+}
+
+
+/* Custom Toggle Switch for 'Empresa Ativa' */
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    /* gap: 16px; Removed gap to rely on explicit margin for control */
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    /* Made slightly bolder */
+    color: var(--color-text-primary);
+    user-select: none;
+    padding: 12px 0;
+    margin-top: 12px;
+    /* line-height: 1;  Removed minimal line height to allow centering */
+}
+
+.checkbox-label span {
+    margin-left: 20px;
+    /* Explicit space "descole o texto" */
+    /* transform: translateY(1px); Removed optical correction */
+    text-transform: uppercase;
+    /* Ensure consistency */
+    letter-spacing: 0.05em;
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    line-height: 24px;
+    /* EXACTLY match toggle height for centering */
+}
+
+/* Hide default checkbox */
+.checkbox-label input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 44px;
+    /* Fixed width */
+    min-width: 44px;
+    /* Prevent squishing */
+    height: 24px;
+    background: var(--color-border);
+    border-radius: 99px;
+    /* Pill shape */
+    position: relative;
+    cursor: pointer;
+    outline: none;
+    transition: background 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    margin: 0;
+    /* Removing default margins */
+}
+
+/* Toggle Thumb */
+.checkbox-label input[type="checkbox"]::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    background: white;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Checked State */
+.checkbox-label input[type="checkbox"]:checked {
+    background: var(--color-success);
+}
+
+.checkbox-label input[type="checkbox"]:checked::after {
+    transform: translateX(20px);
+}
+
+/* Hover effect */
+.checkbox-label:hover input[type="checkbox"] {
+    background: #cbd5e1;
+}
+
+.checkbox-label:hover input[type="checkbox"]:checked {
+    background: var(--color-success);
+    filter: brightness(0.95);
+}
+
+/* Focus state for accessibility */
+.checkbox-label input[type="checkbox"]:focus-visible {
+    box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.2);
+    /* Ring matching success color */
+}
+
+/* Mobile Responsiveness for Modal */
+@media (max-width: 640px) {
+    .modal {
+        width: 100%;
+        height: 100%;
+        max-width: none;
+        max-height: none;
+        border-radius: 0;
+    }
+
+    .modal-body {
+        flex: 1;
+        /* Helps push footer down in full screen */
+    }
+
+    .company-form-grid {
+        gap: 24px;
+    }
+}

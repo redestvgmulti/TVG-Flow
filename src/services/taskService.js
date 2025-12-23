@@ -33,6 +33,22 @@ export const createTask = async (taskData) => {
 };
 
 /**
+ * Criar OS por Função (Architecture Refactor)
+ * Chama Edge Function para distribuir microtarefas
+ */
+export const createOS = async (payload) => {
+    // payload: { empresa_id, titulo, descricao, deadline_at, funcoes }
+    const { data, error } = await supabase.functions.invoke('create-os-by-function', {
+        body: payload
+    })
+
+    if (error) throw new Error(error.message || 'Erro ao criar OS')
+    if (data?.error) throw new Error(data.error)
+
+    return data
+};
+
+/**
  * Atualizar tarefa
  */
 export const updateTask = async (taskId, updates) => {
