@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom'
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
@@ -15,6 +16,7 @@ function CompanyDetails() {
     const [showAssignModal, setShowAssignModal] = useState(false)
     const [selectedProfessionals, setSelectedProfessionals] = useState({})
     const [functions, setFunctions] = useState({}) // Renamed from sectors
+    const [showDeleteModal, setShowDeleteModal] = useState(false)
 
     useEffect(() => {
         fetchCompanyDetails()
@@ -178,6 +180,23 @@ function CompanyDetails() {
     // However, existing code filtered them. I will REMOVE the filter to allow multiple roles.
     const availableProfessionals = allProfessionals
 
+    async function handleDeleteCompany() {
+        try {
+            const { error } = await supabase
+                .from('clientes')
+                .delete()
+                .eq('id', id)
+
+            if (error) throw error
+
+            toast.success('Empresa excluída com sucesso')
+            navigate('/admin/companies')
+        } catch (error) {
+            console.error('Error deleting company:', error)
+            toast.error('Erro ao excluir empresa. Verifique se existem dependências.')
+        }
+    }
+
     if (loading) {
         return (
             <div className="animation-fade-in">
@@ -220,10 +239,19 @@ function CompanyDetails() {
                     </div>
                 </div>
 
-                <button onClick={() => setShowAssignModal(true)} className="btn btn-primary">
-                    <Plus size={20} style={{ marginRight: '8px' }} />
-                    Vincular Profissional
-                </button>
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => setShowDeleteModal(true)}
+                        className="btn-icon btn-delete-trigger"
+                        title="Excluir Empresa"
+                    >
+                        <Trash2 size={20} />
+                    </button>
+                    <button onClick={() => setShowAssignModal(true)} className="btn btn-primary">
+                        <Plus size={20} style={{ marginRight: '8px' }} />
+                        Vincular Profissional
+                    </button>
+                </div>
             </div>
 
             {/* Professionals Table */}
@@ -379,6 +407,46 @@ function CompanyDetails() {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Delete Confirmation Modal - Using Portal for proper layering */}
+            {showDeleteModal && createPortal(
+                <div className="modal-backdrop" onClick={() => setShowDeleteModal(false)}>
+                    <div className="modal modal-danger-wrapper" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h3 className="modal-danger-title">Excluir Empresa</h3>
+                            <button onClick={() => setShowDeleteModal(false)} className="modal-close">
+                                <Plus size={20} style={{ transform: 'rotate(45deg)' }} />
+                            </button>
+                        </div>
+
+                        <div className="modal-body modal-body-centered">
+                            <div className="modal-icon-wrapper modal-icon-danger">
+                                <Trash2 size={32} />
+                            </div>
+                            <h4 className="modal-confirmation-title">Tem certeza?</h4>
+                            <p className="modal-confirmation-text">
+                                Você está prestes a excluir a empresa <strong>{company?.nome}</strong>. Esta ação não pode ser desfeita.
+                            </p>
+                        </div>
+
+                        <div className="modal-footer modal-footer-centered">
+                            <button
+                                onClick={() => setShowDeleteModal(false)}
+                                className="btn btn-secondary w-full"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleDeleteCompany}
+                                className="btn btn-danger-primary w-full"
+                            >
+                                Sim, excluir empresa
+                            </button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
             )}
         </div>
     )
