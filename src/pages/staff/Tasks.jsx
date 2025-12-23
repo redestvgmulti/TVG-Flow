@@ -266,25 +266,26 @@ export default function StaffTasks() {
             <div className="card p-5 mb-8 sticky top-4 z-20 backdrop-blur-xl bg-white/80 border border-white/20 shadow-lg shadow-brand/5 rounded-2xl transition-all duration-300">
                 <div className="flex flex-col gap-4">
                     {/* Search Input - Premium Style */}
+                    {/* Search Input - Premium Style (Flexbox Refactor) */}
                     <div className="relative group w-full">
-                        <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none z-10">
-                            <Search className="text-gray-400 group-focus-within:text-brand transition-colors duration-300" size={18} />
+                        <div className="search-container-premium group">
+                            <Search className="text-gray-400 group-focus-within:text-brand transition-colors duration-300 flex-shrink-0" size={18} />
+                            <input
+                                type="text"
+                                placeholder="Buscar tarefa..."
+                                className="input-premium-search placeholder:text-gray-400 font-medium"
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                            />
+                            {search && (
+                                <button
+                                    onClick={() => setSearch('')}
+                                    className="p-1.5 rounded-full hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
+                                >
+                                    <X size={14} />
+                                </button>
+                            )}
                         </div>
-                        <input
-                            type="text"
-                            placeholder="Buscar tarefa..."
-                            className="input-premium-search text-gray-700 placeholder:text-gray-400 font-medium"
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                        />
-                        {search && (
-                            <button
-                                onClick={() => setSearch('')}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-full hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors z-10"
-                            >
-                                <X size={14} />
-                            </button>
-                        )}
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">

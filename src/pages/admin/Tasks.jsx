@@ -390,7 +390,7 @@ function Tasks() {
     return (
         <div className="animation-fade-in">
             {/* Header */}
-            <div className="dashboard-header admin-tasks-section-spacing">
+            <div className="dashboard-header admin-tasks-section-spacing flex items-center justify-between">
                 <h2>Gerenciamento de Tarefas</h2>
                 <button onClick={handleOpenCreateModal} className="btn btn-primary">
                     <ClipboardList size={20} className="admin-tasks-icon-spacing" />
