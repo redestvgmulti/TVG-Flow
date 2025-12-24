@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../services/supabase'
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { Clock, User, AlertCircle, CheckCircle, ExternalLink, Calendar, Activity, ListTodo } from 'lucide-react'
+import TaskForm from '../../components/forms/TaskForm'
 
 function Painel() {
     const [stats, setStats] = useState({
@@ -19,172 +20,9 @@ function Painel() {
     const [showCreateModal, setShowCreateModal] = useState(false)
     const [showReatribuirModal, setShowReatribuirModal] = useState(false)
     const [reassigningTask, setReatribuiringTask] = useState(null)
-    const [newTask, setNewTask] = useState({
-        titulo: '',
-        deadline: '',
-        priority: 'medium',
-        status: 'pending',
-        assigned_to: '',
-        drive_link: ''
-    })
     const [reassignTo, setReatribuirTo] = useState('')
-    const [creating, setCreating] = useState(false)
     const [reassigning, setReatribuiring] = useState(false)
     const [feedback, setFeedback] = useState({ show: false, type: '', message: '' })
-    const [selectedTask, setSelectedTask] = useState(null)
-
-    useEffect(() => {
-        fetchPainelData()
-        fetchProfissionais()
-    }, [])
-
-    useEffect(() => {
-        if (feedback.show) {
-            const timer = setTimeout(() => {
-                setFeedback({ show: false, type: '', message: '' })
-            }, 5000)
-            return () => clearTimeout(timer)
-        }
-    }, [feedback.show])
-
-    async function fetchProfissionais() {
-        try {
-            const { data, error } = await supabase
-                .from('profissionais')
-                .select('id, nome')
-                .eq('role', 'profissional')
-                .eq('ativo', true)
-                .order('nome')
-
-            if (error) throw error
-            setProfissionais(data || [])
-        } catch (error) {
-            console.error('Error fetching professionals:', error)
-        }
-    }
-
-    async function fetchPainelData() {
-        try {
-            setLoading(true)
-
-            const { data: allTasks, error: allTasksError } = await supabase
-                .from('tarefas')
-                .select('id, status, titulo, deadline, priority, created_at, assigned_to, drive_link')
-                .order('created_at', { ascending: false })
-
-            if (allTasksError) throw allTasksError
-
-            const { count: profCount, error: profError } = await supabase
-                .from('profissionais')
-                .select('*', { count: 'exact', head: true })
-
-            if (profError) throw profError
-
-            const total = allTasks?.length || 0
-            const active = allTasks?.filter(t => t.status === 'in_progress' || t.status === 'pending').length || 0
-            const completed = allTasks?.filter(t => t.status === 'completed').length || 0
-
-            setStats({
-                totalTasks: total,
-                activeTasks: active,
-                completedTasks: completed,
-                totalProfissionais: profCount || 0
-            })
-
-            setRecentTasks(allTasks?.slice(0, 5) || [])
-
-            const last30Days = getLast30Days()
-            const tasksTimeData = last30Days.map(date => {
-                const count = allTasks?.filter(t => {
-                    const taskDate = new Date(t.created_at).toDateString()
-                    return taskDate === date.toDateString()
-                }).length || 0
-                return {
-                    date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-                    tasks: count
-                }
-            })
-            setTasksOverTime(tasksTimeData)
-
-            const statusData = [
-                { name: 'Pending', value: allTasks?.filter(t => t.status === 'pending').length || 0, color: '#6e6e73' },
-                { name: 'In Progress', value: allTasks?.filter(t => t.status === 'in_progress').length || 0, color: '#007aff' },
-                { name: 'Concluídas', value: allTasks?.filter(t => t.status === 'completed').length || 0, color: '#34c759' },
-                { name: 'Overdue', value: allTasks?.filter(t => t.status === 'overdue').length || 0, color: '#ff3b30' }
-            ]
-            setTasksByStatus(statusData.filter(s => s.value > 0))
-
-            const priorityData = [
-                { name: 'Low', value: allTasks?.filter(t => t.priority === 'low').length || 0 },
-                { name: 'Medium', value: allTasks?.filter(t => t.priority === 'medium').length || 0 },
-                { name: 'High', value: allTasks?.filter(t => t.priority === 'high').length || 0 },
-                { name: 'Urgent', value: allTasks?.filter(t => t.priority === 'urgent').length || 0 }
-            ]
-            setTasksByPriority(priorityData.filter(p => p.value > 0))
-
-        } catch (error) {
-            console.error('Error fetching dashboard data:', error)
-            showFeedback('error', 'Failed to load dashboard data. Please refresh the page.')
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    function showFeedback(type, message) {
-        setFeedback({ show: true, type, message })
-    }
-
-    function handleOpenReatribuirModal(task) {
-        setReatribuiringTask(task)
-        setReatribuirTo(task.assigned_to || '')
-        setShowReatribuirModal(true)
-    }
-
-    async function handleCreateTask(e) {
-        e.preventDefault()
-
-        if (!newTask.titulo.trim()) {
-            showFeedback('error', 'Please enter a task title')
-            return
-        }
-
-        setCreating(true)
-
-        try {
-            const taskData = {
-                titulo: newTask.titulo,
-                deadline: newTask.deadline,
-                priority: newTask.priority,
-                status: newTask.status
-            }
-
-            // Only add assigned_to if a professional is selected
-            if (newTask.assigned_to) {
-                taskData.assigned_to = newTask.assigned_to
-            }
-
-            // Only add drive_link if provided
-            if (newTask.drive_link && newTask.drive_link.trim()) {
-                taskData.drive_link = newTask.drive_link.trim()
-            }
-
-            const { error } = await supabase
-                .from('tarefas')
-                .insert([taskData])
-
-            if (error) throw error
-
-            setNewTask({ titulo: '', deadline: '', priority: 'medium', status: 'pending', assigned_to: '', drive_link: '' })
-            setShowCreateModal(false)
-            showFeedback('success', 'Task created successfully!')
-            await fetchPainelData()
-        } catch (error) {
-            console.error('Error creating task:', error)
-            showFeedback('error', 'Failed to create task. Please try again.')
-        } finally {
-            setCreating(false)
-        }
-    }
 
     async function handleReatribuirTask(e) {
         e.preventDefault()
@@ -607,94 +445,16 @@ function Painel() {
                             <h3>Nova Tarefa</h3>
                             <button className="modal-close" onClick={() => setShowCreateModal(false)}>×</button>
                         </div>
-                        <form onSubmit={handleCreateTask}>
-                            <div className="modal-body">
-                                <div className="input-group">
-                                    <label htmlFor="titulo">Título *</label>
-                                    <input
-                                        id="titulo"
-                                        type="text"
-                                        className="input"
-                                        value={newTask.titulo}
-                                        onChange={(e) => setNewTask({ ...newTask, titulo: e.target.value })}
-                                        placeholder="Ex: Atualizar relatório mensal"
-                                        required
-                                    />
-                                </div>
-
-                                <div className="input-group">
-                                    <label htmlFor="deadline">Prazo *</label>
-                                    <input
-                                        id="deadline"
-                                        type="datetime-local"
-                                        className="input"
-                                        value={newTask.deadline}
-                                        onChange={(e) => setNewTask({ ...newTask, deadline: e.target.value })}
-                                        required
-                                    />
-                                </div>
-
-                                <div className="input-group">
-                                    <label htmlFor="assigned_to">Atribuir a</label>
-                                    <select
-                                        id="assigned_to"
-                                        className="input"
-                                        value={newTask.assigned_to}
-                                        onChange={(e) => setNewTask({ ...newTask, assigned_to: e.target.value })}
-                                    >
-                                        <option value="">-- Selecione --</option>
-                                        {professionals.map(prof => (
-                                            <option key={prof.id} value={prof.id}>{prof.nome}</option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                <div className="input-group">
-                                    <label htmlFor="drive_link">Link do Arquivo (Drive)</label>
-                                    <input
-                                        id="drive_link"
-                                        type="url"
-                                        className="input"
-                                        value={newTask.drive_link}
-                                        onChange={(e) => setNewTask({ ...newTask, drive_link: e.target.value })}
-                                        placeholder="https://..."
-                                    />
-                                </div>
-
-                                <div className="input-group">
-                                    <label htmlFor="priority">Prioridade</label>
-                                    <select
-                                        id="priority"
-                                        className="input"
-                                        value={newTask.priority}
-                                        onChange={(e) => setNewTask({ ...newTask, priority: e.target.value })}
-                                    >
-                                        <option value="low">Baixa</option>
-                                        <option value="medium">Média</option>
-                                        <option value="high">Alta</option>
-                                        <option value="urgent">Urgente</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div className="modal-footer">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowCreateModal(false)}
-                                    className="btn btn-secondary"
-                                    disabled={creating}
-                                >
-                                    Cancelar
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="btn btn-primary"
-                                    disabled={creating}
-                                >
-                                    {creating ? 'Criando...' : 'Criar Tarefa'}
-                                </button>
-                            </div>
-                        </form>
+                        <div className="modal-body">
+                            <TaskForm
+                                onSuccess={async () => {
+                                    setShowCreateModal(false)
+                                    await fetchPainelData()
+                                    // Optional: You might want to remove showFeedback here since TaskForm handles its own toasts
+                                }}
+                                onCancel={() => setShowCreateModal(false)}
+                            />
+                        </div>
                     </div>
                 </div>
             )}
