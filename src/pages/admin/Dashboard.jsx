@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { Clock, User, AlertCircle, CheckCircle, ExternalLink, Calendar, Activity, ListTodo } from 'lucide-react'
 import TaskForm from '../../components/forms/TaskForm'
 
 function Painel() {
+    const navigate = useNavigate()
     const [stats, setStats] = useState({
         totalTasks: 0,
         activeTasks: 0,
@@ -17,8 +19,6 @@ function Painel() {
     const [tasksByPriority, setTasksByPriority] = useState([])
     const [professionals, setProfissionais] = useState([])
     const [loading, setLoading] = useState(true)
-    const [showCreateModal, setShowCreateModal] = useState(false)
-    const [showReatribuirModal, setShowReatribuirModal] = useState(false)
     const [reassigningTask, setReatribuiringTask] = useState(null)
     const [reassignTo, setReatribuirTo] = useState('')
     const [reassigning, setReatribuiring] = useState(false)
@@ -129,7 +129,7 @@ function Painel() {
     function handleOpenReatribuirModal(task) {
         setReatribuiringTask(task)
         setReatribuirTo(task.assigned_to || '')
-        setShowReatribuirModal(true)
+        // setShowReatribuirModal(true) // This state is removed, so this line should be commented out or removed if it's not used elsewhere.
     }
 
     async function handleReatribuirTask(e) {
@@ -149,7 +149,7 @@ function Painel() {
 
             if (error) throw error
 
-            setShowReatribuirModal(false)
+            // setShowReatribuirModal(false) // This state is removed
             setReatribuiringTask(null)
             showFeedback('success', 'Task reassigned successfully!')
             await fetchPainelData()
@@ -364,7 +364,6 @@ function Painel() {
                                     tick={{ fontSize: 11, fill: '#6B7280' }}
                                     axisLine={false}
                                     tickLine={false}
-                                    dy={10}
                                 />
                                 <YAxis
                                     tick={{ fontSize: 11, fill: '#6B7280' }}
@@ -402,7 +401,10 @@ function Painel() {
                         <ListTodo size={18} />
                         Tarefas Recentes
                     </h3>
-                    <button onClick={() => setShowCreateModal(true)} className="btn btn-primary">
+                    <button
+                        onClick={() => navigate('/admin/tarefas/nova')}
+                        className="btn btn-primary shadow-lg shadow-indigo-500/20"
+                    >
                         + Nova Tarefa
                     </button>
                 </div>
@@ -411,7 +413,7 @@ function Painel() {
                     <div className="empty-state">
                         <span className="empty-icon">📝</span>
                         <p className="empty-text">Você ainda não tem tarefas criadas. Comece agora!</p>
-                        <button onClick={() => setShowCreateModal(true)} className="btn btn-primary">
+                        <button onClick={() => navigate('/admin/tarefas/nova')} className="btn btn-primary">
                             Criar Primeira Tarefa
                         </button>
                     </div>
@@ -459,130 +461,9 @@ function Painel() {
                 )}
             </div>
 
-            {/* Modal de Detalhes da Tarefa */}
-            {selectedTask && (
-                <div className="modal-backdrop" onClick={() => setSelectedTask(null)}>
-                    <div className="modal" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h3>Detalhes da Tarefa</h3>
-                            <button className="modal-close" onClick={() => setSelectedTask(null)}>×</button>
-                        </div>
-                        <div className="modal-body">
-                            <div className="detail-group">
-                                <label>Título</label>
-                                <p className="detail-value">{selectedTask.titulo}</p>
-                            </div>
-
-                            <div className="detail-group">
-                                <label>Descrição</label>
-                                <p className="detail-value" style={{ whiteSpace: 'pre-wrap' }}>
-                                    {selectedTask.descricao || 'Sem descrição'}
-                                </p>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="detail-group">
-                                    <label>Status</label>
-                                    <span className={`badge badge-${selectedTask.status === 'completed' ? 'success' : selectedTask.status === 'in_progress' ? 'primary' : 'neutral'}`}>
-                                        {selectedTask.status === 'completed' ? 'Concluída' : selectedTask.status === 'in_progress' ? 'Em Andamento' : 'Pendente'}
-                                    </span>
-                                </div>
-
-                                <div className="detail-group">
-                                    <label>Prioridade</label>
-                                    <span className={`badge badge-${selectedTask.prioridade === 'urgent' ? 'danger' : selectedTask.prioridade === 'high' ? 'warning' : 'neutral'}`}>
-                                        {selectedTask.prioridade === 'urgent' ? 'Urgente' : selectedTask.prioridade === 'high' ? 'Alta' : 'Normal'}
-                                    </span>
-                                </div>
-                            </div>
-
-                            <div className="detail-group">
-                                <label>Responsável</label>
-                                <div className="flex items-center gap-2 mt-1">
-                                    <div className="avatar-placeholder w-8 h-8 text-xs">
-                                        {getAssignedToName(selectedTask.assigned_to)?.charAt(0) || '?'}
-                                    </div>
-                                    <p className="detail-value mb-0">
-                                        {getAssignedToName(selectedTask.assigned_to) || 'Não atribuído'}
-                                    </p>
-                                </div>
-                            </div>
-
-                            {selectedTask.drive_link && (
-                                <div className="detail-group">
-                                    <label>Link do Drive</label>
-                                    <a
-                                        href={selectedTask.drive_link}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-primary flex items-center gap-2 hover:underline"
-                                    >
-                                        <ExternalLink size={16} />
-                                        Acessar Arquivos
-                                    </a>
-                                </div>
-                            )}
-
-                            <div className="detail-group">
-                                <label>Prazos</label>
-                                <p className="text-sm text-muted flex items-center gap-2">
-                                    <Calendar size={14} />
-                                    Criado em: {new Date(selectedTask.created_at).toLocaleDateString()}
-                                </p>
-                                <p className="text-sm text-muted flex items-center gap-2">
-                                    <Clock size={14} />
-                                    Vencimento: {new Date(selectedTask.due_date).toLocaleDateString()}
-                                </p>
-                            </div>
-                        </div>
-                        <div className="modal-footer">
-                            <button className="btn btn-secondary w-full" onClick={() => setSelectedTask(null)}>
-                                Fechar
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Modals are kept as is, just ensuring classes match */}
-            {/* Create Task Modal */}
-            {showCreateModal && (
-                <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
-
-                    {/* Modal Content */}
-                    <div
-                        className="modal-premium"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <div className="modal-premium-header">
-                            <div className="modal-premium-title">
-                                <h3>Nova Tarefa</h3>
-                                <p>Preencha os dados para criar uma nova OS</p>
-                            </div>
-                            <button
-                                onClick={() => setShowCreateModal(false)}
-                                className="modal-premium-close"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 18 18" /></svg>
-                            </button>
-                        </div>
-
-                        <div className="modal-premium-content">
-                            <TaskForm
-                                onSuccess={async () => {
-                                    setShowCreateModal(false)
-                                    await fetchPainelData()
-                                }}
-                                onCancel={() => setShowCreateModal(false)}
-                            />
-                        </div>
-                    </div>
-                </div>
-            )}
-
             {/* Reatribuir Modal */}
-            {showReatribuirModal && reassigningTask && (
-                <div className="modal-backdrop" onClick={() => setShowReatribuirModal(false)}>
+            {reassigningTask && (
+                <div className="modal-backdrop" onClick={() => setReatribuiringTask(null)}>
                     <div className="modal" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <h3>Reatribuir Tarefa</h3>

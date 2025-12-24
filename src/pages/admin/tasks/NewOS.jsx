@@ -8,24 +8,31 @@ export default function NewOS() {
     return (
         <div className="max-w-3xl mx-auto space-y-8 fade-in p-6 md:p-0">
             {/* Header */}
-            <div className="dashboard-header flex items-center gap-4">
+            <div className="page-header-premium">
                 <button
-                    onClick={() => navigate('/admin/tasks')}
-                    className="btn-icon bg-white hover:bg-slate-50 text-muted hover:text-primary transition-colors"
+                    onClick={() => navigate('/admin')}
+                    className="btn btn-ghost p-2 -ml-2 text-slate-500 hover:text-slate-800"
+                    title="Voltar"
                 >
-                    <ArrowLeft size={20} />
+                    <ArrowLeft size={24} strokeWidth={2} />
                 </button>
-                <div>
-                    <h2 className="flex items-center gap-2">
+                <div className="pt-1">
+                    <h2 className="page-title">
                         Nova Ordem de Serviço
                     </h2>
-                    <p className="text-muted mt-1">Distribuição automática baseada em Funções.</p>
+                    <p className="page-subtitle">
+                        Preencha os dados e definições da demanda
+                    </p>
                 </div>
             </div>
 
-            <div className="card">
+            <div className="card-premium-decision">
                 <TaskForm
-                    onSuccess={() => navigate('/admin/tasks')}
+                    onSuccess={(result) => {
+                        // Optional: Navigate to detail of first created task if possible, 
+                        // or just back to list with success toast (already handled by form)
+                        navigate('/admin/tasks')
+                    }}
                     onCancel={() => navigate('/admin/tasks')}
                 />
             </div>

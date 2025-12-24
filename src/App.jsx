@@ -56,7 +56,7 @@ function App() {
               >
                 <Route index element={<Dashboard />} />
                 <Route path="tasks" element={<Tasks />} />
-                <Route path="tasks/new" element={<NewOS />} />
+                <Route path="tarefas/nova" element={<NewOS />} />
                 <Route path="areas" element={<Areas />} />
 
                 {/* Professionals Module */}

@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { clientService } from '../../services/clientService'
 import { professionalsService } from '../../services/professionals'
 import { createOS } from '../../services/taskService'
+import { supabase } from '../../services/supabase'
 
 export default function TaskForm({ onSuccess, onCancel }) {
     // Data
@@ -70,6 +71,10 @@ export default function TaskForm({ onSuccess, onCancel }) {
         }
     }
 
+
+
+    // ... imports
+
     const handleSubmit = async (e) => {
         e.preventDefault()
 
@@ -80,21 +85,114 @@ export default function TaskForm({ onSuccess, onCancel }) {
 
         setSubmitting(true)
         try {
-            const payload = {
-                empresa_id: empresaId,
-                titulo,
-                descricao,
-                deadline_at: new Date(deadline).toISOString(),
-                funcoes: selectedFunctions
+            // Client-side implementation of "create-os-by-function"
+            // Logic:
+            // 1. Iterate functions
+            // 2. Find professionals
+            // 3. Create Task
+            // 4. Create Notification
+            // 5. Send Push
+
+            let itemsCreated = 0
+            let notificationsSent = 0
+
+            for (const funcao of selectedFunctions) {
+                // 1. Find professionals for this company/function
+                const { data: links, error: linkError } = await supabase
+                    .from('empresa_profissionais')
+                    .select(`
+                        profissional_id,
+                        profissionais!inner (
+                            id,
+                            departamento_id,
+                            nome
+                        )
+                    `)
+                    .eq('empresa_id', empresaId)
+                    .eq('funcao', funcao)
+                    .eq('ativo', true)
+
+                if (linkError) {
+                    console.error(`Erro ao buscar profissionais para ${funcao}:`, linkError)
+                    continue
+                }
+
+                if (!links || links.length === 0) {
+                    console.warn(`Nenhum profissional encontrado para: ${funcao}`)
+                    continue
+                }
+
+                // 2. Create for each professional
+                for (const link of links) {
+                    const professional = link.profissionais
+                    if (!professional) continue
+
+                    // Create Task
+                    const taskPayload = {
+                        titulo: `${titulo} - ${funcao}`,
+                        descricao: descricao,
+                        cliente_id: empresaId,
+                        profissional_id: professional.id,
+                        departamento_id: professional.departamento_id,
+                        prioridade: 'media',
+                        deadline: new Date(deadline).toISOString(),
+                        status: 'pendente'
+                    }
+
+                    const { data: task, error: taskError } = await supabase
+                        .from('tarefas')
+                        .insert(taskPayload)
+                        .select()
+                        .single()
+
+                    if (taskError) {
+                        console.error('Erro ao criar tarefa:', taskError)
+                        continue
+                    }
+                    itemsCreated++
+
+                    // 3. Create In-App Notification
+                    const notificationPayload = {
+                        profissional_id: professional.id,
+                        title: 'Nova Tarefa Atribuída',
+                        message: `Você recebeu uma nova tarefa de ${funcao}: "${titulo}"`,
+                        type: 'task_assigned',
+                        link: `/staff/tasks/${task.id}`,
+                        read: false,
+                        created_at: new Date().toISOString()
+                    }
+
+                    const { data: notif, error: notifError } = await supabase
+                        .from('notifications')
+                        .insert(notificationPayload)
+                        .select()
+                        .single()
+
+                    if (!notifError && notif) {
+                        // 4. Trigger Push Notification (via Edge Function that exists)
+                        // We use the existing 'send-push-notification' function which takes a notificationId
+                        try {
+                            const { error: pushError } = await supabase.functions.invoke('send-push-notification', {
+                                body: { notificationId: notif.id }
+                            })
+                            if (pushError) console.error('Push error:', pushError)
+                            else notificationsSent++
+                        } catch (err) {
+                            console.error('Push invoke error:', err)
+                        }
+                    }
+                }
             }
 
-            const result = await createOS(payload)
-
-            toast.success(`OS criada com sucesso! (${result.itemsCreated} microtarefas geradas)`)
-
-            if (onSuccess) {
-                onSuccess(result)
+            if (itemsCreated === 0) {
+                toast.warning('Nenhuma tarefa foi cria. Verifique se há profissionais vinculados às funções selecionadas.')
+            } else {
+                toast.success(`OS criada com sucesso! (${itemsCreated} tarefas geradas)`)
+                if (onSuccess) {
+                    onSuccess({ itemsCreated })
+                }
             }
+
         } catch (error) {
             console.error(error)
             toast.error(error.message || 'Falha ao criar OS')
@@ -107,36 +205,41 @@ export default function TaskForm({ onSuccess, onCancel }) {
     const minDate = new Date().toISOString().slice(0, 16)
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-6">
+
+        <form onSubmit={handleSubmit} className="form-section-spacing">
 
             {/* 1. Seleção de Empresa */}
-            <div className="form-group">
-                <label className="label flex items-center gap-2">
-                    <Building2 size={16} className="text-blue-600" />
-                    Selecione a Empresa (Cliente) *
+            <div className="space-y-1">
+                <label className="label-premium flex items-center gap-2">
+                    <Building2 size={16} className="text-indigo-600" />
+                    Cliente (Empresa)
                 </label>
-                <select
-                    className="input"
-                    value={empresaId}
-                    onChange={e => setEmpresaId(e.target.value)}
-                    required
-                    disabled={loadingCompanies}
-                >
-                    <option value="">Selecione...</option>
-                    {companies.map(c => (
-                        <option key={c.id} value={c.id}>{c.nome}</option>
-                    ))}
-                </select>
+                <div className="relative">
+                    <select
+                        className="input-premium appearance-none cursor-pointer hover:border-indigo-300"
+                        value={empresaId}
+                        onChange={e => setEmpresaId(e.target.value)}
+                        required
+                        disabled={loadingCompanies}
+                    >
+                        <option value="">Selecione uma empresa...</option>
+                        {companies.map(c => (
+                            <option key={c.id} value={c.id}>{c.nome}</option>
+                        ))}
+                    </select>
+                </div>
             </div>
 
             {/* 2. Funções (Condicional) */}
-            {/* 2. Funções (Condicional) */}
             {empresaId && (
-                <div className="form-group animate-in fade-in slide-in-from-top-2">
-                    <label className="label flex items-center gap-2 mb-3 text-slate-700 font-medium">
-                        <Layers size={16} className="text-indigo-600" />
-                        Funções Necessárias * <span className="text-xs font-normal text-slate-400">(Selecione as funções)</span>
-                    </label>
+                <div className="animate-in fade-in slide-in-from-top-2">
+                    <div className="flex items-baseline justify-between mb-2">
+                        <label className="label-premium flex items-center gap-2 text-slate-700">
+                            <Layers size={16} className="text-indigo-600" />
+                            Funções Necessárias
+                        </label>
+                        <span className="text-xs text-slate-400 font-medium">Selecione as funções para distribuição</span>
+                    </div>
 
                     {loadingFunctions ? (
                         <div className="text-sm text-slate-500 flex items-center gap-2 py-2">
@@ -152,11 +255,11 @@ export default function TaskForm({ onSuccess, onCancel }) {
                         <>
                             <div className="relative group">
                                 {/* Gradient masks for scroll indication */}
-                                <div className="absolute left-0 top-0 bottom-0 w-4 bg-gradient-to-r from-white to-transparent pointer-events-none z-10" />
-                                <div className="absolute right-0 top-0 bottom-0 w-4 bg-gradient-to-l from-white to-transparent pointer-events-none z-10" />
+                                <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-white to-transparent pointer-events-none z-10" />
+                                <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-white to-transparent pointer-events-none z-10" />
 
-                                <div className="overflow-x-auto pb-3 -mx-2 px-2 hide-scrollbar">
-                                    <div className="flex gap-2 min-w-max">
+                                <div className="pb-2 -mx-2 px-2">
+                                    <div className="chip-group">
                                         {availableFunctions.map(fn => {
                                             const isSelected = selectedFunctions.includes(fn)
                                             return (
@@ -164,18 +267,12 @@ export default function TaskForm({ onSuccess, onCancel }) {
                                                     key={fn}
                                                     type="button"
                                                     onClick={() => toggleFunction(fn)}
-                                                    className={`
-                                                        relative flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border whitespace-nowrap select-none
-                                                        ${isSelected
-                                                            ? 'bg-indigo-50 border-indigo-200 text-indigo-700 shadow-sm'
-                                                            : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-                                                        }
-                                                    `}
+                                                    className={`chip-premium ${isSelected ? 'selected' : ''}`}
                                                 >
-                                                    <span className="relative z-10">{fn}</span>
+                                                    <span className="relative z-10 whitespace-nowrap">{fn}</span>
                                                     {isSelected && (
-                                                        <div className="bg-indigo-600 rounded-full p-0.5 text-white animate-in zoom-in-50 duration-200">
-                                                            <CheckCircle size={12} strokeWidth={3} />
+                                                        <div className="chip-check-icon">
+                                                            <CheckCircle size={10} strokeWidth={4} />
                                                         </div>
                                                     )}
                                                 </button>
@@ -184,23 +281,31 @@ export default function TaskForm({ onSuccess, onCancel }) {
                                     </div>
                                 </div>
                             </div>
-                            <p className="text-xs text-slate-400 mt-1 pl-1">
-                                {selectedFunctions.length} {selectedFunctions.length === 1 ? 'função selecionada' : 'funções selecionadas'}
-                            </p>
+                            <div className="flex items-center gap-2 mt-2 pl-1">
+                                <div className="h-1 flex-1 bg-slate-100 rounded-full overflow-hidden">
+                                    <div
+                                        className="h-full bg-indigo-500 transition-all duration-500"
+                                        style={{ width: `${(selectedFunctions.length / (availableFunctions.length || 1)) * 100}%` }}
+                                    />
+                                </div>
+                                <p className="text-xs font-medium text-slate-400 whitespace-nowrap">
+                                    {selectedFunctions.length} selecionadas
+                                </p>
+                            </div>
                         </>
                     )}
                 </div>
             )}
 
-            <div className="h-px bg-slate-100 my-6" />
+            <div className="divider-subtle" />
 
             {/* 3. Detalhes da OS */}
-            <div className="grid grid-cols-1 gap-5">
-                <div className="form-group">
-                    <label className="label text-slate-700 font-medium mb-1.5 block">Título da OS *</label>
+            <div className="space-y-6">
+                <div className="space-y-1">
+                    <label className="label-premium">Título da Demanda</label>
                     <input
                         type="text"
-                        className="input w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none text-slate-700 placeholder:text-slate-400"
+                        className="input-premium"
                         value={titulo}
                         onChange={e => setTitulo(e.target.value)}
                         placeholder="Ex: Campanha de Black Friday"
@@ -208,24 +313,24 @@ export default function TaskForm({ onSuccess, onCancel }) {
                     />
                 </div>
 
-                <div className="form-group">
-                    <label className="label text-slate-700 font-medium mb-1.5 block">Descrição / Briefing</label>
+                <div className="space-y-1">
+                    <label className="label-premium">Descrição / Briefing</label>
                     <textarea
-                        className="input w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none text-slate-700 placeholder:text-slate-400 min-h-[100px] resize-y"
+                        className="input-premium min-h-[140px] resize-y leading-relaxed"
                         value={descricao}
                         onChange={e => setDescricao(e.target.value)}
                         placeholder="Detalhes gerais da demanda..."
                     />
                 </div>
 
-                <div className="form-group">
-                    <label className="label flex items-center gap-2 text-slate-700 font-medium mb-1.5">
-                        <CalendarIcon size={16} className="text-orange-500" />
-                        Prazo de Entrega (Deadline) *
+                <div className="space-y-1">
+                    <label className="label-premium flex items-center gap-2">
+                        <CalendarIcon size={16} className="text-indigo-600" />
+                        Deadline (Prazo Final)
                     </label>
                     <input
                         type="datetime-local"
-                        className="input w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none text-slate-700"
+                        className="input-premium"
                         value={deadline}
                         onChange={e => setDeadline(e.target.value)}
                         min={minDate}
@@ -235,12 +340,12 @@ export default function TaskForm({ onSuccess, onCancel }) {
             </div>
 
             {/* Submit */}
-            <div className="pt-4 border-t border-slate-100 flex justify-end gap-3">
+            <div className="form-actions-premium">
                 {onCancel && (
                     <button
                         type="button"
                         onClick={onCancel}
-                        className="btn btn-secondary"
+                        className="btn btn-ghost text-slate-500 hover:text-slate-800"
                         disabled={submitting}
                     >
                         Cancelar
@@ -249,11 +354,20 @@ export default function TaskForm({ onSuccess, onCancel }) {
                 <button
                     type="submit"
                     disabled={submitting || selectedFunctions.length === 0}
-                    className="btn btn-primary"
+                    className="btn btn-primary px-8 py-3 text-base shadow-lg shadow-indigo-500/20"
                 >
-                    {submitting ? 'Criando OS...' : 'Gerar Ordem de Serviço'}
+                    {submitting ? (
+                        <>
+                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            Processando...
+                        </>
+                    ) : (
+                        'Gerar Ordem de Serviço'
+                    )}
                 </button>
             </div>
         </form>
     )
 }
+
+
