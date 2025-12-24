@@ -1,22 +1,16 @@
 import { useState, useEffect, useRef } from 'react'
-import { createPortal } from 'react-dom'
 import { supabase } from '../../services/supabase'
 import {
     Search,
-    Filter,
-    ArrowRight,
+    ArrowLeft,
     Calendar,
     Clock,
     AlertCircle,
     CheckCircle2,
-    ArrowUpCircle,
     Send,
-    History,
-    FileText,
-    ExternalLink,
-    Maximize2,
-    ChevronDown,
-    X
+    ChevronRight,
+    X,
+    Filter
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '../../contexts/AuthContext'
@@ -26,164 +20,98 @@ export default function StaffTasks() {
     const { user } = useAuth()
     const { registerRefresh, unregisterRefresh } = useRefresh()
     const [tasks, setTasks] = useState([])
-    const [filteredTasks, setFilteredTasks] = useState([])
     const [loading, setLoading] = useState(true)
 
-    // Modal & Detail State
-    const [selectedTask, setSelectedTask] = useState(null)
-    const [timeline, setTimeline] = useState([])
-    const [loadingTimeline, setLoadingTimeline] = useState(false)
-    const [newComment, setNewComment] = useState('')
-    const [sendingComment, setSendingComment] = useState(false)
-    const [updating, setUpdating] = useState(false)
+    // View State
+    const [selectedTask, setSelectedTask] = useState(null) // If set, shows ExecutionView
 
-    // Filters
+    // Filter State
     const [search, setSearch] = useState('')
-    const [statusFilter, setStatusFilter] = useState('all')
-    const [priorityFilter, setPriorityFilter] = useState('all')
+    const [statusFilter, setStatusFilter] = useState('all') // all, pending, in_progress, completed
+    const [priorityFilter, setPriorityFilter] = useState('all') // all, urgent, high, medium, low
 
     useEffect(() => {
         fetchTasks()
 
-        // Register pull-to-refresh
         registerRefresh(async () => {
-            await fetchTasks(true) // Silent refresh
+            await fetchTasks(true)
         })
 
         return () => unregisterRefresh()
     }, [])
 
-    useEffect(() => {
-        filterTasks()
-    }, [search, statusFilter, priorityFilter, tasks])
-
     async function fetchTasks(silent = false) {
         try {
             if (!silent) setLoading(true)
 
-            // Ensure user is loaded
             if (!user?.id) {
-                console.warn('User not loaded yet')
                 setTasks([])
                 return
             }
 
-            // CRITICAL SECURITY FIX: Only fetch tasks where the professional has a micro-task assigned
-            // First, get all micro-tasks for this professional
+            // 1. Get micro-tasks
             const { data: microTasks, error: microError } = await supabase
                 .from('tarefas_itens')
                 .select('tarefa_id')
                 .eq('profissional_id', user.id)
 
-            if (microError) {
-                console.error('Error fetching micro-tasks:', microError)
-                throw microError
-            }
+            if (microError) throw microError
 
-            // Extract unique task IDs
             const taskIds = [...new Set(microTasks?.map(mt => mt.tarefa_id) || [])]
 
             if (taskIds.length === 0) {
-                // No tasks assigned to this professional
                 setTasks([])
                 if (!silent) setLoading(false)
                 return
             }
 
-            // Now fetch only those specific tasks
+            // 2. Get tasks
             const { data, error } = await supabase
                 .from('tarefas')
                 .select('*')
                 .in('id', taskIds)
                 .order('deadline_at', { ascending: true, nullsFirst: false })
 
-            if (error) {
-                console.error('Error fetching tasks:', error)
-                throw error
-            }
+            if (error) throw error
 
             setTasks(data || [])
         } catch (error) {
             console.error('Error in fetchTasks:', error)
             toast.error('Erro ao carregar tarefas')
-            setTasks([])
         } finally {
             if (!silent) setLoading(false)
         }
     }
 
-    function filterTasks() {
-        let result = [...tasks]
+    // Filter Logic
+    const filteredTasks = tasks.filter(task => {
+        // Search
+        if (search) {
+            const lowerDate = search.toLowerCase()
+            const matchTitle = task.titulo.toLowerCase().includes(lowerDate)
+            const matchDesc = task.descricao && task.descricao.toLowerCase().includes(lowerDate)
+            if (!matchTitle && !matchDesc) return false
+        }
 
-        // 1. Status Filter
+        // Status
         if (statusFilter !== 'all') {
-            if (statusFilter === 'active') {
-                result = result.filter(t => t.status === 'pending' || t.status === 'in_progress')
+            if (statusFilter === 'active') { // Custom filter for Pending + In Progress
+                if (task.status === 'completed') return false
             } else {
-                result = result.filter(t => t.status === statusFilter)
+                if (task.status !== statusFilter) return false
             }
         }
 
-        // 2. Priority Filter
+        // Priority
         if (priorityFilter !== 'all') {
-            result = result.filter(t => t.priority === priorityFilter)
+            if (task.priority !== priorityFilter) return false
         }
 
-        // 3. Search
-        if (search) {
-            const lowerDate = search.toLowerCase()
-            result = result.filter(t =>
-                t.titulo.toLowerCase().includes(lowerDate) ||
-                (t.descricao && t.descricao.toLowerCase().includes(lowerDate))
-            )
-        }
+        return true
+    })
 
-        setFilteredTasks(result)
-    }
-
-    // Modal Functions
-    async function openTaskModal(task) {
-        setSelectedTask(task)
-        fetchTimeline(task.id)
-    }
-
-    async function fetchTimeline(taskId) {
-        try {
-            setLoadingTimeline(true)
-            // 1. Fetch Comments
-            const { data: comments, error: commentsError } = await supabase
-                .from('task_comments')
-                .select('id, content, created_at, author_id, profissionais(nome)')
-                .eq('task_id', taskId)
-                .order('created_at', { ascending: true })
-
-            if (commentsError) throw commentsError
-
-            // 2. Fetch History
-            const { data: history, error: historyError } = await supabase
-                .from('task_history')
-                .select('id, event, created_at')
-                .eq('task_id', taskId)
-                .order('created_at', { ascending: true })
-
-            if (historyError) throw historyError
-
-            // 3. Merge and Sort
-            const combined = [
-                ...(comments || []).map(c => ({ ...c, type: 'comment' })),
-                ...(history || []).map(h => ({ ...h, type: 'history' }))
-            ].sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
-
-            setTimeline(combined)
-        } catch (error) {
-            console.error('Error fetching timeline:', error)
-        } finally {
-            setLoadingTimeline(false)
-        }
-    }
-
-    async function handleStatusChange(taskId, newStatus) {
-        setUpdating(true)
+    // Actions
+    async function handleUpdateStatus(taskId, newStatus) {
         try {
             const updates = {
                 status: newStatus,
@@ -197,569 +125,347 @@ export default function StaffTasks() {
 
             if (error) throw error
 
-            // Update local state
-            setSelectedTask(prev => prev ? { ...prev, ...updates } : null)
             setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updates } : t))
+
+            // If currently viewing details, update that too
+            if (selectedTask?.id === taskId) {
+                setSelectedTask(prev => ({ ...prev, ...updates }))
+            }
 
             if (newStatus === 'completed') {
                 toast.success('Tarefa concluída! 🎉')
-                setTimeout(() => setSelectedTask(null), 1500)
+                // Optional: Auto-close view on complete? 
+                // Let's keep it open so user can verify, or close it. 
+                // User requirement: "Fluxo rápido". Maybe closing is better? 
+                // "UX silenciosa". Let's wait for user to back out.
             } else {
                 toast.success('Status atualizado')
             }
 
-            // Refresh timeline
-            setTimeout(() => fetchTimeline(taskId), 500)
-
         } catch (error) {
             console.error('Error updating status:', error)
             toast.error('Erro ao atualizar status')
-        } finally {
-            setUpdating(false)
         }
     }
 
-    async function handleSendComment(e) {
-        e.preventDefault()
-        if (!newComment.trim() || !selectedTask) return
-
-        setSendingComment(true)
-        try {
-            const { error } = await supabase
-                .from('task_comments')
-                .insert({
-                    task_id: selectedTask.id,
-                    author_id: user.id,
-                    content: newComment.trim()
-                })
-
-            if (error) throw error
-
-            setNewComment('')
-            fetchTimeline(selectedTask.id)
-            toast.success('Nota adicionada')
-        } catch (error) {
-            console.error('Error sending comment:', error)
-            toast.error('Não foi possível enviar o comentário')
-        } finally {
-            setSendingComment(false)
-        }
-    }
+    // --- RENDER ---
 
     if (loading) {
         return (
-            <div className="flex justify-center items-center h-full p-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <div className="flex justify-center items-center h-[50vh]">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
             </div>
         )
     }
 
+    // MODE: EXECUTION VIEW (Full Screen)
+    if (selectedTask) {
+        return (
+            <ExecutionView
+                task={selectedTask}
+                onBack={() => setSelectedTask(null)}
+                onUpdateStatus={handleUpdateStatus}
+                user={user}
+            />
+        )
+    }
+
+    // MODE: LIST VIEW
     return (
-        <div className="animation-fade-in pb-12">
+        <div className="pb-24 px-4 pt-4 max-w-lg mx-auto min-h-screen flex flex-col">
             {/* Header */}
-            <div className="mb-8">
-                <h1 className="text-3xl font-bold text-primary mb-2">Minhas Tarefas</h1>
-                <p className="text-secondary">Gerencie suas atividades e prazos.</p>
+            <div className="mb-6">
+                <h1 className="text-2xl font-bold text-gray-900">Minhas Tarefas</h1>
+                <p className="text-gray-500 text-sm">Gerencie suas demandas.</p>
             </div>
 
-            {/* Controls Bar */}
-            <div className="card p-5 mb-8 sticky top-4 z-20 backdrop-blur-xl bg-white/80 border border-white/20 shadow-lg shadow-brand/5 rounded-2xl transition-all duration-300">
-                <div className="flex flex-col gap-4">
-                    {/* Search Input - Premium Style */}
-                    {/* Search Input - Premium Style (Flexbox Refactor) */}
-                    <div className="relative group w-full">
-                        <div className="search-container-premium group">
-                            <Search className="text-gray-400 group-focus-within:text-brand transition-colors duration-300 flex-shrink-0" size={18} />
-                            <input
-                                type="text"
-                                placeholder="Buscar tarefa..."
-                                className="input-premium-search placeholder:text-gray-400 font-medium"
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                            />
-                            {search && (
-                                <button
-                                    onClick={() => setSearch('')}
-                                    className="p-1.5 rounded-full hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
-                                >
-                                    <X size={14} />
-                                </button>
-                            )}
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                        <CustomSelect
-                            value={statusFilter}
-                            onChange={setStatusFilter}
-                            options={[
-                                { value: 'all', label: 'Todos os Status' },
-                                { value: 'active', label: 'Em Aberto' },
-                                { value: 'pending', label: 'Pendente' },
-                                { value: 'in_progress', label: 'Em Andamento' },
-                                { value: 'completed', label: 'Concluída' }
-                            ]}
-                            icon={Filter}
-                        />
-
-                        <CustomSelect
-                            value={priorityFilter}
-                            onChange={setPriorityFilter}
-                            options={[
-                                { value: 'all', label: 'Todas Prioridades' },
-                                { value: 'urgent', label: 'Urgente' },
-                                { value: 'high', label: 'Alta' },
-                                { value: 'medium', label: 'Média' },
-                                { value: 'low', label: 'Baixa' }
-                            ]}
-                            icon={AlertCircle}
-                        />
-                    </div>
-                </div>
-            </div>
-
-            {/* Tasks Grid */}
-            {filteredTasks.length === 0 ? (
-                <div className="empty-state">
-                    <span className="empty-icon">📝</span>
-                    <h3 className="text-lg font-medium text-secondary mb-1">Nenhuma tarefa encontrada</h3>
-                    <p className="empty-text">Ajuste os filtros ou busque por outro termo.</p>
-                    <button
-                        className="btn btn-secondary mt-2"
-                        onClick={() => {
-                            setSearch('')
-                            setStatusFilter('all')
-                            setPriorityFilter('all')
-                        }}
-                    >
-                        Limpar Filtros
+            {/* Search */}
+            <div className="relative mb-4">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                <input
+                    type="text"
+                    placeholder="Buscar..."
+                    className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent shadow-sm"
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                />
+                {search && (
+                    <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 p-1">
+                        <X size={14} />
                     </button>
+                )}
+            </div>
+
+            {/* Horizontal Scrollable Filters */}
+            <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-none -mx-4 px-4">
+                <FilterChip
+                    label="Tudo"
+                    active={statusFilter === 'all'}
+                    onClick={() => setStatusFilter('all')}
+                />
+                <FilterChip
+                    label="Pendentes"
+                    active={statusFilter === 'pending'}
+                    onClick={() => setStatusFilter('pending')}
+                />
+                <FilterChip
+                    label="Em Andamento"
+                    active={statusFilter === 'in_progress'}
+                    onClick={() => setStatusFilter('in_progress')}
+                />
+                <FilterChip
+                    label="Concluídas"
+                    active={statusFilter === 'completed'}
+                    onClick={() => setStatusFilter('completed')}
+                />
+                <div className="w-px bg-gray-200 mx-1 h-6 self-center shrink-0"></div>
+                <FilterChip
+                    label="Alta Prioridade"
+                    active={priorityFilter === 'high'}
+                    onClick={() => setPriorityFilter(priorityFilter === 'high' ? 'all' : 'high')}
+                />
+            </div>
+
+            {/* List */}
+            {filteredTasks.length === 0 ? (
+                <div className="text-center py-12 text-gray-400">
+                    <Filter size={48} className="mx-auto mb-3 opacity-20" />
+                    <p>Nenhuma tarefa encontrada.</p>
                 </div>
             ) : (
-                <div className="task-list">
-                    {filteredTasks.map(task => {
-                        const isOverdue = task.deadline && new Date(task.deadline) < new Date() && task.status !== 'completed'
-
-                        return (
-                            <div
-                                key={task.id}
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    openTaskModal(task);
-                                }}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter' || e.key === ' ') {
-                                        e.preventDefault();
-                                        openTaskModal(task);
-                                    }
-                                }}
-                                role="button"
-                                tabIndex={0}
-                                className="task-item card relative z-0 hover:border-brand-light/50 transition-all duration-200 group bg-white !no-underline hover:!no-underline cursor-pointer active:scale-[0.99] flex flex-col md:flex-row md:items-center gap-3 md:gap-4 p-4"
-                            >
-                                {/* Content - Title & Date */}
-                                <div className="flex-1 w-full min-w-0">
-                                    <h3 className="task-item-title group-hover:text-brand transition-colors text-base font-semibold leading-tight mb-2 md:mb-1 pr-8 md:pr-0">
-                                        {task.titulo}
-                                        {isOverdue && (
-                                            <span className="text-danger inline-flex align-middle ml-2" title="Atrasada">
-                                                <AlertCircle size={14} />
-                                            </span>
-                                        )}
-                                    </h3>
-
-                                    <div className="task-item-meta flex items-center gap-2 text-tertiary text-xs md:text-sm">
-                                        {task.deadline ? (
-                                            <>
-                                                <Calendar size={13} className="opacity-70" />
-                                                <span className={`${isOverdue ? 'text-danger font-medium' : ''}`}>
-                                                    {new Date(task.deadline).toLocaleDateString('pt-BR')}
-                                                </span>
-                                                <span className="opacity-60 hidden xs:inline">
-                                                    • {new Date(task.deadline).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                                                </span>
-                                            </>
-                                        ) : (
-                                            <span className="italic opacity-50">Sem prazo definido</span>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* Actions - Badges */}
-                                <div className="flex items-center justify-between md:justify-end w-full md:w-auto gap-3 mt-1 md:mt-0">
-                                    {/* Priority Badge */}
-                                    <span
-                                        className="rounded-full font-semibold border"
-                                        style={{
-                                            backgroundColor: task.priority === 'urgent' ? '#fef2f2' :
-                                                task.priority === 'high' ? '#fff7ed' :
-                                                    task.priority === 'medium' ? '#fefce8' : '#f9fafb',
-                                            color: task.priority === 'urgent' ? '#dc2626' :
-                                                task.priority === 'high' ? '#ea580c' :
-                                                    task.priority === 'medium' ? '#ca8a04' : '#6b7280',
-                                            borderColor: task.priority === 'urgent' ? '#fecaca' :
-                                                task.priority === 'high' ? '#fed7aa' :
-                                                    task.priority === 'medium' ? '#fef08a' : '#e5e7eb',
-                                            fontSize: '10px',
-                                            padding: '3px 10px',
-                                            textTransform: 'none'
-                                        }}
-                                    >
-                                        {task.priority === 'urgent' ? 'Urgente' :
-                                            task.priority === 'high' ? 'Alta' :
-                                                task.priority === 'medium' ? 'Média' : 'Baixa'}
-                                    </span>
-
-                                    {/* Status Badge */}
-                                    <span
-                                        className="relative overflow-hidden px-3.5 py-1 rounded-full text-[10px] font-semibold border shadow-sm transition-all duration-300"
-                                        style={{
-                                            backgroundColor: task.status === 'in_progress' ? '#eff6ff' :
-                                                task.status === 'completed' ? '#f0fdf4' : '#fff7ed',
-                                            color: task.status === 'in_progress' ? '#2563eb' :
-                                                task.status === 'completed' ? '#16a34a' : '#c2410c',
-                                            borderColor: task.status === 'in_progress' ? '#bfdbfe' :
-                                                task.status === 'completed' ? '#bbf7d0' : '#fed7aa',
-                                            fontSize: '10px',
-                                            fontWeight: 600,
-                                            padding: '4px 12px',
-                                            textTransform: 'none'
-                                        }}
-                                    >
-                                        <span className="relative z-10 flex items-center gap-1.5">
-                                            {task.status === 'in_progress' ? <Clock size={11} className="animate-pulse" /> :
-                                                task.status === 'completed' ? <CheckCircle2 size={11} /> :
-                                                    <div className="w-1.5 h-1.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.5)]"></div>}
-
-                                            {task.status === 'in_progress' ? 'Em andamento' :
-                                                task.status === 'completed' ? 'Concluída' : 'Pendente'}
-                                        </span>
-                                    </span>
-
-                                    <div className="text-brand opacity-0 group-hover:opacity-100 transition-opacity translate-x-[-10px] group-hover:translate-x-0 duration-200 hidden md:block ml-2">
-                                        <ArrowRight size={16} />
-                                    </div>
-                                </div>
-                            </div>
-                        )
-                    })}
+                <div className="flex flex-col gap-3">
+                    {filteredTasks.map(task => (
+                        <TaskCard
+                            key={task.id}
+                            task={task}
+                            onClick={() => setSelectedTask(task)}
+                        />
+                    ))}
                 </div>
-            )}
-
-            {/* Task Detail Modal - Teleported to Body */}
-            {selectedTask && createPortal(
-                <div className="modal-backdrop" onClick={() => setSelectedTask(null)}>
-                    <div
-                        className="modal"
-                        onClick={(e) => e.stopPropagation()}
-                        style={{
-                            maxWidth: '48rem',
-                            maxHeight: '90vh',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            overflow: 'hidden'
-                        }}
-                    >
-                        {/* Glass Header */}
-                        <div
-                            className="border-b flex items-start justify-between z-10 shrink-0 sticky top-0"
-                            style={{
-                                backgroundColor: 'rgba(255, 255, 255, 0.8)',
-                                backdropFilter: 'blur(20px)',
-                                WebkitBackdropFilter: 'blur(20px)',
-                                borderBottom: '1px solid rgba(0, 0, 0, 0.06)',
-                                paddingLeft: '32px',
-                                paddingRight: '32px',
-                                paddingTop: '24px',
-                                paddingBottom: '24px'
-                            }}
-                        >
-                            <div className="flex-1 min-w-0" style={{ marginRight: '16px' }}>
-                                <div className="flex items-center gap-3 mb-3">
-                                    <h2 className="modal-title flex-1 min-w-0 truncate m-0">
-                                        {selectedTask.titulo}
-                                    </h2>
-                                    <span
-                                        className="priority-badge flex-shrink-0"
-                                        style={{
-                                            backgroundColor: selectedTask.priority === 'urgent' ? '#FEF2F2' :
-                                                selectedTask.priority === 'high' ? '#FFF7ED' :
-                                                    selectedTask.priority === 'medium' ? '#FEFCE8' : '#F9FAFB',
-                                            color: selectedTask.priority === 'urgent' ? '#DC2626' :
-                                                selectedTask.priority === 'high' ? '#EA580C' :
-                                                    selectedTask.priority === 'medium' ? '#CA8A04' : '#6B7280',
-                                            borderColor: selectedTask.priority === 'urgent' ? '#FECACA' :
-                                                selectedTask.priority === 'high' ? '#FED7AA' :
-                                                    selectedTask.priority === 'medium' ? '#FEF08A' : '#E5E7EB'
-                                        }}
-                                    >
-                                        <div className="priority-badge-dot" style={{ boxShadow: '0 0 8px currentColor' }}></div>
-                                        {selectedTask.priority === 'urgent' ? 'Urgente' :
-                                            selectedTask.priority === 'high' ? 'Alta' :
-                                                selectedTask.priority === 'medium' ? 'Média' : 'Baixa'}
-                                    </span>
-                                </div>
-
-                                <div className="flex items-start gap-8 text-sm text-gray-500 mt-4">
-                                    {selectedTask.deadline && (
-                                        <div className="flex flex-col flex-1">
-                                            <span className="label-text">Prazo Final</span>
-                                            <span className="label-value">
-                                                {new Date(selectedTask.deadline).toLocaleDateString('pt-BR')}
-                                                {' '}
-                                                <span className="label-value-secondary">
-                                                    {new Date(selectedTask.deadline).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                                                </span>
-                                            </span>
-                                        </div>
-                                    )}
-                                    <div className="flex flex-col flex-1">
-                                        <span className="label-text">Criada em</span>
-                                        <span className="label-value">
-                                            {new Date(selectedTask.created_at).toLocaleDateString('pt-BR')}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-
-
-                            <button className="modal-close" onClick={() => setSelectedTask(null)}>×</button>
-                        </div>
-
-                        {/* Body - Scrollable */}
-                        <div
-                            className="flex-1 scrollbar-hide"
-                            style={{
-                                overflowY: 'auto',
-                                maxHeight: 'calc(90vh - 120px)',
-                                padding: '24px 32px'
-                            }}
-                        >
-                            <div className="flex flex-col md:flex-row gap-6">
-                                {/* Left: Content & Status */}
-                                <div className="flex-1">
-                                    {/* Status Box */}
-                                    <div className="bg-white p-8 rounded-xl border border-gray-200 flex flex-col items-center gap-6 text-center shadow-sm">
-                                        <div className="w-full">
-                                            <span className="status-label block mb-4">Status Atual</span>
-
-                                            <div className="relative w-full max-w-xs mx-auto">
-                                                <select
-                                                    value={selectedTask.status}
-                                                    onChange={(e) => handleStatusChange(selectedTask.id, e.target.value)}
-                                                    disabled={updating}
-                                                    className={`input w-full h-12 text-center font-medium appearance-none cursor-pointer ${selectedTask.status === 'completed' ? 'text-success border-success bg-success/5' : 'text-primary'
-                                                        }`}
-                                                >
-                                                    <option value="pending">Pendente</option>
-                                                    <option value="in_progress">Em andamento</option>
-                                                    <option value="completed">Concluída</option>
-                                                </select>
-
-                                            </div>
-                                        </div>
-
-                                        {selectedTask.status !== 'completed' && (
-                                            <button
-                                                onClick={() => handleStatusChange(selectedTask.id, 'completed')}
-                                                disabled={updating}
-                                                className="btn w-full max-w-xs flex items-center justify-center gap-2"
-                                                style={{
-                                                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                                                    color: '#ffffff',
-                                                    boxShadow: '0 2px 4px rgba(16, 185, 129, 0.2)',
-                                                    border: 'none'
-                                                }}
-                                                onMouseEnter={(e) => {
-                                                    if (!updating) {
-                                                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.3)';
-                                                        e.currentTarget.style.transform = 'translateY(-1px)';
-                                                    }
-                                                }}
-                                                onMouseLeave={(e) => {
-                                                    e.currentTarget.style.boxShadow = '0 2px 4px rgba(16, 185, 129, 0.2)';
-                                                    e.currentTarget.style.transform = 'translateY(0)';
-                                                }}
-                                            >
-                                                <CheckCircle2 size={18} />
-                                                Concluir Tarefa
-                                            </button>
-                                        )}
-                                    </div>
-
-                                    {/* Description */}
-                                    <div className="mt-8">
-                                        <h3 className="section-title">
-                                            Descrição
-                                        </h3>
-                                        <div className="min-h-[100px] p-4 rounded-lg border border-gray-100/50 bg-white">
-                                            {selectedTask.descricao ? (
-                                                <p className="content-text whitespace-pre-wrap">{selectedTask.descricao}</p>
-                                            ) : (
-                                                <p className="empty-state-text">Sem descrição fornecida.</p>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Link */}
-                                    {selectedTask.drive_link && (
-                                        <div className="mt-6">
-                                            <a
-                                                href={selectedTask.drive_link}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="card p-4 flex items-center gap-3 hover:bg-subtle hover:border-brand-light transition-colors group"
-                                            >
-                                                <div className="p-2 bg-blue-50 text-brand rounded-lg group-hover:bg-white transition-colors">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
-                                                </div>
-                                                <div>
-                                                    <p className="font-medium text-primary text-sm group-hover:text-brand transition-colors">Abrir arquivos anexos</p>
-                                                    <p className="text-xs text-tertiary truncate max-w-[200px]">{selectedTask.drive_link}</p>
-                                                </div>
-                                            </a>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Right: Activity (Gray Background) */}
-                                <div className="w-full md:w-[320px] bg-subtle/50 border-l border-gray-100 flex flex-col">
-                                    <div className="p-6">
-                                        <h3 className="section-title">
-                                            Atividade
-                                        </h3>
-                                    </div>
-
-                                    <div
-                                        className="flex-1 overflow-y-auto space-y-3 max-h-[400px] md:max-h-none"
-                                        style={{ paddingLeft: '24px', paddingRight: '24px', paddingTop: '16px', paddingBottom: '16px' }}
-                                    >
-                                        {loadingTimeline ? (
-                                            <div className="flex justify-center py-4"><div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div></div>
-                                        ) : timeline.length === 0 ? (
-                                            <div className="empty-state-text text-center py-8">Nenhuma atividade recente.</div>
-                                        ) : (
-                                            timeline.map((item) => (
-                                                <div
-                                                    key={item.id}
-                                                    className="pb-4 border-b border-gray-100 last:border-0 last:pb-0"
-                                                    style={item.type === 'comment' ? {
-                                                        backgroundColor: '#f9fafb',
-                                                        padding: '12px',
-                                                        borderRadius: '8px',
-                                                        marginLeft: '-12px',
-                                                        marginRight: '-12px'
-                                                    } : {}}
-                                                >
-                                                    <div className="flex items-start justify-between mb-2">
-                                                        <span className="text-sm font-medium text-gray-900">
-                                                            {item.type === 'comment' ? (item.profissionais?.nome || 'Você') : 'Sistema'}
-                                                        </span>
-                                                        <span className="text-xs text-gray-400">
-                                                            {new Date(item.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
-                                                        </span>
-                                                    </div>
-                                                    <p className={`text-sm ${item.type === 'comment' ? 'text-gray-700' : 'text-gray-500 italic'}`}>
-                                                        {item.type === 'comment' ? item.content : item.event}
-                                                    </p>
-                                                </div>
-                                            ))
-                                        )}
-                                    </div>
-
-                                    <div className="p-3 bg-white border-t border-gray-100">
-                                        <form onSubmit={handleSendComment} className="relative">
-                                            <input
-                                                type="text"
-                                                className="input w-full pr-10 py-2.5 text-xs bg-subtle hover:bg-white transition-colors"
-                                                placeholder="Adicionar nota..."
-                                                value={newComment}
-                                                onChange={(e) => setNewComment(e.target.value)}
-                                                disabled={sendingComment}
-                                            />
-                                            <button
-                                                type="submit"
-                                                disabled={!newComment.trim() || sendingComment}
-                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-brand hover:text-brand-dark disabled:opacity-30 disabled:cursor-not-allowed p-1"
-                                            >
-                                                <Send size={14} />
-                                            </button>
-                                        </form>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>,
-                document.body
             )}
         </div>
     )
 }
 
-function CustomSelect({ value, onChange, options, icon: Icon }) {
-    const [isOpen, setIsOpen] = useState(false);
-    const containerRef = useRef(null);
-
-    useEffect(() => {
-        function handleClickOutside(event) {
-            if (containerRef.current && !containerRef.current.contains(event.target)) {
-                setIsOpen(false);
-            }
-        }
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, []);
-
-    const selectedOption = options.find(o => o.value === value) || options[0];
-
+function FilterChip({ label, active, onClick }) {
     return (
-        <div className="relative" ref={containerRef}>
-            <button
-                onClick={() => setIsOpen(!isOpen)}
-                type="button"
-                className={`btn-premium-select ${isOpen ? 'active' : ''}`}
-            >
-                <div className="flex items-center gap-3 truncate">
-                    {Icon && (
-                        <div className={`p-1 rounded-md transition-colors ${isOpen || value !== 'all' ? 'bg-brand/10 text-brand' : 'text-gray-400 bg-gray-100'}`}>
-                            <Icon size={14} className="shrink-0" />
-                        </div>
-                    )}
-                    <span className={`truncate ${value !== 'all' ? 'text-gray-900 font-medium' : 'text-gray-500 font-normal'}`}>
-                        {selectedOption.label}
-                    </span>
-                </div>
-                <ChevronDown
-                    size={16}
-                    className={`text-gray-400 transition-transform duration-300 ${isOpen ? 'rotate-180 text-brand' : ''}`}
-                />
-            </button>
-
-            {isOpen && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-white/90 backdrop-blur-xl border border-gray-100 rounded-xl shadow-xl shadow-gray-200/50 overflow-hidden z-20 animation-scale-in origin-top">
-                    <div className="max-h-[240px] overflow-y-auto py-1 custom-scrollbar">
-                        {options.map((option) => (
-                            <button
-                                key={option.value}
-                                onClick={() => {
-                                    onChange(option.value);
-                                    setIsOpen(false);
-                                }}
-                                className={`w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors text-left
-                                    ${value === option.value
-                                        ? 'bg-brand/5 text-brand font-medium'
-                                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                                    }`}
-                            >
-                                <span>{option.label}</span>
-                                {value === option.value && <div className="w-1.5 h-1.5 rounded-full bg-brand shadow-sm"></div>}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-            )}
-        </div>
-    );
+        <button
+            onClick={onClick}
+            className={`
+                whitespace-nowrap px-4 py-2 rounded-full text-xs font-medium transition-all
+                ${active
+                    ? 'bg-gray-900 text-white shadow-md shadow-gray-200'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}
+            `}
+        >
+            {label}
+        </button>
+    )
 }
 
+function TaskCard({ task, onClick }) {
+    const isOverdue = new Date(task.deadline) < new Date() && task.status !== 'completed'
+
+    return (
+        <button
+            onClick={onClick}
+            className="w-full text-left bg-white p-4 rounded-xl border border-gray-100 shadow-sm active:scale-[0.98] transition-transform flex items-center justify-between gap-4 group"
+        >
+            <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                    <span className={`
+                        w-2 h-2 rounded-full 
+                        ${task.status === 'completed' ? 'bg-green-500' : task.status === 'in_progress' ? 'bg-blue-500' : 'bg-orange-500'}
+                    `}></span>
+                    <span className="text-[10px] uppercase tracking-wider font-semibold text-gray-500">
+                        {task.status === 'completed' ? 'Concluída' : task.status === 'in_progress' ? 'Em Andamento' : 'Pendente'}
+                    </span>
+                    {isOverdue && <span className="text-[10px] text-red-600 font-bold ml-1">! Atrasada</span>}
+                </div>
+                <h3 className="text-sm font-semibold text-gray-900 truncate pr-2">
+                    {task.titulo}
+                </h3>
+                <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
+                    {task.deadline && (
+                        <div className="flex items-center gap-1">
+                            <Calendar size={12} />
+                            <span>{new Date(task.deadline).toLocaleDateString('pt-BR')}</span>
+                        </div>
+                    )}
+                    {task.priority === 'urgent' && <span className="text-red-500 font-medium">Urgente</span>}
+                </div>
+            </div>
+            <ChevronRight size={20} className="text-gray-300 group-hover:text-gray-900 transition-colors" />
+        </button>
+    )
+}
+
+function ExecutionView({ task, onBack, onUpdateStatus, user }) {
+    const isCompleted = task.status === 'completed'
+
+    // Simple state for comments/timeline
+    const [timeline, setTimeline] = useState([])
+    const [comment, setComment] = useState('')
+
+    useEffect(() => {
+        // Fetch timeline logic (Simplified for this view)
+        async function loadTimeline() {
+            const { data } = await supabase
+                .from('task_comments')
+                .select('id, content, created_at, profissionais(nome)')
+                .eq('task_id', task.id)
+                .order('created_at', { ascending: true })
+
+            if (data) setTimeline(data)
+        }
+        loadTimeline()
+    }, [task.id])
+
+    async function sendComment(e) {
+        e.preventDefault()
+        if (!comment.trim()) return
+
+        try {
+            await supabase.from('task_comments').insert({
+                task_id: task.id,
+                author_id: user.id,
+                content: comment
+            })
+            setComment('')
+            // Optimistic update
+            setTimeline(prev => [...prev, {
+                id: Date.now(),
+                content: comment,
+                created_at: new Date(),
+                profissionais: { nome: 'Você' }
+            }])
+        } catch (err) {
+            toast.error('Erro ao enviar')
+        }
+    }
+
+    return (
+        <div className="fixed inset-0 bg-white z-50 flex flex-col animate-in slide-in-from-right duration-300">
+            {/* Header */}
+            <div className="h-16 px-4 flex items-center gap-3 border-b border-gray-100 bg-white/80 backdrop-blur-md sticky top-0 z-10">
+                <button onClick={onBack} className="p-2 -ml-2 text-gray-600 hover:bg-gray-100 rounded-full">
+                    <ArrowLeft size={24} />
+                </button>
+                <div className="flex-1 min-w-0">
+                    <h2 className="font-bold text-gray-900 truncate text-lg leading-tight">{task.titulo}</h2>
+                </div>
+                <div className={`
+                    w-3 h-3 rounded-full mr-2
+                    ${isCompleted ? 'bg-green-500' : task.status === 'in_progress' ? 'bg-blue-500' : 'bg-orange-500 shadow-orange-200 shadow-md animate-pulse'}
+                `}></div>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto p-4 pb-32">
+                {/* Status Card */}
+                <div className="bg-gray-50 rounded-xl p-4 mb-6 border border-gray-100">
+                    <div className="flex justify-between items-start mb-2">
+                        <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Status Atual</span>
+                        {task.deadline && (
+                            <span className="text-xs font-medium text-gray-500 bg-white px-2 py-1 rounded shadow-sm">
+                                Prazo: {new Date(task.deadline).toLocaleDateString('pt-BR')}
+                            </span>
+                        )}
+                    </div>
+                    <div className="text-lg font-medium text-gray-900">
+                        {isCompleted ? 'Concluída' : task.status === 'in_progress' ? 'Em Andamento' : 'Pendente'}
+                    </div>
+                </div>
+
+                {/* Description */}
+                <div className="mb-8">
+                    <h3 className="text-sm font-bold text-gray-900 mb-2">Descrição</h3>
+                    <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap">
+                        {task.descricao || 'Sem descrição.'}
+                    </p>
+                </div>
+
+                {/* Link */}
+                {task.drive_link && (
+                    <a
+                        href={task.drive_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block w-full p-4 bg-blue-50 border border-blue-100 rounded-xl text-blue-700 font-medium text-center mb-8 active:scale-[0.98] transition-transform"
+                    >
+                        Abrir Arquivos Anexos
+                    </a>
+                )}
+
+                {/* Timeline / Comments */}
+                <div>
+                    <h3 className="text-sm font-bold text-gray-900 mb-4">Atividade & Notas</h3>
+                    <div className="space-y-4 mb-4">
+                        {timeline.length === 0 ? (
+                            <p className="text-gray-400 text-xs italic">Nenhuma nota ainda.</p>
+                        ) : (
+                            timeline.map(item => (
+                                <div key={item.id} className="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                                    <div className="flex justify-between items-center mb-1">
+                                        <span className="text-xs font-bold text-gray-700">{item.profissionais?.nome || 'Usuário'}</span>
+                                        <span className="text-[10px] text-gray-400">{new Date(item.created_at).toLocaleDateString()}</span>
+                                    </div>
+                                    <p className="text-sm text-gray-600">{item.content}</p>
+                                </div>
+                            ))
+                        )}
+                    </div>
+
+                    <form onSubmit={sendComment} className="relative">
+                        <input
+                            type="text"
+                            placeholder="Adicionar nota rápida..."
+                            className="w-full pl-4 pr-12 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                            value={comment}
+                            onChange={e => setComment(e.target.value)}
+                        />
+                        <button
+                            type="submit"
+                            disabled={!comment.trim()}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-gray-900 text-white rounded-lg disabled:opacity-50 disabled:bg-gray-300"
+                        >
+                            <Send size={14} />
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            {/* Footer / Thumb Zone Actions */}
+            <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-100 pb-8 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+                <div className="max-w-lg mx-auto flex gap-3">
+                    {!isCompleted ? (
+                        <>
+                            {task.status === 'pending' && (
+                                <button
+                                    onClick={() => onUpdateStatus(task.id, 'in_progress')}
+                                    className="flex-1 py-4 bg-gray-100 text-gray-900 font-bold rounded-xl active:scale-[0.98] transition-transform"
+                                >
+                                    Iniciar
+                                </button>
+                            )}
+                            <button
+                                onClick={() => onUpdateStatus(task.id, 'completed')}
+                                className="flex-[2] py-4 bg-gray-900 text-white font-bold rounded-xl shadow-lg shadow-gray-200 active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
+                            >
+                                <CheckCircle2 size={20} />
+                                Concluir Tarefa
+                            </button>
+                        </>
+                    ) : (
+                        <button
+                            onClick={() => onUpdateStatus(task.id, 'in_progress')}
+                            className="w-full py-4 bg-gray-100 text-gray-600 font-bold rounded-xl active:scale-[0.98] transition-transform"
+                        >
+                            Reabrir Tarefa
+                        </button>
+                    )}
+                </div>
+            </div>
+        </div>
+    )
+}

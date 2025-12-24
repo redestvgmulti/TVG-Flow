@@ -13,6 +13,11 @@
     transition: all var(--transition-base);
     position: relative;
     overflow: hidden;
+    height: 100%;
+    /* Ensure it fills grid cell */
+    display: flex;
+    flex-direction: column;
+    /* Organize content vertically */
 }
 
 .card:hover {
@@ -769,6 +774,9 @@ textarea:focus {
     border: 2px dashed var(--color-border);
     background-color: rgba(255, 255, 255, 0.5);
     margin: var(--space-4) 0;
+    flex: 1;
+    /* Fill available space in flex container (card) */
+    width: 100%;
 }
 
 .empty-icon {

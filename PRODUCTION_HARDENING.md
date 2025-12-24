@@ -29,6 +29,8 @@ CREATE TABLE schema_migrations (
 - `026_migrate_deadline_datetime`
 - `027_fix_microtasks_profissionais_status`
 - `028_production_hardening`
+- `029_fix_staff_task_visibility`
+- `20251223163500_create_architecture_tables`
 
 **Uso:**
 ```sql
@@ -198,6 +200,31 @@ END IF;
 }
 ```
 
+### Edge Function: `delete-professional`
+
+**Validações:**
+- ✅ Apenas Admin pode invocar
+- ✅ Remove do Auth (bloqueia login imediatamente)
+- ✅ Remove do Storage (avatar/files)
+- ✅ Remove do Public Schema (dados)
+- ✅ Confirmação dupla requerida no front
+
+### Edge Function: `create-professional`
+
+**Validações:**
+- ✅ Cria usuário no Auth
+- ✅ Cria perfil no Public Schema
+- ✅ Valida unicidade de email
+- ✅ Atribui role correto (admin/staff)
+
+### Edge Function: `send-push-notification`
+
+**Validações:**
+- ✅ Autenticação via Service Role
+- ✅ Valida tokens e payload
+- ✅ Trata erros de entrega (tokens inválidos)
+```
+
 ---
 
 ## ✅ 7. HARDENING DE RLS
@@ -227,6 +254,13 @@ END IF;
 - ✅ Read-only (exceto via trigger)
 - ✅ Admin: vê tudo
 - ✅ Profissional: vê seus logs
+
+**Tabela: `tarefas` (CRITICAL UPDATE - Migration 029)**
+- ✅ RLS Estrita (Whitelist)
+- ✅ Admin: Acesso total
+- ✅ Profissional: Vê **APENAS** tarefas onde possui uma micro-tarefa (`tarefas_itens`) atribuída
+- ✅ Bloqueia acesso a tarefas de outros profissionais
+- ✅ Garante isolamento total entre staffs
 
 ---
 
@@ -294,6 +328,8 @@ function AdminLayout() {
 - [x] `026_migrate_deadline_datetime`
 - [x] `027_fix_microtasks_profissionais_status`
 - [x] `028_production_hardening`
+- [x] `029_fix_staff_task_visibility` (CRITICAL SECURITY)
+- [x] `20251223163500_create_architecture_tables`
 
 ### Triggers
 - [x] `trigger_update_tarefa_status_after_item_change` (hardened)
@@ -309,6 +345,9 @@ function AdminLayout() {
 ### Edge Functions
 - [x] `create-microtasks` (com validação empresa-profissional)
 - [x] `system-check` (validação de integridade)
+- [x] `delete-professional` (clean exit)
+- [x] `create-professional` (transactional creation)
+- [x] `send-push-notification` (secure triggers)
 
 ### Constraints
 - [x] Status constraint pt-BR (`pendente`, `concluida`)

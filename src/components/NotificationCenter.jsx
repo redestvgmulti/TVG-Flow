@@ -35,11 +35,7 @@ function NotificationCenter() {
 
     useEffect(() => {
         // Debug logging
-        console.log('[NotificationCenter] Mounted', {
-            professionalId,
-            isIOSPWA: isIOSPWAMode,
-            notificationPermission: typeof Notification !== 'undefined' ? Notification.permission : 'N/A'
-        })
+
 
         if (professionalId) {
             fetchNotifications()
@@ -47,7 +43,7 @@ function NotificationCenter() {
 
             // Subscribe to real-time notifications with unique channel name
             const channelName = `notifications:${professionalId}`
-            console.log('[NotificationCenter] Creating Realtime channel:', channelName)
+
 
             const channel = supabase
                 .channel(channelName)
@@ -58,17 +54,17 @@ function NotificationCenter() {
                     filter: `profissional_id=eq.${professionalId}`
                 }, handleNewNotification)
                 .subscribe((status, err) => {
-                    console.log('[NotificationCenter] Realtime subscription status:', status)
+
                     if (err) {
                         console.error('[NotificationCenter] Realtime subscription error:', err)
                     }
                     if (status === 'SUBSCRIBED') {
-                        console.log('[NotificationCenter] ✅ Successfully subscribed to real-time notifications')
+
                     }
                 })
 
             return () => {
-                console.log('[NotificationCenter] Unmounting, removing channel:', channelName)
+
                 supabase.removeChannel(channel)
             }
         }
@@ -182,13 +178,13 @@ function NotificationCenter() {
 
     function handleNewNotification(payload) {
         const notification = payload.new
-        console.log('[NotificationCenter] New notification received:', notification)
+
 
         // DEDUPLICATION: Check if notification already exists
         setNotifications(prev => {
             const exists = prev.some(n => n.id === notification.id)
             if (exists) {
-                console.log('[NotificationCenter] Duplicate notification ignored:', notification.id)
+
                 return prev // Don't add duplicate
             }
 
@@ -204,7 +200,7 @@ function NotificationCenter() {
         })
 
         // Show in-app banner
-        console.log('[NotificationCenter] Showing in-app notification')
+
         showNotification({
             notification_id: notification.id, // CRITICAL: For deduplication with push
             title: notification.title,

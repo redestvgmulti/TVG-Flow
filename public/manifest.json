@@ -45,13 +45,13 @@
             "name": "Tarefas de Hoje",
             "short_name": "Hoje",
             "description": "Ver tarefas do dia",
-            "url": "/profissional?view=today"
+            "url": "/staff/today"
         },
         {
             "name": "Nova Tarefa",
             "short_name": "Nova",
             "description": "Criar nova tarefa",
-            "url": "/admin/tarefas/nova"
+            "url": "/admin/tasks/new"
         }
     ]
 }

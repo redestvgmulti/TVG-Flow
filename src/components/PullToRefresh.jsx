@@ -83,7 +83,7 @@ export default function PullToRefresh({ children, className = '' }) {
             if (navigator.vibrate) navigator.vibrate(10)
 
             // Log for debugging
-            console.log('[PullToRefresh] Triggering refresh...')
+
 
             // Snap to threshold
             setPullY(PULL_THRESHOLD)
