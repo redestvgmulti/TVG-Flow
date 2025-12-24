@@ -130,56 +130,77 @@ export default function TaskForm({ onSuccess, onCancel }) {
             </div>
 
             {/* 2. Funções (Condicional) */}
+            {/* 2. Funções (Condicional) */}
             {empresaId && (
                 <div className="form-group animate-in fade-in slide-in-from-top-2">
-                    <label className="label flex items-center gap-2 mb-3">
-                        <Layers size={16} className="text-purple-600" />
-                        Funções Necessárias * <span className="text-xs font-normal text-muted">(Selecione as funções que trabalharão nesta OS)</span>
+                    <label className="label flex items-center gap-2 mb-3 text-slate-700 font-medium">
+                        <Layers size={16} className="text-indigo-600" />
+                        Funções Necessárias * <span className="text-xs font-normal text-slate-400">(Selecione as funções)</span>
                     </label>
 
                     {loadingFunctions ? (
-                        <div className="text-sm text-slate-500">Buscando funções disponíveis...</div>
+                        <div className="text-sm text-slate-500 flex items-center gap-2 py-2">
+                            <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                            Buscando funções disponíveis...
+                        </div>
                     ) : availableFunctions.length === 0 ? (
-                        <div className="p-4 bg-yellow-50 text-yellow-800 border border-yellow-100 rounded-lg text-sm flex items-center gap-2">
-                            <AlertTriangle size={16} />
-                            Nenhuma função/profissional vinculado a esta empresa. Adicione vínculos no cadastro do profissional primeiro.
+                        <div className="p-4 bg-amber-50 text-amber-800 border border-amber-100 rounded-xl text-sm flex items-center gap-3">
+                            <AlertTriangle size={18} className="shrink-0" />
+                            <span>Nenhuma função vinculada a esta empresa.</span>
                         </div>
                     ) : (
-                        <div className="flex flex-wrap gap-2">
-                            {availableFunctions.map(fn => {
-                                const isSelected = selectedFunctions.includes(fn)
-                                return (
-                                    <button
-                                        key={fn}
-                                        type="button"
-                                        onClick={() => toggleFunction(fn)}
-                                        className={`px-4 py-2 rounded-full text-sm font-medium transition-all border ${isSelected
-                                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm transform scale-105'
-                                            : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300 hover:text-blue-600'
-                                            }`}
-                                    >
-                                        {fn}
-                                        {isSelected && <CheckCircle size={14} className="inline ml-1.5 -mt-0.5" />}
-                                    </button>
-                                )
-                            })}
-                        </div>
+                        <>
+                            <div className="relative group">
+                                {/* Gradient masks for scroll indication */}
+                                <div className="absolute left-0 top-0 bottom-0 w-4 bg-gradient-to-r from-white to-transparent pointer-events-none z-10" />
+                                <div className="absolute right-0 top-0 bottom-0 w-4 bg-gradient-to-l from-white to-transparent pointer-events-none z-10" />
+
+                                <div className="overflow-x-auto pb-3 -mx-2 px-2 hide-scrollbar">
+                                    <div className="flex gap-2 min-w-max">
+                                        {availableFunctions.map(fn => {
+                                            const isSelected = selectedFunctions.includes(fn)
+                                            return (
+                                                <button
+                                                    key={fn}
+                                                    type="button"
+                                                    onClick={() => toggleFunction(fn)}
+                                                    className={`
+                                                        relative flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border whitespace-nowrap select-none
+                                                        ${isSelected
+                                                            ? 'bg-indigo-50 border-indigo-200 text-indigo-700 shadow-sm'
+                                                            : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                                                        }
+                                                    `}
+                                                >
+                                                    <span className="relative z-10">{fn}</span>
+                                                    {isSelected && (
+                                                        <div className="bg-indigo-600 rounded-full p-0.5 text-white animate-in zoom-in-50 duration-200">
+                                                            <CheckCircle size={12} strokeWidth={3} />
+                                                        </div>
+                                                    )}
+                                                </button>
+                                            )
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                            <p className="text-xs text-slate-400 mt-1 pl-1">
+                                {selectedFunctions.length} {selectedFunctions.length === 1 ? 'função selecionada' : 'funções selecionadas'}
+                            </p>
+                        </>
                     )}
-                    <p className="text-xs text-slate-400 mt-2">
-                        {selectedFunctions.length} funções selecionadas.
-                    </p>
                 </div>
             )}
 
-            <hr className="border-slate-100" />
+            <div className="h-px bg-slate-100 my-6" />
 
             {/* 3. Detalhes da OS */}
-            <div className="grid grid-cols-1 gap-6">
+            <div className="grid grid-cols-1 gap-5">
                 <div className="form-group">
-                    <label className="label">Título da OS *</label>
+                    <label className="label text-slate-700 font-medium mb-1.5 block">Título da OS *</label>
                     <input
                         type="text"
-                        className="input"
+                        className="input w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none text-slate-700 placeholder:text-slate-400"
                         value={titulo}
                         onChange={e => setTitulo(e.target.value)}
                         placeholder="Ex: Campanha de Black Friday"
@@ -188,9 +209,9 @@ export default function TaskForm({ onSuccess, onCancel }) {
                 </div>
 
                 <div className="form-group">
-                    <label className="label">Descrição / Briefing</label>
+                    <label className="label text-slate-700 font-medium mb-1.5 block">Descrição / Briefing</label>
                     <textarea
-                        className="input min-h-[100px]"
+                        className="input w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none text-slate-700 placeholder:text-slate-400 min-h-[100px] resize-y"
                         value={descricao}
                         onChange={e => setDescricao(e.target.value)}
                         placeholder="Detalhes gerais da demanda..."
@@ -198,13 +219,13 @@ export default function TaskForm({ onSuccess, onCancel }) {
                 </div>
 
                 <div className="form-group">
-                    <label className="label flex items-center gap-2">
-                        <CalendarIcon size={16} className="text-orange-600" />
+                    <label className="label flex items-center gap-2 text-slate-700 font-medium mb-1.5">
+                        <CalendarIcon size={16} className="text-orange-500" />
                         Prazo de Entrega (Deadline) *
                     </label>
                     <input
                         type="datetime-local"
-                        className="input"
+                        className="input w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none text-slate-700"
                         value={deadline}
                         onChange={e => setDeadline(e.target.value)}
                         min={minDate}

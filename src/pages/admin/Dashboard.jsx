@@ -23,6 +23,114 @@ function Painel() {
     const [reassignTo, setReatribuirTo] = useState('')
     const [reassigning, setReatribuiring] = useState(false)
     const [feedback, setFeedback] = useState({ show: false, type: '', message: '' })
+    const [selectedTask, setSelectedTask] = useState(null)
+
+    useEffect(() => {
+        fetchPainelData()
+        fetchProfissionais()
+    }, [])
+
+    useEffect(() => {
+        if (feedback.show) {
+            const timer = setTimeout(() => {
+                setFeedback({ show: false, type: '', message: '' })
+            }, 5000)
+            return () => clearTimeout(timer)
+        }
+    }, [feedback.show])
+
+    async function fetchProfissionais() {
+        try {
+            const { data, error } = await supabase
+                .from('profissionais')
+                .select('id, nome')
+                .eq('role', 'profissional')
+                .eq('ativo', true)
+                .order('nome')
+
+            if (error) throw error
+            setProfissionais(data || [])
+        } catch (error) {
+            console.error('Error fetching professionals:', error)
+        }
+    }
+
+    async function fetchPainelData() {
+        try {
+            setLoading(true)
+
+            const { data: allTasks, error: allTasksError } = await supabase
+                .from('tarefas')
+                .select('id, status, titulo, deadline, priority, created_at, assigned_to, drive_link')
+                .order('created_at', { ascending: false })
+
+            if (allTasksError) throw allTasksError
+
+            const { count: profCount, error: profError } = await supabase
+                .from('profissionais')
+                .select('*', { count: 'exact', head: true })
+
+            if (profError) throw profError
+
+            const total = allTasks?.length || 0
+            const active = allTasks?.filter(t => t.status === 'in_progress' || t.status === 'pending').length || 0
+            const completed = allTasks?.filter(t => t.status === 'completed').length || 0
+
+            setStats({
+                totalTasks: total,
+                activeTasks: active,
+                completedTasks: completed,
+                totalProfissionais: profCount || 0
+            })
+
+            setRecentTasks(allTasks?.slice(0, 5) || [])
+
+            const last30Days = getLast30Days()
+            const tasksTimeData = last30Days.map(date => {
+                const count = allTasks?.filter(t => {
+                    const taskDate = new Date(t.created_at).toDateString()
+                    return taskDate === date.toDateString()
+                }).length || 0
+                return {
+                    date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+                    tasks: count
+                }
+            })
+            setTasksOverTime(tasksTimeData)
+
+            const statusData = [
+                { name: 'Pending', value: allTasks?.filter(t => t.status === 'pending').length || 0, color: '#6e6e73' },
+                { name: 'In Progress', value: allTasks?.filter(t => t.status === 'in_progress').length || 0, color: '#007aff' },
+                { name: 'Concluídas', value: allTasks?.filter(t => t.status === 'completed').length || 0, color: '#34c759' },
+                { name: 'Overdue', value: allTasks?.filter(t => t.status === 'overdue').length || 0, color: '#ff3b30' }
+            ]
+            setTasksByStatus(statusData.filter(s => s.value > 0))
+
+            const priorityData = [
+                { name: 'Low', value: allTasks?.filter(t => t.priority === 'low').length || 0 },
+                { name: 'Medium', value: allTasks?.filter(t => t.priority === 'medium').length || 0 },
+                { name: 'High', value: allTasks?.filter(t => t.priority === 'high').length || 0 },
+                { name: 'Urgent', value: allTasks?.filter(t => t.priority === 'urgent').length || 0 }
+            ]
+            setTasksByPriority(priorityData.filter(p => p.value > 0))
+
+        } catch (error) {
+            console.error('Error fetching dashboard data:', error)
+            showFeedback('error', 'Failed to load dashboard data. Please refresh the page.')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    function showFeedback(type, message) {
+        setFeedback({ show: true, type, message })
+    }
+
+    function handleOpenReatribuirModal(task) {
+        setReatribuiringTask(task)
+        setReatribuirTo(task.assigned_to || '')
+        setShowReatribuirModal(true)
+    }
 
     async function handleReatribuirTask(e) {
         e.preventDefault()
@@ -439,18 +547,31 @@ function Painel() {
             {/* Modals are kept as is, just ensuring classes match */}
             {/* Create Task Modal */}
             {showCreateModal && (
-                <div className="modal-backdrop" onClick={() => setShowCreateModal(false)}>
-                    <div className="modal" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h3>Nova Tarefa</h3>
-                            <button className="modal-close" onClick={() => setShowCreateModal(false)}>×</button>
+                <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
+
+                    {/* Modal Content */}
+                    <div
+                        className="modal-premium"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="modal-premium-header">
+                            <div className="modal-premium-title">
+                                <h3>Nova Tarefa</h3>
+                                <p>Preencha os dados para criar uma nova OS</p>
+                            </div>
+                            <button
+                                onClick={() => setShowCreateModal(false)}
+                                className="modal-premium-close"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 18 18" /></svg>
+                            </button>
                         </div>
-                        <div className="modal-body">
+
+                        <div className="modal-premium-content">
                             <TaskForm
                                 onSuccess={async () => {
                                     setShowCreateModal(false)
                                     await fetchPainelData()
-                                    // Optional: You might want to remove showFeedback here since TaskForm handles its own toasts
                                 }}
                                 onCancel={() => setShowCreateModal(false)}
                             />

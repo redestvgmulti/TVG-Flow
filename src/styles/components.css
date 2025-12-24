@@ -793,15 +793,132 @@ textarea:focus {
     box-shadow: var(--shadow-sm);
 }
 
-.empty-text {
-    font-size: var(--text-base);
-    font-weight: 500;
-    margin-bottom: var(--space-md);
-    line-height: 1.5;
-    max-width: 320px;
-    margin-left: auto;
-    margin-right: auto;
+
+/* 
+ * PREMIUM MODAL (CityOS Style)
+ * Replaces inline Tailwind for "Nova Tarefa" and other premium modals
+ */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-4);
+    background-color: rgba(15, 23, 42, 0.4);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    animation: fadeIn 0.2s ease-out forwards;
 }
+
+.modal-premium {
+    position: relative;
+    width: 100%;
+    max-width: 540px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    background: #ffffff;
+    border-radius: 24px;
+    /* rounded-2xl equivalent */
+    box-shadow:
+        0 25px 50px -12px rgba(0, 0, 0, 0.25),
+        0 0 0 1px rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(226, 232, 240, 0.8);
+    overflow: hidden;
+    animation: modalSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.modal-premium-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px;
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--color-border-light);
+    position: sticky;
+    top: 0;
+    z-index: 20;
+}
+
+.modal-premium-title h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin: 0;
+    letter-spacing: -0.01em;
+}
+
+.modal-premium-title p {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    margin: 2px 0 0 0;
+    font-weight: 400;
+}
+
+.modal-premium-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-right: -8px;
+}
+
+.modal-premium-close:hover {
+    background-color: var(--color-bg-subtle);
+    color: var(--color-text-primary);
+    transform: rotate(90deg);
+}
+
+.modal-premium-content {
+    padding: 24px;
+    overflow-y: auto;
+    /* Custom Scrollbar for Content */
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
+}
+
+.modal-premium-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.modal-premium-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.modal-premium-content::-webkit-scrollbar-thumb {
+    background-color: var(--color-border);
+    border-radius: 20px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+}
+
+.modal-premium-content::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-text-tertiary);
+}
+
+@keyframes modalSlideUp {
+    from {
+        opacity: 0;
+        transform: scale(0.96) translateY(8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
 
 /* 
  * DASHBOARD SPECIFIC 
