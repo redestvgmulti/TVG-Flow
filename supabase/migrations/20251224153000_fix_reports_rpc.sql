@@ -1,10 +1,7 @@
 -- FIX: Re-create Report RPCs (Fix for PGRST202 error & Missing Table & Missing Column)
 -- Description: 
 -- 1. Updates get_client_stats to query 'clientes' table.
--- 2. Updates get_role_stats to use 'profissionais.role' instead of missing 'funcao_snapshot', or just generic placeholders if role is not granular enough.
---    Actually, let's use 'departamentos.nome' if available via join, otherwise just grouping by professional role.
---    Wait, `tarefas` has `departamento_id`. Let's use Department Stats instead of Role Stats since 'funcao_snapshot' is missing.
---    Renaming the function output but keeping function name compatible for frontend.
+-- 2. Updates get_role_stats to use 'departamentos.nome' (Department) as the "Role" proxy.
 
 -- 1. Get Client/Company Stats
 CREATE OR REPLACE FUNCTION get_client_stats(
@@ -46,8 +43,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- 2. Get Role/Department Stats (Replacing missing funcao_snapshot)
--- Note: We are using "profissionais.role" or "departamentos.nome" if possible. 
--- Since we are querying basic stats, let's Group by Professional Role ('admin', 'profissional') as a fallback.
+-- We use Department Name as the grouping key.
 CREATE OR REPLACE FUNCTION get_role_stats(
     start_date TIMESTAMP WITH TIME ZONE DEFAULT NULL,
     end_date TIMESTAMP WITH TIME ZONE DEFAULT NULL
@@ -61,7 +57,7 @@ RETURNS TABLE (
 BEGIN
     RETURN QUERY
     SELECT 
-        COALESCE(p.role, 'N/A') as role_name,
+        COALESCE(d.nome, 'Sem Departamento') as role_name,
         COUNT(ti.id) as total_items,
         COUNT(ti.id) FILTER (WHERE ti.status IN ('completed', 'concluida')) as completed_items,
         COALESCE(
@@ -72,9 +68,10 @@ BEGIN
         )::NUMERIC(10,2) as avg_completion_hours
     FROM tarefas_itens ti
     JOIN profissionais p ON p.id = ti.profissional_id
+    LEFT JOIN departamentos d ON d.id = p.departamento_id
     WHERE (start_date IS NULL OR ti.created_at >= start_date)
       AND (end_date IS NULL OR ti.created_at <= end_date)
-    GROUP BY p.role
+    GROUP BY d.nome
     ORDER BY total_items DESC;
 END;
 $$ LANGUAGE plpgsql;

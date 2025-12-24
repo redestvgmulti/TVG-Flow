@@ -89,7 +89,7 @@ export default function Reports() {
                     active={activeTab === 'roles'}
                     onClick={() => setActiveTab('roles')}
                     icon={Briefcase}
-                    label="Por Função"
+                    label="Por Departamento"
                 />
                 <TabButton
                     active={activeTab === 'staff'}
