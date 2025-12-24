@@ -18,6 +18,7 @@ function Tasks() {
     const [statusFilter, setStatusFilter] = useState('all')
     const [priorityFilter, setPriorityFilter] = useState('all')
     const [assignedToFilter, setAssignedToFilter] = useState('all')
+    const [deadlineFilter, setDeadlineFilter] = useState('all')
 
     // Modals
     const [showCreateModal, setShowCreateModal] = useState(false)
@@ -309,7 +310,26 @@ function Tasks() {
             const matchesPriority = priorityFilter === 'all' || task.priority === priorityFilter
             const matchesAssignedTo = assignedToFilter === 'all' || task.assigned_to === assignedToFilter
 
-            return matchesSearch && matchesStatus && matchesPriority && matchesAssignedTo
+            // Deadline filter logic
+            let matchesDeadline = true
+            if (deadlineFilter !== 'all') {
+                const now = new Date()
+                const deadline = new Date(task.deadline)
+                const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+                const taskDate = new Date(deadline.getFullYear(), deadline.getMonth(), deadline.getDate())
+
+                if (deadlineFilter === 'overdue') {
+                    matchesDeadline = task.status !== 'completed' && deadline < now
+                } else if (deadlineFilter === 'today') {
+                    matchesDeadline = taskDate.getTime() === today.getTime()
+                } else if (deadlineFilter === 'week') {
+                    const weekFromNow = new Date(now)
+                    weekFromNow.setDate(weekFromNow.getDate() + 7)
+                    matchesDeadline = deadline >= now && deadline <= weekFromNow
+                }
+            }
+
+            return matchesSearch && matchesStatus && matchesPriority && matchesAssignedTo && matchesDeadline
         })
     }
 
@@ -391,12 +411,40 @@ function Tasks() {
     return (
         <div className="animation-fade-in">
             {/* Header */}
-            <div className="dashboard-header admin-tasks-section-spacing flex items-center justify-between">
+            <div className="dashboard-header admin-tasks-section-spacing">
                 <h2>Gerenciamento de Tarefas</h2>
-                <button onClick={handleOpenCreateModal} className="btn btn-primary">
-                    <ClipboardList size={20} className="admin-tasks-icon-spacing" />
-                    Nova Tarefa
-                </button>
+            </div>
+
+            {/* Metrics Cards */}
+            <div className="admin-tasks-section-spacing">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="card" style={{ padding: '20px' }}>
+                        <p className="text-sm text-slate-500 mb-1">Total de Tarefas</p>
+                        <p className="text-2xl font-semibold text-slate-900">{tasks.length}</p>
+                    </div>
+                    <div className="card" style={{ padding: '20px' }}>
+                        <p className="text-sm text-slate-500 mb-1">Em Andamento</p>
+                        <p className="text-2xl font-semibold text-indigo-600">
+                            {tasks.filter(t => t.status === 'in_progress').length}
+                        </p>
+                    </div>
+                    <div className="card" style={{ padding: '20px' }}>
+                        <p className="text-sm text-slate-500 mb-1">Concluídas</p>
+                        <p className="text-2xl font-semibold text-green-600">
+                            {tasks.filter(t => t.status === 'completed').length}
+                        </p>
+                    </div>
+                    <div className="card" style={{ padding: '20px' }}>
+                        <p className="text-sm text-slate-500 mb-1">Atrasadas</p>
+                        <p className="text-2xl font-semibold text-red-600">
+                            {tasks.filter(t => {
+                                const now = new Date()
+                                const deadline = new Date(t.deadline)
+                                return t.status !== 'completed' && deadline < now
+                            }).length}
+                        </p>
+                    </div>
+                </div>
             </div>
 
             {/* Filters */}
@@ -464,6 +512,21 @@ function Tasks() {
                             ))}
                         </select>
                     </div>
+
+                    <div className="input-group admin-tasks-filter-group">
+                        <label htmlFor="deadline">Prazo</label>
+                        <select
+                            id="deadline"
+                            className="input"
+                            value={deadlineFilter}
+                            onChange={(e) => setDeadlineFilter(e.target.value)}
+                        >
+                            <option value="all">Todas</option>
+                            <option value="overdue">Atrasadas</option>
+                            <option value="today">Hoje</option>
+                            <option value="week">Esta Semana</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 
@@ -481,15 +544,10 @@ function Tasks() {
                             <ClipboardList size={64} className="text-slate-300" strokeWidth={1} />
                         </span>
                         <p className="empty-text">
-                            {searchTerm || statusFilter !== 'all' || priorityFilter !== 'all' || assignedToFilter !== 'all'
+                            {searchTerm || statusFilter !== 'all' || priorityFilter !== 'all' || assignedToFilter !== 'all' || deadlineFilter !== 'all'
                                 ? 'Nenhuma tarefa encontrada com os filtros aplicados.'
-                                : 'Nenhuma tarefa criada ainda. Comece criando a primeira!'}
+                                : 'Nenhuma tarefa em andamento no momento.'}
                         </p>
-                        {!searchTerm && statusFilter === 'all' && priorityFilter === 'all' && assignedToFilter === 'all' && (
-                            <button onClick={handleOpenCreateModal} className="btn btn-primary">
-                                Criar Primeira Tarefa
-                            </button>
-                        )}
                     </div>
                 ) : (
                     <div className="table-container">
