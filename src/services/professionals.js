@@ -4,13 +4,33 @@ import { supabase } from './supabase'
 export const professionalsService = {
     // List all professionals (Admin only via RLS)
     async list() {
-        const { data, error } = await supabase
+        // First get all professionals
+        const { data: professionals, error: profError } = await supabase
             .from('profissionais')
-            .select('id, nome, email, role, ativo, created_at, area_id, areas(nome)')
+            .select('id, nome, email, role, ativo, created_at')
             .order('created_at', { ascending: false })
 
-        if (error) throw error
-        return data
+        if (profError) throw profError
+
+        // Then get company counts for each professional
+        const { data: companyCounts, error: countError } = await supabase
+            .from('empresa_profissionais')
+            .select('profissional_id')
+            .eq('ativo', true)
+
+        if (countError) throw countError
+
+        // Count companies per professional
+        const countMap = {}
+        companyCounts.forEach(link => {
+            countMap[link.profissional_id] = (countMap[link.profissional_id] || 0) + 1
+        })
+
+        // Attach counts to professionals
+        return professionals.map(prof => ({
+            ...prof,
+            company_count: countMap[prof.id] || 0
+        }))
     },
 
     // Get single professional

@@ -2,11 +2,12 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-    Users, UserPlus, Search, Mail, Shield, User, CheckCircle, XCircle, Edit, X, Copy
+    Users, UserPlus, Search, Mail, CheckCircle, XCircle, Edit, X, Copy
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { professionalsService } from '../../../services/professionals'
 import ProfessionalForm from './ProfessionalForm'
+import '../../../styles/professionals.css'
 
 export default function ProfessionalsList() {
     const navigate = useNavigate()
@@ -150,12 +151,12 @@ export default function ProfessionalsList() {
     }
 
     return (
-        <div className="animation-fade-in space-y-6">
+        <div className="professionals-page animation-fade-in">
             {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2rem' }}>
-                <div>
-                    <h2 className="text-2xl font-bold text-slate-800">Gestão de Profissionais</h2>
-                    <p className="text-muted mt-1">Gerencie o acesso e permissões da sua equipe.</p>
+            <div className="professionals-header">
+                <div className="professionals-header__content">
+                    <h2>Gestão de Profissionais</h2>
+                    <p>Gerencie o acesso e permissões da sua equipe.</p>
                 </div>
                 <button
                     onClick={() => {
@@ -171,8 +172,8 @@ export default function ProfessionalsList() {
             </div>
 
             {/* Toolbar - Detached Elements */}
-            <div style={{ marginBottom: '2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div className="w-full max-w-md" style={{ position: 'relative' }}>
+            <div className="professionals-toolbar">
+                <div className="professionals-search">
                     {!searchTerm && (
                         <Search
                             size={18}
@@ -182,7 +183,7 @@ export default function ProfessionalsList() {
                                 top: '50%',
                                 transform: 'translateY(-50%)',
                                 pointerEvents: 'none',
-                                color: '#94a3b8' // text-slate-400
+                                color: '#94a3b8'
                             }}
                         />
                     )}
@@ -198,7 +199,7 @@ export default function ProfessionalsList() {
                         }}
                     />
                 </div>
-                <div className="text-sm text-slate-500 font-medium bg-slate-100 px-4 py-2 rounded-full border border-slate-200">
+                <div className="professionals-count">
                     Mostrando <strong>{filtered.length}</strong> membros
                 </div>
             </div>
@@ -229,8 +230,7 @@ export default function ProfessionalsList() {
                             <thead>
                                 <tr>
                                     <th style={{ padding: '1.5rem', paddingLeft: '2rem', textAlign: 'left' }}>Profissional</th>
-                                    <th style={{ padding: '1.5rem', textAlign: 'left' }}>Função</th>
-                                    <th style={{ padding: '1.5rem', textAlign: 'left' }}>Departamento</th>
+                                    <th style={{ padding: '1.5rem', textAlign: 'left' }}>Ativo em</th>
                                     <th style={{ padding: '1.5rem', textAlign: 'left' }}>Status</th>
                                     <th style={{ padding: '1.5rem', paddingRight: '2rem', textAlign: 'right' }}>Ações</th>
                                 </tr>
@@ -248,14 +248,8 @@ export default function ProfessionalsList() {
                                             </div>
                                         </td>
                                         <td style={{ padding: '1.5rem' }}>
-                                            <span className={`badge ${prof.roles === 'admin' ? 'badge-primary' : 'badge-warning'} gap-1.5 px-3 py-1.5 text-xs ring-1 ring-inset ${prof.role === 'admin' ? 'ring-blue-100' : 'ring-yellow-100'}`}>
-                                                {prof.role === 'admin' ? <Shield size={12} /> : <User size={12} />}
-                                                {prof.role === 'admin' ? 'Administrador' : 'Profissional'}
-                                            </span>
-                                        </td>
-                                        <td style={{ padding: '1.5rem' }}>
-                                            <span className="text-sm font-medium text-slate-600 bg-slate-100 px-3 py-1 rounded-full">
-                                                {prof.areas?.nome || <span className="text-slate-400 italic font-normal">Sem área</span>}
+                                            <span className="text-sm text-slate-600">
+                                                Ativo em <strong>{prof.company_count || 0}</strong> {prof.company_count === 1 ? 'empresa' : 'empresas'}
                                             </span>
                                         </td>
                                         <td style={{ padding: '1.5rem' }}>

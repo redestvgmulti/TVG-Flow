@@ -132,10 +132,10 @@ function Sidebar({ mobileMenuOpen, onClose }) {
                                                 <Building size={16} />
                                                 <span>Empresas</span>
                                             </NavLink>
-                                            <NavLink to="/admin/areas" className="nav-sub-item" onClick={handleNavClick}>
+                                            {/* <NavLink to="/admin/areas" className="nav-sub-item" onClick={handleNavClick}>
                                                 <Map size={16} />
                                                 <span>Setores</span>
-                                            </NavLink>
+                                            </NavLink> */}
                                             <NavLink to="/admin/professionals" className="nav-sub-item" onClick={handleNavClick}>
                                                 <Users size={16} />
                                                 <span>Funcionários</span>
@@ -164,20 +164,7 @@ function Sidebar({ mobileMenuOpen, onClose }) {
                                 <CheckSquare size={20} className="nav-icon" />
                                 <span className="nav-text">Minhas Tarefas</span>
                                 {incompleteTaskCount > 0 && (
-                                    <span
-                                        className="ml-auto flex items-center justify-center"
-                                        style={{
-                                            minWidth: '20px',
-                                            height: '20px',
-                                            padding: '0 6px',
-                                            borderRadius: '10px',
-                                            background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
-                                            color: '#ffffff',
-                                            fontSize: '11px',
-                                            fontWeight: '700',
-                                            boxShadow: '0 2px 4px rgba(239, 68, 68, 0.3)'
-                                        }}
-                                    >
+                                    <span className="nav-task-badge">
                                         {incompleteTaskCount}
                                     </span>
                                 )}

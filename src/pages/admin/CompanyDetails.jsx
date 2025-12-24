@@ -263,51 +263,134 @@ function CompanyDetails() {
                 </div>
 
                 {professionals.length > 0 ? (
-                    <table className="company-professionals-table">
-                        <thead>
-                            <tr>
-                                <th>Nome</th>
-                                <th>Email</th>
-                                <th>Função na Empresa</th>
-                                <th>Status</th>
-                                <th style={{ width: '100px', textAlign: 'right' }}>Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {professionals.map(prof => (
-                                <tr key={prof.id}>
-                                    <td style={{ fontWeight: 500 }}>
-                                        {prof.usuarios?.nome || 'Usuário Removido'}
-                                    </td>
-                                    <td style={{ color: 'var(--color-text-secondary)' }}>
-                                        {prof.usuarios?.email || '-'}
-                                    </td>
-                                    <td>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                            <Briefcase size={14} className="text-muted" />
-                                            <span style={{ fontWeight: 500, color: '#475569' }}>
-                                                {prof.funcao}
+                    <>
+                        {/* Desktop Table View */}
+                        <table className="company-professionals-table hidden md:table">
+                            <thead>
+                                <tr>
+                                    <th>Nome</th>
+                                    <th>Email</th>
+                                    <th>Função na Empresa</th>
+                                    <th>Status</th>
+                                    <th style={{ width: '100px', textAlign: 'right' }}>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {professionals.map(prof => (
+                                    <tr key={prof.id}>
+                                        <td style={{ fontWeight: 500 }}>
+                                            {prof.usuarios?.nome || 'Usuário Removido'}
+                                        </td>
+                                        <td style={{ color: 'var(--color-text-secondary)' }}>
+                                            {prof.usuarios?.email || '-'}
+                                        </td>
+                                        <td>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <Briefcase size={14} className="text-muted" />
+                                                <span style={{ fontWeight: 500, color: '#475569' }}>
+                                                    {prof.funcao}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span className={`status-badge ${prof.ativo ? 'status-success' : 'status-error'}`}>
+                                                {prof.ativo ? 'Ativo' : 'Inativo'}
                                             </span>
+                                        </td>
+                                        <td style={{ textAlign: 'right' }}>
+                                            <button
+                                                onClick={() => handleRemoveProfessional(prof.id)}
+                                                className="btn-icon btn-icon-danger"
+                                                title="Desvincular"
+                                            >
+                                                <Trash2 size={18} />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+
+                        {/* Mobile Card View */}
+                        <div className="md:hidden" style={{ padding: '16px' }}>
+                            {professionals.map(prof => (
+                                <div
+                                    key={prof.id}
+                                    style={{
+                                        background: '#ffffff',
+                                        border: '1px solid #e2e8f0',
+                                        borderRadius: '12px',
+                                        padding: '16px',
+                                        marginBottom: '12px',
+                                        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)'
+                                    }}
+                                >
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <p style={{
+                                                fontSize: '16px',
+                                                fontWeight: 600,
+                                                color: '#1e293b',
+                                                margin: '0 0 4px 0',
+                                                lineHeight: '1.4'
+                                            }}>
+                                                {prof.usuarios?.nome || 'Usuário Removido'}
+                                            </p>
+                                            <p style={{
+                                                fontSize: '13px',
+                                                color: '#64748b',
+                                                margin: 0,
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                whiteSpace: 'nowrap'
+                                            }}>
+                                                {prof.usuarios?.email || '-'}
+                                            </p>
                                         </div>
-                                    </td>
-                                    <td>
-                                        <span className={`status-badge ${prof.ativo ? 'status-success' : 'status-error'}`}>
-                                            {prof.ativo ? 'Ativo' : 'Inativo'}
-                                        </span>
-                                    </td>
-                                    <td style={{ textAlign: 'right' }}>
                                         <button
                                             onClick={() => handleRemoveProfessional(prof.id)}
-                                            className="btn-icon btn-icon-danger"
+                                            style={{
+                                                background: 'transparent',
+                                                border: 'none',
+                                                color: '#ef4444',
+                                                padding: '8px',
+                                                cursor: 'pointer',
+                                                borderRadius: '8px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                marginLeft: '8px',
+                                                flexShrink: 0
+                                            }}
                                             title="Desvincular"
                                         >
-                                            <Trash2 size={18} />
+                                            <Trash2 size={20} />
                                         </button>
-                                    </td>
-                                </tr>
+                                    </div>
+
+                                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                        <span style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            fontSize: '13px',
+                                            fontWeight: 500,
+                                            color: '#475569',
+                                            background: '#f1f5f9',
+                                            padding: '4px 10px',
+                                            borderRadius: '6px'
+                                        }}>
+                                            <Briefcase size={12} />
+                                            {prof.funcao}
+                                        </span>
+                                        <span className={`status-badge ${prof.ativo ? 'status-success' : 'status-error'}`} style={{ fontSize: '12px', padding: '4px 10px' }}>
+                                            {prof.ativo ? 'Ativo' : 'Inativo'}
+                                        </span>
+                                    </div>
+                                </div>
                             ))}
-                        </tbody>
-                    </table>
+                        </div>
+                    </>
                 ) : (
                     <div style={{ padding: '60px 20px', textAlign: 'center' }}>
                         <Users size={48} style={{ opacity: 0.3, marginBottom: '16px' }} />

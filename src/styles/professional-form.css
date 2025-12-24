@@ -1,0 +1,326 @@
+/* Professional Form Styles */
+
+.professional-form {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+/* Identity Section */
+.professional-form__identity {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* Permissions Section */
+.professional-form__permissions {
+    border-top: 1px solid #e2e8f0;
+    padding-top: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* Admin Confirmation Alert */
+.professional-form__admin-alert {
+    padding: 16px;
+    background-color: #fef3c7;
+    border: 1px solid #fbbf24;
+    border-radius: 8px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.professional-form__admin-alert-icon {
+    color: #d97706;
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
+.professional-form__admin-alert-content {
+    flex: 1;
+}
+
+.professional-form__admin-alert-title {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #92400e;
+    margin-bottom: 4px;
+}
+
+.professional-form__admin-alert-text {
+    margin: 0;
+    font-size: 13px;
+    color: #78350f;
+}
+
+/* Grid Layout */
+.professional-form__grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+/* Toggle Switch */
+.professional-form__toggle-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.professional-form__toggle {
+    position: relative;
+    display: inline-block;
+    width: 52px;
+    height: 28px;
+    cursor: pointer;
+}
+
+.professional-form__toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.professional-form__toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #cbd5e1;
+    transition: 0.3s;
+    border-radius: 28px;
+}
+
+.professional-form__toggle input:checked+.professional-form__toggle-slider {
+    background-color: #3b82f6;
+}
+
+.professional-form__toggle-slider::before {
+    position: absolute;
+    content: '';
+    height: 20px;
+    width: 20px;
+    left: 4px;
+    bottom: 4px;
+    background-color: white;
+    transition: 0.3s;
+    border-radius: 50%;
+}
+
+.professional-form__toggle input:checked+.professional-form__toggle-slider::before {
+    transform: translateX(24px);
+}
+
+/* Toggle Label */
+.professional-form__toggle-label {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 500;
+    color: #334155;
+}
+
+.professional-form__toggle-description {
+    margin: 0;
+    font-size: 12px;
+    color: #64748b;
+}
+
+/* Checkbox Section */
+.professional-form__checkbox-wrapper {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding-top: 30px;
+}
+
+.professional-form__checkbox {
+    margin-top: 2px;
+    cursor: pointer;
+}
+
+.professional-form__checkbox-label {
+    font-size: 14px;
+    color: #334155;
+    cursor: pointer;
+    line-height: 1.5;
+}
+
+.professional-form__checkbox-label strong {
+    display: block;
+}
+
+.professional-form__checkbox-hint {
+    font-size: 12px;
+    color: #64748b;
+}
+
+/* Access Section */
+.professional-form__access {
+    border-top: 1px solid #e2e8f0;
+    padding-top: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.professional-form__access-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: #475569;
+    margin: 0;
+}
+
+/* Recovery Link Button */
+.professional-form__recovery-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    background-color: white;
+    border: 1px solid #cbd5e1;
+    color: #475569;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.professional-form__recovery-btn:disabled {
+    opacity: 0.6;
+}
+
+.professional-form__recovery-btn:hover:not(:disabled) {
+    border-color: #3b82f6;
+}
+
+/* Recovery Success */
+.professional-form__recovery-success {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.professional-form__recovery-feedback {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 12px;
+    background-color: #f0fdf4;
+    border-radius: 8px;
+    border: 1px solid #bbf7d0;
+}
+
+.professional-form__recovery-icon {
+    color: #16a34a;
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
+.professional-form__recovery-content {
+    flex: 1;
+}
+
+.professional-form__recovery-title {
+    margin: 0;
+    font-size: 13px;
+    color: #15803d;
+    font-weight: 500;
+}
+
+.professional-form__recovery-text {
+    margin: 4px 0 0 0;
+    font-size: 12px;
+    color: #16a34a;
+}
+
+/* Copy Button */
+.professional-form__copy-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background-color: #3b82f6;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+}
+
+.professional-form__copy-btn:hover {
+    background-color: #2563eb;
+}
+
+.professional-form__recovery-hint {
+    margin: 0;
+    font-size: 11px;
+    color: #64748b;
+    text-align: center;
+}
+
+/* Footer */
+.professional-form__footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-top: 1px solid #e2e8f0;
+    padding-top: 24px;
+}
+
+.professional-form__delete-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: none;
+    border: none;
+    color: #dc2626;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 0;
+}
+
+.professional-form__actions {
+    display: flex;
+    gap: 12px;
+}
+
+/* Form Group */
+.professional-form__group {
+    display: flex;
+    flex-direction: column;
+}
+
+.professional-form__label {
+    font-size: 13px;
+    font-weight: 500;
+    color: #475569;
+    margin-bottom: 8px;
+    display: block;
+}
+
+.professional-form__label--spaced {
+    margin-bottom: 12px;
+}
+
+.professional-form__input--disabled {
+    background-color: #f8fafc;
+    cursor: not-allowed;
+}
+
+.professional-form__hint {
+    font-size: 12px;
+    color: #64748b;
+    margin-top: 6px;
+    display: block;
+}

@@ -1,6 +1,5 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import webpush from 'https://esm.sh/web-push@3.6.6'
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -8,7 +7,6 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
-    // Handle CORS preflight
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
     }
@@ -19,8 +17,7 @@ serve(async (req) => {
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
         )
 
-        // Parse payload
-        const { empresa_id, titulo, descricao, deadline_at, funcoes } = await req.json()
+        const { empresa_id, titulo, descricao, deadline_at, funcoes, prioridade } = await req.json()
 
         // Validation
         if (!empresa_id || !titulo || !deadline_at || !funcoes || !Array.isArray(funcoes) || funcoes.length === 0) {
@@ -30,102 +27,143 @@ serve(async (req) => {
             )
         }
 
+        // Validate and normalize priority
+        const validPriorities = ['baixa', 'normal', 'alta', 'urgente']
+        const normalizedPriority = prioridade && validPriorities.includes(prioridade) ? prioridade : 'normal'
+
+        // STEP 1: Resolve professionals for ALL selected functions
+        const { data: professionals, error: profError } = await supabaseClient
+            .from('empresa_profissionais')
+            .select(`
+                profissional_id,
+                funcao,
+                profissionais!inner (
+                    id,
+                    nome,
+                    departamento_id
+                )
+            `)
+            .eq('empresa_id', empresa_id)
+            .in('funcao', funcoes)
+            .eq('ativo', true)
+
+        if (profError) {
+            console.error('Error fetching professionals:', profError)
+            return new Response(
+                JSON.stringify({ error: 'Erro ao buscar profissionais vinculados', details: profError.message }),
+                { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+        }
+
+        // CRITICAL VALIDATION: Must have at least one professional
+        if (!professionals || professionals.length === 0) {
+            return new Response(
+                JSON.stringify({
+                    error: 'Nenhum profissional ativo encontrado para as funções selecionadas nesta empresa.',
+                    empresa_id,
+                    funcoes
+                }),
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+        }
+
+        // STEP 2: Create tasks for each professional
         const createdTasks = []
-        const notificationsSent = []
+        const notifications = []
 
-        // For each selected function, find professionals and create tasks
-        for (const funcao of funcoes) {
-            // 1. Find active professionals for this company and function
-            // We also fetch the professional's department (linked via profissionais table)
-            // Note: Assuming 'empresa_profissionais' has 'profissional_id' and 'profissionais' has 'departamento_id'
-            const { data: links, error: linkError } = await supabaseClient
-                .from('empresa_profissionais')
-                .select(`
-          profissional_id,
-          profissionais!inner (
-            id,
-            departamento_id,
-            nome
-          )
-        `)
-                .eq('empresa_id', empresa_id)
-                .eq('funcao', funcao)
-                .eq('ativo', true)
+        for (const prof of professionals) {
+            const professional = prof.profissionais
 
-            if (linkError) {
-                console.error(`Error fetching professionals for function ${funcao}:`, linkError)
-                continue // Skip this function if error, or throw? better to convert partial?
+            if (!professional) continue
+
+            // Create task
+            const taskPayload = {
+                titulo: `${titulo} - ${prof.funcao}`,
+                descricao: descricao || null,
+                cliente_id: empresa_id,
+                assigned_to: professional.id,
+                departamento_id: professional.departamento_id,
+                deadline: deadline_at,
+                status: 'pendente',
+                prioridade: normalizedPriority
             }
 
-            if (!links || links.length === 0) {
-                console.log(`No professionals found for function: ${funcao} in company: ${empresa_id}`)
+            const { data: task, error: taskError } = await supabaseClient
+                .from('tarefas')
+                .insert(taskPayload)
+                .select()
+                .single()
+
+            if (taskError) {
+                console.error(`Error creating task for ${professional.nome}:`, taskError)
                 continue
             }
 
-            // 2. Create Task for each professional
-            for (const link of links) {
-                const professional = link.profissionais
+            createdTasks.push(task)
 
-                if (!professional) continue
+            // STEP 3: Create in-app notification
+            const notificationPayload = {
+                profissional_id: professional.id,
+                title: 'Nova Tarefa Atribuída',
+                message: `Você recebeu uma nova tarefa de ${prof.funcao}: "${titulo}"`,
+                type: 'task_assigned',
+                link: `/staff/tasks/${task.id}`,
+                read: false
+            }
 
-                // Create Task
-                const taskPayload = {
-                    titulo: `${titulo} - ${funcao}`,
-                    descricao: descricao,
-                    cliente_id: empresa_id,
-                    profissional_id: professional.id,
-                    departamento_id: professional.departamento_id, // Important for RLS and categorization
-                    prioridade: 'media', // Default priority
-                    deadline: deadline_at,
-                    status: 'pendente'
-                }
+            const { error: notifError } = await supabaseClient
+                .from('notifications')
+                .insert(notificationPayload)
 
-                const { data: task, error: taskError } = await supabaseClient
-                    .from('tarefas')
-                    .insert(taskPayload)
-                    .select()
-                    .single()
+            if (!notifError) {
+                notifications.push(professional.id)
 
-                if (taskError) {
-                    console.error(`Error creating task for ${professional.nome}:`, taskError)
-                    continue
-                }
-
-                createdTasks.push(task)
-
-                // 3. Create Notification (In-App)
-                const notificationPayload = {
-                    profissional_id: professional.id,
-                    title: 'Nova Tarefa Atribuída',
-                    message: `Você recebeu uma nova tarefa de ${funcao}: "${titulo}"`,
-                    type: 'task_assigned',
-                    link: `/staff/tasks/${task.id}`,
-                    read: false,
-                    created_at: new Date().toISOString()
-                }
-
-                const { data: notif, error: notifError } = await supabaseClient
-                    .from('notifications')
-                    .insert(notificationPayload)
-                    .select()
-                    .single()
-
-                if (notifError) {
-                    console.error('Error creating in-app notification:', notifError)
-                } else {
-                    // 4. Send Push Notification (if in-app creation worked, likely user exists)
-                    await sendPushNotification(supabaseClient, professional.id, notificationPayload.title, notificationPayload.message)
-                    notificationsSent.push(professional.id)
+                // STEP 4: Send push notification via existing Edge Function
+                try {
+                    await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-push-notification`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}`
+                        },
+                        body: JSON.stringify({
+                            userId: professional.id,
+                            title: notificationPayload.title,
+                            message: notificationPayload.message
+                        })
+                    })
+                } catch (pushError) {
+                    console.error('Error sending push notification:', pushError)
                 }
             }
+        }
+
+        // Validate that at least one task was created
+        if (createdTasks.length === 0) {
+            return new Response(
+                JSON.stringify({
+                    error: 'Nenhuma tarefa foi criada. Verifique se há profissionais vinculados às funções selecionadas.',
+                    professionals_found: professionals.length
+                }),
+                { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
         }
 
         return new Response(
             JSON.stringify({
                 success: true,
-                itemsCreated: createdTasks.length,
-                tasks: createdTasks,
-                notifications: notificationsSent.length
+                tasks_created: createdTasks.length,
+                notifications_sent: notifications.length,
+                tasks: createdTasks.map(t => ({
+                    id: t.id,
+                    titulo: t.titulo,
+                    profissional_id: t.profissional_id
+                })),
+                professionals: professionals.map(p => ({
+                    id: p.profissionais.id,
+                    nome: p.profissionais.nome,
+                    funcao: p.funcao
+                }))
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
@@ -133,66 +171,8 @@ serve(async (req) => {
     } catch (error) {
         console.error('Unexpected error:', error)
         return new Response(
-            JSON.stringify({ error: error.message }),
+            JSON.stringify({ error: error.message || 'Internal server error' }),
             { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
     }
 })
-
-// Helper to send Push Notification
-async function sendPushNotification(supabase: any, userId: string, title: string, message: string) {
-    try {
-        // VAPID keys
-        const vapidPublicKey = Deno.env.get('VAPID_PUBLIC_KEY')
-        const vapidPrivateKey = Deno.env.get('VAPID_PRIVATE_KEY')
-
-        if (!vapidPublicKey || !vapidPrivateKey) {
-            console.warn('VAPID keys not configured, skipping push.')
-            return
-        }
-
-        webpush.setVapidDetails(
-            'mailto:contato@tvgflow.com',
-            vapidPublicKey,
-            vapidPrivateKey
-        )
-
-        // Fetch user's push subscriptions
-        const { data: subscriptions, error: subError } = await supabase
-            .from('push_subscriptions')
-            .select('*')
-            .eq('profissional_id', userId)
-
-        if (subError || !subscriptions || subscriptions.length === 0) {
-            return
-        }
-
-        const payload = JSON.stringify({
-            title,
-            message,
-            icon: '/icon-192x192.png',
-            badge: '/badge-72x72.png',
-            timestamp: Date.now(),
-        })
-
-        // Send to all subscriptions
-        const promises = subscriptions.map(async (sub: any) => {
-            try {
-                await webpush.sendNotification({
-                    endpoint: sub.endpoint,
-                    keys: { p256dh: sub.p256dh_key, auth: sub.auth_key }
-                }, payload)
-            } catch (e: any) {
-                if (e.statusCode === 410 || e.statusCode === 404) {
-                    // Cleanup invalid subscription
-                    await supabase.from('push_subscriptions').delete().eq('id', sub.id)
-                }
-            }
-        })
-
-        await Promise.all(promises)
-
-    } catch (e) {
-        console.error('Error sending push:', e)
-    }
-}

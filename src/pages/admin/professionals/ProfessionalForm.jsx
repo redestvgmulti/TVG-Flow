@@ -4,6 +4,7 @@ import { CheckCircle, Copy, RefreshCw, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import { professionalsService } from '../../../services/professionals'
 import { supabase } from '../../../services/supabase'
+import '../../../styles/professional-form.css'
 
 export default function ProfessionalForm({ initialData, onSubmit, onCancel, onDelete, isSubmitting, isEditMode = false, hideCancelButton = false }) {
     const [formData, setFormData] = useState({
@@ -58,7 +59,7 @@ export default function ProfessionalForm({ initialData, onSubmit, onCancel, onDe
             nome: formData.nome,
             email: formData.email,
             role: formData.role,
-            area_id: formData.area_id, // Keeping usage but defaulting to null
+            area_id: formData.area_id,
             ativo: formData.ativo
         }
 
@@ -66,93 +67,105 @@ export default function ProfessionalForm({ initialData, onSubmit, onCancel, onDe
     }
 
     return (
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <form onSubmit={handleSubmit} className="professional-form">
 
-            {/* ═══════════════════════════════════════════════════════════
-                BLOCO 1 — IDENTIDADE (Read-only)
-            ═══════════════════════════════════════════════════════════ */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* BLOCO 1 — IDENTIDADE (Read-only) */}
+            <div className="professional-form__identity">
                 {/* Nome */}
-                <div className="form-group">
-                    <label style={{ fontSize: '13px', fontWeight: 500, color: '#475569', marginBottom: '8px', display: 'block' }}>
+                <div className="professional-form__group">
+                    <label className="professional-form__label">
                         Nome Completo
                     </label>
                     <input
                         type="text"
                         required
-                        className="input"
+                        className={`input ${isEditMode ? 'professional-form__input--disabled' : ''}`}
                         value={formData.nome}
                         onChange={e => setFormData({ ...formData, nome: e.target.value })}
                         placeholder="Ex: Ana Silva"
                         disabled={isEditMode}
-                        style={isEditMode ? { backgroundColor: '#f8fafc', cursor: 'not-allowed' } : {}}
                     />
                 </div>
 
                 {/* Email */}
-                <div className="form-group">
-                    <label style={{ fontSize: '13px', fontWeight: 500, color: '#475569', marginBottom: '8px', display: 'block' }}>
+                <div className="professional-form__group">
+                    <label className="professional-form__label">
                         E-mail Corporativo
                     </label>
                     <input
                         type="email"
                         required
-                        className="input"
+                        className={`input ${isEditMode ? 'professional-form__input--disabled' : ''}`}
                         value={formData.email}
                         onChange={e => setFormData({ ...formData, email: e.target.value })}
                         placeholder="usuario@empresa.com"
                         disabled={isEditMode}
-                        style={isEditMode ? { backgroundColor: '#f8fafc', cursor: 'not-allowed' } : {}}
                     />
                     {isEditMode && (
-                        <span style={{ fontSize: '12px', color: '#64748b', marginTop: '6px', display: 'block' }}>
+                        <span className="professional-form__hint">
                             O e-mail não pode ser alterado.
                         </span>
                     )}
                 </div>
             </div>
 
-            {/* ═══════════════════════════════════════════════════════════
-                BLOCO 2 — PERMISSÕES DO SISTEMA
-            ═══════════════════════════════════════════════════════════ */}
+            {/* BLOCO 2 — PERMISSÕES DO SISTEMA */}
             {isEditMode && (
-                <div style={{
-                    borderTop: '1px solid #e2e8f0',
-                    paddingTop: '24px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '16px'
-                }}>
-                    {/* Grid: Função + Ativo */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                        {/* Função / Perfil (System Role) */}
-                        <div className="form-group">
-                            <label style={{ fontSize: '13px', fontWeight: 500, color: '#475569', marginBottom: '8px', display: 'block' }}>
+                <div className="professional-form__permissions">
+                    {/* Admin Confirmation Alert */}
+                    {formData.role === 'admin' && initialData?.role !== 'admin' && (
+                        <div className="professional-form__admin-alert">
+                            <AlertTriangle size={20} className="professional-form__admin-alert-icon" />
+                            <div className="professional-form__admin-alert-content">
+                                <p className="professional-form__admin-alert-title">
+                                    Atenção: Acesso Administrativo
+                                </p>
+                                <p className="professional-form__admin-alert-text">
+                                    Você está concedendo permissões de administrador. Este usuário terá acesso total ao sistema.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Grid: Admin Toggle + Ativo */}
+                    <div className="professional-form__grid">
+                        {/* Admin Toggle */}
+                        <div className="professional-form__group">
+                            <label className="professional-form__label professional-form__label--spaced">
                                 Acesso ao Sistema
                             </label>
-                            <select
-                                className="input"
-                                value={formData.role}
-                                onChange={e => setFormData({ ...formData, role: e.target.value })}
-                            >
-                                <option value="profissional">Profissional (Acesso Básico)</option>
-                                <option value="admin">Administrador (Acesso Total)</option>
-                            </select>
+                            <div className="professional-form__toggle-container">
+                                <label className="professional-form__toggle">
+                                    <input
+                                        type="checkbox"
+                                        checked={formData.role === 'admin'}
+                                        onChange={e => setFormData({ ...formData, role: e.target.checked ? 'admin' : 'profissional' })}
+                                    />
+                                    <span className="professional-form__toggle-slider"></span>
+                                </label>
+                                <div>
+                                    <p className="professional-form__toggle-label">
+                                        {formData.role === 'admin' ? 'Administrador' : 'Profissional'}
+                                    </p>
+                                    <p className="professional-form__toggle-description">
+                                        {formData.role === 'admin' ? 'Acesso total ao sistema' : 'Acesso básico'}
+                                    </p>
+                                </div>
+                            </div>
                         </div>
 
                         {/* Checkbox: Usuário Ativo */}
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', paddingTop: '30px' }}>
+                        <div className="professional-form__checkbox-wrapper">
                             <input
                                 type="checkbox"
                                 id="ativo"
+                                className="professional-form__checkbox"
                                 checked={formData.ativo}
                                 onChange={e => setFormData({ ...formData, ativo: e.target.checked })}
-                                style={{ marginTop: '2px', cursor: 'pointer' }}
                             />
-                            <label htmlFor="ativo" style={{ fontSize: '14px', color: '#334155', cursor: 'pointer', lineHeight: '1.5' }}>
+                            <label htmlFor="ativo" className="professional-form__checkbox-label">
                                 <strong>Usuário Ativo</strong>
-                                <br />
-                                <span style={{ fontSize: '12px', color: '#64748b' }}>
+                                <span className="professional-form__checkbox-hint">
                                     Login habilitado
                                 </span>
                             </label>
@@ -163,32 +176,24 @@ export default function ProfessionalForm({ initialData, onSubmit, onCancel, onDe
 
             {/* Creation Mode Status Toggle */}
             {!isEditMode && (
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                <div className="professional-form__checkbox-wrapper">
                     <input
                         type="checkbox"
                         id="ativo"
+                        className="professional-form__checkbox"
                         checked={formData.ativo}
                         onChange={e => setFormData({ ...formData, ativo: e.target.checked })}
-                        style={{ marginTop: '2px', cursor: 'pointer' }}
                     />
-                    <label htmlFor="ativo" style={{ fontSize: '14px', color: '#334155', cursor: 'pointer', lineHeight: '1.5' }}>
+                    <label htmlFor="ativo" className="professional-form__checkbox-label">
                         <strong>Usuário Ativo</strong>
                     </label>
                 </div>
             )}
 
-            {/* ═══════════════════════════════════════════════════════════
-                BLOCO 3 — ACESSO (Ação contextual - apenas edit mode)
-            ═══════════════════════════════════════════════════════════ */}
+            {/* BLOCO 3 — ACESSO (Ação contextual - apenas edit mode) */}
             {isEditMode && (
-                <div style={{
-                    borderTop: '1px solid #e2e8f0',
-                    paddingTop: '24px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '12px'
-                }}>
-                    <h3 style={{ fontSize: '13px', fontWeight: 500, color: '#475569', margin: 0 }}>
+                <div className="professional-form__access">
+                    <h3 className="professional-form__access-title">
                         Acesso
                     </h3>
 
@@ -197,45 +202,21 @@ export default function ProfessionalForm({ initialData, onSubmit, onCancel, onDe
                             type="button"
                             onClick={handleGenerateLink}
                             disabled={isGeneratingLink}
-                            className="input"
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '8px',
-                                cursor: 'pointer',
-                                backgroundColor: 'white',
-                                border: '1px solid #cbd5e1',
-                                color: '#475569',
-                                fontSize: '14px',
-                                fontWeight: 500,
-                                transition: 'all 0.2s',
-                                opacity: isGeneratingLink ? 0.6 : 1
-                            }}
-                            onMouseEnter={(e) => !isGeneratingLink && (e.currentTarget.style.borderColor = '#3b82f6')}
-                            onMouseLeave={(e) => (e.currentTarget.style.borderColor = '#cbd5e1')}
+                            className="input professional-form__recovery-btn"
                         >
                             <RefreshCw size={16} className={isGeneratingLink ? 'animate-spin' : ''} />
                             {isGeneratingLink ? 'Gerando...' : 'Gerar novo link de redefinição'}
                         </button>
                     ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        <div className="professional-form__recovery-success">
                             {/* Feedback de sucesso */}
-                            <div style={{
-                                display: 'flex',
-                                alignItems: 'flex-start',
-                                gap: '8px',
-                                padding: '12px',
-                                backgroundColor: '#f0fdf4',
-                                borderRadius: '8px',
-                                border: '1px solid #bbf7d0'
-                            }}>
-                                <CheckCircle size={16} style={{ color: '#16a34a', marginTop: '2px', flexShrink: 0 }} />
-                                <div style={{ flex: 1 }}>
-                                    <p style={{ margin: 0, fontSize: '13px', color: '#15803d', fontWeight: 500 }}>
+                            <div className="professional-form__recovery-feedback">
+                                <CheckCircle size={16} className="professional-form__recovery-icon" />
+                                <div className="professional-form__recovery-content">
+                                    <p className="professional-form__recovery-title">
                                         Link de redefinição gerado.
                                     </p>
-                                    <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#16a34a' }}>
+                                    <p className="professional-form__recovery-text">
                                         Use o botão abaixo para copiar e enviar ao usuário.
                                     </p>
                                 </div>
@@ -245,31 +226,14 @@ export default function ProfessionalForm({ initialData, onSubmit, onCancel, onDe
                             <button
                                 type="button"
                                 onClick={copyRecoveryLink}
-                                style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '8px',
-                                    padding: '10px 16px',
-                                    backgroundColor: '#3b82f6',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '8px',
-                                    fontSize: '14px',
-                                    fontWeight: 500,
-                                    cursor: 'pointer',
-                                    transition: 'background-color 0.2s',
-                                    boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.05)'
-                                }}
-                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#2563eb'}
-                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#3b82f6'}
+                                className="professional-form__copy-btn"
                             >
                                 <Copy size={16} />
                                 Copiar link
                             </button>
 
                             {/* Microcopy de segurança */}
-                            <p style={{ margin: 0, fontSize: '11px', color: '#64748b', textAlign: 'center' }}>
+                            <p className="professional-form__recovery-hint">
                                 O link expira automaticamente por segurança.
                             </p>
                         </div>
@@ -277,33 +241,14 @@ export default function ProfessionalForm({ initialData, onSubmit, onCancel, onDe
                 </div>
             )}
 
-            {/* ═══════════════════════════════════════════════════════════
-                RODAPÉ — Danger Zone + CTA Final
-            ═══════════════════════════════════════════════════════════ */}
-            <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                borderTop: '1px solid #e2e8f0',
-                paddingTop: '24px'
-            }}>
+            {/* RODAPÉ — Danger Zone + CTA Final */}
+            <div className="professional-form__footer">
                 {/* Excluir (esquerda) */}
                 {isEditMode && onDelete ? (
                     <button
                         type="button"
                         onClick={onDelete}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            background: 'none',
-                            border: 'none',
-                            color: '#dc2626',
-                            fontSize: '13px',
-                            fontWeight: 500,
-                            cursor: 'pointer',
-                            padding: 0
-                        }}
+                        className="professional-form__delete-btn"
                     >
                         <AlertTriangle size={16} />
                         Excluir
@@ -313,7 +258,7 @@ export default function ProfessionalForm({ initialData, onSubmit, onCancel, onDe
                 )}
 
                 {/* Cancelar + Salvar (direita) */}
-                <div style={{ display: 'flex', gap: '12px' }}>
+                <div className="professional-form__actions">
                     {!hideCancelButton && (
                         <button
                             type="button"

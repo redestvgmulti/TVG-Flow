@@ -1,0 +1,83 @@
+/* Professionals Page Styles */
+
+.professionals-page {
+    padding: 32px;
+}
+
+.professionals-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 48px;
+}
+
+.professionals-header__content h2 {
+    font-size: 28px;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0 0 8px 0;
+    letter-spacing: -0.02em;
+}
+
+.professionals-header__content p {
+    color: #64748b;
+    margin: 0;
+    font-size: 14px;
+}
+
+.professionals-toolbar {
+    margin-bottom: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.professionals-search {
+    width: 100%;
+    max-width: 400px;
+    position: relative;
+}
+
+.professionals-count {
+    display: inline-flex;
+    align-items: center;
+    font-size: 13px;
+    color: #64748b;
+    font-weight: 500;
+    background-color: #f1f5f9;
+    padding: 8px 16px;
+    border-radius: 999px;
+    border: 1px solid #e2e8f0;
+}
+
+.professionals-count strong {
+    color: #1e293b;
+    margin: 0 4px;
+}
+
+@media (max-width: 768px) {
+    .professionals-page {
+        padding: 16px;
+    }
+
+    .professionals-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+        margin-bottom: 32px;
+    }
+
+    .professionals-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .professionals-search {
+        max-width: 100%;
+    }
+
+    .professionals-count {
+        justify-content: center;
+    }
+}

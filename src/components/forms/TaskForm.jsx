@@ -17,6 +17,7 @@ export default function TaskForm({ onSuccess, onCancel }) {
     const [titulo, setTitulo] = useState('')
     const [descricao, setDescricao] = useState('')
     const [deadline, setDeadline] = useState('')
+    const [prioridade, setPrioridade] = useState('normal')
     const [selectedFunctions, setSelectedFunctions] = useState([])
 
     // States
@@ -132,9 +133,9 @@ export default function TaskForm({ onSuccess, onCancel }) {
                         titulo: `${titulo} - ${funcao}`,
                         descricao: descricao,
                         cliente_id: empresaId,
-                        profissional_id: professional.id,
+                        assigned_to: professional.id,
                         departamento_id: professional.departamento_id,
-                        prioridade: 'media',
+                        prioridade: prioridade,
                         deadline: new Date(deadline).toISOString(),
                         status: 'pendente'
                     }
@@ -321,6 +322,21 @@ export default function TaskForm({ onSuccess, onCancel }) {
                         onChange={e => setDescricao(e.target.value)}
                         placeholder="Detalhes gerais da demanda..."
                     />
+                </div>
+
+                <div className="space-y-1">
+                    <label className="label-premium">Prioridade</label>
+                    <select
+                        className="input-premium"
+                        value={prioridade}
+                        onChange={e => setPrioridade(e.target.value)}
+                    >
+                        <option value="baixa">Baixa</option>
+                        <option value="normal">Normal</option>
+                        <option value="alta">Alta</option>
+                        <option value="urgente">Urgente</option>
+                    </select>
+                    <p className="text-xs text-slate-400 mt-1">Define a urgência da demanda</p>
                 </div>
 
                 <div className="space-y-1">
