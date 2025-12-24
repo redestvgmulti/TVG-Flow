@@ -101,7 +101,7 @@ export default function TaskForm({ onSuccess, onCancel }) {
                 throw new Error(data?.error || 'Falha ao criar OS')
             }
 
-            toast.success(\`OS criada com sucesso! (\${data.tasks_created} tarefas geradas)\`)
+            toast.success(`OS criada com sucesso! (${data.tasks_created} tarefas geradas)`)
             
             if (onSuccess) {
                 onSuccess(data)
@@ -219,11 +219,11 @@ export default function TaskForm({ onSuccess, onCancel }) {
                                     key={fn}
                                     type="button"
                                     onClick={() => toggleFunction(fn)}
-                                    className={\`px-4 py-2 rounded-lg border text-sm font-medium transition-all \${
+                                    className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all ${
                                         selectedFunctions.includes(fn)
                                             ? 'bg-slate-900 text-white border-slate-900'
                                             : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
-                                    }\`}
+                                    }`}
                                 >
                                     {selectedFunctions.includes(fn) && <CheckCircle className="inline w-4 h-4 mr-1" />}
                                     {fn}

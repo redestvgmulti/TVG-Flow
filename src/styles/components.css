@@ -2330,3 +2330,283 @@ textarea.input:focus {
 .task-card-horizontal .task-card-actions {
     display: revert !important;
 }
+
+/* ============================================
+ * STAFF TASKS PAGE - CITYOS PREMIUM
+ * ============================================ */
+
+/* Page container */
+.staff-tasks-page {
+    max-width: 1024px;
+    margin: 0 auto;
+    padding: 2rem 1rem;
+    min-height: 100vh;
+}
+
+/* Header section */
+.staff-tasks-header {
+    margin-bottom: 2rem;
+}
+
+.staff-tasks-title {
+    font-size: 1.875rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin-bottom: 0.5rem;
+}
+
+.staff-tasks-subtitle {
+    font-size: 0.875rem;
+    color: #64748b;
+}
+
+/* Search bar */
+.staff-search-container {
+    position: relative;
+    margin-bottom: 1.5rem;
+}
+
+.staff-search-input {
+    width: 100%;
+    padding: 0.875rem 1rem 0.875rem 2.75rem;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+    transition: all 0.2s;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.staff-search-input:focus {
+    outline: none;
+    border-color: #0f172a;
+    box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.1);
+}
+
+.staff-search-icon {
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+    pointer-events: none;
+}
+
+.staff-search-clear {
+    position: absolute;
+    right: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    padding: 0.25rem;
+    transition: color 0.2s;
+}
+
+.staff-search-clear:hover {
+    color: #64748b;
+}
+
+/* Filter chips */
+.staff-filters {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    overflow-x: auto;
+    padding-bottom: 0.5rem;
+    scrollbar-width: none;
+}
+
+.staff-filters::-webkit-scrollbar {
+    display: none;
+}
+
+.filter-chip {
+    white-space: nowrap;
+    padding: 0.5rem 1rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    transition: all 0.2s;
+    cursor: pointer;
+    border: none;
+}
+
+.filter-chip.active {
+    background: #0f172a;
+    color: white;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.filter-chip:not(.active) {
+    background: #f1f5f9;
+    color: #475569;
+}
+
+.filter-chip:not(.active):hover {
+    background: #e2e8f0;
+}
+
+/* Task cards */
+.staff-task-card {
+    background: white;
+    padding: 1rem;
+    border-radius: 0.75rem;
+    border: 1px solid #f1f5f9;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+    transition: all 0.2s;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+}
+
+.staff-task-card:hover {
+    border-color: #e2e8f0;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    transform: translateY(-1px);
+}
+
+.staff-task-card:active {
+    transform: scale(0.98);
+}
+
+/* Task card content */
+.staff-task-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.staff-task-status-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.25rem;
+}
+
+.status-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+}
+
+.status-dot.pendente {
+    background: #f97316;
+}
+
+.status-dot.em_progresso {
+    background: #3b82f6;
+}
+
+.status-dot.concluida {
+    background: #22c55e;
+}
+
+.staff-task-status-text {
+    font-size: 0.625rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+    color: #64748b;
+}
+
+.staff-task-overdue-badge {
+    font-size: 0.625rem;
+    color: #dc2626;
+    font-weight: 700;
+    margin-left: 0.25rem;
+}
+
+.staff-task-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #0f172a;
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.staff-task-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+    font-size: 0.75rem;
+    color: #94a3b8;
+}
+
+.staff-task-meta-item {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.staff-task-priority-urgent {
+    color: #dc2626;
+    font-weight: 500;
+}
+
+/* Task card arrow */
+.staff-task-arrow {
+    color: #cbd5e1;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.staff-task-card:hover .staff-task-arrow {
+    color: #0f172a;
+    transform: translateX(4px);
+}
+
+/* Empty state */
+.staff-tasks-empty {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: #94a3b8;
+}
+
+.staff-tasks-empty-icon {
+    margin: 0 auto 0.75rem;
+    opacity: 0.2;
+}
+
+/* Loading state */
+.staff-tasks-loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 50vh;
+}
+
+.staff-tasks-spinner {
+    width: 2rem;
+    height: 2rem;
+    border: 2px solid #f1f5f9;
+    border-top-color: #0f172a;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .staff-tasks-page {
+        padding: 1rem;
+    }
+    
+    .staff-tasks-title {
+        font-size: 1.5rem;
+    }
+    
+    .staff-task-card {
+        padding: 0.875rem;
+    }
+}

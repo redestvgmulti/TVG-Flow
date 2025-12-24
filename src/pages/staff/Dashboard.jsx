@@ -60,40 +60,12 @@ function StaffDashboard() {
                 return
             }
 
-            // CRITICAL SECURITY FIX: Only fetch tasks where the professional has a micro-task assigned
-            // First, get all micro-tasks for this professional
-            const { data: microTasks, error: microError } = await supabase
-                .from('tarefas_itens')
-                .select('tarefa_id')
-                .eq('profissional_id', professionalId)
-
-            if (microError) {
-                console.error('Error fetching micro-tasks:', microError)
-                throw microError
-            }
-
-            // Extract unique task IDs
-            const taskIds = [...new Set(microTasks?.map(mt => mt.tarefa_id) || [])]
-
-            if (taskIds.length === 0) {
-                // No tasks assigned to this professional
-                setStats({
-                    pending: 0,
-                    completed: 0,
-                    overdue: 0,
-                    productivity: 0
-                })
-                setRecentTasks([])
-                if (!silent) setLoading(false)
-                return
-            }
-
-            // Now fetch only those specific tasks
+            // Fetch tasks assigned to this professional
             const { data: tasks, error } = await supabase
                 .from('tarefas')
-                .select('id, titulo, deadline_at, status, priority, created_at, completed_at')
-                .in('id', taskIds)
-                .order('deadline_at', { ascending: true, nullsFirst: false })
+                .select('id, titulo, deadline, status, prioridade, created_at, concluida_at')
+                .eq('assigned_to', professionalId)
+                .order('deadline', { ascending: true, nullsFirst: false })
 
             if (error) {
                 console.error('Error fetching tasks:', error)
@@ -108,14 +80,14 @@ function StaffDashboard() {
 
             // Check overdue (only for non-completed tasks)
             const overdueTasks = pendingTasks.filter(t => {
-                if (!t.deadline_at) return false
-                return new Date(t.deadline_at) < now
+                if (!t.deadline) return false
+                return new Date(t.deadline) < now
             })
 
             // Very basic "Productivity" metric (last 7 days completions)
             const sevenDaysAgo = new Date()
             sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-            const recentCompletions = completedTasks.filter(t => new Date(t.completed_at || t.created_at) > sevenDaysAgo).length
+            const recentCompletions = completedTasks.filter(t => new Date(t.concluida_at || t.created_at) > sevenDaysAgo).length
 
             setStats({
                 pending: pendingTasks.length,

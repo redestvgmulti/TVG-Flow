@@ -49,27 +49,11 @@ export default function StaffTasks() {
                 return
             }
 
-            // 1. Get micro-tasks
-            const { data: microTasks, error: microError } = await supabase
-                .from('tarefas_itens')
-                .select('tarefa_id')
-                .eq('profissional_id', user.id)
-
-            if (microError) throw microError
-
-            const taskIds = [...new Set(microTasks?.map(mt => mt.tarefa_id) || [])]
-
-            if (taskIds.length === 0) {
-                setTasks([])
-                if (!silent) setLoading(false)
-                return
-            }
-
-            // 2. Get tasks
+            // Get tasks assigned to this user
             const { data, error } = await supabase
                 .from('tarefas')
                 .select('*')
-                .in('id', taskIds)
+                .eq('assigned_to', user.id)
                 .order('deadline', { ascending: true, nullsFirst: false })
 
             if (error) throw error
