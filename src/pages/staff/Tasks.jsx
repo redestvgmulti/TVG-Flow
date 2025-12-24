@@ -27,8 +27,8 @@ export default function StaffTasks() {
 
     // Filter State
     const [search, setSearch] = useState('')
-    const [statusFilter, setStatusFilter] = useState('all') // all, pending, in_progress, completed
-    const [priorityFilter, setPriorityFilter] = useState('all') // all, urgent, high, medium, low
+    const [statusFilter, setStatusFilter] = useState('all') // all, pendente, em_progresso, concluida
+    const [priorityFilter, setPriorityFilter] = useState('all') // all, urgente, alta, normal, baixa
 
     useEffect(() => {
         fetchTasks()
@@ -70,7 +70,7 @@ export default function StaffTasks() {
                 .from('tarefas')
                 .select('*')
                 .in('id', taskIds)
-                .order('deadline_at', { ascending: true, nullsFirst: false })
+                .order('deadline', { ascending: true, nullsFirst: false })
 
             if (error) throw error
 
@@ -96,7 +96,7 @@ export default function StaffTasks() {
         // Status
         if (statusFilter !== 'all') {
             if (statusFilter === 'active') { // Custom filter for Pending + In Progress
-                if (task.status === 'completed') return false
+                if (task.status === 'concluida') return false
             } else {
                 if (task.status !== statusFilter) return false
             }
@@ -104,7 +104,7 @@ export default function StaffTasks() {
 
         // Priority
         if (priorityFilter !== 'all') {
-            if (task.priority !== priorityFilter) return false
+            if (task.prioridade !== priorityFilter) return false
         }
 
         return true
@@ -115,7 +115,7 @@ export default function StaffTasks() {
         try {
             const updates = {
                 status: newStatus,
-                completed_at: newStatus === 'completed' ? new Date().toISOString() : null
+                concluida_at: newStatus === 'concluida' ? new Date().toISOString() : null
             }
 
             const { error } = await supabase
@@ -132,12 +132,8 @@ export default function StaffTasks() {
                 setSelectedTask(prev => ({ ...prev, ...updates }))
             }
 
-            if (newStatus === 'completed') {
+            if (newStatus === 'concluida') {
                 toast.success('Tarefa concluída! 🎉')
-                // Optional: Auto-close view on complete? 
-                // Let's keep it open so user can verify, or close it. 
-                // User requirement: "Fluxo rápido". Maybe closing is better? 
-                // "UX silenciosa". Let's wait for user to back out.
             } else {
                 toast.success('Status atualizado')
             }
@@ -205,24 +201,24 @@ export default function StaffTasks() {
                 />
                 <FilterChip
                     label="Pendentes"
-                    active={statusFilter === 'pending'}
-                    onClick={() => setStatusFilter('pending')}
+                    active={statusFilter === 'pendente'}
+                    onClick={() => setStatusFilter('pendente')}
                 />
                 <FilterChip
                     label="Em Andamento"
-                    active={statusFilter === 'in_progress'}
-                    onClick={() => setStatusFilter('in_progress')}
+                    active={statusFilter === 'em_progresso'}
+                    onClick={() => setStatusFilter('em_progresso')}
                 />
                 <FilterChip
                     label="Concluídas"
-                    active={statusFilter === 'completed'}
-                    onClick={() => setStatusFilter('completed')}
+                    active={statusFilter === 'concluida'}
+                    onClick={() => setStatusFilter('concluida')}
                 />
                 <div className="w-px bg-gray-200 mx-1 h-6 self-center shrink-0"></div>
                 <FilterChip
                     label="Alta Prioridade"
-                    active={priorityFilter === 'high'}
-                    onClick={() => setPriorityFilter(priorityFilter === 'high' ? 'all' : 'high')}
+                    active={priorityFilter === 'alta'}
+                    onClick={() => setPriorityFilter(priorityFilter === 'alta' ? 'all' : 'alta')}
                 />
             </div>
 
@@ -264,7 +260,7 @@ function FilterChip({ label, active, onClick }) {
 }
 
 function TaskCard({ task, onClick }) {
-    const isOverdue = new Date(task.deadline) < new Date() && task.status !== 'completed'
+    const isOverdue = new Date(task.deadline) < new Date() && task.status !== 'concluida'
 
     return (
         <button
@@ -278,7 +274,7 @@ function TaskCard({ task, onClick }) {
                         ${task.status === 'completed' ? 'bg-green-500' : task.status === 'in_progress' ? 'bg-blue-500' : 'bg-orange-500'}
                     `}></span>
                     <span className="text-[10px] uppercase tracking-wider font-semibold text-gray-500">
-                        {task.status === 'completed' ? 'Concluída' : task.status === 'in_progress' ? 'Em Andamento' : 'Pendente'}
+                        {task.status === 'concluida' ? 'Concluída' : task.status === 'em_progresso' ? 'Em Andamento' : 'Pendente'}
                     </span>
                     {isOverdue && <span className="text-[10px] text-red-600 font-bold ml-1">! Atrasada</span>}
                 </div>
@@ -292,7 +288,7 @@ function TaskCard({ task, onClick }) {
                             <span>{new Date(task.deadline).toLocaleDateString('pt-BR')}</span>
                         </div>
                     )}
-                    {task.priority === 'urgent' && <span className="text-red-500 font-medium">Urgente</span>}
+                    {task.prioridade === 'urgente' && <span className="text-red-500 font-medium">Urgente</span>}
                 </div>
             </div>
             <ChevronRight size={20} className="text-gray-300 group-hover:text-gray-900 transition-colors" />
@@ -301,7 +297,7 @@ function TaskCard({ task, onClick }) {
 }
 
 function ExecutionView({ task, onBack, onUpdateStatus, user }) {
-    const isCompleted = task.status === 'completed'
+    const isCompleted = task.status === 'concluida'
 
     // Simple state for comments/timeline
     const [timeline, setTimeline] = useState([])
@@ -356,7 +352,7 @@ function ExecutionView({ task, onBack, onUpdateStatus, user }) {
                 </div>
                 <div className={`
                     w-3 h-3 rounded-full mr-2
-                    ${isCompleted ? 'bg-green-500' : task.status === 'in_progress' ? 'bg-blue-500' : 'bg-orange-500 shadow-orange-200 shadow-md animate-pulse'}
+                    ${isCompleted ? 'bg-green-500' : task.status === 'em_progresso' ? 'bg-blue-500' : 'bg-orange-500 shadow-orange-200 shadow-md animate-pulse'}
                 `}></div>
             </div>
 
@@ -373,7 +369,7 @@ function ExecutionView({ task, onBack, onUpdateStatus, user }) {
                         )}
                     </div>
                     <div className="text-lg font-medium text-gray-900">
-                        {isCompleted ? 'Concluída' : task.status === 'in_progress' ? 'Em Andamento' : 'Pendente'}
+                        {isCompleted ? 'Concluída' : task.status === 'em_progresso' ? 'Em Andamento' : 'Pendente'}
                     </div>
                 </div>
 
@@ -440,16 +436,16 @@ function ExecutionView({ task, onBack, onUpdateStatus, user }) {
                 <div className="max-w-lg mx-auto flex gap-3">
                     {!isCompleted ? (
                         <>
-                            {task.status === 'pending' && (
+                            {task.status === 'pendente' && (
                                 <button
-                                    onClick={() => onUpdateStatus(task.id, 'in_progress')}
+                                    onClick={() => onUpdateStatus(task.id, 'em_progresso')}
                                     className="flex-1 py-4 bg-gray-100 text-gray-900 font-bold rounded-xl active:scale-[0.98] transition-transform"
                                 >
                                     Iniciar
                                 </button>
                             )}
                             <button
-                                onClick={() => onUpdateStatus(task.id, 'completed')}
+                                onClick={() => onUpdateStatus(task.id, 'concluida')}
                                 className="flex-[2] py-4 bg-gray-900 text-white font-bold rounded-xl shadow-lg shadow-gray-200 active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
                             >
                                 <CheckCircle2 size={20} />
@@ -458,7 +454,7 @@ function ExecutionView({ task, onBack, onUpdateStatus, user }) {
                         </>
                     ) : (
                         <button
-                            onClick={() => onUpdateStatus(task.id, 'in_progress')}
+                            onClick={() => onUpdateStatus(task.id, 'em_progresso')}
                             className="w-full py-4 bg-gray-100 text-gray-600 font-bold rounded-xl active:scale-[0.98] transition-transform"
                         >
                             Reabrir Tarefa
