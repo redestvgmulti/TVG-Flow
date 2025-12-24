@@ -60,8 +60,8 @@ function Painel() {
             setLoading(true)
 
             const { data: allTasks, error: allTasksError } = await supabase
-                .from('tarefas')
-                .select('id, status, titulo, deadline, priority, created_at, assigned_to, drive_link')
+                .from('tarefas_com_status_real')
+                .select('id, status, titulo, deadline, priority, created_at, assigned_to, drive_link, is_overdue')
                 .order('created_at', { ascending: false })
 
             if (allTasksError) throw allTasksError
@@ -420,7 +420,11 @@ function Painel() {
                 ) : (
                     <div className="task-list">
                         {recentTasks.map(task => (
-                            <div key={task.id} className="task-item card">
+                            <div
+                                key={task.id}
+                                className={`task-item card ${task.is_overdue ? 'task-card-overdue task-card-overdue-pulse' : ''
+                                    }`}
+                            >
                                 <div className="task-item-content">
                                     <p className="task-item-title">
                                         {task.titulo}
@@ -431,9 +435,15 @@ function Painel() {
                                 </div>
 
                                 <div className="task-item-actions">
-                                    <span className={`badge ${getStatusBadgeClass(task.status)}`}>
-                                        {task.status}
-                                    </span>
+                                    {task.is_overdue ? (
+                                        <span className="badge badge-overdue">
+                                            ATRASADA
+                                        </span>
+                                    ) : (
+                                        <span className={`badge ${getStatusBadgeClass(task.status)}`}>
+                                            {task.status}
+                                        </span>
+                                    )}
 
                                     <div className="btn-group">
                                         <button

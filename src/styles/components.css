@@ -669,51 +669,63 @@ textarea:focus {
 }
 
 /* 
- * TASK LIST 
+ * TASK LIST - CITYOS PREMIUM
  */
 .task-list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 12px;
 }
 
 .task-item {
-    padding: 16px;
+    padding: 20px 24px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 16px;
+    gap: 20px;
     flex-wrap: wrap;
     margin-bottom: 0;
-    box-shadow: none;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
     border: 1px solid var(--color-border);
+    border-radius: 12px;
+    background: #ffffff;
+    transition: all 0.2s ease;
+}
+
+.task-item:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    transform: translateY(-1px);
 }
 
 .task-item-content {
     flex: 1;
-    min-width: 200px;
+    min-width: 250px;
 }
 
 .task-item-title {
     font-weight: 600;
-    margin-bottom: 4px;
+    font-size: 15px;
+    margin-bottom: 6px;
     color: var(--color-text-primary);
+    line-height: 1.4;
 }
 
 .task-item-meta {
     margin: 0;
+    font-size: 13px;
+    color: var(--color-text-secondary);
 }
 
 .task-item-actions {
     display: flex;
-    gap: 8px;
+    gap: 12px;
     align-items: center;
     flex-wrap: wrap;
 }
 
 .btn-group {
     display: flex;
-    gap: 4px;
+    gap: 6px;
 }
 
 /* 
@@ -2158,4 +2170,44 @@ textarea.input:focus {
     /* Slate 400 */
     margin-top: 6px;
     margin-left: 2px;
+}
+
+/* 
+ * OVERDUE TASKS - CITYOS STYLE
+ * Subtle visual indication without aggressive styling
+ */
+.task-card-overdue {
+    background-color: #fef2f2;
+    /* red-50 */
+    border: 1px solid #fca5a5;
+    /* red-300 */
+}
+
+.task-card-overdue-pulse {
+    animation: overduePulse 2.8s ease-out infinite;
+}
+
+@keyframes overduePulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.2);
+    }
+
+    70% {
+        box-shadow: 0 0 0 6px rgba(239, 68, 68, 0);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+    }
+}
+
+.badge-overdue {
+    color: #991b1b;
+    /* red-800 */
+    background-color: #fee2e2;
+    /* red-100 */
+    border-radius: 9999px;
+    padding: 2px 8px;
+    font-size: 12px;
+    font-weight: 600;
 }
