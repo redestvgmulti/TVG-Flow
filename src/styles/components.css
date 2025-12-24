@@ -1904,17 +1904,31 @@ textarea.input:focus {
         0 4px 6px -1px rgba(0, 0, 0, 0.02),
         0 20px 25px -5px rgba(0, 0, 0, 0.04);
     /* Deep diffuse shadow */
-    padding: 40px;
-    /* Generous padding p-10 */
+    padding: 24px;
+    /* Default Mobile Padding (Reduced) */
     position: relative;
+}
+
+@media (min-width: 768px) {
+    .card-premium-decision {
+        padding: 40px;
+        /* Desktop Padding */
+    }
 }
 
 /* 3. Form Spacing & Rhythm */
 .form-section-spacing {
     display: flex;
     flex-direction: column;
-    gap: 32px;
-    /* Large gap between logical blocks */
+    gap: 16px;
+    /* Mobile Gap - Compact */
+}
+
+@media (min-width: 768px) {
+    .form-section-spacing {
+        gap: 20px;
+        /* Desktop Gap - Compact */
+    }
 }
 
 /* 4. Premium Chips (Tags) */
@@ -1943,65 +1957,114 @@ textarea.input:focus {
     /* Chrome/Safari/Webkit */
 }
 
-/* Desktop: Wrap chips */
+/* Desktop: Keep scroll but refine spacing if needed */
 @media (min-width: 768px) {
     .chip-group {
-        flex-wrap: wrap;
-        overflow-x: visible;
         padding-right: 0;
+        /* Optional: Custom scrollbar logic could go here if we wanted visible scrollbars */
     }
 }
 
+/* Mobile Base Style: Text-Only / Minimal */
 .chip-premium {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    padding: 10px 18px;
-    border-radius: 9999px;
-    /* rounded-full */
-    font-size: 0.875rem;
+    gap: 6px;
+    padding: 8px 12px;
+    /* Good touch target */
+    border-radius: 8px;
+
+    /* "Only Name Clickable" Look */
+    background-color: transparent;
+    border: 1px solid transparent;
+
+    font-size: 0.95rem;
     font-weight: 500;
-    background-color: #ffffff;
-    border: 1px solid #e2e8f0;
-    /* Slate 200 */
-    color: #475569;
-    /* Slate 600 */
+    color: #64748b;
+    /* Slate 500 */
+
     cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    position: relative;
+    transition: all 0.2s ease;
     user-select: none;
+    white-space: nowrap;
 }
 
-.chip-premium:hover {
-    border-color: #cbd5e1;
-    /* Slate 300 */
-    background-color: #f8fafc;
-    /* Slate 50 */
-    color: #1e293b;
-    /* Slate 800 */
+.chip-premium:active {
+    background-color: #f1f5f9;
+    /* Subtle feedback */
 }
 
 .chip-premium.selected {
-    background-color: #eff6ff;
-    /* Blue 50 */
-    border-color: #bfdbfe;
-    /* Blue 200 */
-    color: #1d4ed8;
-    /* Blue 700 */
-    box-shadow: 0 1px 2px rgba(37, 99, 235, 0.05);
+    color: #2563eb;
+    /* Blue 600 */
+    font-weight: 700;
+    /* Very subtle background for touch feedback area, almost invisible */
+    background-color: rgba(37, 99, 235, 0.05);
 }
 
+/* Hide check icon on mobile to reduce clutter */
 .chip-check-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
-    background-color: #2563eb;
-    border-radius: 50%;
-    color: white;
-    font-size: 10px;
-    animation: scaleIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    display: none;
+}
+
+
+/* Desktop: Restore Premium Pill (Button-like) Aesthetic */
+@media (min-width: 768px) {
+    .chip-group {
+        flex-wrap: wrap;
+        /* Wrap on desktop */
+        overflow-x: visible;
+        padding-right: 0;
+        gap: 10px;
+    }
+
+    .chip-premium {
+        padding: 10px 18px;
+        border-radius: 9999px;
+        /* rounded-full */
+        background-color: #ffffff;
+        border: 1px solid #e2e8f0;
+        /* Slate 200 */
+        color: #475569;
+        /* Slate 600 */
+        font-size: 0.875rem;
+        font-weight: 500;
+    }
+
+    .chip-premium:hover {
+        border-color: #cbd5e1;
+        /* Slate 300 */
+        background-color: #f8fafc;
+        /* Slate 50 */
+        color: #1e293b;
+        /* Slate 800 */
+    }
+
+    .chip-premium.selected {
+        background-color: #eff6ff;
+        /* Blue 50 */
+        border-color: #bfdbfe;
+        /* Blue 200 */
+        color: #1d4ed8;
+        /* Blue 700 */
+        box-shadow: 0 1px 2px rgba(37, 99, 235, 0.05);
+        font-weight: 500;
+        /* Reset excessive bold */
+    }
+
+    /* Show icon on desktop */
+    .chip-check-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        height: 20px;
+        background-color: #2563eb;
+        border-radius: 50%;
+        color: white;
+        font-size: 10px;
+        animation: scaleIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
 }
 
 @keyframes scaleIn {
@@ -2016,23 +2079,42 @@ textarea.input:focus {
     }
 }
 
+
+
 /* 5. Section Dividers */
 .divider-subtle {
     height: 1px;
     background: linear-gradient(to right, transparent, #e2e8f0, transparent);
-    margin: 40px 0;
+    margin: 12px 0;
+    /* Mobile Margin - Compact */
     opacity: 0.6;
+}
+
+@media (min-width: 768px) {
+    .divider-subtle {
+        margin: 16px 0;
+        /* Desktop Margin - Compact */
+    }
 }
 
 /* 6. Action Bar */
 .form-actions-premium {
-    margin-top: 48px;
-    padding-top: 32px;
+    margin-top: 32px;
+    /* Mobile Top */
+    padding-top: 20px;
+    /* Mobile Padding */
     border-top: 1px solid #f1f5f9;
     display: flex;
     justify-content: flex-end;
     align-items: center;
     gap: 16px;
+}
+
+@media (min-width: 768px) {
+    .form-actions-premium {
+        margin-top: 48px;
+        padding-top: 32px;
+    }
 }
 
 /* 7. Enhanced Inputs for this context */

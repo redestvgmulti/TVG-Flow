@@ -238,7 +238,7 @@ export default function TaskForm({ onSuccess, onCancel }) {
                             <Layers size={16} className="text-indigo-600" />
                             Funções Necessárias
                         </label>
-                        <span className="text-xs text-slate-400 font-medium">Selecione as funções para distribuição</span>
+                        <span className="text-xs text-slate-400 font-medium hidden md:inline">Selecione as funções para distribuição</span>
                     </div>
 
                     {loadingFunctions ? (
@@ -362,7 +362,10 @@ export default function TaskForm({ onSuccess, onCancel }) {
                             Processando...
                         </>
                     ) : (
-                        'Gerar Ordem de Serviço'
+                        <>
+                            <span className="md:hidden">Gerar OS</span>
+                            <span className="hidden md:inline">Gerar Ordem de Serviço</span>
+                        </>
                     )}
                 </button>
             </div>
