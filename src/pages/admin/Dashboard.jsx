@@ -419,54 +419,92 @@ function Painel() {
                     </div>
                 ) : (
                     <div className="task-list">
-                        {recentTasks.map(task => (
-                            <div
-                                key={task.id}
-                                className={`task-item card ${task.is_overdue ? 'task-card-overdue task-card-overdue-pulse' : ''
-                                    }`}
-                            >
-                                <div className="task-item-content">
-                                    <p className="task-item-title">
-                                        {task.titulo}
-                                    </p>
-                                    <p className="text-sm text-muted task-item-meta">
-                                        Prazo: {new Date(task.deadline).toLocaleDateString()} • {getAssignedToName(task.assigned_to)}
-                                    </p>
-                                </div>
+                        {recentTasks.map(task => {
+                            const isOverdue = task.is_overdue === true && task.status !== 'concluida'
 
-                                <div className="task-item-actions">
-                                    {task.is_overdue ? (
-                                        <span className="badge badge-overdue">
-                                            ATRASADA
-                                        </span>
-                                    ) : (
-                                        <span className={`badge ${getStatusBadgeClass(task.status)}`}>
-                                            {task.status}
-                                        </span>
-                                    )}
+                            return (
+                                <div
+                                    key={task.id}
+                                    className={`task-item card task-card-horizontal ${isOverdue ? 'task-card-overdue task-card-overdue-pulse' : ''}`}
+                                >
+                                    {/* ESQUERDA — INFORMAÇÕES */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: 0 }}>
+                                        <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            {task.titulo}
+                                        </h3>
 
-                                    <div className="btn-group">
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#64748b' }}>
+                                            <svg style={{ width: '14px', height: '14px', color: '#94a3b8', flexShrink: 0 }} viewBox="0 0 24 24" fill="none">
+                                                <path
+                                                    d="M12 12c2.761 0 5-2.239 5-5S14.761 2 12 2 7 4.239 7 7s2.239 5 5 5Zm0 2c-3.33 0-10 1.67-10 5v3h20v-3c0-3.33-6.67-5-10-5Z"
+                                                    fill="currentColor"
+                                                />
+                                            </svg>
+                                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                {getAssignedToName(task.assigned_to)}
+                                            </span>
+                                        </div>
+
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 500 }}>
+                                            <span style={{ color: isOverdue ? '#b91c1c' : '#475569', textTransform: 'uppercase', fontSize: '11px', fontWeight: 700, letterSpacing: '0.02em' }}>
+                                                {isOverdue ? 'ATRASADA' : task.status}
+                                            </span>
+                                            <span style={{ color: '#cbd5e1' }}>·</span>
+                                            <span style={{ color: isOverdue ? '#dc2626' : '#64748b' }}>
+                                                Prazo {new Date(task.deadline).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* DIREITA — AÇÕES */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '16px' }}>
                                         <button
                                             onClick={() => handleOpenReatribuirModal(task)}
-                                            className="btn btn-ghost btn-xs"
+                                            style={{
+                                                width: '36px',
+                                                height: '36px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                borderRadius: '50%',
+                                                border: '1px solid #e2e8f0',
+                                                background: 'transparent',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s'
+                                            }}
                                             title="Reatribuir"
+                                            onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                                         >
-                                            <User size={16} />
+                                            <User size={16} color="#64748b" />
                                         </button>
 
                                         {task.status !== 'completed' && (
                                             <button
                                                 onClick={() => handleCompleteTask(task.id, task.titulo)}
-                                                className="btn btn-ghost btn-xs text-success"
+                                                style={{
+                                                    width: '36px',
+                                                    height: '36px',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    borderRadius: '50%',
+                                                    border: '1px solid #e2e8f0',
+                                                    background: 'transparent',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.2s'
+                                                }}
                                                 title="Concluir"
+                                                onMouseEnter={e => e.currentTarget.style.background = '#f0fdf4'}
+                                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                                             >
-                                                <CheckCircle size={16} />
+                                                <CheckCircle size={16} color="#16a34a" />
                                             </button>
                                         )}
                                     </div>
                                 </div>
-                            </div>
-                        ))}
+                            )
+                        })}
                     </div>
                 )}
             </div>

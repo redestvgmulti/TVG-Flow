@@ -2211,3 +2211,122 @@ textarea.input:focus {
     font-size: 12px;
     font-weight: 600;
 }
+/* 
+ * TASK CARD - CITYOS MOBILE-FIRST
+ * Mobile: Essential info only
+ * Desktop: Full context
+ */
+
+/* Base structure - Mobile first */
+.task-item.card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.task-card-title {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.4;
+    color: var(--color-text-primary);
+    margin: 0;
+}
+
+.task-card-meta {
+    display: none; /* Hidden on mobile */
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    margin: 0;
+}
+
+.task-card-divider {
+    display: none; /* Hidden on mobile */
+}
+
+.task-card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-top: 4px;
+}
+
+.task-card-status {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+}
+
+.task-card-status.overdue {
+    color: #991b1b; /* red-800 */
+}
+
+.task-card-deadline {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+}
+
+.task-card-deadline.overdue {
+    color: #dc2626; /* red-600 */
+}
+
+.task-card-actions {
+    display: none; /* Hidden on mobile */
+}
+
+/* Desktop (>= 1024px) - More density and context */
+@media (min-width: 1024px) {
+    .task-item.card {
+        gap: 12px;
+    }
+
+    .task-card-title {
+        font-size: 15px;
+    }
+
+    .task-card-meta {
+        display: block;
+        margin-top: 4px;
+    }
+
+    .task-card-divider {
+        display: block;
+        height: 1px;
+        background: var(--color-border-light);
+        margin: 8px 0;
+    }
+
+    .task-card-footer {
+        margin-top: 0;
+    }
+
+    .task-card-actions {
+        display: flex;
+        gap: 6px;
+        margin-top: 8px;
+    }
+}
+
+/* 
+ * TASK CARD HORIZONTAL - CITYOS EXECUTIVE
+ * Compact, dense, operational
+ */
+.task-card-horizontal {
+    display: flex !important;
+    align-items: center;
+    padding: 14px 18px !important;
+    gap: 12px;
+    flex-direction: row !important;
+}
+
+/* Override mobile-first vertical styles */
+.task-card-horizontal .task-card-title,
+.task-card-horizontal .task-card-meta,
+.task-card-horizontal .task-card-divider,
+.task-card-horizontal .task-card-footer,
+.task-card-horizontal .task-card-actions {
+    display: revert !important;
+}
