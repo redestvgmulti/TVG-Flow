@@ -1,0 +1,420 @@
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   TASK DETAIL - Premium Executive CityOS
+   Staff Task Execution View
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* Container */
+.task-detail-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100vh;
+    background: #ffffff;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    animation: task-detail-slide-in 0.3s ease-out;
+}
+
+@keyframes task-detail-slide-in {
+    from {
+        opacity: 0;
+        transform: translateX(100%);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Header - Task Identity
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.task-detail-header {
+    height: 64px;
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid #f1f5f9;
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(12px);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.task-detail-back-btn {
+    padding: 8px;
+    margin-left: -8px;
+    color: #64748b;
+    background: transparent;
+    border: none;
+    border-radius: 9999px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.task-detail-back-btn:hover {
+    background: #f1f5f9;
+}
+
+.task-detail-header-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.task-title {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: #111827;
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.task-status-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 8px;
+    flex-shrink: 0;
+}
+
+.task-status-indicator.pending {
+    background: #f59e0b;
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.3);
+    animation: pulse-indicator 2s infinite;
+}
+
+.task-status-indicator.active {
+    background: #3b82f6;
+}
+
+.task-status-indicator.completed {
+    background: #10b981;
+}
+
+@keyframes pulse-indicator {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Body - Content Area
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.task-detail-body {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 16px;
+    padding-bottom: 160px;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Status Block */
+.task-status-block {
+    background: #f8fafc;
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 24px;
+    border: 1px solid #e5e7eb;
+}
+
+.task-status-block-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 8px;
+}
+
+.task-status-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+.task-deadline {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #64748b;
+    background: #ffffff;
+    padding: 6px 12px;
+    border-radius: 8px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.task-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-top: 4px;
+}
+
+.task-status.pending {
+    background: #fff7ed;
+    color: #9a3412;
+}
+
+.task-status.active {
+    background: #eff6ff;
+    color: #1d4ed8;
+}
+
+.task-status.completed {
+    background: #ecfdf5;
+    color: #065f46;
+}
+
+/* Description */
+.task-section {
+    margin-bottom: 32px;
+}
+
+.task-section-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #111827;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.task-description {
+    background: #f8fafc;
+    border-radius: 12px;
+    padding: 16px;
+    font-size: 0.9rem;
+    color: #334155;
+    line-height: 1.6;
+    white-space: pre-wrap;
+}
+
+/* Link */
+.task-link {
+    display: block;
+    width: 100%;
+    padding: 16px;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 12px;
+    color: #1d4ed8;
+    font-weight: 600;
+    text-align: center;
+    text-decoration: none;
+    transition: all 0.2s;
+}
+
+.task-link:active {
+    transform: scale(0.98);
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Timeline / Notes
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.task-notes {
+    margin-top: 24px;
+}
+
+.task-notes-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.task-notes-empty {
+    font-size: 0.8rem;
+    color: #94a3b8;
+    font-style: italic;
+}
+
+.task-note-item {
+    background: #f8fafc;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid #e5e7eb;
+}
+
+.task-note-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.task-note-author {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #475569;
+}
+
+.task-note-date {
+    font-size: 0.65rem;
+    color: #94a3b8;
+}
+
+.task-note-content {
+    font-size: 0.875rem;
+    color: #64748b;
+    line-height: 1.4;
+}
+
+/* Note Input */
+.task-note-form {
+    position: relative;
+}
+
+.task-note-input {
+    width: 100%;
+    padding: 12px 48px 12px 16px;
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    font-size: 0.875rem;
+    transition: all 0.2s;
+}
+
+.task-note-input:focus {
+    outline: none;
+    border-color: #111827;
+    background: #ffffff;
+    box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.05);
+}
+
+.task-note-submit {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 6px;
+    background: #111827;
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.task-note-submit:disabled {
+    opacity: 0.3;
+    background: #d1d5db;
+    cursor: not-allowed;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Actions - Executive Controls
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.task-actions {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 16px;
+    padding-bottom: 32px;
+    background: #ffffff;
+    border-top: 1px solid #f1f5f9;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.05);
+}
+
+.task-actions-inner {
+    max-width: 512px;
+    margin: 0 auto;
+    display: flex;
+    gap: 12px;
+}
+
+.task-btn-primary {
+    flex: 2;
+    padding: 16px;
+    background: #111827;
+    color: #ffffff;
+    border: none;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    box-shadow: 0 4px 12px rgba(17, 24, 39, 0.15);
+}
+
+.task-btn-primary:active {
+    transform: scale(0.98);
+}
+
+.task-btn-secondary {
+    flex: 1;
+    padding: 16px;
+    background: #f1f5f9;
+    color: #111827;
+    border: none;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.task-btn-secondary:active {
+    transform: scale(0.98);
+}
+
+.task-btn-reopen {
+    width: 100%;
+    padding: 16px;
+    background: #f1f5f9;
+    color: #64748b;
+    border: none;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.task-btn-reopen:active {
+    transform: scale(0.98);
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Mobile Adjustments
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+@media (max-width: 480px) {
+    .task-actions-inner {
+        flex-direction: column;
+    }
+
+    .task-btn-primary,
+    .task-btn-secondary {
+        flex: 1;
+    }
+}

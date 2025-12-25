@@ -16,6 +16,7 @@ import { toast } from 'sonner'
 import { useAuth } from '../../contexts/AuthContext'
 import { useRefresh } from '../../contexts/RefreshContext'
 import '../../styles/staff-tasks.css'
+import '../../styles/task-detail.css'
 
 export default function StaffTasks() {
     const { user } = useAuth()
@@ -324,45 +325,45 @@ function ExecutionView({ task, onBack, onUpdateStatus, user }) {
         }
     }
 
+    const statusClass = isCompleted ? 'completed' : task.status === 'em_progresso' ? 'active' : 'pending'
+    const statusText = isCompleted ? 'Concluída' : task.status === 'em_progresso' ? 'Em Andamento' : 'Pendente'
+
     return (
-        <div className="fixed inset-0 bg-white z-50 flex flex-col animate-in slide-in-from-right duration-300">
+        <div className="task-detail-container">
             {/* Header */}
-            <div className="h-16 px-4 flex items-center gap-3 border-b border-gray-100 bg-white/80 backdrop-blur-md sticky top-0 z-10">
-                <button onClick={onBack} className="p-2 -ml-2 text-gray-600 hover:bg-gray-100 rounded-full">
+            <div className="task-detail-header">
+                <button onClick={onBack} className="task-detail-back-btn">
                     <ArrowLeft size={24} />
                 </button>
-                <div className="flex-1 min-w-0">
-                    <h2 className="font-bold text-gray-900 truncate text-lg leading-tight">{task.titulo}</h2>
+                <div className="task-detail-header-content">
+                    <h2 className="task-title">{task.titulo}</h2>
                 </div>
-                <div className={`
-                    w-3 h-3 rounded-full mr-2
-                    ${isCompleted ? 'bg-green-500' : task.status === 'em_progresso' ? 'bg-blue-500' : 'bg-orange-500 shadow-orange-200 shadow-md animate-pulse'}
-                `}></div>
+                <div className={`task-status-indicator ${statusClass}`}></div>
             </div>
 
             {/* Body */}
-            <div className="flex-1 overflow-y-auto p-4 pb-32">
+            <div className="task-detail-body">
                 {/* Status Card */}
-                <div className="bg-gray-50 rounded-xl p-4 mb-6 border border-gray-100">
-                    <div className="flex justify-between items-start mb-2">
-                        <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Status Atual</span>
+                <div className="task-status-block">
+                    <div className="task-status-block-header">
+                        <span className="task-status-label">Status Atual</span>
                         {task.deadline && (
-                            <span className="text-xs font-medium text-gray-500 bg-white px-2 py-1 rounded shadow-sm">
+                            <span className="task-deadline">
                                 Prazo: {new Date(task.deadline).toLocaleDateString('pt-BR')}
                             </span>
                         )}
                     </div>
-                    <div className="text-lg font-medium text-gray-900">
-                        {isCompleted ? 'Concluída' : task.status === 'em_progresso' ? 'Em Andamento' : 'Pendente'}
+                    <div className={`task-status ${statusClass}`}>
+                        {statusText}
                     </div>
                 </div>
 
                 {/* Description */}
-                <div className="mb-8">
-                    <h3 className="text-sm font-bold text-gray-900 mb-2">Descrição</h3>
-                    <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap">
+                <div className="task-section">
+                    <h3 className="task-section-title">Descrição</h3>
+                    <div className="task-description">
                         {task.descricao || 'Sem descrição.'}
-                    </p>
+                    </div>
                 </div>
 
                 {/* Link */}
@@ -371,43 +372,43 @@ function ExecutionView({ task, onBack, onUpdateStatus, user }) {
                         href={task.drive_link}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="block w-full p-4 bg-blue-50 border border-blue-100 rounded-xl text-blue-700 font-medium text-center mb-8 active:scale-[0.98] transition-transform"
+                        className="task-link"
                     >
                         Abrir Arquivos Anexos
                     </a>
                 )}
 
                 {/* Timeline / Comments */}
-                <div>
-                    <h3 className="text-sm font-bold text-gray-900 mb-4">Atividade & Notas</h3>
-                    <div className="space-y-4 mb-4">
+                <div className="task-notes">
+                    <h3 className="task-section-title">Atividade & Notas</h3>
+                    <div className="task-notes-list">
                         {timeline.length === 0 ? (
-                            <p className="text-gray-400 text-xs italic">Nenhuma nota ainda.</p>
+                            <p className="task-notes-empty">Nenhuma nota ainda.</p>
                         ) : (
                             timeline.map(item => (
-                                <div key={item.id} className="bg-gray-50 p-3 rounded-lg border border-gray-100">
-                                    <div className="flex justify-between items-center mb-1">
-                                        <span className="text-xs font-bold text-gray-700">{item.profissionais?.nome || 'Usuário'}</span>
-                                        <span className="text-[10px] text-gray-400">{new Date(item.created_at).toLocaleDateString()}</span>
+                                <div key={item.id} className="task-note-item">
+                                    <div className="task-note-header">
+                                        <span className="task-note-author">{item.profissionais?.nome || 'Usuário'}</span>
+                                        <span className="task-note-date">{new Date(item.created_at).toLocaleDateString()}</span>
                                     </div>
-                                    <p className="text-sm text-gray-600">{item.content}</p>
+                                    <p className="task-note-content">{item.content}</p>
                                 </div>
                             ))
                         )}
                     </div>
 
-                    <form onSubmit={sendComment} className="relative">
+                    <form onSubmit={sendComment} className="task-note-form">
                         <input
                             type="text"
                             placeholder="Adicionar nota rápida..."
-                            className="w-full pl-4 pr-12 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                            className="task-note-input"
                             value={comment}
                             onChange={e => setComment(e.target.value)}
                         />
                         <button
                             type="submit"
                             disabled={!comment.trim()}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-gray-900 text-white rounded-lg disabled:opacity-50 disabled:bg-gray-300"
+                            className="task-note-submit"
                         >
                             <Send size={14} />
                         </button>
@@ -415,22 +416,22 @@ function ExecutionView({ task, onBack, onUpdateStatus, user }) {
                 </div>
             </div>
 
-            {/* Footer / Thumb Zone Actions */}
-            <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-100 pb-8 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
-                <div className="max-w-lg mx-auto flex gap-3">
+            {/* Footer / Actions */}
+            <div className="task-actions">
+                <div className="task-actions-inner">
                     {!isCompleted ? (
                         <>
                             {task.status === 'pendente' && (
                                 <button
                                     onClick={() => onUpdateStatus(task.id, 'em_progresso')}
-                                    className="flex-1 py-4 bg-gray-100 text-gray-900 font-bold rounded-xl active:scale-[0.98] transition-transform"
+                                    className="task-btn-secondary"
                                 >
                                     Iniciar
                                 </button>
                             )}
                             <button
                                 onClick={() => onUpdateStatus(task.id, 'concluida')}
-                                className="flex-[2] py-4 bg-gray-900 text-white font-bold rounded-xl shadow-lg shadow-gray-200 active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
+                                className="task-btn-primary"
                             >
                                 <CheckCircle2 size={20} />
                                 Concluir Tarefa
@@ -439,7 +440,7 @@ function ExecutionView({ task, onBack, onUpdateStatus, user }) {
                     ) : (
                         <button
                             onClick={() => onUpdateStatus(task.id, 'em_progresso')}
-                            className="w-full py-4 bg-gray-100 text-gray-600 font-bold rounded-xl active:scale-[0.98] transition-transform"
+                            className="task-btn-reopen"
                         >
                             Reabrir Tarefa
                         </button>
