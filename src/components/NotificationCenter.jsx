@@ -34,7 +34,7 @@ function NotificationCenter() {
     const [isIOSPWAMode] = useState(isIOSPWA())
 
     useEffect(() => {
-        console.log('[NotificationCenter] useEffect triggered, professionalId:', professionalId)
+
 
         if (professionalId) {
             fetchNotifications()
@@ -42,7 +42,7 @@ function NotificationCenter() {
 
             // Subscribe to real-time notifications with unique channel name
             const channelName = `notifications:${professionalId}`
-            console.log('[NotificationCenter] Creating realtime channel:', channelName)
+
 
             const channel = supabase
                 .channel(channelName)
@@ -52,16 +52,16 @@ function NotificationCenter() {
                     table: 'notifications',
                     filter: `profissional_id=eq.${professionalId}`
                 }, (payload) => {
-                    console.log('[NotificationCenter] ✅ Realtime event received!', payload)
+
                     handleNewNotification(payload)
                 })
                 .subscribe((status, err) => {
-                    console.log('[NotificationCenter] Subscription status:', status)
+
                     if (err) {
                         console.error('[NotificationCenter] Realtime subscription error:', err)
                     }
                     if (status === 'SUBSCRIBED') {
-                        console.log('[NotificationCenter] ✅ Successfully subscribed to realtime!')
+
                     }
                     if (status === 'CHANNEL_ERROR') {
                         console.error('[NotificationCenter] ❌ Channel error - realtime may not be enabled')
@@ -72,7 +72,7 @@ function NotificationCenter() {
                 })
 
             return () => {
-                console.log('[NotificationCenter] Cleaning up channel:', channelName)
+
                 supabase.removeChannel(channel)
             }
         }
@@ -185,7 +185,7 @@ function NotificationCenter() {
     }
 
     function handleNewNotification(payload) {
-        console.log('[NotificationCenter] handleNewNotification called with payload:', payload)
+
         const notification = payload.new
 
 

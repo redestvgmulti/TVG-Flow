@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from '../../services/supabase'
 import {
     Search,
@@ -11,14 +12,16 @@ import {
     ChevronRight,
     X,
     Filter,
-    Lock
+    Lock,
+    FileText,
+    ExternalLink
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '../../contexts/AuthContext'
 import { useRefresh } from '../../contexts/RefreshContext'
 import ReturnReasonModal from '../../components/ReturnReasonModal'
 import '../../styles/staff-tasks.css'
-import '../../styles/task-detail.css'
+import '../../styles/task-details.css'
 
 export default function StaffTasks() {
     const { user } = useAuth()
@@ -53,7 +56,7 @@ export default function StaffTasks() {
                 return
             }
 
-            console.log('Fetching tasks for user ID:', user.id)
+
 
             // HYBRID QUERY: Fetch micro tasks + legacy tasks
 
@@ -64,7 +67,7 @@ export default function StaffTasks() {
                 .eq('profissional_id', user.id)
                 .order('created_at', { ascending: false })
 
-            console.log('Micro tasks query result:', { microTasks, microError })
+
 
             if (microError) {
                 console.error('Error fetching micro tasks:', microError)
@@ -72,14 +75,14 @@ export default function StaffTasks() {
 
             // Fetch macro tasks for the micro tasks
             const macroTaskIds = [...new Set(microTasks?.map(mt => mt.tarefa_id) || [])]
-            console.log('Fetching macro tasks for IDs:', macroTaskIds)
+
 
             const { data: macroTasks, error: macroError } = await supabase
                 .from('tarefas')
                 .select('id, titulo, descricao, deadline, prioridade')
                 .in('id', macroTaskIds)
 
-            console.log('Macro tasks query result:', { macroTasks, macroError })
+
 
             if (macroError) {
                 console.error('Error fetching macro tasks:', macroError)
@@ -105,11 +108,10 @@ export default function StaffTasks() {
 
             // Add micro tasks (with special flag)
             if (microTasks) {
-                console.log('Raw micro tasks data:', microTasks)
-                console.log('Macro tasks map:', macroTaskMap)
+
                 microTasks.forEach(mt => {
                     const macroTask = macroTaskMap.get(mt.tarefa_id)
-                    console.log('Micro task:', mt.id, 'macro task:', macroTask)
+
                     allTasks.push({
                         ...mt,
                         // Normalize structure for compatibility
@@ -133,9 +135,7 @@ export default function StaffTasks() {
                 // Filter out macro tasks that have micro tasks
                 const macroTaskIds = new Set(microTasks?.map(mt => mt.tarefa_id) || [])
 
-                console.log('Micro tasks fetched:', microTasks?.length || 0)
-                console.log('Legacy tasks fetched:', legacyTasks?.length || 0)
-                console.log('Macro task IDs to filter:', Array.from(macroTaskIds))
+
 
                 legacyTasks.forEach(task => {
                     if (!macroTaskIds.has(task.id)) {
@@ -144,12 +144,12 @@ export default function StaffTasks() {
                             is_micro_task: false // Flag for UI
                         })
                     } else {
-                        console.log('Filtered out macro task:', task.id, task.titulo)
+
                     }
                 })
             }
 
-            console.log('Total tasks after merge:', allTasks.length)
+
             setTasks(allTasks)
         } catch (error) {
             console.error('Error in fetchTasks:', error)
@@ -494,6 +494,7 @@ function ExecutionView({ task, onBack, onUpdateStatus, user }) {
 
         try {
             setLoadingProfessionals(true)
+
             const { data, error } = await supabase
                 .from('tarefas_micro')
                 .select(`
@@ -505,6 +506,8 @@ function ExecutionView({ task, onBack, onUpdateStatus, user }) {
                     )
                 `)
                 .eq('tarefa_id', task.tarefa_id)
+                .neq('profissional_id', user.id)
+
 
             if (error) throw error
             setProfessionals(data || [])
@@ -545,175 +548,187 @@ function ExecutionView({ task, onBack, onUpdateStatus, user }) {
     const statusClass = isCompleted ? 'completed' : task.status === 'em_progresso' ? 'active' : 'pending'
     const statusText = isCompleted ? 'Concluída' : task.status === 'em_progresso' ? 'Em Andamento' : 'Pendente'
 
-    return (
-        <div className="task-detail-container">
-            {/* Header */}
-            <div className="task-detail-header">
-                <button onClick={onBack} className="task-detail-back-btn">
-                    <ArrowLeft size={24} />
-                </button>
-                <div className="task-detail-header-content">
-                    <h2 className="task-title">{task.titulo}</h2>
+    return createPortal(
+        <div className="task-detail-overlay" onClick={(e) => { if (e.target === e.currentTarget) onBack() }}>
+            <div className="task-detail-modal">
+                {/* Header */}
+                <div className="task-detail-header">
+                    <button onClick={onBack} className="task-detail-back-btn">
+                        <ArrowLeft size={20} />
+                    </button>
+                    <div className="task-detail-header-content">
+                        <div className="task-title-wrapper">
+                            <FileText size={18} className="task-title-icon" />
+                            <h2 className="task-title">{task.titulo}</h2>
+                        </div>
+                    </div>
                 </div>
-                <div className={`task-status-indicator ${statusClass}`}></div>
-            </div>
 
-            {/* Body */}
-            <div className="task-detail-body">
-                {/* Status Card */}
-                <div className="task-status-block">
-                    <div className="task-status-block-header">
-                        <span className="task-status-label">Status Atual</span>
+                {/* Body */}
+                <div className="task-detail-body">
+                    {/* Summary Card */}
+                    <div className="task-summary-card">
+                        <div className={`task-status-badge ${statusClass}`}>
+                            {statusText}
+                        </div>
                         {task.deadline && (
-                            <span className="task-deadline">
-                                Prazo: {new Date(task.deadline).toLocaleDateString('pt-BR')}
-                            </span>
+                            <div className="task-deadline-wrapper">
+                                <span className="task-deadline-label">Prazo:</span>
+                                <span className="task-deadline-value">
+                                    {new Date(task.deadline).toLocaleString('pt-BR', {
+                                        day: '2-digit',
+                                        month: '2-digit',
+                                        year: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                    })}
+                                </span>
+                            </div>
                         )}
                     </div>
-                    <div className={`task-status ${statusClass}`}>
-                        {statusText}
-                    </div>
-                </div>
 
-                {/* Description */}
-                <div className="task-section">
-                    <h3 className="task-section-title">Descrição</h3>
-                    <div className="task-description">
-                        {task.descricao || 'Sem descrição.'}
-                    </div>
-                </div>
-
-                {/* Link */}
-                {task.drive_link && (
-                    <a
-                        href={task.drive_link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="task-link"
-                    >
-                        Abrir Arquivos Anexos
-                    </a>
-                )}
-
-                {/* Add/Edit Drive Link */}
-                {!isCompleted && (
+                    {/* Description */}
                     <div className="task-section">
-                        <h3 className="task-section-title">Link para Arquivos</h3>
-                        <input
-                            type="url"
-                            placeholder="Cole o link do Google Drive, Dropbox, etc..."
-                            className="task-note-input"
-                            defaultValue={task.drive_link || ''}
-                            onBlur={async (e) => {
-                                const newLink = e.target.value.trim()
-                                if (newLink === task.drive_link) return
-
-                                try {
-                                    const tableName = task.is_micro_task ? 'tarefas_micro' : 'tarefas'
-                                    const { error } = await supabase
-                                        .from(tableName)
-                                        .update({ drive_link: newLink || null })
-                                        .eq('id', task.id)
-
-                                    if (error) throw error
-                                    toast.success('Link atualizado!')
-                                } catch (error) {
-                                    console.error('Error updating link:', error)
-                                    toast.error('Erro ao atualizar link')
-                                }
-                            }}
-                        />
+                        <h3 className="task-section-title">Descrição</h3>
+                        <div className="task-description">
+                            {task.descricao || 'Sem descrição.'}
+                        </div>
                     </div>
-                )}
 
-                {/* Timeline / Comments */}
-                <div className="task-notes">
-                    <h3 className="task-section-title">Atividade & Notas</h3>
-                    <div className="task-notes-list">
-                        {timeline.length === 0 ? (
-                            <p className="task-notes-empty">Nenhuma nota ainda.</p>
-                        ) : (
-                            timeline.map(item => (
-                                <div key={item.id} className="task-note-item">
-                                    <div className="task-note-header">
-                                        <span className="task-note-author">{item.profissionais?.nome || 'Usuário'}</span>
-                                        <span className="task-note-date">{new Date(item.created_at).toLocaleDateString()}</span>
+                    {/* Link */}
+                    {task.drive_link && (
+                        <a
+                            href={task.drive_link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="task-link-button"
+                        >
+                            <ExternalLink size={18} />
+                            <span>Abrir Arquivos Anexos</span>
+                        </a>
+                    )}
+
+                    {/* Add/Edit Drive Link */}
+                    {!isCompleted && (
+                        <div className="task-section">
+                            <h3 className="task-section-title">Link para Arquivos</h3>
+                            <input
+                                type="url"
+                                placeholder="Cole o link do Google Drive, Dropbox, etc..."
+                                className="task-note-input"
+                                defaultValue={task.drive_link || ''}
+                                onBlur={async (e) => {
+                                    const newLink = e.target.value.trim()
+                                    if (newLink === task.drive_link) return
+
+                                    try {
+                                        const tableName = task.is_micro_task ? 'tarefas_micro' : 'tarefas'
+                                        const { error } = await supabase
+                                            .from(tableName)
+                                            .update({ drive_link: newLink || null })
+                                            .eq('id', task.id)
+
+                                        if (error) throw error
+                                        toast.success('Link atualizado!')
+                                    } catch (error) {
+                                        console.error('Error updating link:', error)
+                                        toast.error('Erro ao atualizar link')
+                                    }
+                                }}
+                            />
+                        </div>
+                    )}
+
+                    {/* Timeline / Comments */}
+                    <div className="task-notes">
+                        <h3 className="task-section-title">Atividade & Notas</h3>
+                        <div className="task-notes-list">
+                            {timeline.length === 0 ? (
+                                <p className="task-notes-empty">Nenhuma nota ainda.</p>
+                            ) : (
+                                timeline.map(item => (
+                                    <div key={item.id} className="task-note-item">
+                                        <div className="task-note-header">
+                                            <span className="task-note-author">{item.profissionais?.nome || 'Usuário'}</span>
+                                            <span className="task-note-date">{new Date(item.created_at).toLocaleDateString()}</span>
+                                        </div>
+                                        <p className="task-note-content">{item.content}</p>
                                     </div>
-                                    <p className="task-note-content">{item.content}</p>
-                                </div>
-                            ))
+                                ))
+                            )}
+                        </div>
+
+                        <form onSubmit={sendComment} className="task-note-form">
+                            <input
+                                type="text"
+                                placeholder="Adicionar nota rápida..."
+                                className="task-note-input"
+                                value={comment}
+                                onChange={e => setComment(e.target.value)}
+                            />
+                            <button
+                                type="submit"
+                                disabled={!comment.trim()}
+                                className="task-note-submit"
+                            >
+                                <Send size={14} />
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                {/* Footer / Actions */}
+                <div className="task-actions">
+                    <div className="task-actions-inner">
+                        {!isCompleted ? (
+                            <>
+                                {task.status === 'pendente' && (
+                                    <button
+                                        onClick={() => onUpdateStatus(task.id, 'em_progresso')}
+                                        className="task-btn-secondary"
+                                    >
+                                        Iniciar
+                                    </button>
+                                )}
+                                {task.is_micro_task && task.status !== 'bloqueada' && (
+                                    <button
+                                        onClick={openReturnModal}
+                                        className="task-btn-secondary"
+                                        disabled={loadingProfessionals}
+                                    >
+                                        Solicitar Ajuste
+                                    </button>
+                                )}
+                                <button
+                                    onClick={() => onUpdateStatus(task.id, 'concluida')}
+                                    className="task-btn-primary"
+                                >
+                                    <CheckCircle2 size={20} />
+                                    Concluir Tarefa
+                                </button>
+                            </>
+                        ) : (
+                            <button
+                                onClick={() => onUpdateStatus(task.id, 'em_progresso')}
+                                className="task-btn-reopen"
+                            >
+                                Reabrir Tarefa
+                            </button>
                         )}
                     </div>
-
-                    <form onSubmit={sendComment} className="task-note-form">
-                        <input
-                            type="text"
-                            placeholder="Adicionar nota rápida..."
-                            className="task-note-input"
-                            value={comment}
-                            onChange={e => setComment(e.target.value)}
-                        />
-                        <button
-                            type="submit"
-                            disabled={!comment.trim()}
-                            className="task-note-submit"
-                        >
-                            <Send size={14} />
-                        </button>
-                    </form>
                 </div>
-            </div>
 
-            {/* Footer / Actions */}
-            <div className="task-actions">
-                <div className="task-actions-inner">
-                    {!isCompleted ? (
-                        <>
-                            {task.status === 'pendente' && (
-                                <button
-                                    onClick={() => onUpdateStatus(task.id, 'em_progresso')}
-                                    className="task-btn-secondary"
-                                >
-                                    Iniciar
-                                </button>
-                            )}
-                            {task.is_micro_task && task.status !== 'bloqueada' && (
-                                <button
-                                    onClick={openReturnModal}
-                                    className="task-btn-secondary"
-                                    disabled={loadingProfessionals}
-                                >
-                                    Solicitar Ajuste
-                                </button>
-                            )}
-                            <button
-                                onClick={() => onUpdateStatus(task.id, 'concluida')}
-                                className="task-btn-primary"
-                            >
-                                <CheckCircle2 size={20} />
-                                Concluir Tarefa
-                            </button>
-                        </>
-                    ) : (
-                        <button
-                            onClick={() => onUpdateStatus(task.id, 'em_progresso')}
-                            className="task-btn-reopen"
-                        >
-                            Reabrir Tarefa
-                        </button>
-                    )}
-                </div>
+                {/* Return Modal */}
+                {showReturnModal && task.is_micro_task && (
+                    <ReturnReasonModal
+                        microTask={task}
+                        professionals={professionals}
+                        onClose={() => setShowReturnModal(false)}
+                        onSubmit={handleReturnTask}
+                    />
+                )}
             </div>
-
-            {/* Return Modal */}
-            {showReturnModal && task.is_micro_task && (
-                <ReturnReasonModal
-                    microTask={task}
-                    professionals={professionals}
-                    onClose={() => setShowReturnModal(false)}
-                    onSubmit={handleReturnTask}
-                />
-            )}
-        </div>
+        </div>,
+        document.body
     )
 }
