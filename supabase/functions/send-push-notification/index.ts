@@ -1,6 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import webpush from 'https://esm.sh/web-push@3.6.6'
+import { createClient } from '@supabase/supabase-js'
+import webpush from 'web-push'
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -25,18 +25,36 @@ serve(async (req: Request) => {
     }
 
     try {
+        console.log(`[Push] Incomming request: ${req.method}`)
+
         // Get notification data from request
-        const { notificationId } = await req.json() as NotificationPayload
+        let body
+        try {
+            body = await req.json()
+        } catch (e) {
+            console.error('[Push] Failed to parse JSON body', e)
+            return new Response(JSON.stringify({ error: 'Invalid JSON body' }), { status: 400, headers: corsHeaders })
+        }
+
+        const notificationId = body.notificationId || (body.record && body.record.id) || (body.payload && body.payload.record && body.payload.record.id)
+
+        console.log(`[Push] Processing notificationId: ${notificationId}`)
 
         if (!notificationId) {
-            throw new Error('notificationId is required')
+            console.error('[Push] Missing notificationId in payload', body)
+            return new Response(JSON.stringify({ error: 'notificationId is required' }), { status: 400, headers: corsHeaders })
         }
 
         // Create Supabase client with service role
-        const supabaseAdmin = createClient(
-            Deno.env.get('SUPABASE_URL') ?? '',
-            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-        )
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')
+        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+
+        if (!supabaseUrl || !supabaseKey) {
+            console.error('[Push] Missing Supabase env vars')
+            throw new Error('Server configuration error: Missing Supabase credentials')
+        }
+
+        const supabaseAdmin = createClient(supabaseUrl, supabaseKey)
 
         // Fetch notification details
         const { data: notification, error: notifError } = await supabaseAdmin
@@ -46,8 +64,12 @@ serve(async (req: Request) => {
             .single()
 
         if (notifError || !notification) {
-            throw new Error('Notification not found')
+            console.error('[Push] Notification not found or db error', notifError)
+            // Return 200 to stop retries if it's just not found
+            return new Response(JSON.stringify({ error: 'Notification not found' }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
         }
+
+        console.log(`[Push] Found notification for user: ${notification.profissional_id}`)
 
         // Fetch user's push subscriptions
         const { data: subscriptions, error: subError } = await supabaseAdmin
@@ -56,30 +78,39 @@ serve(async (req: Request) => {
             .eq('profissional_id', notification.profissional_id)
 
         if (subError) {
-            throw new Error('Error fetching subscriptions')
+            console.error('[Push] Error fetching subscriptions', subError)
+            throw new Error('Database error fetching subscriptions')
         }
 
         if (!subscriptions || subscriptions.length === 0) {
-            console.log('No subscriptions found for user')
+            console.log('[Push] No subscriptions found for user')
             return new Response(
-                JSON.stringify({ success: true, message: 'No subscriptions' }),
+                JSON.stringify({ success: true, message: 'No subscriptions active' }),
                 { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             )
         }
+
+        console.log(`[Push] Found ${subscriptions.length} subscriptions`)
 
         // VAPID keys
         const vapidPublicKey = Deno.env.get('VAPID_PUBLIC_KEY')
         const vapidPrivateKey = Deno.env.get('VAPID_PRIVATE_KEY')
 
         if (!vapidPublicKey || !vapidPrivateKey) {
-            throw new Error('VAPID keys not configured')
+            console.error('[Push] Missing VAPID keys')
+            throw new Error('Server configuration error: Missing VAPID keys')
         }
 
-        webpush.setVapidDetails(
-            'mailto:contato@tvgflow.com',
-            vapidPublicKey,
-            vapidPrivateKey
-        )
+        try {
+            webpush.setVapidDetails(
+                'mailto:contato@tvgflow.com',
+                vapidPublicKey,
+                vapidPrivateKey
+            )
+        } catch (vapidError) {
+            console.error('[Push] Failed to set VAPID details', vapidError)
+            throw new Error('VAPID configuration failed')
+        }
 
         // Send push to all subscriptions
         const pushPromises = (subscriptions as PushSubscription[]).map(async (sub) => {
@@ -98,15 +129,17 @@ serve(async (req: Request) => {
                     icon: '/icon-192x192.png',
                     badge: '/badge-72x72.png',
                     timestamp: Date.now(),
+                    url: '/staff/tasks' // Action URL
                 })
 
                 await webpush.sendNotification(pushSubscription, payload)
                 return { success: true, endpoint: sub.endpoint }
             } catch (error: any) {
-                console.error('Push failed for subscription:', error)
+                console.error('[Push] Send failed for sub:', sub.id, error)
 
                 // If subscription is invalid (410 Gone or 404 Not Found), delete it
                 if (error.statusCode === 410 || error.statusCode === 404) {
+                    console.log('[Push] Removing invalid subscription:', sub.id)
                     await supabaseAdmin
                         .from('push_subscriptions')
                         .delete()
@@ -119,6 +152,7 @@ serve(async (req: Request) => {
 
         const results = await Promise.all(pushPromises)
         const successCount = results.filter(r => r.success).length
+        console.log(`[Push] Sent ${successCount}/${results.length} notifications`)
 
         return new Response(
             JSON.stringify({
@@ -132,11 +166,11 @@ serve(async (req: Request) => {
             }
         )
     } catch (error: any) {
-        console.error('Error:', error)
+        console.error('[Push] Unhandled error:', error)
         return new Response(
-            JSON.stringify({ error: error.message || 'Internal Server Error' }),
+            JSON.stringify({ error: error.message || 'Internal Server Error', stack: error.stack }),
             {
-                status: 400,
+                status: 500, // Still return 500 for unhandled, but now with JSON body
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             }
         )
