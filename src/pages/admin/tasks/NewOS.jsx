@@ -1,32 +1,33 @@
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import TaskForm from '../../../components/forms/TaskForm'
+import '../../../styles/admin-forms.css'
 
 export default function NewOS() {
     const navigate = useNavigate()
 
     return (
-        <div className="max-w-3xl mx-auto space-y-8 fade-in p-6 md:p-0">
+        <div className="admin-page-container">
             {/* Header */}
-            <div className="page-header-premium">
+            <div className="admin-page-header">
                 <button
                     onClick={() => navigate('/admin')}
-                    className="btn btn-ghost p-2 -ml-2 text-slate-500 hover:text-slate-800"
+                    className="admin-back-btn"
                     title="Voltar"
                 >
                     <ArrowLeft size={24} strokeWidth={2} />
                 </button>
-                <div className="pt-1">
-                    <h2 className="page-title">
+                <div className="admin-page-title-group">
+                    <h2 className="admin-page-title">
                         Nova Ordem de Serviço
                     </h2>
-                    <p className="page-subtitle">
+                    <p className="admin-page-subtitle">
                         Preencha os dados e definições da demanda
                     </p>
                 </div>
             </div>
 
-            <div className="card-premium-decision">
+            <div className="card-premium">
                 <TaskForm
                     onSuccess={(result) => {
                         // Optional: Navigate to detail of first created task if possible, 
