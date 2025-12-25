@@ -1,0 +1,261 @@
+/* Staff Tasks Page - CityOS Mobile First */
+
+.staff-tasks-page {
+    padding: 16px;
+    max-width: 100%;
+    padding-bottom: 100px;
+    /* Space for bottom nav */
+}
+
+/* Header */
+.staff-tasks-header {
+    margin-bottom: 24px;
+}
+
+.staff-tasks-header h1 {
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin-bottom: 4px;
+}
+
+.staff-tasks-header p {
+    font-family: var(--font-body);
+    font-size: 0.875rem;
+    color: var(--color-text-secondary);
+}
+
+/* Search */
+.staff-tasks-search {
+    margin-bottom: 24px;
+    position: relative;
+}
+
+.staff-tasks-search input {
+    width: 100%;
+    height: 48px;
+    border-radius: 12px;
+    padding: 0 16px 0 44px;
+    background-color: var(--color-bg-surface);
+    border: 1px solid var(--color-border);
+    font-size: 0.875rem;
+    color: var(--color-text-primary);
+    transition: all 0.2s ease;
+    box-shadow: var(--shadow-soft);
+}
+
+.staff-tasks-search input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-light);
+}
+
+.staff-tasks-search-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--color-text-tertiary);
+    pointer-events: none;
+}
+
+.staff-tasks-clear-btn {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--color-text-tertiary);
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Filters */
+.staff-task-filters {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 12px;
+    padding-left: 4px;
+    /* Adjust for shadow clipping */
+    margin-bottom: 16px;
+    scrollbar-width: none;
+    /* Hide scrollbar Firefox */
+    -ms-overflow-style: none;
+    /* Hide scrollbar IE/Edge */
+}
+
+.staff-task-filters::-webkit-scrollbar {
+    display: none;
+    /* Hide scrollbar Chrome/Safari */
+}
+
+.staff-task-filter {
+    flex-shrink: 0;
+    padding: 8px 16px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    border: 1px solid var(--color-border);
+    background-color: var(--color-bg-surface);
+    color: var(--color-text-secondary);
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.staff-task-filter.active {
+    background-color: var(--color-primary);
+    color: white;
+    border-color: var(--color-primary);
+    box-shadow: var(--shadow-soft);
+}
+
+.staff-task-filter-separator {
+    width: 1px;
+    height: 24px;
+    background-color: var(--color-border);
+    margin: 0 4px;
+    flex-shrink: 0;
+    align-self: center;
+}
+
+/* Task List */
+.staff-tasks-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.staff-tasks-empty {
+    text-align: center;
+    padding: 48px 24px;
+    color: var(--color-text-tertiary);
+}
+
+/* Task Card */
+.staff-task-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px;
+    border-radius: 16px;
+    background: var(--color-bg-surface);
+    border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-soft);
+    /* Using token soft shadow */
+    transition: transform 0.1s ease, box-shadow 0.2s ease;
+    text-align: left;
+    width: 100%;
+    cursor: pointer;
+}
+
+.staff-task-card:active {
+    transform: scale(0.98);
+}
+
+.staff-task-content {
+    flex: 1;
+    min-width: 0;
+    /* Prevent flex text overflow */
+    margin-right: 12px;
+}
+
+.staff-task-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.staff-task-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.staff-task-status-text {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-secondary);
+}
+
+.staff-task-title {
+    font-family: var(--font-display);
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin-bottom: 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.staff-task-meta {
+    font-size: 0.75rem;
+    color: var(--color-text-tertiary);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.staff-task-meta-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.staff-task-action {
+    color: var(--color-text-tertiary);
+}
+
+/* Status variants */
+.status-completed {
+    background-color: var(--color-success);
+}
+
+.status-in-progress {
+    background-color: var(--color-primary);
+}
+
+.status-pending {
+    background-color: var(--color-warning);
+}
+
+/* Overdue State */
+.staff-task-card.overdue {
+    background-color: #FEF2F2;
+    /* Red 50 */
+    border-color: #FECACA;
+    /* Red 200 */
+}
+
+.staff-task-badge-overdue {
+    color: var(--color-danger);
+    font-weight: 700;
+    font-size: 0.7rem;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Priority */
+.staff-task-priority-urgent {
+    color: var(--color-danger);
+    font-weight: 600;
+}
+
+/* Desktop Handling */
+@media (min-width: 768px) {
+    .staff-tasks-page {
+        padding: 0;
+        /* Let main app layout handle padding */
+        max-width: 800px;
+        margin: 0 auto;
+        padding-bottom: 0;
+    }
+}

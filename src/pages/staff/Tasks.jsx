@@ -15,6 +15,7 @@ import {
 import { toast } from 'sonner'
 import { useAuth } from '../../contexts/AuthContext'
 import { useRefresh } from '../../contexts/RefreshContext'
+import '../../styles/staff-tasks.css'
 
 export default function StaffTasks() {
     const { user } = useAuth()
@@ -152,80 +153,72 @@ export default function StaffTasks() {
 
     // MODE: LIST VIEW
     return (
-        <div className="pb-24 px-4 pt-4 max-w-lg mx-auto min-h-screen flex flex-col">
-            {/* Premium Header Container */}
-            <div className="bg-white/80 backdrop-blur-xl border border-white/50 shadow-sm rounded-3xl p-6 mb-6">
-                {/* Header */}
-                <div className="mb-6">
-                    <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Minhas Tarefas</h1>
-                    <p className="text-gray-500 text-sm font-medium">Gerencie suas demandas diárias.</p>
-                </div>
-
-                {/* Search */}
-                <div className="relative mb-6">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                    <input
-                        type="text"
-                        placeholder="Buscar tarefas..."
-                        className="w-full pl-11 pr-4 py-3.5 bg-gray-50/50 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900/10 focus:border-gray-900 transition-all placeholder:text-gray-400"
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
-                    />
-                    {search && (
-                        <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 p-1 hover:text-gray-600 transition-colors">
-                            <X size={14} />
-                        </button>
-                    )}
-                </div>
-
-                {/* Horizontal Scrollable Filters */}
-                <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-                    <FilterChip
-                        label="Tudo"
-                        active={statusFilter === 'all'}
-                        onClick={() => setStatusFilter('all')}
-                    />
-                    <FilterChip
-                        label="Pendentes"
-                        active={statusFilter === 'pendente'}
-                        onClick={() => setStatusFilter('pendente')}
-                    />
-                    <FilterChip
-                        label="Em Andamento"
-                        active={statusFilter === 'em_progresso'}
-                        onClick={() => setStatusFilter('em_progresso')}
-                    />
-                    <FilterChip
-                        label="Concluídas"
-                        active={statusFilter === 'concluida'}
-                        onClick={() => setStatusFilter('concluida')}
-                    />
-                    <div className="w-px bg-gray-200 mx-1 h-6 self-center shrink-0"></div>
-                    <FilterChip
-                        label="Alta Prioridade"
-                        active={priorityFilter === 'alta'}
-                        onClick={() => setPriorityFilter(priorityFilter === 'alta' ? 'all' : 'alta')}
-                    />
-                </div>
+        <div className="staff-tasks-page">
+            <div className="staff-tasks-header">
+                <h1>Minhas Tarefas</h1>
+                <p>Gerencie suas demandas diárias.</p>
             </div>
 
-            {/* List */}
-            {filteredTasks.length === 0 ? (
-                <div className="text-center py-12 text-gray-400">
-                    <Filter size={48} className="mx-auto mb-3 opacity-20" />
-                    <p>Nenhuma tarefa encontrada.</p>
-                </div>
-            ) : (
-                <div className="flex flex-col gap-3">
-                    {filteredTasks.map(task => (
+            <div className="staff-tasks-search">
+                <Search size={18} className="staff-tasks-search-icon" />
+                <input
+                    type="text"
+                    placeholder="Buscar tarefas..."
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                />
+                {search && (
+                    <button onClick={() => setSearch('')} className="staff-tasks-clear-btn">
+                        <X size={14} />
+                    </button>
+                )}
+            </div>
+
+            <div className="staff-task-filters">
+                <FilterChip
+                    label="Tudo"
+                    active={statusFilter === 'all'}
+                    onClick={() => setStatusFilter('all')}
+                />
+                <FilterChip
+                    label="Pendentes"
+                    active={statusFilter === 'pendente'}
+                    onClick={() => setStatusFilter('pendente')}
+                />
+                <FilterChip
+                    label="Em Andamento"
+                    active={statusFilter === 'em_progresso'}
+                    onClick={() => setStatusFilter('em_progresso')}
+                />
+                <FilterChip
+                    label="Concluídas"
+                    active={statusFilter === 'concluida'}
+                    onClick={() => setStatusFilter('concluida')}
+                />
+                <div className="staff-task-filter-separator"></div>
+                <FilterChip
+                    label="Alta Prioridade"
+                    active={priorityFilter === 'alta'}
+                    onClick={() => setPriorityFilter(priorityFilter === 'alta' ? 'all' : 'alta')}
+                />
+            </div>
+
+            <div className="staff-tasks-list">
+                {filteredTasks.length === 0 ? (
+                    <div className="staff-tasks-empty">
+                        <Filter size={48} style={{ opacity: 0.2, margin: '0 auto 12px' }} />
+                        <p>Nenhuma tarefa encontrada.</p>
+                    </div>
+                ) : (
+                    filteredTasks.map(task => (
                         <TaskCard
                             key={task.id}
                             task={task}
                             onClick={() => setSelectedTask(task)}
                         />
-                    ))}
-                </div>
-            )}
+                    ))
+                )}
+            </div>
         </div>
     )
 }
@@ -234,12 +227,7 @@ function FilterChip({ label, active, onClick }) {
     return (
         <button
             onClick={onClick}
-            className={`
-                whitespace-nowrap px-4 py-2 rounded-full text-xs font-medium transition-all
-                ${active
-                    ? 'bg-gray-900 text-white shadow-md shadow-gray-200'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}
-            `}
+            className={`staff-task-filter ${active ? 'active' : ''}`}
         >
             {label}
         </button>
@@ -248,37 +236,46 @@ function FilterChip({ label, active, onClick }) {
 
 function TaskCard({ task, onClick }) {
     const isOverdue = new Date(task.deadline) < new Date() && task.status !== 'concluida'
+    const statusClass = task.status === 'concluida' ? 'status-completed' : task.status === 'em_progresso' ? 'status-in-progress' : 'status-pending'
+    const statusText = task.status === 'concluida' ? 'Concluída' : task.status === 'em_progresso' ? 'Em Andamento' : 'Pendente'
 
     return (
         <button
             onClick={onClick}
-            className="w-full text-left bg-white p-4 rounded-xl border border-gray-100 shadow-sm active:scale-[0.98] transition-transform flex items-center justify-between gap-4 group"
+            className={`staff-task-card ${isOverdue ? 'overdue' : ''}`}
         >
-            <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                    <span className={`
-                        w-2 h-2 rounded-full 
-                        ${task.status === 'completed' ? 'bg-green-500' : task.status === 'in_progress' ? 'bg-blue-500' : 'bg-orange-500'}
-                    `}></span>
-                    <span className="text-[10px] uppercase tracking-wider font-semibold text-gray-500">
-                        {task.status === 'concluida' ? 'Concluída' : task.status === 'em_progresso' ? 'Em Andamento' : 'Pendente'}
-                    </span>
-                    {isOverdue && <span className="text-[10px] text-red-600 font-bold ml-1">! Atrasada</span>}
+            <div className="staff-task-content">
+                <div className="staff-task-header">
+                    <span className={`staff-task-status-dot ${statusClass}`}></span>
+                    <span className="staff-task-status-text">{statusText}</span>
+                    {isOverdue && (
+                        <span className="staff-task-badge-overdue">
+                            <AlertCircle size={10} />
+                            Atrasada
+                        </span>
+                    )}
                 </div>
-                <h3 className="text-sm font-semibold text-gray-900 truncate pr-2">
+
+                <h3 className="staff-task-title">
                     {task.titulo}
                 </h3>
-                <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
+
+                <div className="staff-task-meta">
                     {task.deadline && (
-                        <div className="flex items-center gap-1">
+                        <div className="staff-task-meta-item">
                             <Calendar size={12} />
                             <span>{new Date(task.deadline).toLocaleDateString('pt-BR')}</span>
                         </div>
                     )}
-                    {task.prioridade === 'urgente' && <span className="text-red-500 font-medium">Urgente</span>}
+                    {task.prioridade === 'urgente' && (
+                        <span className="staff-task-priority-urgent">Urgente</span>
+                    )}
                 </div>
             </div>
-            <ChevronRight size={20} className="text-gray-300 group-hover:text-gray-900 transition-colors" />
+
+            <div className="staff-task-action">
+                <ChevronRight size={20} />
+            </div>
         </button>
     )
 }
