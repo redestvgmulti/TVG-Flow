@@ -153,57 +153,60 @@ export default function StaffTasks() {
     // MODE: LIST VIEW
     return (
         <div className="pb-24 px-4 pt-4 max-w-lg mx-auto min-h-screen flex flex-col">
-            {/* Header */}
-            <div className="mb-6">
-                <h1 className="text-2xl font-bold text-gray-900">Minhas Tarefas</h1>
-                <p className="text-gray-500 text-sm">Gerencie suas demandas.</p>
-            </div>
+            {/* Premium Header Container */}
+            <div className="bg-white/80 backdrop-blur-xl border border-white/50 shadow-sm rounded-3xl p-6 mb-6">
+                {/* Header */}
+                <div className="mb-6">
+                    <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Minhas Tarefas</h1>
+                    <p className="text-gray-500 text-sm font-medium">Gerencie suas demandas diárias.</p>
+                </div>
 
-            {/* Search */}
-            <div className="relative mb-4">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                <input
-                    type="text"
-                    placeholder="Buscar..."
-                    className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent shadow-sm"
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                />
-                {search && (
-                    <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 p-1">
-                        <X size={14} />
-                    </button>
-                )}
-            </div>
+                {/* Search */}
+                <div className="relative mb-6">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input
+                        type="text"
+                        placeholder="Buscar tarefas..."
+                        className="w-full pl-11 pr-4 py-3.5 bg-gray-50/50 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900/10 focus:border-gray-900 transition-all placeholder:text-gray-400"
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                    />
+                    {search && (
+                        <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 p-1 hover:text-gray-600 transition-colors">
+                            <X size={14} />
+                        </button>
+                    )}
+                </div>
 
-            {/* Horizontal Scrollable Filters */}
-            <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-none -mx-4 px-4">
-                <FilterChip
-                    label="Tudo"
-                    active={statusFilter === 'all'}
-                    onClick={() => setStatusFilter('all')}
-                />
-                <FilterChip
-                    label="Pendentes"
-                    active={statusFilter === 'pendente'}
-                    onClick={() => setStatusFilter('pendente')}
-                />
-                <FilterChip
-                    label="Em Andamento"
-                    active={statusFilter === 'em_progresso'}
-                    onClick={() => setStatusFilter('em_progresso')}
-                />
-                <FilterChip
-                    label="Concluídas"
-                    active={statusFilter === 'concluida'}
-                    onClick={() => setStatusFilter('concluida')}
-                />
-                <div className="w-px bg-gray-200 mx-1 h-6 self-center shrink-0"></div>
-                <FilterChip
-                    label="Alta Prioridade"
-                    active={priorityFilter === 'alta'}
-                    onClick={() => setPriorityFilter(priorityFilter === 'alta' ? 'all' : 'alta')}
-                />
+                {/* Horizontal Scrollable Filters */}
+                <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+                    <FilterChip
+                        label="Tudo"
+                        active={statusFilter === 'all'}
+                        onClick={() => setStatusFilter('all')}
+                    />
+                    <FilterChip
+                        label="Pendentes"
+                        active={statusFilter === 'pendente'}
+                        onClick={() => setStatusFilter('pendente')}
+                    />
+                    <FilterChip
+                        label="Em Andamento"
+                        active={statusFilter === 'em_progresso'}
+                        onClick={() => setStatusFilter('em_progresso')}
+                    />
+                    <FilterChip
+                        label="Concluídas"
+                        active={statusFilter === 'concluida'}
+                        onClick={() => setStatusFilter('concluida')}
+                    />
+                    <div className="w-px bg-gray-200 mx-1 h-6 self-center shrink-0"></div>
+                    <FilterChip
+                        label="Alta Prioridade"
+                        active={priorityFilter === 'alta'}
+                        onClick={() => setPriorityFilter(priorityFilter === 'alta' ? 'all' : 'alta')}
+                    />
+                </div>
             </div>
 
             {/* List */}

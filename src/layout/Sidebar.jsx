@@ -169,6 +169,11 @@ function Sidebar({ mobileMenuOpen, onClose }) {
                                     </span>
                                 )}
                             </NavLink>
+
+                            <NavLink to="/staff/calendar" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={handleNavClick}>
+                                <Calendar size={20} className="nav-icon" />
+                                <span className="nav-text">Agenda</span>
+                            </NavLink>
                         </div>
                     )}
                 </nav>

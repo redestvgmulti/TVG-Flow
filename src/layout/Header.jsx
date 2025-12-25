@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext'
 import NotificationCenter from '../components/NotificationCenter'
 import { Menu, X } from 'lucide-react'
 
-function Header({ onMobileMenuToggle, mobileMenuOpen }) {
+function Header({ onMobileMenuToggle, mobileMenuOpen, hideMobileMenu }) {
     const { user, signOut } = useAuth()
     const [currentTime, setCurrentTime] = useState(new Date())
     const [systemMsg, setSystemMsg] = useState('Sistema operacional estável')
@@ -50,14 +50,16 @@ function Header({ onMobileMenuToggle, mobileMenuOpen }) {
         <header className="status-bar">
             {/* Left: Mobile Menu + Context / Date */}
             <div className="status-left">
-                {/* Mobile Menu Button */}
-                <button
-                    className="mobile-menu-btn"
-                    onClick={onMobileMenuToggle}
-                    aria-label="Toggle menu"
-                >
-                    {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
-                </button>
+                {/* Mobile Menu Button - Hidden for Staff */}
+                {!hideMobileMenu && (
+                    <button
+                        className="mobile-menu-btn"
+                        onClick={onMobileMenuToggle}
+                        aria-label="Toggle menu"
+                    >
+                        {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+                    </button>
+                )}
 
                 <div className="status-clock" key={formattedTime}>
                     {formattedTime}
