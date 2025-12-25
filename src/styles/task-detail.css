@@ -225,10 +225,35 @@
     text-align: center;
     text-decoration: none;
     transition: all 0.2s;
+    margin-bottom: 16px;
 }
 
 .task-link:active {
     transform: scale(0.98);
+}
+
+/* Link Input Field */
+.task-section input[type="url"] {
+    width: 100%;
+    padding: 14px 16px;
+    background: #f8fafc;
+    border: 2px solid #e5e7eb;
+    border-radius: 12px;
+    font-size: 0.875rem;
+    color: #334155;
+    transition: all 0.2s;
+    font-family: inherit;
+}
+
+.task-section input[type="url"]:focus {
+    outline: none;
+    border-color: #3b82f6;
+    background: #ffffff;
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+}
+
+.task-section input[type="url"]::placeholder {
+    color: #94a3b8;
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -418,6 +443,7 @@
         flex: 1;
     }
 }
+
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    MICRO TASK ELEMENTS
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */

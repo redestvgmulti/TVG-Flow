@@ -27,8 +27,11 @@ serve(async (req) => {
             workflow_stages // NEW: Optional workflow stages for macro/micro tasks
         } = await req.json()
 
+        console.log('Received payload:', { empresa_id, titulo, descricao, deadline_at, funcoes, prioridade, workflow_stages })
+
         // Validation
         if (!empresa_id || !titulo || !deadline_at) {
+            console.error('Validation failed:', { empresa_id: !!empresa_id, titulo: !!titulo, deadline_at: !!deadline_at })
             return new Response(
                 JSON.stringify({ error: 'Missing required fields: empresa_id, titulo, deadline_at' }),
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -84,7 +87,7 @@ serve(async (req) => {
                     tarefa_id: macroTask.id,
                     profissional_id: stage.profissional_id,
                     funcao: stage.funcao,
-                    peso: stage.peso || 1,
+                    peso: 1, // Default weight since we removed it from UI
                     status: initialStatus,
                     depends_on: null // Will be set after creation
                 }

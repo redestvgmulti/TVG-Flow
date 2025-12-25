@@ -16,6 +16,7 @@ import {
 import { toast } from 'sonner'
 import { useAuth } from '../../contexts/AuthContext'
 import { useRefresh } from '../../contexts/RefreshContext'
+import ReturnReasonModal from '../../components/ReturnReasonModal'
 import '../../styles/staff-tasks.css'
 import '../../styles/task-detail.css'
 
@@ -52,27 +53,41 @@ export default function StaffTasks() {
                 return
             }
 
+            console.log('Fetching tasks for user ID:', user.id)
+
             // HYBRID QUERY: Fetch micro tasks + legacy tasks
 
             // 1. Fetch micro tasks assigned to this user
             const { data: microTasks, error: microError } = await supabase
                 .from('tarefas_micro')
-                .select(`
-                    *,
-                    tarefas (
-                        id,
-                        titulo,
-                        descricao,
-                        deadline,
-                        prioridade
-                    )
-                `)
+                .select('*')
                 .eq('profissional_id', user.id)
                 .order('created_at', { ascending: false })
+
+            console.log('Micro tasks query result:', { microTasks, microError })
 
             if (microError) {
                 console.error('Error fetching micro tasks:', microError)
             }
+
+            // Fetch macro tasks for the micro tasks
+            const macroTaskIds = [...new Set(microTasks?.map(mt => mt.tarefa_id) || [])]
+            console.log('Fetching macro tasks for IDs:', macroTaskIds)
+
+            const { data: macroTasks, error: macroError } = await supabase
+                .from('tarefas')
+                .select('id, titulo, descricao, deadline, prioridade')
+                .in('id', macroTaskIds)
+
+            console.log('Macro tasks query result:', { macroTasks, macroError })
+
+            if (macroError) {
+                console.error('Error fetching macro tasks:', macroError)
+            }
+
+            // Create a map of macro tasks by ID
+            const macroTaskMap = new Map()
+            macroTasks?.forEach(mt => macroTaskMap.set(mt.id, mt))
 
             // 2. Fetch legacy tasks (tasks without micro tasks)
             const { data: legacyTasks, error: legacyError } = await supabase
@@ -90,15 +105,19 @@ export default function StaffTasks() {
 
             // Add micro tasks (with special flag)
             if (microTasks) {
+                console.log('Raw micro tasks data:', microTasks)
+                console.log('Macro tasks map:', macroTaskMap)
                 microTasks.forEach(mt => {
+                    const macroTask = macroTaskMap.get(mt.tarefa_id)
+                    console.log('Micro task:', mt.id, 'macro task:', macroTask)
                     allTasks.push({
                         ...mt,
                         // Normalize structure for compatibility
                         id: mt.id,
-                        titulo: mt.tarefas?.titulo || 'Tarefa sem título',
-                        descricao: mt.tarefas?.descricao,
-                        deadline: mt.tarefas?.deadline,
-                        prioridade: mt.tarefas?.prioridade || 'normal',
+                        titulo: macroTask?.titulo || `[${mt.funcao}] Sem título`,
+                        descricao: macroTask?.descricao,
+                        deadline: macroTask?.deadline,
+                        prioridade: macroTask?.prioridade || 'normal',
                         status: mt.status, // Use micro task status
                         funcao: mt.funcao, // Micro task specific
                         is_micro_task: true, // Flag for UI
@@ -114,16 +133,23 @@ export default function StaffTasks() {
                 // Filter out macro tasks that have micro tasks
                 const macroTaskIds = new Set(microTasks?.map(mt => mt.tarefa_id) || [])
 
+                console.log('Micro tasks fetched:', microTasks?.length || 0)
+                console.log('Legacy tasks fetched:', legacyTasks?.length || 0)
+                console.log('Macro task IDs to filter:', Array.from(macroTaskIds))
+
                 legacyTasks.forEach(task => {
                     if (!macroTaskIds.has(task.id)) {
                         allTasks.push({
                             ...task,
                             is_micro_task: false // Flag for UI
                         })
+                    } else {
+                        console.log('Filtered out macro task:', task.id, task.titulo)
                     }
                 })
             }
 
+            console.log('Total tasks after merge:', allTasks.length)
             setTasks(allTasks)
         } catch (error) {
             console.error('Error in fetchTasks:', error)
@@ -163,34 +189,77 @@ export default function StaffTasks() {
     // Actions
     async function handleUpdateStatus(taskId, newStatus) {
         try {
-            const updates = {
-                status: newStatus,
-                concluida_at: newStatus === 'concluida' ? new Date().toISOString() : null
+            // Find the task to check if it's a micro task
+            const task = tasks.find(t => t.id === taskId) || selectedTask
+
+            // MICRO TASK: Use Edge Function
+            if (task?.is_micro_task) {
+                if (newStatus === 'concluida') {
+                    // Call complete-micro-task Edge Function
+                    const { data, error } = await supabase.functions.invoke('complete-micro-task', {
+                        body: {
+                            micro_task_id: taskId
+                        }
+                    })
+
+                    if (error) throw error
+
+                    if (!data || !data.success) {
+                        throw new Error(data?.error || 'Falha ao concluir micro tarefa')
+                    }
+
+                    toast.success('Micro tarefa concluída! 🎉')
+                } else {
+                    // For other status changes (em_progresso, etc), update directly
+                    const { error } = await supabase
+                        .from('tarefas_micro')
+                        .update({ status: newStatus })
+                        .eq('id', taskId)
+
+                    if (error) throw error
+                    toast.success('Status atualizado')
+                }
+
+                // Update local state
+                setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t))
+                if (selectedTask?.id === taskId) {
+                    setSelectedTask(prev => ({ ...prev, status: newStatus }))
+                }
+
+                // Refresh tasks to get updated macro task progress
+                fetchTasks()
             }
+            // LEGACY TASK: Direct update
+            else {
+                const updates = {
+                    status: newStatus,
+                    concluida_at: newStatus === 'concluida' ? new Date().toISOString() : null
+                }
 
-            const { error } = await supabase
-                .from('tarefas')
-                .update(updates)
-                .eq('id', taskId)
+                const { error } = await supabase
+                    .from('tarefas')
+                    .update(updates)
+                    .eq('id', taskId)
 
-            if (error) throw error
+                if (error) throw error
 
-            setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updates } : t))
+                setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updates } : t))
 
-            // If currently viewing details, update that too
-            if (selectedTask?.id === taskId) {
-                setSelectedTask(prev => ({ ...prev, ...updates }))
-            }
+                // If currently viewing details, update that too
+                if (selectedTask?.id === taskId) {
+                    setSelectedTask(prev => ({ ...prev, ...updates }))
+                }
 
-            if (newStatus === 'concluida') {
-                toast.success('Tarefa concluída! 🎉')
-            } else {
-                toast.success('Status atualizado')
+                if (newStatus === 'concluida') {
+                    toast.success('Tarefa concluída! 🎉')
+                } else {
+                    toast.success('Status atualizado')
+                }
             }
 
         } catch (error) {
             console.error('Error updating status:', error)
-            toast.error('Erro ao atualizar status')
+            toast.error(error.message || 'Erro ao atualizar status')
         }
     }
 
@@ -376,6 +445,11 @@ function ExecutionView({ task, onBack, onUpdateStatus, user }) {
     const [timeline, setTimeline] = useState([])
     const [comment, setComment] = useState('')
 
+    // Return modal state
+    const [showReturnModal, setShowReturnModal] = useState(false)
+    const [professionals, setProfessionals] = useState([])
+    const [loadingProfessionals, setLoadingProfessionals] = useState(false)
+
     useEffect(() => {
         // Fetch timeline logic (Simplified for this view)
         async function loadTimeline() {
@@ -408,9 +482,64 @@ function ExecutionView({ task, onBack, onUpdateStatus, user }) {
                 created_at: new Date(),
                 profissionais: { nome: 'Você' }
             }])
+            toast.success('Nota adicionada!')
         } catch (err) {
-            toast.error('Erro ao enviar')
+            console.error('Error sending comment:', err)
+            toast.error('Erro ao enviar nota')
         }
+    }
+
+    async function loadProfessionalsForReturn() {
+        if (!task.is_micro_task || !task.tarefa_id) return
+
+        try {
+            setLoadingProfessionals(true)
+            const { data, error } = await supabase
+                .from('tarefas_micro')
+                .select(`
+                    profissional_id,
+                    funcao,
+                    profissionais!inner (
+                        id,
+                        nome
+                    )
+                `)
+                .eq('tarefa_id', task.tarefa_id)
+
+            if (error) throw error
+            setProfessionals(data || [])
+        } catch (error) {
+            console.error('Error loading professionals:', error)
+            toast.error('Erro ao carregar profissionais')
+        } finally {
+            setLoadingProfessionals(false)
+        }
+    }
+
+    async function handleReturnTask(payload) {
+        try {
+            const { data, error } = await supabase.functions.invoke('return-micro-task', {
+                body: payload
+            })
+
+            if (error) throw error
+
+            if (!data || !data.success) {
+                throw new Error(data?.error || 'Falha ao devolver tarefa')
+            }
+
+            toast.success('Tarefa devolvida com sucesso')
+            setShowReturnModal(false)
+            onBack() // Return to task list
+        } catch (error) {
+            console.error('Error returning task:', error)
+            toast.error(error.message || 'Erro ao devolver tarefa')
+        }
+    }
+
+    function openReturnModal() {
+        loadProfessionalsForReturn()
+        setShowReturnModal(true)
     }
 
     const statusClass = isCompleted ? 'completed' : task.status === 'em_progresso' ? 'active' : 'pending'
@@ -466,6 +595,37 @@ function ExecutionView({ task, onBack, onUpdateStatus, user }) {
                     </a>
                 )}
 
+                {/* Add/Edit Drive Link */}
+                {!isCompleted && (
+                    <div className="task-section">
+                        <h3 className="task-section-title">Link para Arquivos</h3>
+                        <input
+                            type="url"
+                            placeholder="Cole o link do Google Drive, Dropbox, etc..."
+                            className="task-note-input"
+                            defaultValue={task.drive_link || ''}
+                            onBlur={async (e) => {
+                                const newLink = e.target.value.trim()
+                                if (newLink === task.drive_link) return
+
+                                try {
+                                    const tableName = task.is_micro_task ? 'tarefas_micro' : 'tarefas'
+                                    const { error } = await supabase
+                                        .from(tableName)
+                                        .update({ drive_link: newLink || null })
+                                        .eq('id', task.id)
+
+                                    if (error) throw error
+                                    toast.success('Link atualizado!')
+                                } catch (error) {
+                                    console.error('Error updating link:', error)
+                                    toast.error('Erro ao atualizar link')
+                                }
+                            }}
+                        />
+                    </div>
+                )}
+
                 {/* Timeline / Comments */}
                 <div className="task-notes">
                     <h3 className="task-section-title">Atividade & Notas</h3>
@@ -517,6 +677,15 @@ function ExecutionView({ task, onBack, onUpdateStatus, user }) {
                                     Iniciar
                                 </button>
                             )}
+                            {task.is_micro_task && task.status !== 'bloqueada' && (
+                                <button
+                                    onClick={openReturnModal}
+                                    className="task-btn-secondary"
+                                    disabled={loadingProfessionals}
+                                >
+                                    Solicitar Ajuste
+                                </button>
+                            )}
                             <button
                                 onClick={() => onUpdateStatus(task.id, 'concluida')}
                                 className="task-btn-primary"
@@ -535,6 +704,16 @@ function ExecutionView({ task, onBack, onUpdateStatus, user }) {
                     )}
                 </div>
             </div>
+
+            {/* Return Modal */}
+            {showReturnModal && task.is_micro_task && (
+                <ReturnReasonModal
+                    microTask={task}
+                    professionals={professionals}
+                    onClose={() => setShowReturnModal(false)}
+                    onSubmit={handleReturnTask}
+                />
+            )}
         </div>
     )
 }

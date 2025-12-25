@@ -1,0 +1,478 @@
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   MACRO TASK DETAIL - Premium CityOS Admin View
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.macro-task-container {
+    width: 100%;
+    min-height: 100vh;
+    background: #ffffff;
+    padding: 24px;
+}
+
+.macro-task-loading,
+.macro-task-error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 400px;
+    gap: 16px;
+    color: #6b7280;
+}
+
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid #f3f4f6;
+    border-top-color: #111827;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   HEADER
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.macro-task-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 32px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.macro-task-back-btn {
+    padding: 10px;
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: #64748b;
+}
+
+.macro-task-back-btn:hover {
+    background: #f1f5f9;
+    color: #111827;
+}
+
+.macro-task-header-content {
+    flex: 1;
+}
+
+.macro-task-title {
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: #111827;
+    margin-bottom: 12px;
+    line-height: 1.2;
+}
+
+.macro-task-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.macro-task-status {
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.macro-task-status.status-pendente {
+    background: #fff7ed;
+    color: #9a3412;
+}
+
+.macro-task-status.status-em_progresso {
+    background: #eff6ff;
+    color: #1d4ed8;
+}
+
+.macro-task-status.status-concluida {
+    background: #ecfdf5;
+    color: #065f46;
+}
+
+.macro-task-deadline {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.875rem;
+    color: #64748b;
+    font-weight: 600;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   PROGRESS BAR
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.macro-task-progress-section {
+    background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 32px;
+}
+
+.progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.progress-label {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #111827;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.progress-percentage {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #111827;
+}
+
+.progress-bar-container {
+    height: 12px;
+    background: #f1f5f9;
+    border-radius: 999px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
+    border-radius: 999px;
+    transition: width 0.5s ease;
+}
+
+.progress-stats {
+    font-size: 0.75rem;
+    color: #6b7280;
+    font-weight: 600;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   BODY & SECTIONS
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.macro-task-body {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+}
+
+.macro-task-section {
+    background: #ffffff;
+}
+
+.section-title {
+    font-size: 0.8rem;
+    font-weight: 800;
+    color: #111827;
+    margin-bottom: 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+.macro-task-description {
+    background: #f8fafc;
+    border-radius: 12px;
+    padding: 16px;
+    font-size: 0.9rem;
+    color: #334155;
+    line-height: 1.6;
+    white-space: pre-wrap;
+}
+
+.empty-state {
+    font-size: 0.875rem;
+    color: #9ca3af;
+    font-style: italic;
+    text-align: center;
+    padding: 24px;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   WORKFLOW TIMELINE
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.workflow-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.timeline-item {
+    position: relative;
+    display: flex;
+    gap: 16px;
+    padding: 16px 0;
+}
+
+.timeline-marker {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: #f8fafc;
+    border: 2px solid #e5e7eb;
+    z-index: 2;
+}
+
+.timeline-item.status-concluida .timeline-marker {
+    background: #ecfdf5;
+    border-color: #10b981;
+    color: #10b981;
+}
+
+.timeline-item.status-em_execucao .timeline-marker {
+    background: #eff6ff;
+    border-color: #3b82f6;
+    color: #3b82f6;
+}
+
+.timeline-item.status-bloqueada .timeline-marker {
+    background: #f3f4f6;
+    border-color: #9ca3af;
+    color: #6b7280;
+}
+
+.timeline-item.status-devolvida .timeline-marker {
+    background: #fef3c7;
+    border-color: #f59e0b;
+    color: #f59e0b;
+}
+
+.timeline-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #e5e7eb;
+}
+
+.timeline-connector {
+    position: absolute;
+    left: 19px;
+    top: 56px;
+    bottom: -16px;
+    width: 2px;
+    background: #e5e7eb;
+    z-index: 1;
+}
+
+.timeline-content {
+    flex: 1;
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 16px;
+}
+
+.timeline-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.timeline-step {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #111827;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.timeline-status {
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.timeline-status.status-concluida {
+    background: #ecfdf5;
+    color: #065f46;
+}
+
+.timeline-status.status-em_execucao {
+    background: #eff6ff;
+    color: #1d4ed8;
+}
+
+.timeline-status.status-bloqueada {
+    background: #f3f4f6;
+    color: #6b7280;
+}
+
+.timeline-status.status-devolvida {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.timeline-status.status-pendente {
+    background: #fff7ed;
+    color: #9a3412;
+}
+
+.timeline-info {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.timeline-function {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #111827;
+}
+
+.timeline-professional {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.875rem;
+    color: #64748b;
+    font-weight: 600;
+}
+
+.timeline-weight {
+    font-size: 0.75rem;
+    color: #9ca3af;
+    font-weight: 600;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   ACTIVITY LOG
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.activity-log {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.log-item {
+    display: flex;
+    gap: 12px;
+    padding: 14px;
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+    border-left: 3px solid #e5e7eb;
+    border-radius: 8px;
+}
+
+.log-item.log-completed {
+    border-left-color: #10b981;
+}
+
+.log-item.log-returned {
+    border-left-color: #f59e0b;
+}
+
+.log-item.log-blocked {
+    border-left-color: #6b7280;
+}
+
+.log-item.log-created {
+    border-left-color: #3b82f6;
+}
+
+.log-icon {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: #ffffff;
+    color: #6b7280;
+}
+
+.log-item.log-completed .log-icon {
+    color: #10b981;
+}
+
+.log-item.log-returned .log-icon {
+    color: #f59e0b;
+}
+
+.log-content {
+    flex: 1;
+}
+
+.log-message {
+    font-size: 0.875rem;
+    color: #111827;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.log-reason {
+    font-size: 0.8rem;
+    color: #64748b;
+    font-style: italic;
+    margin-bottom: 4px;
+}
+
+.log-timestamp {
+    font-size: 0.7rem;
+    color: #9ca3af;
+    font-weight: 600;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   RESPONSIVE
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+@media (max-width: 768px) {
+    .macro-task-container {
+        padding: 16px;
+    }
+
+    .macro-task-title {
+        font-size: 1.5rem;
+    }
+
+    .macro-task-meta {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .timeline-item {
+        gap: 12px;
+    }
+
+    .timeline-marker {
+        width: 32px;
+        height: 32px;
+    }
+
+    .timeline-connector {
+        left: 15px;
+    }
+}
