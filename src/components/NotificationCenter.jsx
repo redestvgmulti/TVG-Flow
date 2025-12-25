@@ -358,39 +358,41 @@ function NotificationCenter() {
                         {/* Header */}
                         <div className="notification-header">
                             <h3>Notificações</h3>
-                            {notifications.length > 0 && (
-                                <div className="notification-actions">
-                                    {/* Push Notification Toggle - Hidden on iOS PWA */}
-                                    {!isIOSPWAMode && (
-                                        <button
-                                            onClick={handleTogglePush}
-                                            className="btn-text-action"
-                                            title={pushEnabled ? 'Desativar notificações push' : 'Ativar notificações push'}
-                                            disabled={pushLoading}
-                                        >
-                                            <BellRing size={16} className={pushEnabled ? 'text-brand' : ''} />
-                                            {pushLoading ? '...' : pushEnabled ? 'Push On' : 'Push Off'}
-                                        </button>
-                                    )}
-
-                                    {unreadCount > 0 && (
-                                        <button
-                                            onClick={markAllAsRead}
-                                            className="btn-text-action"
-                                            title="Marcar todas como lidas"
-                                        >
-                                            <Check size={16} /> Ler todas
-                                        </button>
-                                    )}
+                            <div className="notification-actions">
+                                {/* Push Notification Toggle - Hidden on iOS PWA */}
+                                {!isIOSPWAMode && (
                                     <button
-                                        onClick={clearAll}
+                                        onClick={handleTogglePush}
                                         className="btn-text-action"
-                                        title="Limpar tudo"
+                                        title={pushEnabled ? 'Desativar notificações push' : 'Ativar notificações push'}
+                                        disabled={pushLoading}
                                     >
-                                        <Trash2 size={16} /> Limpar
+                                        <BellRing size={16} className={pushEnabled ? 'text-brand' : ''} />
+                                        {pushLoading ? '...' : pushEnabled ? 'Push On' : 'Push Off'}
                                     </button>
-                                </div>
-                            )}
+                                )}
+
+                                {notifications.length > 0 && (
+                                    <>
+                                        {unreadCount > 0 && (
+                                            <button
+                                                onClick={markAllAsRead}
+                                                className="btn-text-action"
+                                                title="Marcar todas como lidas"
+                                            >
+                                                <Check size={16} /> Ler todas
+                                            </button>
+                                        )}
+                                        <button
+                                            onClick={clearAll}
+                                            className="btn-text-action"
+                                            title="Limpar tudo"
+                                        >
+                                            <Trash2 size={16} /> Limpar
+                                        </button>
+                                    </>
+                                )}
+                            </div>
                         </div>
 
                         {/* iOS PWA Limitation Notice */}
