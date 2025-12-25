@@ -17,12 +17,20 @@ serve(async (req) => {
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
         )
 
-        const { empresa_id, titulo, descricao, deadline_at, funcoes, prioridade } = await req.json()
+        const {
+            empresa_id,
+            titulo,
+            descricao,
+            deadline_at,
+            funcoes,
+            prioridade,
+            workflow_stages // NEW: Optional workflow stages for macro/micro tasks
+        } = await req.json()
 
         // Validation
-        if (!empresa_id || !titulo || !deadline_at || !funcoes || !Array.isArray(funcoes) || funcoes.length === 0) {
+        if (!empresa_id || !titulo || !deadline_at) {
             return new Response(
-                JSON.stringify({ error: 'Missing required fields: empresa_id, titulo, deadline_at, funcoes' }),
+                JSON.stringify({ error: 'Missing required fields: empresa_id, titulo, deadline_at' }),
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             )
         }
@@ -31,7 +39,133 @@ serve(async (req) => {
         const validPriorities = ['baixa', 'normal', 'alta', 'urgente']
         const normalizedPriority = prioridade && validPriorities.includes(prioridade) ? prioridade : 'normal'
 
-        // STEP 1: Resolve professionals for ALL selected functions
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // NEW WORKFLOW: Macro/Micro Tasks
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        if (workflow_stages && Array.isArray(workflow_stages) && workflow_stages.length > 0) {
+            // Create macro task
+            const { data: macroTask, error: macroError } = await supabaseClient
+                .from('tarefas')
+                .insert({
+                    titulo,
+                    descricao: descricao || null,
+                    cliente_id: empresa_id,
+                    deadline: deadline_at,
+                    status: 'pendente',
+                    prioridade: normalizedPriority,
+                    progress: 0
+                })
+                .select()
+                .single()
+
+            if (macroError) {
+                console.error('Error creating macro task:', macroError)
+                return new Response(
+                    JSON.stringify({ error: 'Erro ao criar tarefa macro', details: macroError.message }),
+                    { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                )
+            }
+
+            // Create micro tasks with dependencies
+            const microTasksToCreate = []
+            const microTaskMap = new Map() // ordem -> micro_task_id
+
+            for (let i = 0; i < workflow_stages.length; i++) {
+                const stage = workflow_stages[i]
+                const ordem = i + 1
+
+                // Determine initial status
+                let initialStatus = 'pendente'
+                if (stage.depends_on_ordem && stage.depends_on_ordem > 0) {
+                    initialStatus = 'bloqueada' // Blocked by dependency
+                }
+
+                const microTaskPayload = {
+                    tarefa_id: macroTask.id,
+                    profissional_id: stage.profissional_id,
+                    funcao: stage.funcao,
+                    peso: stage.peso || 1,
+                    status: initialStatus,
+                    depends_on: null // Will be set after creation
+                }
+
+                const { data: microTask, error: microError } = await supabaseClient
+                    .from('tarefas_micro')
+                    .insert(microTaskPayload)
+                    .select()
+                    .single()
+
+                if (microError) {
+                    console.error(`Error creating micro task for ${stage.funcao}:`, microError)
+                    continue
+                }
+
+                microTaskMap.set(ordem, microTask.id)
+
+                // Update dependency if exists
+                if (stage.depends_on_ordem && stage.depends_on_ordem > 0) {
+                    const dependsOnId = microTaskMap.get(stage.depends_on_ordem)
+                    if (dependsOnId) {
+                        await supabaseClient
+                            .from('tarefas_micro')
+                            .update({ depends_on: dependsOnId })
+                            .eq('id', microTask.id)
+                    }
+                }
+
+                microTasksToCreate.push(microTask)
+
+                // Log creation
+                await supabaseClient
+                    .from('tarefas_micro_logs')
+                    .insert({
+                        tarefa_micro_id: microTask.id,
+                        to_profissional_id: stage.profissional_id,
+                        acao: 'created'
+                    })
+
+                // Notify professional if not blocked
+                if (initialStatus === 'pendente') {
+                    await supabaseClient
+                        .from('notifications')
+                        .insert({
+                            profissional_id: stage.profissional_id,
+                            title: 'Nova Etapa Atribuída',
+                            message: `Você recebeu uma nova etapa de ${stage.funcao}: "${titulo}"`,
+                            type: 'micro_task_assigned',
+                            link: `/staff/tasks`,
+                            read: false
+                        })
+                }
+            }
+
+            return new Response(
+                JSON.stringify({
+                    success: true,
+                    mode: 'macro_micro',
+                    macro_task_id: macroTask.id,
+                    micro_tasks_created: microTasksToCreate.length,
+                    micro_tasks: microTasksToCreate.map(mt => ({
+                        id: mt.id,
+                        funcao: mt.funcao,
+                        status: mt.status
+                    }))
+                }),
+                { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+        }
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // LEGACY WORKFLOW: Individual Tasks (Backward Compatibility)
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        if (!funcoes || !Array.isArray(funcoes) || funcoes.length === 0) {
+            return new Response(
+                JSON.stringify({ error: 'Missing required field: funcoes (for legacy mode)' }),
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+        }
+
+        // Resolve professionals for ALL selected functions
         const { data: professionals, error: profError } = await supabaseClient
             .from('empresa_profissionais')
             .select(`
@@ -55,7 +189,6 @@ serve(async (req) => {
             )
         }
 
-        // CRITICAL VALIDATION: Must have at least one professional
         if (!professionals || professionals.length === 0) {
             return new Response(
                 JSON.stringify({
@@ -67,7 +200,7 @@ serve(async (req) => {
             )
         }
 
-        // STEP 2: Create tasks for each professional
+        // Create tasks for each professional
         const createdTasks = []
         const notifications = []
 
@@ -101,7 +234,7 @@ serve(async (req) => {
 
             createdTasks.push(task)
 
-            // STEP 3: Create in-app notification
+            // Create in-app notification
             const notificationPayload = {
                 profissional_id: professional.id,
                 title: 'Nova Tarefa Atribuída',
@@ -117,28 +250,9 @@ serve(async (req) => {
 
             if (!notifError) {
                 notifications.push(professional.id)
-
-                // STEP 4: Send push notification via existing Edge Function
-                try {
-                    await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-push-notification`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}`
-                        },
-                        body: JSON.stringify({
-                            userId: professional.id,
-                            title: notificationPayload.title,
-                            message: notificationPayload.message
-                        })
-                    })
-                } catch (pushError) {
-                    console.error('Error sending push notification:', pushError)
-                }
             }
         }
 
-        // Validate that at least one task was created
         if (createdTasks.length === 0) {
             return new Response(
                 JSON.stringify({
@@ -152,17 +266,13 @@ serve(async (req) => {
         return new Response(
             JSON.stringify({
                 success: true,
+                mode: 'legacy',
                 tasks_created: createdTasks.length,
                 notifications_sent: notifications.length,
                 tasks: createdTasks.map(t => ({
                     id: t.id,
                     titulo: t.titulo,
                     profissional_id: t.profissional_id
-                })),
-                professionals: professionals.map(p => ({
-                    id: p.profissionais.id,
-                    nome: p.profissionais.nome,
-                    funcao: p.funcao
                 }))
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

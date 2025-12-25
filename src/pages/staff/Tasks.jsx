@@ -10,7 +10,8 @@ import {
     Send,
     ChevronRight,
     X,
-    Filter
+    Filter,
+    Lock
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '../../contexts/AuthContext'
@@ -51,16 +52,79 @@ export default function StaffTasks() {
                 return
             }
 
-            // Get tasks assigned to this user
-            const { data, error } = await supabase
+            // HYBRID QUERY: Fetch micro tasks + legacy tasks
+
+            // 1. Fetch micro tasks assigned to this user
+            const { data: microTasks, error: microError } = await supabase
+                .from('tarefas_micro')
+                .select(`
+                    *,
+                    tarefas (
+                        id,
+                        titulo,
+                        descricao,
+                        deadline,
+                        prioridade
+                    )
+                `)
+                .eq('profissional_id', user.id)
+                .order('created_at', { ascending: false })
+
+            if (microError) {
+                console.error('Error fetching micro tasks:', microError)
+            }
+
+            // 2. Fetch legacy tasks (tasks without micro tasks)
+            const { data: legacyTasks, error: legacyError } = await supabase
                 .from('tarefas')
                 .select('*')
                 .eq('assigned_to', user.id)
                 .order('deadline', { ascending: true, nullsFirst: false })
 
-            if (error) throw error
+            if (legacyError) {
+                console.error('Error fetching legacy tasks:', legacyError)
+            }
 
-            setTasks(data || [])
+            // 3. Merge and normalize tasks
+            const allTasks = []
+
+            // Add micro tasks (with special flag)
+            if (microTasks) {
+                microTasks.forEach(mt => {
+                    allTasks.push({
+                        ...mt,
+                        // Normalize structure for compatibility
+                        id: mt.id,
+                        titulo: mt.tarefas?.titulo || 'Tarefa sem título',
+                        descricao: mt.tarefas?.descricao,
+                        deadline: mt.tarefas?.deadline,
+                        prioridade: mt.tarefas?.prioridade || 'normal',
+                        status: mt.status, // Use micro task status
+                        funcao: mt.funcao, // Micro task specific
+                        is_micro_task: true, // Flag for UI
+                        tarefa_id: mt.tarefa_id, // Reference to macro task
+                        depends_on: mt.depends_on, // Dependency
+                        peso: mt.peso
+                    })
+                })
+            }
+
+            // Add legacy tasks (only if they don't have micro tasks)
+            if (legacyTasks) {
+                // Filter out macro tasks that have micro tasks
+                const macroTaskIds = new Set(microTasks?.map(mt => mt.tarefa_id) || [])
+
+                legacyTasks.forEach(task => {
+                    if (!macroTaskIds.has(task.id)) {
+                        allTasks.push({
+                            ...task,
+                            is_micro_task: false // Flag for UI
+                        })
+                    }
+                })
+            }
+
+            setTasks(allTasks)
         } catch (error) {
             console.error('Error in fetchTasks:', error)
             toast.error('Erro ao carregar tarefas')
@@ -237,13 +301,24 @@ function FilterChip({ label, active, onClick }) {
 
 function TaskCard({ task, onClick }) {
     const isOverdue = new Date(task.deadline) < new Date() && task.status !== 'concluida'
-    const statusClass = task.status === 'concluida' ? 'status-completed' : task.status === 'em_progresso' ? 'status-in-progress' : 'status-pending'
-    const statusText = task.status === 'concluida' ? 'Concluída' : task.status === 'em_progresso' ? 'Em Andamento' : 'Pendente'
+
+    // Handle different status values for micro tasks
+    const statusClass = task.status === 'concluida' ? 'status-completed'
+        : task.status === 'em_execucao' ? 'status-in-progress'
+            : task.status === 'bloqueada' ? 'status-blocked'
+                : task.status === 'devolvida' ? 'status-returned'
+                    : 'status-pending'
+
+    const statusText = task.status === 'concluida' ? 'Concluída'
+        : task.status === 'em_execucao' ? 'Em Andamento'
+            : task.status === 'bloqueada' ? 'Bloqueada'
+                : task.status === 'devolvida' ? 'Devolvida'
+                    : 'Pendente'
 
     return (
         <button
             onClick={onClick}
-            className={`staff-task-card ${isOverdue ? 'overdue' : ''}`}
+            className={`staff-task-card ${isOverdue ? 'overdue' : ''} ${task.status === 'bloqueada' ? 'blocked' : ''}`}
         >
             <div className="staff-task-content">
                 <div className="staff-task-header">
@@ -257,9 +332,22 @@ function TaskCard({ task, onClick }) {
                     )}
                 </div>
 
+                {/* Micro Task Function Badge */}
+                {task.is_micro_task && task.funcao && (
+                    <span className="micro-task-badge">{task.funcao}</span>
+                )}
+
                 <h3 className="staff-task-title">
                     {task.titulo}
                 </h3>
+
+                {/* Dependency Indicator */}
+                {task.status === 'bloqueada' && (
+                    <div className="dependency-indicator">
+                        <Lock size={14} />
+                        <span>Aguardando etapa anterior</span>
+                    </div>
+                )}
 
                 <div className="staff-task-meta">
                     {task.deadline && (
