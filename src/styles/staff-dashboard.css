@@ -1,0 +1,35 @@
+/* Staff Dashboard Specific Styles */
+
+.staff-dashboard-container {
+    padding-bottom: 80px;
+    /* Space for bottom nav on mobile */
+    animation: fadeIn 0.4s ease-out;
+}
+
+/* Reusing dashboard-grid-metrics from layout.css globally, 
+   but ensuring specific overrides if needed */
+
+/* Recent Tasks List Styling */
+.staff-recent-tasks-section {
+    margin-top: var(--space-8);
+}
+
+/* Custom empty state for staff dashboard */
+.staff-empty-state {
+    padding: 64px 24px;
+    text-align: center;
+    background: var(--color-bg-subtle);
+    border-radius: var(--radius-lg);
+    border: 1px dashed var(--color-border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+}
+
+@media (min-width: 1024px) {
+    .staff-dashboard-container {
+        padding-bottom: var(--space-8);
+    }
+}

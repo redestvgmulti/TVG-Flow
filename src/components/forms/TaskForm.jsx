@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { clientService } from '../../services/clientService'
 import { professionalsService } from '../../services/professionals'
 import { supabase } from '../../services/supabase'
+import '../../styles/admin-forms.css'
 
 export default function TaskForm({ onSuccess, onCancel }) {
     // Data
@@ -102,7 +103,7 @@ export default function TaskForm({ onSuccess, onCancel }) {
             }
 
             toast.success(`OS criada com sucesso! (${data.tasks_created} tarefas geradas)`)
-            
+
             if (onSuccess) {
                 onSuccess(data)
             }
@@ -116,15 +117,15 @@ export default function TaskForm({ onSuccess, onCancel }) {
     }
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="admin-form">
             {/* Company Selection */}
-            <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    <Building2 className="inline w-4 h-4 mr-1.5 text-slate-500" />
+            <div className="admin-form-group">
+                <label className="admin-form-label">
+                    <Building2 className="admin-form-label-icon" />
                     Empresa *
                 </label>
                 <select
-                    className="input-premium"
+                    className="admin-form-select"
                     value={empresaId}
                     onChange={e => setEmpresaId(e.target.value)}
                     disabled={loadingCompanies}
@@ -138,13 +139,13 @@ export default function TaskForm({ onSuccess, onCancel }) {
             </div>
 
             {/* Title */}
-            <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">
+            <div className="admin-form-group">
+                <label className="admin-form-label">
                     Título da OS *
                 </label>
                 <input
                     type="text"
-                    className="input-premium"
+                    className="admin-form-input"
                     value={titulo}
                     onChange={e => setTitulo(e.target.value)}
                     placeholder="Ex: Campanha Black Friday"
@@ -153,12 +154,12 @@ export default function TaskForm({ onSuccess, onCancel }) {
             </div>
 
             {/* Description */}
-            <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">
+            <div className="admin-form-group">
+                <label className="admin-form-label">
                     Descrição
                 </label>
                 <textarea
-                    className="input-premium"
+                    className="admin-form-textarea"
                     value={descricao}
                     onChange={e => setDescricao(e.target.value)}
                     rows={3}
@@ -167,14 +168,14 @@ export default function TaskForm({ onSuccess, onCancel }) {
             </div>
 
             {/* Deadline */}
-            <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    <CalendarIcon className="inline w-4 h-4 mr-1.5 text-slate-500" />
+            <div className="admin-form-group">
+                <label className="admin-form-label">
+                    <CalendarIcon className="admin-form-label-icon" />
                     Prazo *
                 </label>
                 <input
                     type="datetime-local"
-                    className="input-premium"
+                    className="admin-form-input"
                     value={deadline}
                     onChange={e => setDeadline(e.target.value)}
                     required
@@ -182,12 +183,12 @@ export default function TaskForm({ onSuccess, onCancel }) {
             </div>
 
             {/* Priority */}
-            <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">
+            <div className="admin-form-group">
+                <label className="admin-form-label">
                     Prioridade *
                 </label>
                 <select
-                    className="input-premium"
+                    className="admin-form-select"
                     value={prioridade}
                     onChange={e => setPrioridade(e.target.value)}
                 >
@@ -200,32 +201,28 @@ export default function TaskForm({ onSuccess, onCancel }) {
 
             {/* Functions */}
             {empresaId && (
-                <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-2">
-                        <Layers className="inline w-4 h-4 mr-1.5 text-slate-500" />
+                <div className="admin-form-group">
+                    <label className="admin-form-label">
+                        <Layers className="admin-form-label-icon" />
                         Funções *
                     </label>
                     {loadingFunctions ? (
-                        <p className="text-sm text-slate-500">Carregando...</p>
+                        <p className="text-secondary text-sm">Carregando...</p>
                     ) : availableFunctions.length === 0 ? (
-                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                            <AlertTriangle className="inline w-4 h-4 mr-1.5 text-amber-600" />
-                            <span className="text-sm text-amber-700">Nenhuma função disponível para esta empresa</span>
+                        <div className="admin-form-empty-state">
+                            <AlertTriangle size={16} />
+                            <span>Nenhuma função disponível para esta empresa</span>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="admin-functions-grid">
                             {availableFunctions.map(fn => (
                                 <button
                                     key={fn}
                                     type="button"
                                     onClick={() => toggleFunction(fn)}
-                                    className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all ${
-                                        selectedFunctions.includes(fn)
-                                            ? 'bg-slate-900 text-white border-slate-900'
-                                            : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
-                                    }`}
+                                    className={`admin-function-btn ${selectedFunctions.includes(fn) ? 'selected' : ''}`}
                                 >
-                                    {selectedFunctions.includes(fn) && <CheckCircle className="inline w-4 h-4 mr-1" />}
+                                    {selectedFunctions.includes(fn) && <CheckCircle size={14} />}
                                     {fn}
                                 </button>
                             ))}
@@ -235,12 +232,12 @@ export default function TaskForm({ onSuccess, onCancel }) {
             )}
 
             {/* Actions */}
-            <div className="flex gap-3 pt-4">
+            <div className="admin-form-actions">
                 {onCancel && (
                     <button
                         type="button"
                         onClick={onCancel}
-                        className="btn btn-ghost flex-1"
+                        className="admin-form-btn-cancel"
                         disabled={submitting}
                     >
                         Cancelar
@@ -248,7 +245,7 @@ export default function TaskForm({ onSuccess, onCancel }) {
                 )}
                 <button
                     type="submit"
-                    className="btn btn-primary flex-1"
+                    className="admin-form-btn-submit"
                     disabled={submitting || selectedFunctions.length === 0}
                 >
                     {submitting ? 'Criando...' : 'Criar OS'}

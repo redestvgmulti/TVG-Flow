@@ -10,8 +10,15 @@ import {
     ArrowRight,
     TrendingUp,
     AlertTriangle,
-    ListTodo
+    ListTodo,
+    Activity,
+    ChevronRight,
+    AlertCircle
 } from 'lucide-react'
+import { BarChart, Bar, ResponsiveContainer, XAxis, Tooltip, CartesianGrid } from 'recharts'
+import '../../styles/staff-dashboard.css'
+import '../../styles/staff-tasks.css'
+
 
 function StaffDashboard() {
     const navigate = useNavigate()
@@ -21,23 +28,17 @@ function StaffDashboard() {
         pending: 0,
         completed: 0,
         overdue: 0,
-        completionRate: 0
+        productivity: 0
     })
     const [recentTasks, setRecentTasks] = useState([])
+    const [productivityData, setProductivityData] = useState([])
     const [loading, setLoading] = useState(true)
-
-    const today = new Date().toLocaleDateString('pt-BR', {
-        weekday: 'long',
-        day: 'numeric',
-        month: 'long'
-    })
 
     useEffect(() => {
         fetchDashboardData()
 
-        // Register pull-to-refresh
         registerRefresh(async () => {
-            await fetchDashboardData(true) // Silent refresh
+            await fetchDashboardData(true)
         })
 
         return () => unregisterRefresh()
@@ -47,30 +48,19 @@ function StaffDashboard() {
         try {
             if (!silent) setLoading(true)
 
-            // Ensure professionalId is loaded
             if (!professionalId) {
-                console.warn('Professional ID not loaded yet')
-                setStats({
-                    pending: 0,
-                    completed: 0,
-                    overdue: 0,
-                    productivity: 0
-                })
-                setRecentTasks([])
+                setLoading(false)
                 return
             }
 
             // Fetch tasks assigned to this professional
             const { data: tasks, error } = await supabase
                 .from('tarefas')
-                .select('id, titulo, deadline, status, prioridade, created_at, concluida_at')
+                .select('id, titulo, deadline, status, prioridade, created_at, concluida_at, drive_link')
                 .eq('assigned_to', professionalId)
                 .order('deadline', { ascending: true, nullsFirst: false })
 
-            if (error) {
-                console.error('Error fetching tasks:', error)
-                throw error
-            }
+            if (error) throw error
 
             const now = new Date()
 
@@ -78,36 +68,47 @@ function StaffDashboard() {
             const pendingTasks = tasks.filter(t => t.status === 'pendente' || t.status === 'em_progresso')
             const completedTasks = tasks.filter(t => t.status === 'concluida')
 
-            // Check overdue (only for non-completed tasks)
+            // Overdue check
             const overdueTasks = pendingTasks.filter(t => {
                 if (!t.deadline) return false
                 return new Date(t.deadline) < now
             })
 
-            // Very basic "Productivity" metric (last 7 days completions)
+            // Productivity (Last 7 days)
             const sevenDaysAgo = new Date()
             sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-            const recentCompletions = completedTasks.filter(t => new Date(t.concluida_at || t.created_at) > sevenDaysAgo).length
+            const recentCompletions = completedTasks.filter(t => new Date(t.concluida_at || t.created_at) > sevenDaysAgo)
+
+            // Prepare Chart Data (Last 7 Days)
+            const chartData = []
+            for (let i = 6; i >= 0; i--) {
+                const date = new Date()
+                date.setDate(date.getDate() - i)
+                const dateString = date.toLocaleDateString('pt-BR', { weekday: 'short' }) // Seg, Ter...
+
+                const count = recentCompletions.filter(t => {
+                    const taskDate = new Date(t.concluida_at || t.created_at)
+                    return taskDate.getDate() === date.getDate() && taskDate.getMonth() === date.getMonth()
+                }).length
+
+                chartData.push({ name: dateString, value: count })
+            }
 
             setStats({
                 pending: pendingTasks.length,
                 completed: completedTasks.length,
                 overdue: overdueTasks.length,
-                productivity: recentCompletions
+                productivity: recentCompletions.length
             })
 
-            // Set Recent/Upcoming Tasks (Top 5 pending)
+            setProductivityData(chartData)
+
+            // Top listing: pending tasks first, ordered by deadline (already from DB usually, but ensuring)
+            // Limit to 5
             setRecentTasks(pendingTasks.slice(0, 5))
 
         } catch (error) {
             console.error('Error fetching dashboard data:', error)
-            setStats({
-                pending: 0,
-                completed: 0,
-                overdue: 0,
-                productivity: 0
-            })
-            setRecentTasks([])
         } finally {
             setLoading(false)
         }
@@ -115,8 +116,10 @@ function StaffDashboard() {
 
     if (loading) {
         return (
-            <div className="flex justify-center items-center h-64">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <div className="dashboard-container">
+                <div className="card loading-card">
+                    <p className="loading-text-primary">Carregando painel...</p>
+                </div>
             </div>
         )
     }
@@ -124,61 +127,161 @@ function StaffDashboard() {
     const firstName = professionalName?.split(' ')[0] || 'Colaborador'
 
     return (
-        <div className="staff-dashboard animation-fade-in pb-12">
+        <div className="dashboard-container staff-dashboard-container">
             {/* Header */}
-            <header className="mb-10">
-                <h1 className="text-3xl font-bold text-primary">
-                    Olá, {firstName}.
-                </h1>
-                <p className="text-secondary mt-2 text-lg">
-                    Aqui está o panorama das suas atividades.
-                </p>
-            </header>
+            <div className="dashboard-header">
+                <h2>Olá, {firstName}.</h2>
+                <p className="text-secondary">Aqui está o panorama das suas atividades.</p>
+            </div>
 
-            {/* BLOCK 1: Overview Cards (CityOS Silent Style) */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-                {/* Pending */}
-                <div className="card p-6 border-l-4 border-brand hover:translate-y-[-2px] transition-transform duration-300">
-                    <div className="flex justify-between items-start mb-4">
-                        <span className="text-secondary font-medium">Em Aberto</span>
-                        <Clock size={20} className="text-brand opacity-80" />
+            {/* Metrics Grid */}
+            <div className="dashboard-grid-metrics">
+                <div className="card metric-card">
+                    <h3 className="metric-label">Em Aberto</h3>
+                    <p className="metric-value metric-value-primary">{stats.pending}</p>
+                    <div className="flex items-center gap-2 mt-2 text-xs text-secondary">
+                        <Clock size={14} />
+                        <span>Aguardando ação</span>
                     </div>
-                    <div className="text-4xl font-bold text-primary mb-1">{stats.pending}</div>
-                    <div className="text-xs text-tertiary">Tarefas aguardando ação</div>
                 </div>
 
-                {/* Overdue */}
-                <div className="card p-6 border-l-4 border-danger hover:translate-y-[-2px] transition-transform duration-300">
-                    <div className="flex justify-between items-start mb-4">
-                        <span className="text-secondary font-medium">Atrasadas</span>
-                        <AlertTriangle size={20} className="text-danger opacity-80" />
+                <div className="card metric-card">
+                    <h3 className="metric-label">Atrasadas</h3>
+                    <p className="metric-value text-danger">{stats.overdue}</p>
+                    <div className="flex items-center gap-2 mt-2 text-xs text-danger">
+                        <AlertTriangle size={14} />
+                        <span>Atenção necessária</span>
                     </div>
-                    <div className="text-4xl font-bold text-primary mb-1">{stats.overdue}</div>
-                    <div className="text-xs text-tertiary">Precisam de atenção imediata</div>
                 </div>
 
-                {/* Completed Total */}
-                <div className="card p-6 border-l-4 border-success hover:translate-y-[-2px] transition-transform duration-300">
-                    <div className="flex justify-between items-start mb-4">
-                        <span className="text-secondary font-medium">Concluídas</span>
-                        <CheckCircle2 size={20} className="text-success opacity-80" />
+                <div className="card metric-card">
+                    <h3 className="metric-label">Concluídas</h3>
+                    <p className="metric-value metric-value-success">{stats.completed}</p>
+                    <div className="flex items-center gap-2 mt-2 text-xs text-secondary">
+                        <CheckCircle2 size={14} className="text-success" />
+                        <span>Total histórico</span>
                     </div>
-                    <div className="text-4xl font-bold text-primary mb-1">{stats.completed}</div>
-                    <div className="text-xs text-tertiary">Total histórico</div>
                 </div>
 
-                {/* Productivity (Last 7 Days) */}
-                <div className="card p-6 border-l-4 border-purple-500 hover:translate-y-[-2px] transition-transform duration-300">
-                    <div className="flex justify-between items-start mb-4">
-                        <span className="text-secondary font-medium">Produtividade</span>
-                        <TrendingUp size={20} className="text-purple-500 opacity-80" />
+                <div className="card metric-card">
+                    <h3 className="metric-label">Produtividade (7d)</h3>
+                    <p className="metric-value">{stats.productivity}</p>
+                    <div className="flex items-center gap-2 mt-2 text-xs text-secondary">
+                        <TrendingUp size={14} />
+                        <span>Tarefas finalizadas</span>
                     </div>
-                    <div className="text-4xl font-bold text-primary mb-1">{stats.productivity}</div>
-                    <div className="text-xs text-tertiary">Concluídas nos últimos 7 dias</div>
+                </div>
+            </div>
+
+            <div className="dashboard-grid-charts">
+                {/* Chart - Productivity */}
+                <div className="card">
+                    <div className="card-header">
+                        <h3 className="card-title flex items-center gap-2">
+                            <Activity size={18} />
+                            Desempenho Semanal
+                        </h3>
+                    </div>
+                    <div style={{ width: '100%', height: 200 }}>
+                        <ResponsiveContainer>
+                            <BarChart data={productivityData}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
+                                <XAxis
+                                    dataKey="name"
+                                    tick={{ fontSize: 11, fill: '#64748b' }}
+                                    axisLine={false}
+                                    tickLine={false}
+                                />
+                                <Tooltip
+                                    cursor={{ fill: 'var(--color-bg-subtle)' }}
+                                    contentStyle={{
+                                        borderRadius: '8px',
+                                        border: 'none',
+                                        boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                                    }}
+                                />
+                                <Bar dataKey="value" fill="var(--color-primary)" radius={[4, 4, 0, 0]} barSize={32} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+
+                {/* Recent Tasks List */}
+                <div className="card">
+                    <div className="card-header">
+                        <h3 className="card-title flex items-center gap-2">
+                            <ListTodo size={18} />
+                            Próximas Tarefas
+                        </h3>
+                        <button
+                            onClick={() => navigate('/staff/tasks')}
+                            className="btn btn-ghost btn-sm"
+                        >
+                            Ver todas
+                        </button>
+                    </div>
+
+                    {recentTasks.length === 0 ? (
+                        <div className="staff-empty-state">
+                            <CheckCircle2 size={48} className="text-success opacity-20 mb-4" />
+                            <p className="font-medium text-secondary">Tudo em dia!</p>
+                            <p className="text-sm text-tertiary">Você não tem tarefas pendentes.</p>
+                        </div>
+                    ) : (
+                        <div className="staff-tasks-list">
+                            {recentTasks.map(task => {
+                                const isOverdue = new Date(task.deadline) < new Date() && task.status !== 'concluida'
+                                const statusClass = task.status === 'concluida' ? 'status-completed' : task.status === 'em_progresso' ? 'status-in-progress' : 'status-pending'
+                                const statusText = task.status === 'concluida' ? 'Concluída' : task.status === 'em_progresso' ? 'Em Andamento' : 'Pendente'
+
+                                return (
+                                    <div
+                                        key={task.id}
+                                        className={`staff-task-card ${isOverdue ? 'overdue' : ''}`}
+                                        onClick={() => navigate('/staff/tasks')}
+                                    >
+                                        <div className="staff-task-content">
+                                            <div className="staff-task-header">
+                                                <span className={`staff-task-status-dot ${statusClass}`}></span>
+                                                <span className="staff-task-status-text">{statusText}</span>
+                                                {isOverdue && (
+                                                    <span className="staff-task-badge-overdue">
+                                                        <AlertCircle size={10} />
+                                                        Atrasada
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            <h3 className="staff-task-title">
+                                                {task.titulo}
+                                            </h3>
+
+                                            <div className="staff-task-meta">
+                                                {task.deadline && (
+                                                    <div className="staff-task-meta-item">
+                                                        <Calendar size={12} />
+                                                        <span>{new Date(task.deadline).toLocaleDateString('pt-BR')}</span>
+                                                    </div>
+                                                )}
+                                                {task.prioridade === 'urgente' && (
+                                                    <span className="staff-task-priority-urgent">Urgente</span>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <div className="staff-task-action">
+                                            <ChevronRight size={20} />
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
     )
 }
+
 
 export default StaffDashboard
