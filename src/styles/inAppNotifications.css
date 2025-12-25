@@ -1,91 +1,502 @@
-/* In-App Notifications - CityOS Solid Design */
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   TOAST NOTIFICATIONS - Premium Executive CityOS
+   System Event Log Visual
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* Container - Bottom Right */
+.toast-container {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    pointer-events: none;
+}
+
+/* Mobile Adjustments */
+@media (max-width: 480px) {
+    .toast-container {
+        right: 12px;
+        left: 12px;
+    }
+}
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   CONTAINER
+   Card Base - Premium Executive
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.toast-item {
+    width: 320px;
+    padding: 14px 16px 16px;
+    background: #ffffff !important;
+    border-radius: 14px;
+    border: 1px solid #e5e7eb;
+    box-shadow:
+        0 10px 25px rgba(0, 0, 0, 0.08),
+        0 2px 6px rgba(0, 0, 0, 0.04);
+    font-family: var(--font-body, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+    animation: toast-slide-in 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+    pointer-events: auto;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+@media (max-width: 480px) {
+    .toast-item {
+        width: 100%;
+    }
+}
+
+.toast-item:hover {
+    box-shadow:
+        0 14px 32px rgba(0, 0, 0, 0.12),
+        0 4px 8px rgba(0, 0, 0, 0.06);
+    transform: translateY(-1px);
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Header - CityOS Signature
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.toast-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.toast-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #16a34a;
+    flex-shrink: 0;
+}
+
+.toast-title {
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #6b7280;
+    font-weight: 600;
+    flex: 1;
+}
+
+.toast-close {
+    margin-left: auto;
+    background: transparent;
+    border: none;
+    color: #9ca3af;
+    font-size: 1.25rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s;
+    flex-shrink: 0;
+}
+
+.toast-close:hover {
+    color: #1f2937;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Body - Hierarchical Content
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.toast-body {
+    font-size: 0.85rem;
+    color: #1f2937;
+    line-height: 1.45;
+    padding-left: 16px;
+}
+
+.toast-body strong {
+    font-weight: 600;
+    color: #111827;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Type Variants - Dot Color
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.toast-success .toast-dot {
+    background: #16a34a;
+}
+
+.toast-error .toast-dot {
+    background: #dc2626;
+}
+
+.toast-info .toast-dot {
+    background: #2563eb;
+}
+
+.toast-warning .toast-dot {
+    background: #f59e0b;
+}
+
+.toast-task_assigned .toast-dot {
+    background: #8b5cf6;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Animations - Executive, No Show
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+@keyframes toast-slide-in {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes toast-slide-out {
+    from {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    to {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+}
+
+.toast-item.toast-exiting {
+    animation: toast-slide-out 0.25s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Accessibility
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+@media (prefers-reduced-motion: reduce) {
+    .toast-item {
+        animation: none;
+    }
+
+    .toast-item.toast-exiting {
+        animation: none;
+        opacity: 0;
+    }
+}
+
+/* Container - Bottom Right */
+.toast-container {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    pointer-events: none;
+}
+
+/* Mobile Adjustments */
+@media (max-width: 768px) {
+    .toast-container {
+        bottom: max(16px, env(safe-area-inset-bottom));
+        right: 16px;
+        left: 16px;
+    }
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Toast Item - Base Styling
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.toast-item {
+    min-width: 280px;
+    max-width: 360px;
+    padding: 14px 16px;
+    border-radius: 10px;
+    background: #ffffff !important;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+    font-size: 0.875rem;
+    color: #1f2937;
+    pointer-events: auto;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+@media (max-width: 768px) {
+    .toast-item {
+        max-width: 90vw;
+        padding: 12px 14px;
+    }
+}
+
+.toast-item:hover {
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
+    transform: translateY(-1px);
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Type Variants - Border Left Accent
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.toast-success {
+    border-left: 4px solid #16a34a;
+}
+
+.toast-error {
+    border-left: 4px solid #dc2626;
+}
+
+.toast-info {
+    border-left: 4px solid #2563eb;
+}
+
+.toast-warning {
+    border-left: 4px solid #f59e0b;
+}
+
+.toast-task_assigned {
+    border-left: 4px solid #8b5cf6;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Content Layout
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.toast-content {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.toast-icon {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    margin-top: 1px;
+}
+
+.toast-success .toast-icon {
+    color: #16a34a;
+}
+
+.toast-error .toast-icon {
+    color: #dc2626;
+}
+
+.toast-info .toast-icon {
+    color: #2563eb;
+}
+
+.toast-warning .toast-icon {
+    color: #f59e0b;
+}
+
+.toast-task_assigned .toast-icon {
+    color: #8b5cf6;
+}
+
+.toast-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.toast-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #0f172a;
+    margin: 0 0 4px 0;
+    line-height: 1.3;
+}
+
+.toast-message {
+    font-size: 0.8125rem;
+    color: #64748b;
+    margin: 0;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    line-clamp: 2;
+    overflow: hidden;
+}
+
+.toast-close {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    color: #9ca3af;
+    cursor: pointer;
+    transition: color 0.2s;
+    background: none;
+    border: none;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.6;
+}
+
+.toast-close:hover {
+    color: #1f2937;
+    opacity: 1;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Animations - Discrete & Institutional
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+@keyframes toast-in {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes toast-out {
+    from {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    to {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+}
+
+.toast-item {
+    animation: toast-in 0.25s ease-out;
+}
+
+.toast-item.toast-exiting {
+    animation: toast-out 0.2s ease-in forwards;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Accessibility
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+@media (prefers-reduced-motion: reduce) {
+    .toast-item {
+        animation: none;
+    }
+
+    .toast-item.toast-exiting {
+        animation: none;
+        opacity: 0;
+    }
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   CONTAINER - BOTTOM RIGHT
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
 .in-app-notifications-container {
     position: fixed;
-    top: var(--space-4);
+    bottom: var(--space-4);
     right: var(--space-4);
     z-index: 9999;
     pointer-events: none;
     display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-    max-width: 400px;
-    width: calc(100vw - var(--space-8));
+    flex-direction: column-reverse;
+    gap: var(--space-2);
+    max-width: 320px;
+    width: auto;
 }
 
-/* Mobile: Full width at top with iOS safe area support */
+/* Mobile: Bottom center */
 @media (max-width: 768px) {
     .in-app-notifications-container {
-        /* Respect iOS notch/Dynamic Island */
-        top: max(var(--space-2), env(safe-area-inset-top));
-        right: var(--space-2);
-        left: var(--space-2);
+        bottom: max(var(--space-3), env(safe-area-inset-bottom));
+        right: var(--space-3);
+        left: var(--space-3);
         max-width: none;
         width: auto;
     }
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   NOTIFICATION BANNER - SOLID SURFACE (CityOS)
+   NOTIFICATION BANNER - MOBILE TOAST
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
 .in-app-notification {
-    background: var(--color-bg-surface);
-    border-radius: var(--radius-lg);
-    padding: var(--space-4);
+    background: #ffffff;
+    border-radius: 10px;
+    padding: 14px 16px;
     box-shadow:
-        0 2px 4px rgba(0, 0, 0, 0.08),
+        0 8px 24px rgba(0, 0, 0, 0.12),
+        0 4px 8px rgba(0, 0, 0, 0.08),
         0 0 0 1px rgba(0, 0, 0, 0.04);
     pointer-events: auto;
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
     overflow: hidden;
+    min-height: 70px;
 }
 
 /* Dark mode */
 @media (prefers-color-scheme: dark) {
     .in-app-notification {
-        background: var(--color-bg-surface);
+        background: #1e293b;
         box-shadow:
-            0 2px 4px rgba(0, 0, 0, 0.3),
+            0 8px 24px rgba(0, 0, 0, 0.5),
+            0 4px 8px rgba(0, 0, 0, 0.3),
             0 0 0 1px rgba(255, 255, 255, 0.08);
     }
 }
 
 .in-app-notification:hover {
-    transform: translateY(-1px);
+    transform: translateY(-2px);
     box-shadow:
-        0 4px 8px rgba(0, 0, 0, 0.12),
+        0 12px 32px rgba(0, 0, 0, 0.16),
+        0 6px 12px rgba(0, 0, 0, 0.1),
         0 0 0 1px rgba(0, 0, 0, 0.06);
 }
 
-/* Accent bar (left border) */
+/* Colored top border */
 .in-app-notification::before {
     content: '';
     position: absolute;
     left: 0;
+    right: 0;
     top: 0;
-    bottom: 0;
-    width: 4px;
-    background: var(--color-primary);
-    border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+    height: 3px;
+    background: #3b82f6;
+    border-radius: 10px 10px 0 0;
 }
 
 .in-app-notification.type-success::before {
-    background: var(--color-success);
+    background: #10b981;
 }
 
 .in-app-notification.type-warning::before {
-    background: var(--color-warning);
+    background: #f59e0b;
 }
 
 .in-app-notification.type-error::before {
-    background: var(--color-danger);
+    background: #ef4444;
+}
+
+.in-app-notification.type-task_assigned::before {
+    background: #8b5cf6;
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -95,28 +506,31 @@
 .in-app-notification-content {
     display: flex;
     align-items: flex-start;
-    gap: var(--space-3);
-    padding-left: var(--space-2);
+    gap: 12px;
 }
 
 .in-app-notification-icon {
     flex-shrink: 0;
     width: 20px;
     height: 20px;
-    color: var(--color-primary);
+    color: #3b82f6;
     margin-top: 2px;
 }
 
 .in-app-notification.type-success .in-app-notification-icon {
-    color: var(--color-success);
+    color: #10b981;
 }
 
 .in-app-notification.type-warning .in-app-notification-icon {
-    color: var(--color-warning);
+    color: #f59e0b;
 }
 
 .in-app-notification.type-error .in-app-notification-icon {
-    color: var(--color-danger);
+    color: #ef4444;
+}
+
+.in-app-notification.type-task_assigned .in-app-notification-icon {
+    color: #8b5cf6;
 }
 
 .in-app-notification-body {
@@ -125,42 +539,63 @@
 }
 
 .in-app-notification-title {
-    font-size: var(--text-sm);
+    font-size: 14px;
     font-weight: 600;
-    color: var(--color-text-primary);
-    margin: 0 0 var(--space-1) 0;
-    line-height: 1.4;
+    color: #0f172a;
+    margin: 0 0 4px 0;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+}
+
+@media (prefers-color-scheme: dark) {
+    .in-app-notification-title {
+        color: #f1f5f9;
+    }
 }
 
 .in-app-notification-message {
-    font-size: var(--text-xs);
-    color: var(--color-text-secondary);
+    font-size: 13px;
+    color: #64748b;
     margin: 0;
     line-height: 1.5;
     display: -webkit-box;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
-    line-clamp: 2;
+    line-clamp: 3;
     overflow: hidden;
+}
+
+@media (prefers-color-scheme: dark) {
+    .in-app-notification-message {
+        color: #94a3b8;
+    }
 }
 
 .in-app-notification-close {
     flex-shrink: 0;
     width: 20px;
     height: 20px;
-    color: var(--color-text-tertiary);
+    color: #94a3b8;
     cursor: pointer;
-    transition: color 0.2s;
+    transition: all 0.2s;
     background: none;
     border: none;
     padding: 0;
     display: flex;
     align-items: center;
     justify-content: center;
+    opacity: 0.5;
 }
 
 .in-app-notification-close:hover {
-    color: var(--color-text-primary);
+    color: #0f172a;
+    opacity: 1;
+}
+
+@media (prefers-color-scheme: dark) {
+    .in-app-notification-close:hover {
+        color: #f1f5f9;
+    }
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
