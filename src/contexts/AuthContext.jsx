@@ -48,7 +48,17 @@ export function AuthProvider({ children }) {
         try {
             const { data: professional, error } = await supabase
                 .from('profissionais')
-                .select('id, role, nome, ativo')
+                .select(`
+                    id, 
+                    role, 
+                    nome, 
+                    ativo,
+                    empresa_profissionais (
+                        empresa:empresas (
+                            status_conta
+                        )
+                    )
+                `)
                 .eq('id', userId)
                 .maybeSingle()
 
@@ -75,6 +85,14 @@ export function AuthProvider({ children }) {
                 return
             }
 
+            // SECURITY: Check if company is suspended
+            const companyStatus = professional.empresa_profissionais?.[0]?.empresa?.status_conta
+            if (companyStatus === 'suspended') {
+                await signOut()
+                window.location.href = '/suspended'
+                return
+            }
+
             setRole(professional.role || null)
             setProfessionalId(professional.id || null)
             setProfessionalName(professional.nome || null)
@@ -94,7 +112,17 @@ export function AuthProvider({ children }) {
         })
 
         if (error) throw error
-        return data
+
+        // Fetch role immediately to allow redirect logic
+        const { data: prof, error: profError } = await supabase
+            .from('profissionais')
+            .select('role')
+            .eq('id', data.user.id)
+            .single()
+
+        if (profError) console.error('Error fetching role during login:', profError)
+
+        return { ...data, role: prof?.role }
     }
 
     async function signOut() {

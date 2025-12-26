@@ -1,0 +1,166 @@
+.sa-dashboard {
+    width: 100%;
+}
+
+.sa-header-block {
+    margin-bottom: 32px;
+}
+
+.sa-header-block h1 {
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin-bottom: 8px;
+}
+
+.sa-header-block p {
+    color: var(--color-text-secondary);
+}
+
+.sa-table-container {
+    background: var(--color-surface);
+    border-radius: 12px;
+    border: 1px solid var(--color-border);
+    overflow: hidden;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+
+.sa-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.sa-table th {
+    text-align: left;
+    padding: 16px 24px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text-tertiary);
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-background-subtle);
+}
+
+.sa-table td {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--color-border);
+    color: var(--color-text-secondary);
+    font-size: 14px;
+}
+
+.sa-table tr:last-child td {
+    border-bottom: none;
+}
+
+.sa-table tr:hover {
+    background-color: var(--color-background-hover);
+}
+
+.badge-health {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    border: 1px solid currentColor;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.badge-status {
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.badge-status.active {
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+}
+
+.badge-status.suspended {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+}
+
+.badge-status.trial {
+    background: rgba(59, 130, 246, 0.1);
+    color: #3b82f6;
+}
+
+.btn-action-icon {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--color-text-tertiary);
+    padding: 6px;
+    border-radius: 4px;
+}
+
+.btn-action-icon:hover {
+    background: var(--color-background-subtle);
+    color: var(--color-primary);
+}
+
+/* Modal Simple Styles */
+.modal-backdrop-sa {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+}
+
+.modal-sa {
+    background: var(--color-surface);
+    padding: 24px;
+    border-radius: 12px;
+    width: 400px;
+    border: 1px solid var(--color-border);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+.modal-sa h3 {
+    margin-bottom: 16px;
+    color: var(--color-text-primary);
+}
+
+.modal-sa-content textarea {
+    width: 100%;
+    height: 80px;
+    margin: 12px 0 24px;
+    padding: 8px;
+    border-radius: 6px;
+    border: 1px solid var(--color-border);
+    background: var(--color-background);
+    color: var(--color-text-primary);
+}
+
+.modal-sa-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.btn-large {
+    width: 100%;
+    padding: 12px;
+    border-radius: 8px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+}
+
+.btn-danger {
+    background: #ef4444;
+    color: white;
+}
+
+.btn-success {
+    background: #10b981;
+    color: white;
+}

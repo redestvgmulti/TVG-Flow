@@ -3,6 +3,7 @@ import AppLayout from './layout/AppLayout'
 import AdminLayout from './layout/AdminLayout'
 import Login from './pages/Login'
 import ResetPassword from './pages/ResetPassword'
+import Suspended from './pages/Suspended'
 import Dashboard from './pages/admin/Dashboard'
 import Tasks from './pages/admin/Tasks'
 import NewOS from './pages/admin/tasks/NewOS'
@@ -26,6 +27,9 @@ import StaffProfile from './pages/staff/Profile'
 import StaffRequestCreate from './pages/staff/RequestCreate'
 import ProtectedRoute from './routes/ProtectedRoute'
 import RoleProtectedRoute from './routes/RoleProtectedRoute'
+import SuperAdminRoute from './routes/SuperAdminRoute'
+import SuperAdminLayout from './layout/SuperAdminLayout'
+import SuperAdminDashboard from './pages/super-admin/SuperAdminDashboard'
 
 import { Toaster } from 'sonner'
 
@@ -44,6 +48,7 @@ function App() {
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/suspended" element={<Suspended />} />
 
               {/* Admin Routes */}
               <Route
@@ -99,6 +104,20 @@ function App() {
                 <Route path="content" element={<StaffContent />} />
                 <Route path="profile" element={<StaffProfile />} />
                 <Route path="today" element={<StaffToday />} />
+              </Route>
+
+              {/* Super Admin Routes */}
+              <Route
+                path="/platform"
+                element={
+                  <ProtectedRoute>
+                    <SuperAdminRoute>
+                      <SuperAdminLayout />
+                    </SuperAdminRoute>
+                  </ProtectedRoute>
+                }
+              >
+                <Route index element={<SuperAdminDashboard />} />
               </Route>
 
               <Route path="/" element={<Navigate to="/login" replace />} />

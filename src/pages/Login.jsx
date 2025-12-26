@@ -19,8 +19,12 @@ function Login() {
         setLoading(true)
 
         try {
-            await signIn(email, password)
-            navigate('/admin')
+            const { role } = await signIn(email, password)
+            if (role === 'super_admin') {
+                navigate('/platform')
+            } else {
+                navigate('/admin')
+            }
         } catch (error) {
             setError(error.message)
             setLoading(false)
