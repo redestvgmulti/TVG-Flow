@@ -2,7 +2,7 @@ import { createPortal } from 'react-dom'
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
-import { Building2, Users, Plus, Search } from 'lucide-react'
+import { Building2, Users, Plus, Search, Edit2 } from 'lucide-react'
 import { toast } from 'sonner'
 import '../../styles/companies.css'
 
@@ -16,6 +16,7 @@ function Companies() {
     const [formData, setFormData] = useState({
         nome: '',
         cnpj: '',
+        drive_link: '',
         ativo: true
     })
 
@@ -31,11 +32,11 @@ function Companies() {
             const { data: companiesData, error: companiesError } = await supabase
                 .from('clientes')
                 .select(`
-                    *,
-                    empresa_profissionais (
-                        profissional_id
-                    )
-                `)
+    *,
+    empresa_profissionais(
+        profissional_id
+    )
+        `)
                 .order('nome')
 
             if (companiesError) throw companiesError
@@ -67,8 +68,8 @@ function Companies() {
                     .update({
                         nome: formData.nome,
                         cnpj: formData.cnpj,
-                        ativo: formData.ativo,
-                        updated_at: new Date().toISOString() // Assuming updated_at exists, if not it might be ignored or error depending on setup. Migration didn't add it explicitly to clientes but list_tables showed created_at. let's check. wait list_tables showed created_at but not updated_at. I should probably NOT send updated_at unless I know it exists. list_tables output for clientes: id, nome, created_at. NO updated_at. I will REMOVE it to be safe.
+                        drive_link: formData.drive_link || null,
+                        ativo: formData.ativo
                     })
                     .eq('id', editingCompany.id)
 
@@ -81,6 +82,7 @@ function Companies() {
                     .insert([{
                         nome: formData.nome,
                         cnpj: formData.cnpj,
+                        drive_link: formData.drive_link || null,
                         ativo: formData.ativo
                     }])
 
@@ -105,11 +107,12 @@ function Companies() {
             setFormData({
                 nome: company.nome,
                 cnpj: company.cnpj || '',
-                ativo: company.ativo !== undefined ? company.ativo : true // Handle potential missing legacy
+                drive_link: company.drive_link || '',
+                ativo: company.ativo !== undefined ? company.ativo : true
             })
         } else {
             setEditingCompany(null)
-            setFormData({ nome: '', cnpj: '', ativo: true })
+            setFormData({ nome: '', cnpj: '', drive_link: '', ativo: true })
         }
         setShowModal(true)
     }
@@ -121,7 +124,7 @@ function Companies() {
     }
 
     function handleCompanyClick(company) {
-        navigate(`/admin/companies/${company.id}`)
+        navigate(`/ admin / companies / ${company.id} `)
     }
 
     const filteredCompanies = companies.filter(company =>
@@ -174,27 +177,40 @@ function Companies() {
                             <div
                                 key={company.id}
                                 className="card company-card"
-                                onClick={() => handleCompanyClick(company)}
+                                onClick={() => navigate(`/admin/companies/${company.id}`)}
                             >
-                                <div className="company-card-header">
+                                <div className="company-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                     <div>
                                         <h3 className="company-name">{company.nome}</h3>
-                                        {company.cnpj && <p style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>CNPJ: {company.cnpj}</p>}
+                                        {company.cnpj && (
+                                            <p style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+                                                CNPJ: {company.cnpj}
+                                            </p>
+                                        )}
                                         <span className={`company-status ${company.ativo ? 'active' : 'inactive'}`}>
                                             {company.ativo ? 'Ativa' : 'Inativa'}
                                         </span>
                                     </div>
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation()
+                                            handleOpenModal(company)
+                                        }}
+                                        className="btn btn-ghost btn-sm"
+                                        title="Editar empresa"
+                                    >
+                                        <Edit2 size={16} />
+                                    </button>
                                 </div>
 
                                 <div className="company-stats">
                                     <div className="company-stat">
                                         <Users size={16} />
-                                        <span>{company.professionalCount} profissionais</span>
+                                        <span>{company.professionalCount || 0} profissionais</span>
                                     </div>
                                 </div>
                             </div>
-                        ))}
-                    </div>
+                        ))}</div>
                 ) : (
                     <div className="card">
                         <div className="companies-empty-state">
@@ -256,6 +272,23 @@ function Companies() {
                                             onChange={(e) => setFormData({ ...formData, cnpj: e.target.value })}
                                             placeholder="00.000.000/0000-00"
                                         />
+                                    </div>
+
+                                    <div className="input-group">
+                                        <label htmlFor="drive_link">
+                                            Link do Drive da Empresa
+                                            <span style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginLeft: '6px' }}>(Opcional)</span>
+                                        </label>
+                                        <input
+                                            type="url"
+                                            id="drive_link"
+                                            value={formData.drive_link}
+                                            onChange={(e) => setFormData({ ...formData, drive_link: e.target.value })}
+                                            placeholder="https://drive.google.com/drive/folders/..."
+                                        />
+                                        <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '4px', display: 'block' }}>
+                                            Cole o link da pasta raiz do cliente no Google Drive
+                                        </span>
                                     </div>
 
                                     <div className="input-group">

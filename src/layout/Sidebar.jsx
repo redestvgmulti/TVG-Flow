@@ -13,7 +13,8 @@ import {
     ChevronRight,
     LogOut,
     User,
-    Building
+    Building,
+    FolderOpen
 } from 'lucide-react'
 
 function Sidebar({ mobileMenuOpen, onClose }) {
@@ -106,6 +107,11 @@ function Sidebar({ mobileMenuOpen, onClose }) {
                                     <span className="nav-text">Tarefas</span>
                                 </NavLink>
 
+                                <NavLink to="/admin/content" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={handleNavClick}>
+                                    <FolderOpen size={20} className="nav-icon" />
+                                    <span className="nav-text">Conteúdo</span>
+                                </NavLink>
+
                                 <NavLink to="/admin/calendar" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={handleNavClick}>
                                     <Calendar size={20} className="nav-icon" />
                                     <span className="nav-text">Calendário</span>
@@ -168,6 +174,11 @@ function Sidebar({ mobileMenuOpen, onClose }) {
                                         {incompleteTaskCount}
                                     </span>
                                 )}
+                            </NavLink>
+
+                            <NavLink to="/staff/content" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={handleNavClick}>
+                                <FolderOpen size={20} className="nav-icon" />
+                                <span className="nav-text">Conteúdo</span>
                             </NavLink>
 
                             <NavLink to="/staff/calendar" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={handleNavClick}>

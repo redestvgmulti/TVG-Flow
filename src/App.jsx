@@ -15,8 +15,10 @@ import Calendar from './pages/admin/Calendar'
 import Areas from './pages/admin/Areas'
 import Companies from './pages/admin/Companies'
 import CompanyDetails from './pages/admin/CompanyDetails'
+import AdminContent from './pages/admin/AdminContent'
 import StaffDashboard from './pages/staff/Dashboard'
 import StaffTasks from './pages/staff/Tasks'
+import StaffContent from './pages/staff/StaffContent'
 
 import StaffToday from './pages/staff/Today'
 import StaffCalendar from './pages/staff/Calendar'
@@ -73,6 +75,7 @@ function App() {
                 </Route>
 
                 <Route path="calendar" element={<Calendar />} />
+                <Route path="content" element={<AdminContent />} />
                 <Route path="reports" element={<Reports />} />
               </Route>
 
@@ -93,6 +96,7 @@ function App() {
 
                 <Route path="requests/new" element={<StaffRequestCreate />} />
                 <Route path="calendar" element={<StaffCalendar />} />
+                <Route path="content" element={<StaffContent />} />
                 <Route path="profile" element={<StaffProfile />} />
                 <Route path="today" element={<StaffToday />} />
               </Route>
