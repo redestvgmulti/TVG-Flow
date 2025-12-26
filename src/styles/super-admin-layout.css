@@ -18,32 +18,38 @@
     z-index: 100;
 }
 
-.sidebar-header {
-    padding: 24px 20px;
+.super-admin-sidebar .sidebar-header {
+    padding: 32px 20px;
+    /* Balanced vertical padding */
     border-bottom: 1px solid var(--color-border);
     display: flex;
     align-items: center;
-    gap: 12px;
+    justify-content: center;
+    /* Centered */
 }
 
-.sidebar-logo {
+.super-admin-sidebar .sidebar-logo {
     display: flex;
     align-items: center;
-    gap: 12px;
+    justify-content: center;
 }
 
-.logo-icon {
+.super-admin-sidebar .logo-icon {
     font-size: 24px;
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
-.logo-text {
-    font-size: 16px;
-    font-weight: 600;
+.super-admin-sidebar .logo-text {
+    font-size: 20px;
+    /* Increased size */
+    font-weight: 700;
+    /* Bolder */
     color: var(--color-text-primary);
-    /* Dark text */
+    text-align: center;
+    letter-spacing: 1.5px;
+    /* Increased spacing to un-stick letters */
 }
 
 .sidebar-nav {
@@ -128,6 +134,77 @@
     color: #ef4444;
 }
 
+/* Standard Button Styles */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    line-height: 1.2;
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background-color: var(--color-primary);
+    color: white;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.btn-primary:hover {
+    background-color: var(--color-primary-hover, #045263);
+    /* Fallback or variable */
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.btn-secondary {
+    background-color: white;
+    border-color: var(--color-border);
+    color: var(--color-text-secondary);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.btn-secondary:hover {
+    background-color: var(--color-bg-subtle);
+    border-color: var(--color-border-hover);
+    color: var(--color-text-primary);
+}
+
+.btn-danger {
+    background-color: #ef4444;
+    /* Standard Red */
+    color: white;
+}
+
+.btn-danger:hover {
+    background-color: #dc2626;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.2);
+}
+
+.btn-ghost {
+    background: transparent;
+    color: var(--color-text-tertiary);
+    padding: 6px 10px;
+}
+
+.btn-ghost:hover {
+    background-color: var(--color-bg-subtle);
+    color: var(--color-text-primary);
+}
+
 /* CONTENT AREA */
 .super-admin-content {
     flex: 1;
@@ -136,4 +213,155 @@
     max-width: 1400px;
     width: 100%;
     background-color: var(--color-bg-app);
+}
+
+/* Super Admin Modal System */
+.modal-backdrop-sa {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.2s ease-out;
+}
+
+.modal-sa {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    width: 500px;
+    /* Default width, can be overridden by style prop */
+    max-width: 90vw;
+    max-height: 90vh;
+    overflow-y: auto;
+    border: 1px solid var(--color-border);
+    animation: scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    padding: 24px;
+    position: relative;
+}
+
+@keyframes scaleIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95) translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+/* Super Admin Modal Form Styles */
+.sa-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.sa-modal-header h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin: 0;
+}
+
+.sa-close-btn {
+    background: none;
+    border: none;
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sa-close-btn:hover {
+    background: var(--color-bg-subtle);
+    color: var(--color-text-primary);
+}
+
+.sa-form-group {
+    margin-bottom: 16px;
+}
+
+.sa-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    margin-bottom: 6px;
+}
+
+.sa-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.sa-input-icon {
+    position: absolute;
+    left: 12px;
+    color: var(--color-text-tertiary);
+    pointer-events: none;
+    z-index: 1;
+}
+
+.sa-input {
+    width: 100%;
+    padding: 10px 12px 10px 36px;
+    /* Space for icon */
+    background: var(--color-bg-app);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    font-size: 14px;
+    color: var(--color-text-primary);
+    transition: all 0.2s ease;
+    outline: none;
+}
+
+.sa-input:hover {
+    border-color: var(--color-border-hover);
+}
+
+.sa-input:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(var(--color-primary-rgb, 14, 165, 233), 0.1);
+    background: white;
+}
+
+.sa-input::placeholder {
+    color: var(--color-text-disabled);
+}
+
+.sa-section-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin: 24px 0 16px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-top: 16px;
+    border-top: 1px solid var(--color-border);
+}
+
+.sa-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 32px;
+    padding-top: 16px;
 }

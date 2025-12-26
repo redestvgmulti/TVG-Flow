@@ -3,7 +3,7 @@ import { supabase } from '../../services/supabase'
 import { Plus } from 'lucide-react'
 import TenantList from './components/TenantList'
 import CreateTenantModal from './components/CreateTenantModal'
-import '../../styles/super-admin-dashboard.css'
+import '../../styles/adminReports.css' // Using Reports style as requested
 
 export default function TenantListPage() {
     const [companies, setCompanies] = useState([])
@@ -28,15 +28,16 @@ export default function TenantListPage() {
     }
 
     return (
-        <div className="sa-dashboard fade-in">
-            <div className="flex justify-between items-center mb-8">
-                <div>
-                    <h1 className="text-2xl font-bold text-text-primary">Empresas</h1>
-                    <p className="text-text-secondary">Visão geral dos tenants da plataforma</p>
+        <div className="reports-container fade-in">
+            {/* Header match Reports style */}
+            <div className="reports-header" style={{ alignItems: 'center' }}>
+                <div className="reports-title">
+                    <h1>Empresas</h1>
+                    <p>Visão geral dos tenants da plataforma.</p>
                 </div>
                 <button
                     onClick={() => setShowCreateModal(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg font-medium transition-colors"
+                    className="btn btn-primary"
                 >
                     <Plus size={18} />
                     Nova Empresa
@@ -44,9 +45,13 @@ export default function TenantListPage() {
             </div>
 
             {loading ? (
-                <div>Carregando...</div>
+                <div className="reports-loading">
+                    <div className="loading-spinner"></div>
+                </div>
             ) : (
-                <TenantList companies={companies} />
+                <div className="reports-content">
+                    <TenantList companies={companies} />
+                </div>
             )}
 
             {showCreateModal && (

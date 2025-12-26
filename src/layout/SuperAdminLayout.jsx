@@ -28,8 +28,7 @@ export default function SuperAdminLayout() {
         <div className="super-admin-layout">
             <aside className="super-admin-sidebar">
                 <div className="sidebar-header">
-                    <span className="logo-icon">⚡</span>
-                    <span className="logo-text">FlowOS Platform</span>
+                    <span className="logo-text">FlowOS</span>
                 </div>
 
                 <nav className="sidebar-nav">
