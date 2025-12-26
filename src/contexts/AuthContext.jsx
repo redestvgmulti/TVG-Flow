@@ -48,19 +48,25 @@ export function AuthProvider({ children }) {
         try {
             const { data: professional, error } = await supabase
                 .from('profissionais')
-                .select(`
-                    id, 
-                    role, 
-                    nome, 
-                    ativo,
-                    empresa_profissionais (
-                        empresa:empresas (
-                            status_conta
-                        )
-                    )
-                `)
+                .select('id, role, nome, ativo')
                 .eq('id', userId)
                 .maybeSingle()
+
+            // Fetch company association separately to avoid relationship issues
+            const { data: companyData } = await supabase
+                .from('empresa_profissionais')
+                .select(`
+                    empresa:empresas (
+                        status_conta
+                    )
+                `)
+                .eq('profissional_id', userId)
+                .maybeSingle()
+
+            // Merge company data into professional object
+            if (professional) {
+                professional.empresa_profissionais = companyData ? [companyData] : []
+            }
 
             if (error) {
                 setRole(null)
