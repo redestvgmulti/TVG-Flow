@@ -515,7 +515,7 @@ function Painel() {
                     <div className="modal" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <h3>Reatribuir Tarefa</h3>
-                            <button className="modal-close" onClick={() => setShowReatribuirModal(false)}>×</button>
+                            <button className="modal-close" onClick={() => setReatribuiringTask(null)}>×</button>
                         </div>
                         <form onSubmit={handleReatribuirTask}>
                             <div className="modal-body">
@@ -543,7 +543,7 @@ function Painel() {
                             <div className="modal-footer">
                                 <button
                                     type="button"
-                                    onClick={() => setShowReatribuirModal(false)}
+                                    onClick={() => setReatribuiringTask(null)}
                                     className="btn btn-secondary"
                                     disabled={reassigning}
                                 >

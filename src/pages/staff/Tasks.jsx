@@ -210,6 +210,12 @@ export default function StaffTasks() {
 
                     toast.success('Micro tarefa concluída! 🎉')
                 } else {
+                    // Validate status before updating
+                    const validStatuses = ['pendente', 'em_progresso', 'concluida']
+                    if (!validStatuses.includes(newStatus)) {
+                        throw new Error(`Status inválido: ${newStatus}. Valores permitidos: ${validStatuses.join(', ')}`)
+                    }
+
                     // For other status changes (em_progresso, etc), update directly
                     const { error } = await supabase
                         .from('tarefas_micro')

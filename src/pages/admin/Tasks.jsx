@@ -31,6 +31,14 @@ function Tasks() {
     // Bulk selection
     const [selectedTasks, setSelectedTasks] = useState([])
 
+    // Workflow Editing State
+    const [editingMicroTasks, setEditingMicroTasks] = useState([])
+    const [workflowReferenceData, setWorkflowReferenceData] = useState({
+        professionals: [],
+        functions: []
+    })
+    const [loadingWorkflowData, setLoadingWorkflowData] = useState(false)
+
     // Form state
     const [formData, setFormData] = useState({
         titulo: '',
@@ -57,7 +65,18 @@ function Tasks() {
             const [tasksResult, profsResult, deptsResult, clientsResult] = await Promise.all([
                 supabase
                     .from('tarefas')
-                    .select('*')
+                    .select(`
+                        *,
+                        micro_tasks:tarefas_micro (
+                            id,
+                            status,
+                            funcao,
+                            profissional:profissionais (
+                                id,
+                                nome
+                            )
+                        )
+                    `)
                     .order('created_at', { ascending: false }),
                 supabase
                     .from('profissionais')
@@ -123,7 +142,88 @@ function Tasks() {
             status: task.status || 'pending',
             drive_link: task.drive_link || ''
         })
+        if (task.micro_tasks && task.micro_tasks.length > 0) {
+            setEditingMicroTasks(task.micro_tasks.map(mt => ({
+                id: mt.id,
+                funcao: mt.funcao,
+                profissional_id: mt.profissional?.id || '', // Handle alias or direct access
+                status: mt.status,
+                original: true
+            })))
+            loadWorkflowReferenceData(task.cliente_id)
+        } else {
+            setEditingMicroTasks([])
+            setWorkflowReferenceData({ professionals: [], functions: [] })
+        }
         setShowEditModal(true)
+    }
+
+    async function loadWorkflowReferenceData(clientId) {
+        if (!clientId) return
+        setLoadingWorkflowData(true)
+        try {
+            const { data, error } = await supabase
+                .from('empresa_profissionais')
+                .select(`
+                    profissional_id,
+                    funcao,
+                    profissionais!inner (
+                        id,
+                        nome
+                    )
+                `)
+                .eq('empresa_id', clientId)
+                .eq('ativo', true)
+
+            if (error) throw error
+
+            const professionals = data || []
+            const functions = [...new Set(professionals.map(p => p.funcao))]
+
+            setWorkflowReferenceData({
+                professionals,
+                functions
+            })
+        } catch (error) {
+            console.error('Error loading workflow data:', error)
+            toast.error('Erro ao carregar dados do workflow')
+        } finally {
+            setLoadingWorkflowData(false)
+        }
+    }
+
+    // Workflow Editing Helpers
+    function handleAddMicroTask() {
+        setEditingMicroTasks([...editingMicroTasks, {
+            id: `temp_${Date.now()}`,
+            funcao: '',
+            profissional_id: '',
+            status: 'pendente',
+            original: false
+        }])
+    }
+
+    function handleRemoveMicroTask(index) {
+        const newTasks = [...editingMicroTasks]
+        newTasks.splice(index, 1)
+        setEditingMicroTasks(newTasks)
+    }
+
+    function handleUpdateMicroTask(index, field, value) {
+        const newTasks = [...editingMicroTasks]
+        newTasks[index] = { ...newTasks[index], [field]: value }
+
+        // Auto-select professional if function changes
+        if (field === 'funcao') {
+            const validProfs = workflowReferenceData.professionals.filter(p => p.funcao === value)
+            if (validProfs.length > 0) {
+                newTasks[index].profissional_id = validProfs[0].profissional_id
+            } else {
+                newTasks[index].profissional_id = ''
+            }
+        }
+
+        setEditingMicroTasks(newTasks)
     }
 
     function handleOpenDetailModal(task) {
@@ -217,9 +317,63 @@ function Tasks() {
 
             if (error) throw error
 
+            // Handle Workflow Updates
+            if (selectedTask.micro_tasks && selectedTask.micro_tasks.length > 0) {
+                // 1. Identify Deletions (IDs in original but not in editing)
+                const editingIds = editingMicroTasks.filter(mt => mt.original).map(mt => mt.id)
+                const toDelete = selectedTask.micro_tasks.filter(mt => !editingIds.includes(mt.id)).map(mt => mt.id)
+
+                if (toDelete.length > 0) {
+                    const { error: deleteError } = await supabase
+                        .from('tarefas_micro')
+                        .delete()
+                        .in('id', toDelete)
+                    if (deleteError) throw deleteError
+                }
+
+                // 2. Identify Updates (Original items with changes)
+                const toUpdate = editingMicroTasks.filter(mt => mt.original)
+                for (const mt of toUpdate) {
+                    const original = selectedTask.micro_tasks.find(o => o.id === mt.id)
+                    if (original && (original.profissional_id !== mt.profissional_id || original.status !== mt.status)) {
+                        const { error: updateError } = await supabase
+                            .from('tarefas_micro')
+                            .update({
+                                profissional_id: mt.profissional_id,
+                                funcao: mt.funcao // Although usually static, why not
+                                // Status is updated by dragging in kanban, but here we might want to respect current or reset? 
+                                // Let's keep status as is unless we add a status picker in edit. 
+                                // Actually user might want to reassign, status should probably preserved or reset if reassigning? 
+                                // For now, we only update profissional_id and guarantee matches.
+                            })
+                            .eq('id', mt.id)
+                        if (updateError) throw updateError
+                    }
+                }
+
+                // 3. Identify Insertions (New items with temp IDs)
+                const toInsert = editingMicroTasks
+                    .filter(mt => !mt.original)
+                    .map(mt => ({
+                        tarefa_id: selectedTask.id,
+                        funcao: mt.funcao,
+                        profissional_id: mt.profissional_id,
+                        status: 'pendente', // Default new steps to pending
+                        peso: 1 // Default weight
+                    }))
+
+                if (toInsert.length > 0) {
+                    const { error: insertError } = await supabase
+                        .from('tarefas_micro')
+                        .insert(toInsert)
+                    if (insertError) throw insertError
+                }
+            }
+
             toast.success('Tarefa atualizada com sucesso!')
             setShowEditModal(false)
             setSelectedTask(null)
+            setEditingMicroTasks([])
             resetForm()
             await fetchData()
         } catch (error) {
@@ -334,16 +488,15 @@ function Tasks() {
     }
 
     function getStatusBadgeClass(status) {
-        switch (status) {
-            case 'completed':
-                return 'badge-success'
-            case 'in_progress':
-                return 'badge-primary'
-            case 'overdue':
-                return 'badge-danger'
-            default:
-                return 'badge-neutral'
-        }
+        // Normalize status to lowercase
+        const normalized = status ? status.toLowerCase() : ''
+
+        if (normalized === 'completed' || normalized === 'concluida' || normalized === 'concluída') return 'badge-success'
+        if (normalized === 'in_progress' || normalized === 'em_progresso' || normalized === 'em progresso') return 'badge-primary'
+        if (normalized === 'overdue' || normalized === 'atrasada') return 'badge-danger'
+        if (normalized === 'pending' || normalized === 'pendente') return 'badge-pending'
+
+        return 'badge-neutral'
     }
 
     function getStatusLabel(status) {
@@ -359,9 +512,13 @@ function Tasks() {
     function getPriorityBadgeClass(priority) {
         switch (priority) {
             case 'urgent':
-                return 'badge-danger'
+                return 'badge-urgent'
             case 'high':
-                return 'badge-warning'
+                return 'badge-high'
+            case 'medium': // Keeping medium as warning/yellow-orange or distinctive
+                return 'badge-medium'
+            case 'low':
+                return 'badge-low'
             default:
                 return 'badge-neutral'
         }
@@ -565,7 +722,6 @@ function Tasks() {
                                     </th>
                                     <th>Título</th>
                                     <th>Cliente</th>
-                                    <th>Departamento</th>
                                     <th>Atribuída a</th>
                                     <th>Prazo</th>
                                     <th>Status</th>
@@ -593,8 +749,15 @@ function Tasks() {
                                             </button>
                                         </td>
                                         <td>{getClientName(task.cliente_id)}</td>
-                                        <td>{getDepartmentName(task.departamento_id)}</td>
-                                        <td>{getAssignedToName(task.assigned_to)}</td>
+                                        <td>
+                                            {task.micro_tasks && task.micro_tasks.length > 0 ? (
+                                                <span className="badge badge-neutral" title="Tarefa Macro com múltiplas etapas">
+                                                    Workflow ({task.micro_tasks.length})
+                                                </span>
+                                            ) : (
+                                                getAssignedToName(task.assigned_to)
+                                            )}
+                                        </td>
                                         <td>{new Date(task.deadline).toLocaleDateString()}</td>
                                         <td>
                                             <span className={`badge ${getStatusBadgeClass(task.status)}`}>
@@ -700,20 +863,7 @@ function Tasks() {
                                     </select>
                                 </div>
 
-                                <div className="input-group">
-                                    <label htmlFor="departamento">Departamento</label>
-                                    <select
-                                        id="departamento"
-                                        className="input"
-                                        value={formData.departamento_id}
-                                        onChange={(e) => setFormData({ ...formData, departamento_id: e.target.value })}
-                                    >
-                                        <option value="">-- Selecione --</option>
-                                        {departments.map(dept => (
-                                            <option key={dept.id} value={dept.id}>{dept.nome}</option>
-                                        ))}
-                                    </select>
-                                </div>
+
 
                                 <div className="input-group">
                                     <label htmlFor="assigned_to">Atribuir a</label>
@@ -840,35 +990,100 @@ function Tasks() {
                                     </select>
                                 </div>
 
-                                <div className="input-group">
-                                    <label htmlFor="edit-departamento">Departamento</label>
-                                    <select
-                                        id="edit-departamento"
-                                        className="input"
-                                        value={formData.departamento_id}
-                                        onChange={(e) => setFormData({ ...formData, departamento_id: e.target.value })}
-                                    >
-                                        <option value="">-- Selecione --</option>
-                                        {departments.map(dept => (
-                                            <option key={dept.id} value={dept.id}>{dept.nome}</option>
-                                        ))}
-                                    </select>
-                                </div>
 
-                                <div className="input-group">
-                                    <label htmlFor="edit-assigned_to">Atribuir a</label>
-                                    <select
-                                        id="edit-assigned_to"
-                                        className="input"
-                                        value={formData.assigned_to}
-                                        onChange={(e) => setFormData({ ...formData, assigned_to: e.target.value })}
-                                    >
-                                        <option value="">-- Selecione --</option>
-                                        {professionals.map(prof => (
-                                            <option key={prof.id} value={prof.id}>{prof.nome}</option>
-                                        ))}
-                                    </select>
-                                </div>
+
+                                {editingMicroTasks.length > 0 ? (
+                                    <div className="input-group">
+                                        <label>Etapas do Workflow</label>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px' }}>
+                                            {editingMicroTasks.map((mt, idx) => (
+                                                <div key={mt.id} style={{
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    gap: '8px',
+                                                    padding: '12px',
+                                                    border: '1px solid #e2e8f0',
+                                                    borderRadius: '8px',
+                                                    background: '#f8fafc'
+                                                }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                        <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>Etapa {idx + 1}</span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleRemoveMicroTask(idx)}
+                                                            style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer' }}
+                                                            title="Remover etapa"
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    </div>
+
+                                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                                        <div>
+                                                            <label style={{ fontSize: '0.75rem', color: '#64748b' }}>Função</label>
+                                                            <select
+                                                                className="input"
+                                                                value={mt.funcao}
+                                                                onChange={(e) => handleUpdateMicroTask(idx, 'funcao', e.target.value)}
+                                                                style={{ fontSize: '0.85rem', padding: '6px' }}
+                                                            >
+                                                                <option value="">Selecione...</option>
+                                                                {workflowReferenceData.functions.map(fn => (
+                                                                    <option key={fn} value={fn}>{fn}</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+                                                        <div>
+                                                            <label style={{ fontSize: '0.75rem', color: '#64748b' }}>Profissional</label>
+                                                            <select
+                                                                className="input"
+                                                                value={mt.profissional_id}
+                                                                onChange={(e) => handleUpdateMicroTask(idx, 'profissional_id', e.target.value)}
+                                                                style={{ fontSize: '0.85rem', padding: '6px' }}
+                                                            >
+                                                                <option value="">
+                                                                    {workflowReferenceData.professionals.filter(p => p.funcao === mt.funcao).length === 0
+                                                                        ? 'Nenhum encontrado'
+                                                                        : 'Selecione...'}
+                                                                </option>
+                                                                {workflowReferenceData.professionals
+                                                                    .filter(p => p.funcao === mt.funcao)
+                                                                    .map(p => (
+                                                                        <option key={p.profissional_id} value={p.profissional_id}>
+                                                                            {p.profissionais.nome}
+                                                                        </option>
+                                                                    ))}
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            <button
+                                                type="button"
+                                                onClick={handleAddMicroTask}
+                                                className="btn btn-secondary"
+                                                style={{ width: '100%', marginTop: '8px', fontSize: '0.85rem' }}
+                                            >
+                                                + Adicionar Etapa
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="input-group">
+                                        <label htmlFor="edit-assigned_to">Atribuir a</label>
+                                        <select
+                                            id="edit-assigned_to"
+                                            className="input"
+                                            value={formData.assigned_to}
+                                            onChange={(e) => setFormData({ ...formData, assigned_to: e.target.value })}
+                                        >
+                                            <option value="">-- Selecione --</option>
+                                            {professionals.map(prof => (
+                                                <option key={prof.id} value={prof.id}>{prof.nome}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
 
                                 <div className="input-group">
                                     <label htmlFor="edit-deadline">Prazo *</label>
@@ -988,6 +1203,40 @@ function Tasks() {
                                         {getPriorityLabel(selectedTask.priority)}
                                     </span>
                                 </div>
+
+                                {/* Workflow / Micro Tasks Section */}
+                                {selectedTask.micro_tasks && selectedTask.micro_tasks.length > 0 && (
+                                    <div style={{ marginTop: '16px', borderTop: '1px solid #e2e8f0', paddingTop: '16px' }}>
+                                        <h5 style={{ fontSize: '0.875rem', fontWeight: 600, color: '#1e293b', marginBottom: '12px' }}>
+                                            Etapas do Workflow
+                                        </h5>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                            {selectedTask.micro_tasks.map((mt, idx) => (
+                                                <div key={mt.id} style={{
+                                                    display: 'flex',
+                                                    justifyContent: 'space-between',
+                                                    alignItems: 'center',
+                                                    padding: '8px 12px',
+                                                    background: '#f8fafc',
+                                                    borderRadius: '8px',
+                                                    fontSize: '0.8125rem'
+                                                }}>
+                                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                        <span style={{ fontWeight: 600, color: '#0f172a' }}>
+                                                            {idx + 1}. {mt.funcao}
+                                                        </span>
+                                                        <span style={{ color: '#64748b' }}>
+                                                            {mt.profissional?.nome || 'Não atribuído'}
+                                                        </span>
+                                                    </div>
+                                                    <span className={`badge ${getStatusBadgeClass(mt.status)}`} style={{ fontSize: '0.7rem' }}>
+                                                        {getStatusLabel(mt.status)}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                                 {selectedTask.drive_link && (
                                     <div>
                                         <strong>Arquivos:</strong>{' '}
