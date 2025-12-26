@@ -232,8 +232,109 @@
     line-height: 1.2;
 }
 
-.admin-page-subtitle {
-    font-size: 0.875rem;
+/* Mode Toggle */
+.admin-mode-toggle {
+    display: flex;
+    gap: 12px;
+    margin-top: 8px;
+}
+
+.admin-mode-toggle>button {
+    flex: 1;
+}
+
+.admin-mode-description {
+    font-size: 0.75rem;
     color: var(--color-text-secondary);
-    margin: 4px 0 0 0;
+    margin-top: 8px;
+}
+
+/* Workflow Stage Card */
+.admin-workflow-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.admin-workflow-stage-card {
+    background-color: var(--color-bg-subtle);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    transition: all 0.2s;
+}
+
+.admin-workflow-stage-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.admin-workflow-stage-title {
+    font-weight: 600;
+    color: var(--color-text-primary);
+    font-size: 0.95rem;
+}
+
+.admin-workflow-stage-subtitle {
+    font-size: 0.75rem;
+    color: var(--color-text-tertiary);
+}
+
+.admin-workflow-remove-btn {
+    margin-left: auto;
+    padding: 4px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--color-danger);
+    opacity: 0.7;
+    transition: opacity 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.admin-workflow-remove-btn:hover {
+    opacity: 1;
+    background-color: var(--color-danger-subtle);
+    border-radius: 4px;
+}
+
+.admin-workflow-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.admin-workflow-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    display: block;
+    margin-bottom: 4px;
+}
+
+.admin-workflow-warning {
+    font-size: 0.7rem;
+    color: var(--color-warning);
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* CityOS overrides using tokens directly if needed */
+.admin-function-btn.selected {
+    background-color: var(--color-primary-light-subtle, #eff6ff);
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+    box-shadow: none;
+    font-weight: 600;
+}
+
+.admin-function-btn.selected:hover {
+    background-color: var(--color-primary-light, #dbeafe);
 }

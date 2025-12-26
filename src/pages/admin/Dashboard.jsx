@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
-import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { Clock, User, AlertCircle, CheckCircle, ExternalLink, Calendar, Activity, ListTodo } from 'lucide-react'
 import TaskForm from '../../components/forms/TaskForm'
+import OperationalFeed from '../../components/dashboard/OperationalFeed'
 
 function Painel() {
     const navigate = useNavigate()
@@ -351,46 +352,11 @@ function Painel() {
                 <div className="card">
                     <div className="card-header">
                         <h3 className="card-title flex items-center gap-2">
-                            <Activity size={18} />
-                            Status Atual
+                            <Activity size={18} className="text-primary" />
+                            Feed Operacional
                         </h3>
                     </div>
-                    {tasksByStatus.length > 0 ? (
-                        <ResponsiveContainer width="100%" height={250}>
-                            <BarChart data={tasksByStatus}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
-                                <XAxis
-                                    dataKey="name"
-                                    tick={{ fontSize: 11, fill: '#6B7280' }}
-                                    axisLine={false}
-                                    tickLine={false}
-                                />
-                                <YAxis
-                                    tick={{ fontSize: 11, fill: '#6B7280' }}
-                                    axisLine={false}
-                                    tickLine={false}
-                                />
-                                <Tooltip
-                                    cursor={{ fill: 'var(--color-bg-subtle)' }}
-                                    contentStyle={{
-                                        borderRadius: '8px',
-                                        border: 'none',
-                                        boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-                                    }}
-                                />
-                                <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={40}>
-                                    {tasksByStatus.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={entry.color} />
-                                    ))}
-                                </Bar>
-                            </BarChart>
-                        </ResponsiveContainer>
-                    ) : (
-                        <div className="empty-state">
-                            <span className="empty-icon">📊</span>
-                            <p className="empty-text">Nenhuma tarefa ativa no momento.</p>
-                        </div>
-                    )}
+                    <OperationalFeed />
                 </div>
             </div>
 

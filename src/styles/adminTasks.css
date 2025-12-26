@@ -522,3 +522,87 @@
     color: #16a34a !important;
     border: 1px solid rgba(34, 197, 94, 0.2) !important;
 }
+
+/* 
+ * TASK DETAILS MODAL (CityOS Grid)
+ */
+.modal-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-6) var(--space-8);
+    margin-top: var(--space-6);
+    margin-bottom: var(--space-6);
+}
+
+.modal-detail-item {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.modal-detail-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.modal-detail-value {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.modal-detail-value.highlight {
+    color: var(--color-primary);
+    font-weight: 600;
+}
+
+/* Full width for description or long items */
+.modal-detail-item.full-width {
+    grid-column: span 2;
+}
+
+/* Modal Actions Spacing */
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-3);
+    padding-top: var(--space-6);
+    border-top: 1px solid var(--color-border);
+    margin-top: var(--space-4);
+}
+
+/* Typography refinements */
+.modal-detail-link {
+    color: var(--color-primary);
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.modal-detail-link:hover {
+    color: var(--color-primary-hover);
+    text-decoration: underline;
+}
+
+/* Workflow Section in Modal */
+.modal-workflow-section {
+    margin-top: var(--space-6);
+    border-top: 1px solid var(--color-border);
+    padding-top: var(--space-4);
+}
+
+.modal-workflow-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin-bottom: var(--space-4);
+}

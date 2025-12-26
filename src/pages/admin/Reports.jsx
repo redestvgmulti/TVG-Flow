@@ -86,12 +86,6 @@ export default function Reports() {
                     label="Por Cliente"
                 />
                 <TabButton
-                    active={activeTab === 'roles'}
-                    onClick={() => setActiveTab('roles')}
-                    icon={Briefcase}
-                    label="Por Departamento"
-                />
-                <TabButton
                     active={activeTab === 'staff'}
                     onClick={() => setActiveTab('staff')}
                     icon={Users}
@@ -112,7 +106,6 @@ export default function Reports() {
             ) : (
                 <div className="reports-content">
                     {activeTab === 'clients' && <ClientsTable data={data} />}
-                    {activeTab === 'roles' && <RolesTable data={data} />}
                     {activeTab === 'staff' && <StaffTable data={data} />}
                 </div>
             )}
@@ -139,9 +132,9 @@ function ClientsTable({ data }) {
                 <thead>
                     <tr>
                         <th>Cliente</th>
-                        <th className="align-right">Total Tarefas</th>
-                        <th className="align-right">Concluídas</th>
-                        <th className="align-right">Atrasadas</th>
+                        <th className="align-center">Total Tarefas</th>
+                        <th className="align-center">Concluídas</th>
+                        <th className="align-center">Atrasadas</th>
                         <th className="align-right">Tempo Médio (h)</th>
                     </tr>
                 </thead>
@@ -149,13 +142,17 @@ function ClientsTable({ data }) {
                     {data.map((row) => (
                         <tr key={row.client_id}>
                             <td>{row.client_name}</td>
-                            <td className="align-right">{row.total_tasks}</td>
-                            <td className="align-right badge-success">{row.completed_tasks}</td>
-                            <td className="align-right">
+                            <td className="align-center">{row.total_tasks}</td>
+                            <td className="align-center">
+                                {row.completed_tasks > 0 ? (
+                                    <span className="badge-success">{row.completed_tasks}</span>
+                                ) : (
+                                    <span className="badge-neutral">0</span>
+                                )}
+                            </td>
+                            <td className="align-center">
                                 {row.overdue_tasks > 0 ? (
-                                    <span className="badge-error">
-                                        {row.overdue_tasks}
-                                    </span>
+                                    <span className="badge-error">{row.overdue_tasks}</span>
                                 ) : (
                                     <span className="badge-neutral">-</span>
                                 )}
@@ -169,39 +166,6 @@ function ClientsTable({ data }) {
     )
 }
 
-function RolesTable({ data }) {
-    return (
-        <div className="roles-grid">
-            {data.map((row, idx) => (
-                <div key={idx} className="role-card">
-                    <div className="role-header">
-                        <span className="role-title">{row.role_name || 'N/A'}</span>
-                        <div className="role-icon">
-                            <Briefcase size={20} />
-                        </div>
-                    </div>
-
-                    <div className="role-stats">
-                        <div className="stat-row">
-                            <span className="stat-label">Volume Total</span>
-                            <span className="stat-value">{row.total_items}</span>
-                        </div>
-                        <div className="stat-row">
-                            <span className="stat-label">Concluídas</span>
-                            <span className="stat-value highlight">{row.completed_items}</span>
-                        </div>
-                        <div className="stat-divider"></div>
-                        <div className="stat-row">
-                            <span className="stat-label">Tempo Médio</span>
-                            <span className="stat-value">{row.avg_completion_hours}h</span>
-                        </div>
-                    </div>
-                </div>
-            ))}
-        </div>
-    )
-}
-
 function StaffTable({ data }) {
     return (
         <div className="reports-table-container">
@@ -209,9 +173,9 @@ function StaffTable({ data }) {
                 <thead>
                     <tr>
                         <th>Colaborador</th>
-                        <th className="align-right">Atribuídas</th>
-                        <th className="align-right">Entregues</th>
-                        <th className="align-right">Atrasos</th>
+                        <th className="align-center">Atribuídas</th>
+                        <th className="align-center">Entregues</th>
+                        <th className="align-center">Atrasos</th>
                         <th className="align-right">Eficiência</th>
                     </tr>
                 </thead>
@@ -219,9 +183,15 @@ function StaffTable({ data }) {
                     {data.map((row) => (
                         <tr key={row.staff_id}>
                             <td>{row.staff_name}</td>
-                            <td className="align-right">{row.total_assigned}</td>
-                            <td className="align-right badge-success">{row.completed_count}</td>
-                            <td className="align-right">
+                            <td className="align-center">{row.total_assigned}</td>
+                            <td className="align-center">
+                                {row.completed_count > 0 ? (
+                                    <span className="badge-success">{row.completed_count}</span>
+                                ) : (
+                                    <span className="badge-neutral">0</span>
+                                )}
+                            </td>
+                            <td className="align-center">
                                 {row.overdue_count > 0 ? (
                                     <span className="badge-error">{row.overdue_count}</span>
                                 ) : (

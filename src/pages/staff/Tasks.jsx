@@ -79,7 +79,7 @@ export default function StaffTasks() {
 
             const { data: macroTasks, error: macroError } = await supabase
                 .from('tarefas')
-                .select('id, titulo, descricao, deadline, prioridade')
+                .select('id, titulo, descricao, deadline, prioridade, drive_link')
                 .in('id', macroTaskIds)
 
 
@@ -120,6 +120,7 @@ export default function StaffTasks() {
                         descricao: macroTask?.descricao,
                         deadline: macroTask?.deadline,
                         prioridade: macroTask?.prioridade || 'normal',
+                        drive_link: macroTask?.drive_link, // Propagate from macro task
                         status: mt.status, // Use micro task status
                         funcao: mt.funcao, // Micro task specific
                         is_micro_task: true, // Flag for UI
@@ -194,6 +195,12 @@ export default function StaffTasks() {
 
             // MICRO TASK: Use Edge Function
             if (task?.is_micro_task) {
+                // Map generic 'em_progresso' to micro-task specific 'em_execucao'
+                let statusToSend = newStatus
+                if (newStatus === 'em_progresso') {
+                    statusToSend = 'em_execucao'
+                }
+
                 if (newStatus === 'concluida') {
                     // Call complete-micro-task Edge Function
                     const { data, error } = await supabase.functions.invoke('complete-micro-task', {
@@ -211,15 +218,15 @@ export default function StaffTasks() {
                     toast.success('Micro tarefa concluída! 🎉')
                 } else {
                     // Validate status before updating
-                    const validStatuses = ['pendente', 'em_progresso', 'concluida']
-                    if (!validStatuses.includes(newStatus)) {
-                        throw new Error(`Status inválido: ${newStatus}. Valores permitidos: ${validStatuses.join(', ')}`)
+                    const validStatuses = ['pendente', 'em_execucao', 'concluida', 'bloqueada', 'devolvida']
+                    if (!validStatuses.includes(statusToSend)) {
+                        throw new Error(`Status inválido: ${statusToSend}. Valores permitidos: ${validStatuses.join(', ')}`)
                     }
 
-                    // For other status changes (em_progresso, etc), update directly
+                    // For other status changes (em_execucao, etc), update directly
                     const { error } = await supabase
                         .from('tarefas_micro')
-                        .update({ status: newStatus })
+                        .update({ status: statusToSend })
                         .eq('id', taskId)
 
                     if (error) throw error
@@ -227,9 +234,9 @@ export default function StaffTasks() {
                 }
 
                 // Update local state
-                setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t))
+                setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: statusToSend } : t))
                 if (selectedTask?.id === taskId) {
-                    setSelectedTask(prev => ({ ...prev, status: newStatus }))
+                    setSelectedTask(prev => ({ ...prev, status: statusToSend }))
                 }
 
                 // Refresh tasks to get updated macro task progress
@@ -603,15 +610,19 @@ function ExecutionView({ task, onBack, onUpdateStatus, user }) {
 
                     {/* Link */}
                     {task.drive_link && (
-                        <a
-                            href={task.drive_link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="task-link-button"
-                        >
-                            <ExternalLink size={18} />
-                            <span>Abrir Arquivos Anexos</span>
-                        </a>
+                        <div className="task-section">
+                            <h3 className="task-section-title">Arquivos da Tarefa</h3>
+                            <a
+                                href={task.drive_link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="btn btn-secondary w-full justify-start gap-2"
+                                style={{ padding: '12px 16px' }}
+                            >
+                                <ExternalLink size={18} className="text-primary" />
+                                <span className="font-medium">Abrir Pasta do Drive</span>
+                            </a>
+                        </div>
                     )}
 
                     {/* Add/Edit Drive Link */}

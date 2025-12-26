@@ -138,7 +138,7 @@ function Content() {
                                 <div className="company-avatar">
                                     {getInitials(company.nome)}
                                 </div>
-                                <div style={{ flex: 1 }}>
+                                <div className="company-card-info">
                                     <h3 className="company-name">{company.nome}</h3>
                                     <span className={`content-status ${company.drive_link ? 'content-status-linked' : 'content-status-pending'}`}>
                                         {company.drive_link ? (
@@ -202,7 +202,7 @@ function Content() {
                                 Configuração da Empresa
                             </h2>
                             <button onClick={handleCloseConfigModal} className="modal-close">
-                                <Plus size={20} style={{ transform: 'rotate(45deg)' }} />
+                                <Plus size={20} className="modal-close-icon" />
                             </button>
                         </div>
 
@@ -210,13 +210,13 @@ function Content() {
                             <div className="modal-body">
                                 {/* Company Info */}
                                 <div className="config-company-info">
-                                    <div className="company-avatar" style={{ marginBottom: '12px' }}>
+                                    <div className="company-avatar company-avatar-large">
                                         {getInitials(configuringCompany.nome)}
                                     </div>
-                                    <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '4px' }}>
+                                    <h3 className="modal-company-title">
                                         {configuringCompany.nome}
                                     </h3>
-                                    <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)' }}>
+                                    <p className="modal-company-description">
                                         Complete as informações abaixo para liberar esta empresa
                                     </p>
                                 </div>
@@ -230,9 +230,9 @@ function Content() {
                                         <div className="config-item-header">
                                             <div className="config-item-status">
                                                 {configData.drive_link.trim() ? (
-                                                    <CheckCircle size={18} style={{ color: 'var(--color-success)' }} />
+                                                    <CheckCircle size={18} className="icon-success" />
                                                 ) : (
-                                                    <AlertCircle size={18} style={{ color: 'var(--color-warning)' }} />
+                                                    <AlertCircle size={18} className="icon-warning" />
                                                 )}
                                             </div>
                                             <label htmlFor="drive_link" className="config-item-label">
@@ -257,13 +257,13 @@ function Content() {
                                     <div className="config-item">
                                         <div className="config-item-header">
                                             <div className="config-item-status">
-                                                <CheckCircle size={18} style={{ color: 'var(--color-success)' }} />
+                                                <CheckCircle size={18} className="icon-success" />
                                             </div>
                                             <label className="config-item-label">
                                                 Status da Empresa
                                             </label>
                                         </div>
-                                        <label className="checkbox-label" style={{ marginTop: '8px' }}>
+                                        <label className="checkbox-wrapper">
                                             <input
                                                 type="checkbox"
                                                 checked={configData.ativo}

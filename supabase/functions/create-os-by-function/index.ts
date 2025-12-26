@@ -24,7 +24,8 @@ serve(async (req) => {
             deadline_at,
             funcoes,
             prioridade,
-            workflow_stages // NEW: Optional workflow stages for macro/micro tasks
+            workflow_stages, // NEW: Optional workflow stages for macro/micro tasks
+            drive_link
         } = await req.json()
 
         console.log('Received payload:', { empresa_id, titulo, descricao, deadline_at, funcoes, prioridade, workflow_stages })
@@ -56,7 +57,8 @@ serve(async (req) => {
                     deadline: deadline_at,
                     status: 'pendente',
                     prioridade: normalizedPriority,
-                    progress: 0
+                    progress: 0,
+                    drive_link: drive_link || null
                 })
                 .select()
                 .single()
@@ -221,7 +223,8 @@ serve(async (req) => {
                 departamento_id: professional.departamento_id,
                 deadline: deadline_at,
                 status: 'pendente',
-                prioridade: normalizedPriority
+                prioridade: normalizedPriority,
+                drive_link: drive_link || null
             }
 
             const { data: task, error: taskError } = await supabaseClient

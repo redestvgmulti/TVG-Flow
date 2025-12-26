@@ -27,7 +27,7 @@ export default function NewOS() {
                 </div>
             </div>
 
-            <div className="card-premium">
+            <div className="card">
                 <TaskForm
                     onSuccess={(result) => {
                         // Optional: Navigate to detail of first created task if possible, 

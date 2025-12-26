@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { CheckCircle, AlertTriangle, Layers, Building2, Calendar as CalendarIcon, Plus, X, GripVertical } from 'lucide-react'
+import { CheckCircle, AlertTriangle, Layers, Building2, Calendar as CalendarIcon, Plus, X, GripVertical, Folder } from 'lucide-react'
 import { toast } from 'sonner'
 import { clientService } from '../../services/clientService'
 import { professionalsService } from '../../services/professionals'
@@ -18,6 +18,7 @@ export default function TaskForm({ onSuccess, onCancel }) {
     const [descricao, setDescricao] = useState('')
     const [deadline, setDeadline] = useState('')
     const [prioridade, setPrioridade] = useState('normal')
+    const [driveLink, setDriveLink] = useState('')
     const [selectedFunctions, setSelectedFunctions] = useState([])
 
     // Workflow Mode
@@ -202,7 +203,8 @@ export default function TaskForm({ onSuccess, onCancel }) {
                 titulo: titulo,
                 descricao: descricao || null,
                 deadline_at: new Date(deadline).toISOString(),
-                prioridade: prioridade
+                prioridade: prioridade,
+                drive_link: driveLink || null
             }
 
             // Add workflow stages or legacy functions
@@ -341,13 +343,28 @@ export default function TaskForm({ onSuccess, onCancel }) {
                 </select>
             </div>
 
+            {/* Drive Link */}
+            <div className="admin-form-group">
+                <label className="admin-form-label">
+                    <Folder className="admin-form-label-icon" />
+                    Link do Drive
+                </label>
+                <input
+                    type="url"
+                    className="admin-form-input"
+                    value={driveLink}
+                    onChange={e => setDriveLink(e.target.value)}
+                    placeholder="https://drive.google.com/..."
+                />
+            </div>
+
             {/* Workflow Mode Toggle */}
             {empresaId && (
                 <div className="admin-form-group">
                     <label className="admin-form-label">
                         Modo de Criação
                     </label>
-                    <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+                    <div className="admin-mode-toggle">
                         <button
                             type="button"
                             onClick={() => {
@@ -355,7 +372,6 @@ export default function TaskForm({ onSuccess, onCancel }) {
                                 setWorkflowStages([])
                             }}
                             className={`admin-function-btn ${!useWorkflow ? 'selected' : ''}`}
-                            style={{ flex: 1 }}
                         >
                             {!useWorkflow && <CheckCircle size={14} />}
                             Modo Legado (Múltiplas Tarefas)
@@ -367,13 +383,12 @@ export default function TaskForm({ onSuccess, onCancel }) {
                                 setSelectedFunctions([])
                             }}
                             className={`admin-function-btn ${useWorkflow ? 'selected' : ''}`}
-                            style={{ flex: 1 }}
                         >
                             {useWorkflow && <CheckCircle size={14} />}
                             Workflow (Macro/Micro)
                         </button>
                     </div>
-                    <p style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '8px' }}>
+                    <p className="admin-mode-description">
                         {useWorkflow
                             ? 'Crie uma tarefa macro com etapas sequenciais atribuídas a profissionais específicos'
                             : 'Crie tarefas individuais para cada função selecionada (comportamento atual)'}
@@ -412,7 +427,7 @@ export default function TaskForm({ onSuccess, onCancel }) {
                                 ))}
                             </div>
                         )}
-                        <p style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '8px' }}>
+                        <p className="admin-mode-description">
                             Clique nas funções para adicionar etapas ao workflow
                         </p>
                     </div>
@@ -429,43 +444,32 @@ export default function TaskForm({ onSuccess, onCancel }) {
                                 <span>Clique nas funções acima para adicionar etapas</span>
                             </div>
                         ) : (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            <div className="admin-workflow-list">
                                 {workflowStages.map((stage, index) => (
-                                    <div key={index} style={{
-                                        background: '#f8fafc',
-                                        border: '1px solid #e5e7eb',
-                                        borderRadius: '12px',
-                                        padding: '16px'
-                                    }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-                                            <GripVertical size={16} color="#9ca3af" />
-                                            <span style={{ fontWeight: 700, color: '#111827' }}>Etapa {index + 1}: {stage.funcao}</span>
+                                    <div key={index} className="admin-workflow-stage-card">
+                                        <div className="admin-workflow-stage-header">
+                                            <GripVertical size={16} className="text-tertiary" />
+                                            <span className="admin-workflow-stage-title">Etapa {index + 1}: {stage.funcao}</span>
                                             {index > 0 && (
-                                                <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+                                                <span className="admin-workflow-stage-subtitle">
                                                     (depende da Etapa {index})
                                                 </span>
                                             )}
                                             <button
                                                 type="button"
                                                 onClick={() => removeWorkflowStage(index)}
-                                                style={{
-                                                    marginLeft: 'auto',
-                                                    padding: '4px',
-                                                    background: 'transparent',
-                                                    border: 'none',
-                                                    cursor: 'pointer',
-                                                    color: '#ef4444'
-                                                }}
+                                                className="admin-workflow-remove-btn"
+                                                title="Remover etapa"
                                             >
                                                 <X size={18} />
                                             </button>
                                         </div>
 
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                        <div className="admin-workflow-content">
                                             {/* Professional and Priority Row */}
-                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                                            <div className="admin-workflow-row">
                                                 <div>
-                                                    <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#6b7280', display: 'block', marginBottom: '4px' }}>
+                                                    <label className="admin-workflow-label">
                                                         Profissional *
                                                     </label>
                                                     <select
@@ -488,14 +492,15 @@ export default function TaskForm({ onSuccess, onCancel }) {
                                                             ))}
                                                     </select>
                                                     {professionals.filter(p => p.funcao === stage.funcao).length === 0 && (
-                                                        <span style={{ fontSize: '0.7rem', color: '#f59e0b', marginTop: '4px', display: 'block' }}>
-                                                            ⚠️ Adicione um profissional desta função
+                                                        <span className="admin-workflow-warning">
+                                                            <AlertTriangle size={12} />
+                                                            Adicione um profissional desta função
                                                         </span>
                                                     )}
                                                 </div>
 
                                                 <div>
-                                                    <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#6b7280', display: 'block', marginBottom: '4px' }}>
+                                                    <label className="admin-workflow-label">
                                                         Prioridade
                                                     </label>
                                                     <select
@@ -513,7 +518,7 @@ export default function TaskForm({ onSuccess, onCancel }) {
 
                                             {/* Tags Row */}
                                             <div>
-                                                <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#6b7280', display: 'block', marginBottom: '4px' }}>
+                                                <label className="admin-workflow-label">
                                                     Tags (opcional)
                                                 </label>
                                                 <input

@@ -19,6 +19,8 @@
     --ios-blue-100: #e0f2fe;
     --ios-blue-500: #3b82f6;
     --ios-blue-600: #2563eb;
+    --ios-blue-700: #1d4ed8;
+    /* Added missing variable */
 
     --ios-orange-50: #fff7ed;
     --ios-orange-700: #c2410c;

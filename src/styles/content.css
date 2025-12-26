@@ -184,3 +184,79 @@
         gap: var(--space-4);
     }
 }
+
+/* ============================================================================
+   REFACTOR NEW CLASSES (CityOS)
+   ============================================================================ */
+
+.company-card-info {
+    flex: 1;
+}
+
+.modal-close-icon {
+    transform: rotate(45deg);
+    transition: transform 0.2s ease;
+}
+
+.modal-close:hover .modal-close-icon {
+    transform: rotate(135deg);
+}
+
+.company-avatar-large {
+    width: 64px;
+    height: 64px;
+    font-size: 24px;
+    margin: 0 auto 12px auto;
+}
+
+.modal-company-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: var(--color-text-primary);
+}
+
+.modal-company-description {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    margin: 0;
+}
+
+.checkbox-wrapper {
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.checkbox-wrapper input[type="checkbox"] {
+    accent-color: var(--color-primary);
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
+.icon-success {
+    color: var(--color-success);
+}
+
+.icon-warning {
+    color: var(--color-warning);
+}
+
+/* Modal Body Spacing Fix */
+.modal-body {
+    padding: var(--space-6);
+}
+
+.modal-footer {
+    padding: var(--space-4) var(--space-6);
+    background: var(--color-bg-subtle);
+    border-top: 1px solid var(--color-border);
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-3);
+    border-bottom-left-radius: var(--radius-lg);
+    border-bottom-right-radius: var(--radius-lg);
+}

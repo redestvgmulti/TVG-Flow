@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
-import { Edit2, Trash2, ClipboardList, AlertTriangle, X } from 'lucide-react'
+import { Edit2, Trash2, ClipboardList, AlertTriangle, X, ExternalLink, Folder } from 'lucide-react'
 import { toast } from 'sonner'
 import '../../styles/adminTasks.css'
 
@@ -12,6 +12,7 @@ function Tasks() {
     const [departments, setDepartments] = useState([])
     const [clients, setClients] = useState([])
     const [loading, setLoading] = useState(true)
+    const [fetchError, setFetchError] = useState(null)
 
     // Filters
     const [searchTerm, setSearchTerm] = useState('')
@@ -105,6 +106,7 @@ function Tasks() {
             setClients(clientsResult.data || [])
         } catch (error) {
             console.error('Error fetching data:', error)
+            setFetchError(error.message || 'Erro desconhecido ao buscar dados')
             toast.error('Erro ao carregar dados. Por favor, recarregue a página.')
         } finally {
             setLoading(false)
@@ -607,6 +609,29 @@ function Tasks() {
                 </div>
                 <div className="card loading-card">
                     <p className="loading-text-primary">Carregando tarefas...</p>
+                </div>
+            </div>
+        )
+    }
+
+    if (fetchError) {
+        return (
+            <div className="p-8">
+                <div className="dashboard-header">
+                    <h2>Gerenciamento de Tarefas</h2>
+                </div>
+                <div className="bg-red-50 border border-red-200 rounded-lg p-6 flex flex-col items-center justify-center gap-4">
+                    <AlertTriangle size={48} className="text-red-500" />
+                    <h3 className="text-lg font-semibold text-red-700">Erro ao carregar dados</h3>
+                    <p className="text-red-600 bg-white p-4 rounded border border-red-100 font-mono text-sm">
+                        {fetchError}
+                    </p>
+                    <button
+                        onClick={() => window.location.reload()}
+                        className="btn btn-primary"
+                    >
+                        Tentar Novamente
+                    </button>
                 </div>
             </div>
         )
@@ -1225,113 +1250,136 @@ function Tasks() {
                                 )}
                             </div>
 
-                            <div className="modal-detail-rows">
-                                <div>
-                                    <strong>Cliente:</strong> {getClientName(selectedTask.cliente_id)}
-                                </div>
-                                <div>
-                                    <strong>Departamento:</strong> {getDepartmentName(selectedTask.departamento_id)}
-                                </div>
-                                <div>
-                                    <strong>Atribuída a:</strong> {getAssignedToName(selectedTask.assigned_to)}
-                                </div>
-                                <div>
-                                    <strong>Prazo:</strong> {new Date(selectedTask.deadline).toLocaleString()}
-                                </div>
-                                <div>
-                                    <strong>Status:</strong>{' '}
-                                    <span className={`badge ${getStatusBadgeClass(selectedTask.status)}`}>
-                                        {getStatusLabel(selectedTask.status)}
+                            <div className="modal-detail-grid">
+                                <div className="modal-detail-item">
+                                    <span className="modal-detail-label">Cliente</span>
+                                    <span className="modal-detail-value highlight">
+                                        {getClientName(selectedTask.cliente_id)}
                                     </span>
                                 </div>
-                                <div>
-                                    <strong>Prioridade:</strong>{' '}
-                                    <span className={`badge ${getPriorityBadgeClass(selectedTask.priority)}`}>
-                                        {getPriorityLabel(selectedTask.priority)}
+                                <div className="modal-detail-item">
+                                    <span className="modal-detail-label">Departamento</span>
+                                    <span className="modal-detail-value">
+                                        {getDepartmentName(selectedTask.departamento_id)}
+                                    </span>
+                                </div>
+                                <div className="modal-detail-item">
+                                    <span className="modal-detail-label">Atribuída a</span>
+                                    <span className="modal-detail-value">
+                                        {getAssignedToName(selectedTask.assigned_to)}
+                                    </span>
+                                </div>
+                                <div className="modal-detail-item">
+                                    <span className="modal-detail-label">Prazo</span>
+                                    <span className="modal-detail-value">
+                                        {new Date(selectedTask.deadline).toLocaleString()}
+                                    </span>
+                                </div>
+                                <div className="modal-detail-item">
+                                    <span className="modal-detail-label">Status</span>
+                                    <span className="modal-detail-value">
+                                        <span className={`badge ${getStatusBadgeClass(selectedTask.status)}`}>
+                                            {getStatusLabel(selectedTask.status)}
+                                        </span>
+                                    </span>
+                                </div>
+                                <div className="modal-detail-item">
+                                    <span className="modal-detail-label">Prioridade</span>
+                                    <span className="modal-detail-value">
+                                        <span className={`badge ${getPriorityBadgeClass(selectedTask.priority)}`}>
+                                            {getPriorityLabel(selectedTask.priority)}
+                                        </span>
                                     </span>
                                 </div>
 
-                                {/* Workflow / Micro Tasks Section */}
-                                {selectedTask.micro_tasks && selectedTask.micro_tasks.length > 0 && (
-                                    <div style={{ marginTop: '24px', borderTop: '1px solid #e2e8f0', paddingTop: '16px' }}>
-                                        <h5 style={{ fontSize: '0.95rem', fontWeight: 600, color: '#1e293b', marginBottom: '8px' }}>
-                                            Progresso do Workflow
-                                        </h5>
-
-                                        <div className="timeline-container">
-                                            {selectedTask.micro_tasks
-                                                .sort((a, b) => a.id - b.id)
-                                                .map((mt, idx) => {
-                                                    // Determine styles and labels
-                                                    const stepNumber = idx + 1
-
-                                                    let itemClass = 'timeline-item'
-                                                    if (mt.status === 'pendente') itemClass += ' pending'
-
-                                                    let statusLabel = 'Pendente'
-                                                    let statusClass = 'timeline-status-badge pending'
-
-                                                    if (mt.status === 'concluida') {
-                                                        itemClass += ' completed'
-                                                        statusLabel = 'Concluída'
-                                                        statusClass = 'timeline-status-badge completed'
-                                                    } else if (mt.status === 'em_progresso' || mt.status === 'em_execucao') {
-                                                        itemClass += ' in-progress'
-                                                        statusLabel = 'Em Andamento'
-                                                        statusClass = 'timeline-status-badge in-progress'
-                                                    } else if (mt.status === 'devolvida') {
-                                                        statusLabel = 'Devolvida'
-                                                        statusClass = 'timeline-status-badge overdue'
-                                                    }
-
-                                                    return (
-                                                        <div key={mt.id} className={itemClass}>
-                                                            <div className="timeline-marker">
-                                                                {mt.status === 'concluida' ? (
-                                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                                                                ) : (
-                                                                    stepNumber
-                                                                )}
-                                                            </div>
-                                                            <div className="timeline-content">
-                                                                <div className="timeline-info">
-                                                                    <span className="timeline-title">{mt.funcao}</span>
-                                                                    <div className="timeline-meta">
-                                                                        <div className="timeline-assignee" title="Responsável">
-                                                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                                                                            {mt.profissional?.nome || 'A definir'}
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                                <span className={statusClass}>
-                                                                    {statusLabel}
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                    )
-                                                })}
-                                        </div>
-                                    </div>
-                                )}
                                 {selectedTask.drive_link && (
-                                    <div>
-                                        <strong>Arquivos:</strong>{' '}
+                                    <div className="modal-detail-item full-width">
+                                        <span className="modal-detail-label">Arquivos</span>
                                         <a
                                             href={selectedTask.drive_link}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="modal-detail-link"
+                                            className="btn btn-secondary w-full justify-start gap-2 text-sm"
+                                            style={{ marginTop: '4px', maxWidth: 'fit-content' }}
                                         >
-                                            📎 Abrir Link do Drive
+                                            <Folder size={16} className="text-primary" />
+                                            Abrir Pasta do Drive
+                                            <ExternalLink size={12} className="text-tertiary ml-1" />
                                         </a>
                                     </div>
                                 )}
                                 {selectedTask.completed_at && (
-                                    <div>
-                                        <strong>Concluída em:</strong> {new Date(selectedTask.completed_at).toLocaleString()}
+                                    <div className="modal-detail-item full-width">
+                                        <span className="modal-detail-label">Concluída em</span>
+                                        <span className="modal-detail-value">
+                                            {new Date(selectedTask.completed_at).toLocaleString()}
+                                        </span>
                                     </div>
                                 )}
                             </div>
+
+                            {/* Workflow / Micro Tasks Section */}
+                            {selectedTask.micro_tasks && selectedTask.micro_tasks.length > 0 && (
+                                <div className="modal-workflow-section">
+                                    <h5 className="modal-workflow-title">
+                                        Progresso do Workflow
+                                    </h5>
+
+                                    <div className="timeline-container">
+                                        {selectedTask.micro_tasks
+                                            .sort((a, b) => a.id - b.id)
+                                            .map((mt, idx) => {
+                                                // Determine styles and labels
+                                                const stepNumber = idx + 1
+
+                                                let itemClass = 'timeline-item'
+                                                if (mt.status === 'pendente') itemClass += ' pending'
+
+                                                let statusLabel = 'Pendente'
+                                                let statusClass = 'timeline-status-badge pending'
+
+                                                if (mt.status === 'concluida') {
+                                                    itemClass += ' completed'
+                                                    statusLabel = 'Concluída'
+                                                    statusClass = 'timeline-status-badge completed'
+                                                } else if (mt.status === 'em_progresso' || mt.status === 'em_execucao') {
+                                                    itemClass += ' in-progress'
+                                                    statusLabel = 'Em Andamento'
+                                                    statusClass = 'timeline-status-badge in-progress'
+                                                } else if (mt.status === 'devolvida') {
+                                                    statusLabel = 'Devolvida'
+                                                    statusClass = 'timeline-status-badge overdue'
+                                                }
+
+                                                return (
+                                                    <div key={mt.id} className={itemClass}>
+                                                        <div className="timeline-marker">
+                                                            {mt.status === 'concluida' ? (
+                                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                                            ) : (
+                                                                stepNumber
+                                                            )}
+                                                        </div>
+                                                        <div className="timeline-content">
+                                                            <div className="timeline-info">
+                                                                <span className="timeline-title">{mt.funcao}</span>
+                                                                <div className="timeline-meta">
+                                                                    <div className="timeline-assignee" title="Responsável">
+                                                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                                                                        {mt.profissional?.nome || 'A definir'}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <span className={statusClass}>
+                                                                {statusLabel}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                )
+                                            })}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                         <div className="modal-footer">
                             <button
