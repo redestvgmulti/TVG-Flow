@@ -1260,30 +1260,50 @@ function Tasks() {
 
                                         <div className="timeline-container">
                                             {selectedTask.micro_tasks
-                                                .sort((a, b) => a.id - b.id) // Ensure order
+                                                .sort((a, b) => a.id - b.id)
                                                 .map((mt, idx) => {
-                                                    // Determine timeline item class based on status
-                                                    let itemClass = 'timeline-item'
-                                                    if (mt.status === 'concluida') itemClass += ' completed'
-                                                    if (mt.status === 'em_progresso' || mt.status === 'em_execucao') itemClass += ' in-progress'
+                                                    // Determine styles and labels
+                                                    const stepNumber = idx + 1
 
-                                                    // Status label
+                                                    let itemClass = 'timeline-item'
+                                                    if (mt.status === 'pendente') itemClass += ' pending'
+
                                                     let statusLabel = 'Pendente'
-                                                    if (mt.status === 'concluida') statusLabel = 'Concluída'
-                                                    if (mt.status === 'em_progresso') statusLabel = 'Em Andamento'
-                                                    if (mt.status === 'devolvida') statusLabel = 'Devolvida'
+                                                    let statusClass = 'timeline-status-badge pending'
+
+                                                    if (mt.status === 'concluida') {
+                                                        itemClass += ' completed'
+                                                        statusLabel = 'Concluída'
+                                                        statusClass = 'timeline-status-badge completed'
+                                                    } else if (mt.status === 'em_progresso' || mt.status === 'em_execucao') {
+                                                        itemClass += ' in-progress'
+                                                        statusLabel = 'Em Andamento'
+                                                        statusClass = 'timeline-status-badge in-progress'
+                                                    } else if (mt.status === 'devolvida') {
+                                                        statusLabel = 'Devolvida'
+                                                        statusClass = 'timeline-status-badge overdue'
+                                                    }
 
                                                     return (
                                                         <div key={mt.id} className={itemClass}>
-                                                            <div className="timeline-marker"></div>
+                                                            <div className="timeline-marker">
+                                                                {mt.status === 'concluida' ? (
+                                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                                                ) : (
+                                                                    stepNumber
+                                                                )}
+                                                            </div>
                                                             <div className="timeline-content">
                                                                 <div className="timeline-info">
                                                                     <span className="timeline-title">{mt.funcao}</span>
-                                                                    <span className="timeline-subtitle">
-                                                                        {mt.profissional?.nome || 'Não atribuído'}
-                                                                    </span>
+                                                                    <div className="timeline-meta">
+                                                                        <div className="timeline-assignee" title="Responsável">
+                                                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                                                                            {mt.profissional?.nome || 'A definir'}
+                                                                        </div>
+                                                                    </div>
                                                                 </div>
-                                                                <span className="timeline-status">
+                                                                <span className={statusClass}>
                                                                     {statusLabel}
                                                                 </span>
                                                             </div>
