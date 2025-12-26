@@ -226,9 +226,56 @@ function Tasks() {
         setEditingMicroTasks(newTasks)
     }
 
-    function handleOpenDetailModal(task) {
+    async function refreshTaskDetails(taskId) {
+        if (!taskId) return null
+
+        try {
+            const { data, error } = await supabase
+                .from('tarefas')
+                .select(`
+                    *,
+                    micro_tasks:tarefas_micro (
+                        id,
+                        status,
+                        funcao,
+                        created_at,
+                        updated_at,
+                        profissional:profissionais (
+                            id,
+                            nome
+                        )
+                    )
+                `)
+                .eq('id', taskId)
+                .single() // Return object not array
+
+            if (error) throw error
+
+            // Sort micro tasks by created_at or id (assuming insertion order)
+            if (data.micro_tasks) {
+                data.micro_tasks.sort((a, b) => a.id - b.id)
+            }
+
+            return data
+        } catch (error) {
+            console.error('Error refreshing task details:', error)
+            return null
+        }
+    }
+
+    async function handleOpenDetailModal(task) {
+        // Show cached data first while loading fresh
         setSelectedTask(task)
         setShowDetailModal(true)
+
+        // Fetch fresh data
+        const freshData = await refreshTaskDetails(task.id)
+        if (freshData) {
+            setSelectedTask(freshData)
+
+            // Also update the list state to reflect changes without full reload
+            setTasks(prev => prev.map(t => t.id === freshData.id ? freshData : t))
+        }
     }
 
     function handleOpenDeleteModal(task) {
@@ -1206,34 +1253,43 @@ function Tasks() {
 
                                 {/* Workflow / Micro Tasks Section */}
                                 {selectedTask.micro_tasks && selectedTask.micro_tasks.length > 0 && (
-                                    <div style={{ marginTop: '16px', borderTop: '1px solid #e2e8f0', paddingTop: '16px' }}>
-                                        <h5 style={{ fontSize: '0.875rem', fontWeight: 600, color: '#1e293b', marginBottom: '12px' }}>
-                                            Etapas do Workflow
+                                    <div style={{ marginTop: '24px', borderTop: '1px solid #e2e8f0', paddingTop: '16px' }}>
+                                        <h5 style={{ fontSize: '0.95rem', fontWeight: 600, color: '#1e293b', marginBottom: '8px' }}>
+                                            Progresso do Workflow
                                         </h5>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                            {selectedTask.micro_tasks.map((mt, idx) => (
-                                                <div key={mt.id} style={{
-                                                    display: 'flex',
-                                                    justifyContent: 'space-between',
-                                                    alignItems: 'center',
-                                                    padding: '8px 12px',
-                                                    background: '#f8fafc',
-                                                    borderRadius: '8px',
-                                                    fontSize: '0.8125rem'
-                                                }}>
-                                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                                        <span style={{ fontWeight: 600, color: '#0f172a' }}>
-                                                            {idx + 1}. {mt.funcao}
-                                                        </span>
-                                                        <span style={{ color: '#64748b' }}>
-                                                            {mt.profissional?.nome || 'Não atribuído'}
-                                                        </span>
-                                                    </div>
-                                                    <span className={`badge ${getStatusBadgeClass(mt.status)}`} style={{ fontSize: '0.7rem' }}>
-                                                        {getStatusLabel(mt.status)}
-                                                    </span>
-                                                </div>
-                                            ))}
+
+                                        <div className="timeline-container">
+                                            {selectedTask.micro_tasks
+                                                .sort((a, b) => a.id - b.id) // Ensure order
+                                                .map((mt, idx) => {
+                                                    // Determine timeline item class based on status
+                                                    let itemClass = 'timeline-item'
+                                                    if (mt.status === 'concluida') itemClass += ' completed'
+                                                    if (mt.status === 'em_progresso' || mt.status === 'em_execucao') itemClass += ' in-progress'
+
+                                                    // Status label
+                                                    let statusLabel = 'Pendente'
+                                                    if (mt.status === 'concluida') statusLabel = 'Concluída'
+                                                    if (mt.status === 'em_progresso') statusLabel = 'Em Andamento'
+                                                    if (mt.status === 'devolvida') statusLabel = 'Devolvida'
+
+                                                    return (
+                                                        <div key={mt.id} className={itemClass}>
+                                                            <div className="timeline-marker"></div>
+                                                            <div className="timeline-content">
+                                                                <div className="timeline-info">
+                                                                    <span className="timeline-title">{mt.funcao}</span>
+                                                                    <span className="timeline-subtitle">
+                                                                        {mt.profissional?.nome || 'Não atribuído'}
+                                                                    </span>
+                                                                </div>
+                                                                <span className="timeline-status">
+                                                                    {statusLabel}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    )
+                                                })}
                                         </div>
                                     </div>
                                 )}
