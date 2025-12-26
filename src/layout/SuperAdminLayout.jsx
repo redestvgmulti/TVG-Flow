@@ -26,6 +26,11 @@ export default function SuperAdminLayout() {
                     </div>
                 </div>
 
+                <nav className="header-nav">
+                    <button onClick={() => navigate('/platform')} className="nav-item">Dashboard</button>
+                    <button onClick={() => navigate('/platform/companies')} className="nav-item">Empresas</button>
+                </nav>
+
                 <div className="header-right">
                     <span className="admin-name">{professionalName} (Super Admin)</span>
                     <button onClick={handleLogout} className="btn-logout" title="Sair">
@@ -37,6 +42,6 @@ export default function SuperAdminLayout() {
             <main className="super-admin-content">
                 <Outlet />
             </main>
-        </div>
+        </div >
     )
 }

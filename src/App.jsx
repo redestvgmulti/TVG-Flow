@@ -30,6 +30,8 @@ import RoleProtectedRoute from './routes/RoleProtectedRoute'
 import SuperAdminRoute from './routes/SuperAdminRoute'
 import SuperAdminLayout from './layout/SuperAdminLayout'
 import SuperAdminDashboard from './pages/super-admin/SuperAdminDashboard'
+import TenantListPage from './pages/super-admin/TenantListPage'
+import TenantDetail from './pages/super-admin/TenantDetail'
 
 import { Toaster } from 'sonner'
 
@@ -118,6 +120,8 @@ function App() {
                 }
               >
                 <Route index element={<SuperAdminDashboard />} />
+                <Route path="companies" element={<TenantListPage />} />
+                <Route path="companies/:id" element={<TenantDetail />} />
               </Route>
 
               <Route path="/" element={<Navigate to="/login" replace />} />
