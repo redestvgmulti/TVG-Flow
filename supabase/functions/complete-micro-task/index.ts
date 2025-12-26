@@ -60,12 +60,15 @@ serve(async (req) => {
             )
         }
 
-        // Validate status (must be em_execucao to complete)
-        if (microTask.status !== 'em_execucao') {
+        // Validate status (must be valid to complete)
+        // Allow completion from pendente, em_progresso, or devolvida
+        const allowedStatuses = ['pendente', 'em_progresso', 'devolvida', 'em_execucao'];
+        if (!allowedStatuses.includes(microTask.status)) {
             return new Response(
                 JSON.stringify({
-                    error: 'Micro task must be in progress to complete',
-                    current_status: microTask.status
+                    error: 'Micro task cannot be completed from current status',
+                    current_status: microTask.status,
+                    allowed: allowedStatuses
                 }),
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             )

@@ -53,20 +53,78 @@ function StaffDashboard() {
                 return
             }
 
-            // Fetch tasks assigned to this professional
-            const { data: tasks, error } = await supabase
+            // 1. Fetch Micro Tasks (Workflow)
+            const { data: microTasks, error: microError } = await supabase
+                .from('tarefas_micro')
+                .select(`
+                    *,
+                    tarefas (
+                        titulo,
+                        deadline,
+                        prioridade,
+                        descricao
+                    )
+                `)
+                .eq('profissional_id', professionalId)
+
+            if (microError) throw microError
+
+            // Fetch Macro tasks for legacy check (to avoid duplicates if any mixed usage)
+            // But mainly we need Legacy Tasks (assigned directly to user in 'tarefas')
+            const { data: legacyTasks, error: legacyError } = await supabase
                 .from('tarefas')
                 .select('id, titulo, deadline, status, prioridade, created_at, concluida_at, drive_link')
                 .eq('assigned_to', professionalId)
-                .order('deadline', { ascending: true, nullsFirst: false })
 
-            if (error) throw error
+            if (legacyError) throw legacyError
 
-            const now = new Date()
+            // Normalize and Merge
+            const allTasks = []
+
+            // Process Micro Tasks
+            microTasks?.forEach(mt => {
+                allTasks.push({
+                    id: mt.id,
+                    titulo: mt.tarefas?.titulo || `[${mt.funcao}] Sem título`,
+                    deadline: mt.tarefas?.deadline,
+                    prioridade: mt.tarefas?.prioridade || 'normal',
+                    status: mt.status,
+                    created_at: mt.created_at,
+                    concluida_at: mt.concluida_at, // Micro tasks might not have this, check DB schema. Usually we use created_at or logs for completion time if strictly needed, but let's see. 
+                    // Actually micro tasks don't have 'concluida_at' col by default in some schemas, but let's assume if it's completed we strictly care about status.
+                    // For productivity chart (last 7 days), we need a date.
+                    // If 'concluida_at' doesn't exist on micro tasks, we might need to rely on 'updated_at' or just use 'created_at' for now if specific completion time isn't tracked on the row.
+                    // HOWEVER, looking at previous files, 'tarefas_micro' usually tracks status.
+                    // Let's use updated_at as proxy for completion time if status is completed
+                    completion_date: mt.status === 'concluida' ? (mt.updated_at || mt.created_at) : null,
+                    is_micro_task: true,
+                    funcao: mt.funcao
+                })
+            })
+
+            // Process Legacy Tasks
+            legacyTasks?.forEach(lt => {
+                // Avoid duplicates if a legacy task is somehow also a macro task for the user (rare in this model but good safety)
+                // Actually, legacy tasks are directly assigned. Micro tasks are childs. They shouldn't overlap in ID space of "items to do".
+                allTasks.push({
+                    id: lt.id,
+                    titulo: lt.titulo,
+                    deadline: lt.deadline,
+                    prioridade: lt.prioridade,
+                    status: lt.status,
+                    created_at: lt.created_at,
+                    concluida_at: lt.concluida_at,
+                    completion_date: lt.concluida_at,
+                    is_micro_task: false
+                })
+            })
 
             // Calculate Stats
-            const pendingTasks = tasks.filter(t => t.status === 'pendente' || t.status === 'em_progresso')
-            const completedTasks = tasks.filter(t => t.status === 'concluida')
+            const now = new Date()
+            
+            // Map statuses to general buckets
+            const pendingTasks = allTasks.filter(t => ['pendente', 'em_progresso', 'em_execucao', 'devolvida'].includes(t.status))
+            const completedTasks = allTasks.filter(t => t.status === 'concluida')
 
             // Overdue check
             const overdueTasks = pendingTasks.filter(t => {
@@ -77,17 +135,20 @@ function StaffDashboard() {
             // Productivity (Last 7 days)
             const sevenDaysAgo = new Date()
             sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-            const recentCompletions = completedTasks.filter(t => new Date(t.concluida_at || t.created_at) > sevenDaysAgo)
+            const recentCompletions = completedTasks.filter(t => {
+                const date = new Date(t.completion_date || t.created_at)
+                return date > sevenDaysAgo
+            })
 
             // Prepare Chart Data (Last 7 Days)
             const chartData = []
             for (let i = 6; i >= 0; i--) {
                 const date = new Date()
                 date.setDate(date.getDate() - i)
-                const dateString = date.toLocaleDateString('pt-BR', { weekday: 'short' }) // Seg, Ter...
+                const dateString = date.toLocaleDateString('pt-BR', { weekday: 'short' })
 
                 const count = recentCompletions.filter(t => {
-                    const taskDate = new Date(t.concluida_at || t.created_at)
+                    const taskDate = new Date(t.completion_date || t.created_at)
                     return taskDate.getDate() === date.getDate() && taskDate.getMonth() === date.getMonth()
                 }).length
 
@@ -103,9 +164,14 @@ function StaffDashboard() {
 
             setProductivityData(chartData)
 
-            // Top listing: pending tasks first, ordered by deadline (already from DB usually, but ensuring)
-            // Limit to 5
-            setRecentTasks(pendingTasks.slice(0, 5))
+            // Top listing: sort by deadline ascending (nearest deadline first)
+            const sortedTasks = [...pendingTasks].sort((a, b) => {
+                if (!a.deadline) return 1
+                if (!b.deadline) return -1
+                return new Date(a.deadline) - new Date(b.deadline)
+            })
+
+            setRecentTasks(sortedTasks.slice(0, 5))
 
         } catch (error) {
             console.error('Error fetching dashboard data:', error)

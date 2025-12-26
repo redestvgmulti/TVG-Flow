@@ -96,14 +96,16 @@
 }
 
 .admin-function-btn.selected {
-    background-color: var(--color-primary);
-    color: #ffffff;
-    border-color: var(--color-primary);
-    box-shadow: var(--shadow-md);
+    background-color: var(--ios-blue-50);
+    color: var(--ios-blue-600);
+    border-color: var(--ios-blue-500);
+    box-shadow: none;
+    font-weight: 600;
 }
 
 .admin-function-btn.selected:hover {
-    background-color: var(--color-primary-dark);
+    background-color: var(--ios-blue-100);
+    border-color: var(--ios-blue-600);
 }
 
 /* Feedback States */
