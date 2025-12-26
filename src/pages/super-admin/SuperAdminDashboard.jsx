@@ -1,166 +1,155 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../services/supabase'
-import { Shield, Users, Activity, MoreVertical, Ban, CheckCircle, AlertTriangle } from 'lucide-react'
-import { toast } from 'sonner'
+import { Building2, Users, Ban, Activity } from 'lucide-react'
 import '../../styles/super-admin-dashboard.css'
 
 export default function SuperAdminDashboard() {
-    const [stats, setStats] = useState([])
+    const [companies, setCompanies] = useState([])
+    const [stats, setStats] = useState({
+        totalCompanies: 0,
+        activeCompanies: 0,
+        suspendedCompanies: 0,
+        totalUsers: 0
+    })
     const [loading, setLoading] = useState(true)
-    const [showModal, setShowModal] = useState(false)
-    const [selectedCompany, setSelectedCompany] = useState(null)
-    const [actionNote, setActionNote] = useState('')
+    const [error, setError] = useState(null)
 
     useEffect(() => {
-        fetchStats()
+        fetchDashboardStats()
     }, [])
 
-    async function fetchStats() {
+    async function fetchDashboardStats() {
         try {
             setLoading(true)
-            const { data, error } = await supabase.rpc('get_companies_stats')
-            if (error) throw error
-            setStats(data || [])
+            setError(null)
+
+            const { data, error: rpcError } = await supabase.rpc('get_companies_stats')
+
+            if (rpcError) {
+                console.error('RPC Error:', rpcError)
+                throw rpcError
+            }
+
+            console.log('Companies data:', data)
+            setCompanies(data || [])
+
+            if (data && data.length > 0) {
+                const totalCompanies = data.length
+                const activeCompanies = data.filter(c => c.status_conta === 'active').length
+                const suspendedCompanies = data.filter(c => c.status_conta === 'suspended').length
+                const totalUsers = data.reduce((sum, c) => sum + Number(c.users_count || 0), 0)
+
+                setStats({
+                    totalCompanies,
+                    activeCompanies,
+                    suspendedCompanies,
+                    totalUsers
+                })
+            }
         } catch (error) {
-            console.error('Error fetching stats:', error)
-            toast.error('Erro ao carregar dados do painel')
+            console.error('Error fetching dashboard stats:', error)
+            setError(error.message)
         } finally {
             setLoading(false)
         }
     }
 
-    /* 
-       Dynamic Health Calculation (Redundant if RPC does it, but good for immediate feedback)
-       RPC returns: 'healthy', 'low_activity', 'inactive'
-    */
+    const kpis = [
+        { label: 'Total de Empresas', value: stats.totalCompanies, icon: Building2, color: '#3b82f6' },
+        { label: 'Empresas Ativas', value: stats.activeCompanies, icon: Activity, color: '#10b981' },
+        { label: 'Empresas Suspensas', value: stats.suspendedCompanies, icon: Ban, color: '#ef4444' },
+        { label: 'Usuários Totais', value: stats.totalUsers, icon: Users, color: '#8b5cf6' },
+    ]
 
-    function renderHealthBadge(status) {
-        const config = {
-            healthy: { color: '#10b981', label: 'Saudável', icon: CheckCircle },
-            low_activity: { color: '#f59e0b', label: 'Baixa Ativ.', icon: AlertTriangle },
-            inactive: { color: '#ef4444', label: 'Inativo', icon: Ban },
-        }
-        const current = config[status] || config.inactive
-        const Icon = current.icon
-
+    if (loading) {
         return (
-            <span className="badge-health" style={{ color: current.color, borderColor: current.color }}>
-                <Icon size={12} />
-                {current.label}
-            </span>
+            <div className="dashboard-container">
+                <div className="dashboard-header">
+                    <h2>Painel Super Admin</h2>
+                </div>
+                <div className="card loading-card">
+                    <p className="loading-text-primary">Carregando métricas...</p>
+                    <div className="spinner"></div>
+                </div>
+            </div>
         )
     }
 
-    function renderAccountStatus(status) {
-        if (status === 'suspended') return <span className="badge-status suspended">Suspenso</span>
-        if (status === 'trial') return <span className="badge-status trial">Trial</span>
-        return <span className="badge-status active">Ativo</span>
-    }
-
-    async function handleToggleSuspension() {
-        if (!selectedCompany) return
-
-        const newStatus = selectedCompany.status_conta === 'suspended' ? 'active' : 'suspended'
-
-        try {
-            const { error } = await supabase
-                .from('empresas')
-                .update({
-                    status_conta: newStatus,
-                    internal_notes: selectedCompany.internal_notes ? selectedCompany.internal_notes + '\n' + actionNote : actionNote
-                })
-                .eq('id', selectedCompany.empresa_id) // RPC returns empresa_id
-
-            if (error) throw error
-
-            toast.success(newStatus === 'suspended' ? 'Empresa suspensa' : 'Empresa reativada')
-            setShowModal(false)
-            fetchStats()
-        } catch (error) {
-            console.error('Error updating company:', error)
-            toast.error('Erro ao atualizar status da empresa')
-        }
+    if (error) {
+        return (
+            <div className="dashboard-container">
+                <div className="dashboard-header">
+                    <h2>Painel Super Admin</h2>
+                </div>
+                <div className="error-state card">
+                    <p>Erro ao carregar dados: {error}</p>
+                    <button onClick={fetchDashboardStats} className="btn btn-primary">Tentar Novamente</button>
+                </div>
+            </div>
+        )
     }
 
     return (
-        <div className="sa-dashboard fade-in">
-            <div className="sa-header-block">
-                <h1>Painel de Governança</h1>
-                <p>Monitoramento e controle de tenants</p>
+        <div className="dashboard-container animation-fade-in">
+            <div className="dashboard-header">
+                <h2>Painel Super Admin</h2>
             </div>
 
-            {loading ? (
-                <div className="loading-state">Carregando métricas...</div>
-            ) : (
-                <div className="sa-table-container">
-                    <table className="sa-table">
-                        <thead>
-                            <tr>
-                                <th>Empresa</th>
-                                <th>Tipo</th>
-                                <th>Status Conta</th>
-                                <th>Saúde (Atividade)</th>
-                                <th>Usuários</th>
-                                <th>Tarefas Ativas</th>
-                                <th>Última Ativ.</th>
-                                <th>Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {stats.map(company => (
-                                <tr key={company.empresa_id}>
-                                    <td className="fw-500">{company.nome}</td>
-                                    <td className="text-muted">{company.tipo_negocio || '-'}</td>
-                                    <td>{renderAccountStatus(company.status_conta)}</td>
-                                    <td>{renderHealthBadge(company.health_status)}</td>
-                                    <td>{company.users_count}</td>
-                                    <td>{company.active_tasks_count}</td>
-                                    <td className="text-small">
-                                        {company.last_activity_at ? new Date(company.last_activity_at).toLocaleDateString() : '-'}
-                                    </td>
-                                    <td>
-                                        <button
-                                            className="btn-action-icon"
-                                            onClick={() => {
-                                                setSelectedCompany(company)
-                                                setActionNote('')
-                                                setShowModal(true)
-                                            }}
-                                        >
-                                            <MoreVertical size={16} />
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+            {/* KPI Cards - Using standard 'metric-card' structure from Admin Dashboard */}
+            <div className="dashboard-grid-metrics">
+                <div className="card metric-card">
+                    <h3 className="metric-label">Total de Empresas</h3>
+                    <p className="metric-value">{stats.totalCompanies}</p>
                 </div>
-            )}
 
-            {showModal && selectedCompany && (
-                <div className="modal-backdrop-sa" onClick={() => setShowModal(false)}>
-                    <div className="modal-sa" onClick={e => e.stopPropagation()}>
-                        <h3>Gerenciar: {selectedCompany.nome}</h3>
+                <div className="card metric-card">
+                    <h3 className="metric-label">Empresas Ativas</h3>
+                    <p className="metric-value metric-value-success">{stats.activeCompanies}</p>
+                </div>
 
-                        <div className="modal-sa-content">
-                            <p>Status atual: <strong>{selectedCompany.status_conta}</strong></p>
+                <div className="card metric-card">
+                    <h3 className="metric-label">Empresas Suspensas</h3>
+                    <p className="metric-value metric-value-danger">{stats.suspendedCompanies}</p>
+                </div>
 
-                            <label>Nota Interna (Opcional)</label>
-                            <textarea
-                                value={actionNote}
-                                onChange={e => setActionNote(e.target.value)}
-                                placeholder="Motivo da ação..."
-                            />
+                <div className="card metric-card">
+                    <h3 className="metric-label">Usuários Totais</h3>
+                    <p className="metric-value">{stats.totalUsers}</p>
+                </div>
+            </div>
 
-                            <div className="modal-sa-actions">
-                                <button onClick={handleToggleSuspension} className={`btn-large ${selectedCompany.status_conta === 'suspended' ? 'btn-success' : 'btn-danger'}`}>
-                                    {selectedCompany.status_conta === 'suspended' ? 'Reativar Empresa' : 'SUSPENDER EMPRESA'}
-                                </button>
+            {/* Activity Block - Styled as a standard card */}
+            <div className="card mt-6">
+                <div className="card-header">
+                    <h3 className="card-title flex items-center gap-2">
+                        <Activity size={18} className="text-primary" />
+                        Atividade Recente
+                    </h3>
+                </div>
+
+                <div className="activity-list p-4">
+                    {companies.length > 0 ? (
+                        <div className="activity-item p-3 rounded bg-subtle flex items-center gap-3">
+                            <div className="activity-icon bg-white p-2 rounded shadow-sm">
+                                <Building2 size={20} className="text-primary" />
+                            </div>
+                            <div className="activity-content">
+                                <p className="font-medium m-0 text-primary">
+                                    {companies.filter(c => c.status_conta === 'active').length} empresa(s) ativa(s) no sistema
+                                </p>
+                                <span className="text-sm text-secondary">
+                                    Última atualização: agora
+                                </span>
                             </div>
                         </div>
-                    </div>
+                    ) : (
+                        <div className="activity-empty text-center p-8 text-secondary">
+                            <p>Nenhuma empresa cadastrada ainda</p>
+                        </div>
+                    )}
                 </div>
-            )}
+            </div>
         </div>
     )
 }
+

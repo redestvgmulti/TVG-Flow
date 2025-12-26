@@ -108,6 +108,7 @@ function App() {
                 <Route path="today" element={<StaffToday />} />
               </Route>
 
+
               {/* Super Admin Routes */}
               <Route
                 path="/platform"
@@ -123,6 +124,7 @@ function App() {
                 <Route path="companies" element={<TenantListPage />} />
                 <Route path="companies/:id" element={<TenantDetail />} />
               </Route>
+
 
               <Route path="/" element={<Navigate to="/login" replace />} />
             </Routes>

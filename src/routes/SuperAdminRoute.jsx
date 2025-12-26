@@ -1,7 +1,7 @@
-import { Navigate, Outlet } from 'react-router-dom'
+import { Navigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
-export default function SuperAdminRoute() {
+export default function SuperAdminRoute({ children }) {
     const { role, loading } = useAuth()
 
     if (loading) {
@@ -12,5 +12,5 @@ export default function SuperAdminRoute() {
         return <Navigate to="/" replace />
     }
 
-    return <Outlet />
+    return children
 }
