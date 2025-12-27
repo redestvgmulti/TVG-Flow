@@ -17,7 +17,17 @@ export function AuthProvider({ children }) {
 
     useEffect(() => {
         // Get initial session
-        supabase.auth.getSession().then(({ data: { session } }) => {
+        supabase.auth.getSession().then(({ data: { session }, error }) => {
+            if (error) {
+                console.error('Error getting session:', error)
+                // If there's an error (like refresh token missing/invalid), ensure we're signed out
+                if (error.status === 400 || error.message?.includes('refresh_token')) {
+                    signOut().catch(console.error)
+                }
+                setLoading(false)
+                return
+            }
+
             setSession(session)
             setUser(session?.user ?? null)
             if (session?.user) {
@@ -25,6 +35,9 @@ export function AuthProvider({ children }) {
             } else {
                 setLoading(false)
             }
+        }).catch(err => {
+            console.error('Unexpected error during session init:', err)
+            setLoading(false)
         })
 
         // Listen for auth changes
