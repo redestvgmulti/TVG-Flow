@@ -1,0 +1,338 @@
+/* Figma Make Dashboard - Pixel-Perfect Replica */
+
+/* 
+ * CONTAINER & LAYOUT
+ */
+.dashboard-container {
+    padding: 24px 32px;
+    max-width: 1440px;
+    margin: 0 auto;
+}
+
+/* 
+ * HEADER - Figma Make Style
+ */
+.dashboard-header {
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.dashboard-header h2 {
+    font-size: 24px;
+    font-weight: 600;
+    color: #1a1a1a;
+    margin: 0;
+    letter-spacing: -0.02em;
+}
+
+/* 
+ * KPI GRID - Exact Figma Make Layout
+ */
+.dashboard-grid-metrics {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.metric-card {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 20px;
+    transition: box-shadow 150ms ease;
+}
+
+.metric-card:hover {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.metric-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 0 0 12px 0;
+}
+
+.metric-value {
+    font-size: 28px;
+    font-weight: 700;
+    color: #111827;
+    margin: 0;
+    line-height: 1;
+    letter-spacing: -0.03em;
+}
+
+.metric-value-primary {
+    color: #3b82f6;
+}
+
+.metric-value-success {
+    color: #10b981;
+}
+
+.metric-value-danger {
+    color: #ef4444;
+}
+
+/* 
+ * CHARTS ROW - Figma Make Grid
+ */
+.dashboard-grid-charts {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+/* 
+ * CARDS - Figma Make Style
+ */
+.card {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 20px;
+}
+
+.card-header {
+    padding: 0 0 16px 0;
+    border-bottom: 1px solid #f3f4f6;
+    margin-bottom: 16px;
+}
+
+.card-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #111827;
+    margin: 0;
+}
+
+/* 
+ * TASK LIST - Clean Figma Make Style
+ */
+.task-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.task-item {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: all 150ms ease;
+}
+
+.task-item:hover {
+    border-color: #d1d5db;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.task-card-horizontal {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.task-card-overdue {
+    border-left: 3px solid #ef4444;
+    background: #fef2f2;
+}
+
+/* 
+ * BADGES - Figma Make Style
+ */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.badge-success {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.badge-primary {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.badge-danger {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.badge-warning {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+/* 
+ * EMPTY STATES
+ */
+.empty-state {
+    text-align: center;
+    padding: 48px 24px;
+    color: #9ca3af;
+}
+
+.empty-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    display: block;
+    opacity: 0.5;
+}
+
+.empty-text {
+    font-size: 14px;
+    color: #6b7280;
+    margin: 0 0 16px 0;
+}
+
+/* 
+ * LOADING STATE
+ */
+.loading-card {
+    padding: 48px 24px;
+    text-align: center;
+}
+
+.loading-text-primary {
+    font-size: 14px;
+    font-weight: 500;
+    color: #374151;
+    margin: 0 0 8px 0;
+}
+
+.loading-text-secondary {
+    font-size: 13px;
+    color: #9ca3af;
+    margin: 0;
+}
+
+/* 
+ * UTILITY CLASSES
+ */
+.flex {
+    display: flex;
+}
+
+.items-center {
+    align-items: center;
+}
+
+.gap-2 {
+    gap: 8px;
+}
+
+.mb-6 {
+    margin-bottom: 24px;
+}
+
+.p-4 {
+    padding: 16px;
+}
+
+.text-primary {
+    color: #3b82f6;
+}
+
+.text-success {
+    color: #10b981;
+}
+
+.text-danger {
+    color: #ef4444;
+}
+
+.font-medium {
+    font-weight: 500;
+}
+
+.m-0 {
+    margin: 0;
+}
+
+.border-success {
+    border-color: #10b981;
+}
+
+.border-danger {
+    border-color: #ef4444;
+}
+
+.bg-success-subtle {
+    background: #d1fae5;
+}
+
+.bg-danger-subtle {
+    background: #fee2e2;
+}
+
+/* 
+ * ANIMATIONS
+ */
+.animation-fade-in {
+    animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 
+ * RESPONSIVE - Mobile First
+ */
+@media (max-width: 1024px) {
+    .dashboard-grid-charts {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .dashboard-container {
+        padding: 16px;
+    }
+
+    .dashboard-grid-metrics {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+    }
+
+    .metric-card {
+        padding: 16px;
+    }
+
+    .metric-value {
+        font-size: 24px;
+    }
+}
+
+@media (max-width: 480px) {
+    .dashboard-grid-metrics {
+        grid-template-columns: 1fr;
+    }
+}

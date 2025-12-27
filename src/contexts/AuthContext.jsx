@@ -14,16 +14,34 @@ export function AuthProvider({ children }) {
     const [role, setRole] = useState(null)
     const [professionalId, setProfessionalId] = useState(null)
     const [professionalName, setProfessionalName] = useState(null)
+    const [accountStatus, setAccountStatus] = useState('active') // 'active' | 'inactive' | 'suspended'
+    const [connectionStatus, setConnectionStatus] = useState('online') // 'online' | 'offline' | 'reconnecting'
+
+    // Detectar erro de rede
+    function isNetworkError(error) {
+        return (
+            error?.message?.includes('fetch') ||
+            error?.message?.includes('network') ||
+            error?.status === 0 ||
+            !navigator.onLine
+        )
+    }
 
     useEffect(() => {
         // Get initial session
         supabase.auth.getSession().then(({ data: { session }, error }) => {
             if (error) {
                 console.error('Error getting session:', error)
-                // If there's an error (like refresh token missing/invalid), ensure we're signed out
-                if (error.status === 400 || error.message?.includes('refresh_token')) {
-                    signOut().catch(console.error)
+
+                // Diferenciar erro de rede vs sessão expirada
+                if (isNetworkError(error)) {
+                    setConnectionStatus('offline')
+                    // NÃO deslogar, apenas informar
+                } else {
+                    // Outros erros: apenas log, deixar Supabase Auth gerenciar
+                    console.error('Session error (not network):', error)
                 }
+
                 setLoading(false)
                 return
             }
@@ -56,6 +74,35 @@ export function AuthProvider({ children }) {
 
         return () => subscription.unsubscribe()
     }, [])
+
+    // Retry silencioso em reconexão
+    useEffect(() => {
+        const handleOnline = async () => {
+            if (connectionStatus === 'offline') {
+                setConnectionStatus('reconnecting')
+
+                try {
+                    // Tentar recuperar sessão
+                    const { data: { session }, error } = await supabase.auth.getSession()
+
+                    if (!error && session) {
+                        setConnectionStatus('online')
+                        setSession(session)
+                        setUser(session.user)
+                        fetchProfessionalData(session.user.id)
+                    } else {
+                        setConnectionStatus('online')
+                    }
+                } catch (err) {
+                    console.error('Error during reconnection:', err)
+                    setConnectionStatus('online')
+                }
+            }
+        }
+
+        window.addEventListener('online', handleOnline)
+        return () => window.removeEventListener('online', handleOnline)
+    }, [connectionStatus])
 
     async function fetchProfessionalData(userId) {
         try {
@@ -100,21 +147,41 @@ export function AuthProvider({ children }) {
 
             // SECURITY: Check if user is active
             if (!professional.ativo) {
-                await signOut()
+                setAccountStatus('inactive')
+                setRole(professional.role || null)
+                setProfessionalId(professional.id || null)
+                setProfessionalName(professional.nome || null)
+                setLoading(false)
                 return
             }
 
-            // SECURITY: Check if company is suspended
+            // Super admins don't have company associations - set their state immediately
+            if (professional.role === 'super_admin') {
+                setRole('super_admin')
+                setProfessionalId(professional.id || null)
+                setProfessionalName(professional.nome || null)
+                setAccountStatus('active')
+                setLoading(false)
+                return
+            }
+
+            // SECURITY: Check if company is suspended (only for non-super_admin users)
             const companyStatus = professional.empresa_profissionais?.[0]?.empresa?.status_conta
             if (companyStatus === 'suspended') {
-                await signOut()
-                window.location.href = '/suspended'
+                setAccountStatus('suspended')
+                setRole(professional.role || null)
+                setProfessionalId(professional.id || null)
+                setProfessionalName(professional.nome || null)
+                setLoading(false)
                 return
             }
 
+            // All checks passed, set user data
             setRole(professional.role || null)
             setProfessionalId(professional.id || null)
             setProfessionalName(professional.nome || null)
+            setAccountStatus('active')
+            setLoading(false)
         } catch (error) {
             setRole(null)
             setProfessionalId(null)
@@ -160,6 +227,8 @@ export function AuthProvider({ children }) {
         role,
         professionalId,
         professionalName,
+        accountStatus,
+        connectionStatus,
         signIn,
         signOut
     }
