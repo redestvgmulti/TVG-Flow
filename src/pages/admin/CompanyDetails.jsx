@@ -2,7 +2,7 @@ import { createPortal } from 'react-dom'
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
-import { ArrowLeft, Users, Plus, Trash2, Edit, Briefcase, UserCheck } from 'lucide-react'
+import { ArrowLeft, Users, Plus, Trash2, Edit, Briefcase, UserCheck, Link2Off } from 'lucide-react'
 import { toast } from 'sonner'
 import '../../styles/companies.css'
 
@@ -17,6 +17,8 @@ function CompanyDetails() {
     const [selectedProfessionals, setSelectedProfessionals] = useState({})
     const [functions, setFunctions] = useState({}) // Renamed from sectors
     const [showDeleteModal, setShowDeleteModal] = useState(false)
+    const [showUnlinkModal, setShowUnlinkModal] = useState(false)
+    const [professionalToUnlink, setProfessionalToUnlink] = useState(null)
 
     useEffect(() => {
         fetchCompanyDetails()
@@ -29,7 +31,7 @@ function CompanyDetails() {
 
             // Fetch company info (from clientes)
             const { data: companyData, error: companyError } = await supabase
-                .from('clientes')
+                .from('empresas')
                 .select('*')
                 .eq('id', id)
                 .single()
@@ -41,12 +43,12 @@ function CompanyDetails() {
             const { data: professionalsData, error: professionalsError } = await supabase
                 .from('empresa_profissionais')
                 .select(`
-                    *,
-                    usuarios:profissionais (
-                        id,
-                        nome,
-                        email
-                    )
+    *,
+    usuarios: profissionais(
+        id,
+        nome,
+        email
+    )
                 `)
                 .eq('empresa_id', id)
 
@@ -127,19 +129,26 @@ function CompanyDetails() {
         }
     }
 
-    async function handleRemoveProfessional(associationId) {
-        if (!confirm('Tem certeza que deseja desvincular este profissional?')) return
+    function handleRemoveProfessional(professional) {
+        setProfessionalToUnlink(professional)
+        setShowUnlinkModal(true)
+    }
+
+    async function confirmUnlink() {
+        if (!professionalToUnlink) return
 
         try {
             const { error } = await supabase
                 .from('empresa_profissionais')
-                .delete() // Assuming permissions allow delete
-                .eq('id', associationId)
+                .delete()
+                .eq('id', professionalToUnlink.id)
 
             if (error) throw error
 
             toast.success('Profissional desvinculado com sucesso')
             fetchCompanyDetails()
+            setShowUnlinkModal(false)
+            setProfessionalToUnlink(null)
 
         } catch (error) {
             console.error('Error removing professional:', error)
@@ -183,7 +192,7 @@ function CompanyDetails() {
     async function handleDeleteCompany() {
         try {
             const { error } = await supabase
-                .from('clientes')
+                .from('empresas')
                 .delete()
                 .eq('id', id)
 
@@ -232,7 +241,7 @@ function CompanyDetails() {
                     <h2 className="company-details-name">{company.nome}</h2>
                     <div className="company-details-meta">
                         {company.cnpj && <span className="company-cnpj">CNPJ: {company.cnpj}</span>}
-                        <span className={`company-status ${company.ativo ? 'active' : 'inactive'}`}>
+                        <span className={`company - status ${company.ativo ? 'active' : 'inactive'} `}>
                             {company.ativo ? 'Ativa' : 'Inativa'}
                         </span>
                         <span>{professionals.length} vínculos</span>
@@ -255,9 +264,9 @@ function CompanyDetails() {
             </div>
 
             {/* Professionals Table */}
-            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-                <div style={{ padding: '20px', borderBottom: '1px solid var(--color-border-light)' }}>
-                    <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>
+            <div className="card professionals-card">
+                <div className="professionals-header">
+                    <h3 className="professionals-title">
                         Profissionais Vinculados
                     </h3>
                 </div>
@@ -265,125 +274,85 @@ function CompanyDetails() {
                 {professionals.length > 0 ? (
                     <>
                         {/* Desktop Table View */}
-                        <table className="company-professionals-table hidden md:table">
-                            <thead>
-                                <tr>
-                                    <th>Nome</th>
-                                    <th>Email</th>
-                                    <th>Função na Empresa</th>
-                                    <th>Status</th>
-                                    <th style={{ width: '100px', textAlign: 'right' }}>Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {professionals.map(prof => (
-                                    <tr key={prof.id}>
-                                        <td style={{ fontWeight: 500 }}>
-                                            {prof.usuarios?.nome || 'Usuário Removido'}
-                                        </td>
-                                        <td style={{ color: 'var(--color-text-secondary)' }}>
-                                            {prof.usuarios?.email || '-'}
-                                        </td>
-                                        <td>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                <Briefcase size={14} className="text-muted" />
-                                                <span style={{ fontWeight: 500, color: '#475569' }}>
-                                                    {prof.funcao}
-                                                </span>
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <span className={`status-badge ${prof.ativo ? 'status-success' : 'status-error'}`}>
-                                                {prof.ativo ? 'Ativo' : 'Inativo'}
-                                            </span>
-                                        </td>
-                                        <td style={{ textAlign: 'right' }}>
-                                            <button
-                                                onClick={() => handleRemoveProfessional(prof.id)}
-                                                className="btn-icon btn-icon-danger"
-                                                title="Desvincular"
-                                            >
-                                                <Trash2 size={18} />
-                                            </button>
-                                        </td>
+                        <div className="professionals-desktop-view">
+                            <table className="table">
+                                <thead>
+                                    <tr>
+                                        <th>Profissional</th>
+                                        <th>Cargo</th>
+                                        <th>Status</th>
+                                        <th style={{ textAlign: 'right' }}>Ações</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    {professionals.map(prof => (
+                                        <tr key={prof.id}>
+                                            <td>
+                                                <div>
+                                                    <p style={{ margin: 0, fontWeight: 500 }}>
+                                                        {prof.usuarios?.nome || 'Usuário Removido'}
+                                                    </p>
+                                                    <p style={{ margin: 0, color: 'var(--color-text-secondary)', fontSize: '12px' }}>
+                                                        {prof.usuarios?.email || '-'}
+                                                    </p>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div style={{ display: 'flex', gap: '4px' }}>
+                                                    <span className="badge badge-neutral">
+                                                        <Briefcase size={12} style={{ marginRight: '4px' }} />
+                                                        {prof.funcao}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span className={`status-badge ${prof.ativo ? 'status-success' : 'status-error'}`}>
+                                                    {prof.ativo ? 'Ativo' : 'Inativo'}
+                                                </span>
+                                            </td>
+                                            <td style={{ textAlign: 'right' }}>
+                                                <button
+                                                    onClick={() => handleRemoveProfessional(prof)}
+                                                    className="btn-icon btn-icon-danger"
+                                                    title="Desvincular"
+                                                >
+                                                    <Trash2 size={18} />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
 
                         {/* Mobile Card View */}
-                        <div className="md:hidden" style={{ padding: '16px' }}>
+                        <div className="professionals-mobile-list">
                             {professionals.map(prof => (
-                                <div
-                                    key={prof.id}
-                                    style={{
-                                        background: '#ffffff',
-                                        border: '1px solid #e2e8f0',
-                                        borderRadius: '12px',
-                                        padding: '16px',
-                                        marginBottom: '12px',
-                                        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)'
-                                    }}
-                                >
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
-                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                            <p style={{
-                                                fontSize: '16px',
-                                                fontWeight: 600,
-                                                color: '#1e293b',
-                                                margin: '0 0 4px 0',
-                                                lineHeight: '1.4'
-                                            }}>
+                                <div key={prof.id} className="professionals-mobile-card">
+                                    <div className="professionals-mobile-header">
+                                        <div className="professionals-mobile-info">
+                                            <p className="professionals-mobile-name">
                                                 {prof.usuarios?.nome || 'Usuário Removido'}
                                             </p>
-                                            <p style={{
-                                                fontSize: '13px',
-                                                color: '#64748b',
-                                                margin: 0,
-                                                overflow: 'hidden',
-                                                textOverflow: 'ellipsis',
-                                                whiteSpace: 'nowrap'
-                                            }}>
+                                            <p className="professionals-mobile-email">
                                                 {prof.usuarios?.email || '-'}
                                             </p>
                                         </div>
                                         <button
-                                            onClick={() => handleRemoveProfessional(prof.id)}
-                                            style={{
-                                                background: 'transparent',
-                                                border: 'none',
-                                                color: '#ef4444',
-                                                padding: '8px',
-                                                cursor: 'pointer',
-                                                borderRadius: '8px',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                marginLeft: '8px',
-                                                flexShrink: 0
-                                            }}
+                                            onClick={() => handleRemoveProfessional(prof)}
+                                            className="professionals-mobile-delete-btn"
                                             title="Desvincular"
                                         >
                                             <Trash2 size={20} />
                                         </button>
                                     </div>
 
-                                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                                        <span style={{
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '4px',
-                                            fontSize: '13px',
-                                            fontWeight: 500,
-                                            color: '#475569',
-                                            background: '#f1f5f9',
-                                            padding: '4px 10px',
-                                            borderRadius: '6px'
-                                        }}>
+                                    <div className="professionals-mobile-badges">
+                                        <span className="professionals-mobile-role">
                                             <Briefcase size={12} />
                                             {prof.funcao}
                                         </span>
-                                        <span className={`status-badge ${prof.ativo ? 'status-success' : 'status-error'}`} style={{ fontSize: '12px', padding: '4px 10px' }}>
+                                        <span className={`status-badge professionals-mobile-status ${prof.ativo ? 'status-success' : 'status-error'}`}>
                                             {prof.ativo ? 'Ativo' : 'Inativo'}
                                         </span>
                                     </div>
@@ -392,15 +361,14 @@ function CompanyDetails() {
                         </div>
                     </>
                 ) : (
-                    <div style={{ padding: '60px 20px', textAlign: 'center' }}>
-                        <Users size={48} style={{ opacity: 0.3, marginBottom: '16px' }} />
-                        <p style={{ margin: 0, color: 'var(--color-text-secondary)' }}>
+                    <div className="professionals-empty">
+                        <Users size={48} className="professionals-empty-icon" />
+                        <p className="professionals-empty-text">
                             Nenhum profissional vinculado a esta empresa
                         </p>
                         <button
                             onClick={() => setShowAssignModal(true)}
-                            className="btn btn-primary"
-                            style={{ marginTop: '16px' }}
+                            className="btn btn-primary professionals-empty-btn"
                         >
                             <Plus size={20} style={{ marginRight: '8px' }} />
                             Vincular Profissional
@@ -412,7 +380,7 @@ function CompanyDetails() {
             {/* Assign Professionals Modal */}
             {showAssignModal && (
                 <div className="modal-overlay" onClick={() => setShowAssignModal(false)}>
-                    <div className="modal-content modal-large" onClick={(e) => e.stopPropagation()}>
+                    <div className="modal modal-large" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <h3>Vincular Profissionais</h3>
                             <button onClick={() => setShowAssignModal(false)} className="modal-close-btn">×</button>
@@ -525,6 +493,50 @@ function CompanyDetails() {
                                 className="btn btn-danger-primary w-full"
                             >
                                 Sim, excluir empresa
+                            </button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
+
+            {/* Unlink Professional Confirmation Modal */}
+            {showUnlinkModal && createPortal(
+                <div className="modal-backdrop" onClick={() => setShowUnlinkModal(false)}>
+                    <div className="modal modal-danger-wrapper" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h3 className="modal-danger-title">Desvincular Profissional</h3>
+                            <button onClick={() => setShowUnlinkModal(false)} className="modal-close">
+                                <Plus size={20} style={{ transform: 'rotate(45deg)' }} />
+                            </button>
+                        </div>
+
+                        <div className="modal-body modal-body-centered">
+                            <div className="modal-icon-wrapper modal-icon-danger">
+                                <Link2Off size={32} />
+                            </div>
+                            <h4 className="modal-confirmation-title">Desvincular Profissional?</h4>
+                            <p className="modal-confirmation-text">
+                                Você está prestes a remover o acesso de <strong>{professionalToUnlink?.usuarios?.nome}</strong> a esta empresa.
+                                <br /><br />
+                                <span className="text-sm text-gray-500">
+                                    (O cadastro do profissional no sistema <strong>não será excluído</strong>, apenas o vínculo com esta empresa será removido.)
+                                </span>
+                            </p>
+                        </div>
+
+                        <div className="modal-footer modal-footer-centered">
+                            <button
+                                onClick={() => setShowUnlinkModal(false)}
+                                className="btn btn-secondary w-full"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={confirmUnlink}
+                                className="btn btn-danger-primary w-full"
+                            >
+                                Sim, desvincular
                             </button>
                         </div>
                     </div>

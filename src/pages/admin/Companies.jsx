@@ -20,23 +20,62 @@ function Companies() {
         ativo: true
     })
 
+    const [currentTenantId, setCurrentTenantId] = useState(null)
+
     useEffect(() => {
-        fetchCompanies()
+        fetchTenantContext()
     }, [])
 
-    async function fetchCompanies() {
+    async function fetchTenantContext() {
+        try {
+            setLoading(true)
+            // STRICT: Get the Tenant ID from the user's linked companies where type is 'tenant'
+            const { data: { user } } = await supabase.auth.getUser()
+
+            const { data, error } = await supabase
+                .from('empresa_profissionais')
+                .select(`
+                    empresa_id,
+                    empresas!inner (
+                        id,
+                        empresa_tipo
+                    )
+                `)
+                .eq('profissional_id', user.id)
+                .eq('empresas.empresa_tipo', 'tenant')
+                .maybeSingle()
+
+            if (error) throw error
+
+            if (data) {
+                setCurrentTenantId(data.empresa_id)
+                fetchCompanies(data.empresa_id)
+            } else {
+                toast.error('Contexto de Tenant não encontrado para este usuário.')
+                setLoading(false)
+            }
+        } catch (error) {
+            console.error('Error fetching tenant context:', error)
+            setLoading(false)
+        }
+    }
+
+    async function fetchCompanies(tenantId) {
+        if (!tenantId) return
         try {
             setLoading(true)
 
             // Fetch companies (clientes) with professional count
             const { data: companiesData, error: companiesError } = await supabase
-                .from('clientes')
+                .from('empresas')
                 .select(`
     *,
     empresa_profissionais(
         profissional_id
     )
         `)
+                .eq('empresa_tipo', 'operacional')
+                .eq('tenant_id', tenantId) // STRICT: Only companies for this tenant
                 .order('nome')
 
             if (companiesError) throw companiesError
@@ -64,12 +103,14 @@ function Companies() {
             if (editingCompany) {
                 // Update existing company
                 const { error } = await supabase
-                    .from('clientes')
+                    .from('empresas')
                     .update({
                         nome: formData.nome,
                         cnpj: formData.cnpj,
                         drive_link: formData.drive_link || null,
-                        ativo: formData.ativo
+                        // empresa_tipo is NOT updated, stays as created
+                        // tenant_id likely not updated either
+                        ativo: formData.ativo // Ensure schema supports this if added
                     })
                     .eq('id', editingCompany.id)
 
@@ -77,13 +118,16 @@ function Companies() {
                 toast.success('Empresa atualizada com sucesso')
             } else {
                 // Create new company
+
                 const { error } = await supabase
-                    .from('clientes')
+                    .from('empresas')
                     .insert([{
                         nome: formData.nome,
                         cnpj: formData.cnpj,
                         drive_link: formData.drive_link || null,
-                        ativo: formData.ativo
+                        empresa_tipo: 'operacional',
+                        tenant_id: currentTenantId, // STRICT: Use context tenant ID
+                        // ativo: formData.ativo // Check if supported
                     }])
 
                 if (error) throw error
@@ -93,7 +137,8 @@ function Companies() {
             setShowModal(false)
             setEditingCompany(null)
             setFormData({ nome: '', cnpj: '', ativo: true })
-            fetchCompanies()
+            setFormData({ nome: '', cnpj: '', ativo: true })
+            fetchCompanies(currentTenantId)
 
         } catch (error) {
             console.error('Error saving company:', error)
@@ -240,7 +285,7 @@ function Companies() {
             {/* Create/Edit Modal */}
             {showModal && createPortal(
                 <div className="modal-backdrop" onClick={handleCloseModal}>
-                    <div className="modal" onClick={(e) => e.stopPropagation()}>
+                    <div className="modal company-edit-modal" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <h3>{editingCompany ? 'Editar Empresa' : 'Nova Empresa'}</h3>
                             <button onClick={handleCloseModal} className="modal-close">
@@ -260,6 +305,7 @@ function Companies() {
                                             onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
                                             required
                                             autoFocus
+                                            className="form-control"
                                         />
                                     </div>
 
@@ -271,13 +317,14 @@ function Companies() {
                                             value={formData.cnpj}
                                             onChange={(e) => setFormData({ ...formData, cnpj: e.target.value })}
                                             placeholder="00.000.000/0000-00"
+                                            className="form-control"
                                         />
                                     </div>
 
                                     <div className="input-group">
                                         <label htmlFor="drive_link">
                                             Link do Drive da Empresa
-                                            <span style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginLeft: '6px' }}>(Opcional)</span>
+                                            <span className="form-label-optional">(Opcional)</span>
                                         </label>
                                         <input
                                             type="url"
@@ -285,8 +332,9 @@ function Companies() {
                                             value={formData.drive_link}
                                             onChange={(e) => setFormData({ ...formData, drive_link: e.target.value })}
                                             placeholder="https://drive.google.com/drive/folders/..."
+                                            className="form-control"
                                         />
-                                        <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '4px', display: 'block' }}>
+                                        <span className="form-text-helper">
                                             Cole o link da pasta raiz do cliente no Google Drive
                                         </span>
                                     </div>

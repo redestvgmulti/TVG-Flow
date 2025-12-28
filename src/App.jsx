@@ -32,6 +32,8 @@ import SuperAdminLayout from './layout/SuperAdminLayout'
 import SuperAdminDashboard from './pages/super-admin/SuperAdminDashboard'
 import TenantListPage from './pages/super-admin/TenantListPage'
 import TenantDetail from './pages/super-admin/TenantDetail'
+import ReportsPage from './pages/super-admin/ReportsPage'
+import SystemStatusPage from './pages/super-admin/SystemStatusPage'
 
 import { Toaster } from 'sonner'
 
@@ -123,6 +125,8 @@ function App() {
                 <Route index element={<SuperAdminDashboard />} />
                 <Route path="companies" element={<TenantListPage />} />
                 <Route path="companies/:id" element={<TenantDetail />} />
+                <Route path="reports" element={<ReportsPage />} />
+                <Route path="system" element={<SystemStatusPage />} />
               </Route>
 
 

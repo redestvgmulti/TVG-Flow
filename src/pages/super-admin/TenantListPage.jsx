@@ -17,7 +17,12 @@ export default function TenantListPage() {
     async function fetchCompanies() {
         try {
             setLoading(true)
-            const { data, error } = await supabase.rpc('get_companies_stats')
+            const { data, error } = await supabase
+                .from('empresas')
+                .select('*')
+                .eq('empresa_tipo', 'tenant')
+                .order('nome')
+
             if (error) throw error
             setCompanies(data || [])
         } catch (error) {

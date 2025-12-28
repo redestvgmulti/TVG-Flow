@@ -208,6 +208,12 @@ export function AuthProvider({ children }) {
 
         if (profError) console.error('Error fetching role during login:', profError)
 
+        // Track activity on login
+        await supabase
+            .from('profissionais')
+            .update({ last_activity_at: new Date().toISOString() })
+            .eq('id', data.user.id)
+
         return { ...data, role: prof?.role }
     }
 
