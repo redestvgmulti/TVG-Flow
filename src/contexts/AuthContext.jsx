@@ -112,23 +112,8 @@ export function AuthProvider({ children }) {
                 .eq('id', userId)
                 .maybeSingle()
 
-            // Fetch company association separately to avoid relationship issues
-            const { data: companyData } = await supabase
-                .from('empresa_profissionais')
-                .select(`
-                    empresa:empresas (
-                        status_conta
-                    )
-                `)
-                .eq('profissional_id', userId)
-                .maybeSingle()
-
-            // Merge company data into professional object
-            if (professional) {
-                professional.empresa_profissionais = companyData ? [companyData] : []
-            }
-
             if (error) {
+                console.error('Error fetching professional:', error)
                 setRole(null)
                 setProfessionalId(null)
                 setProfessionalName(null)
@@ -155,7 +140,9 @@ export function AuthProvider({ children }) {
                 return
             }
 
-            // Super admins don't have company associations - set their state immediately
+            // CRITICAL BOOTSTRAP FIX: Super Admin Context Resolution
+            // Super admins do NOT have a tenant/company link.
+            // We must detect them immediately and bypass tenant resolution to prevent login failure.
             if (professional.role === 'super_admin') {
                 setRole('super_admin')
                 setProfessionalId(professional.id || null)
@@ -163,6 +150,23 @@ export function AuthProvider({ children }) {
                 setAccountStatus('active')
                 setLoading(false)
                 return
+            }
+
+            // --- STANDARD FLOW (Admin / Staff) ---
+            // Only fetch company association if NOT a super admin
+            const { data: companyData } = await supabase
+                .from('empresa_profissionais')
+                .select(`
+                    empresa:empresas (
+                        status_conta
+                    )
+                `)
+                .eq('profissional_id', userId)
+                .maybeSingle()
+
+            // Merge company data into professional object
+            if (professional) {
+                professional.empresa_profissionais = companyData ? [companyData] : []
             }
 
             // SECURITY: Check if company is suspended (only for non-super_admin users)
