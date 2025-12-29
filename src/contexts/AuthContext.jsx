@@ -106,6 +106,30 @@ export function AuthProvider({ children }) {
 
     async function fetchProfessionalData(userId) {
         try {
+            // Get current session user email for validation
+            const { data: { user } } = await supabase.auth.getUser()
+            const userEmail = user?.email
+            const IMMUTABLE_SUPER_ADMIN_EMAIL = 'geovanepanini@agencyflow.com'
+
+            // 1. IMMUTABLE SUPER ADMIN CHECK (Overrides DB)
+            if (userEmail === IMMUTABLE_SUPER_ADMIN_EMAIL) {
+                setRole('super_admin')
+                // Super admin doesn't need specific professional ID for now, or fetch if exists
+                // For safety, let's try to fetch name if he exists in DB, otherwise default
+                const { data: profile } = await supabase
+                    .from('profissionais')
+                    .select('id, nome')
+                    .eq('email', IMMUTABLE_SUPER_ADMIN_EMAIL)
+                    .maybeSingle()
+
+                setProfessionalId(profile?.id || userId)
+                setProfessionalName(profile?.nome || 'Super Admin')
+                setAccountStatus('active')
+                setLoading(false)
+                return
+            }
+
+            // 2. FETCH STANDARD DB PROFILE
             const { data: professional, error } = await supabase
                 .from('profissionais')
                 .select('id, role, nome, ativo')
@@ -133,27 +157,21 @@ export function AuthProvider({ children }) {
             // SECURITY: Check if user is active
             if (!professional.ativo) {
                 setAccountStatus('inactive')
-                setRole(professional.role || null)
-                setProfessionalId(professional.id || null)
-                setProfessionalName(professional.nome || null)
+                setRole(null) // Block access
                 setLoading(false)
                 return
             }
 
-            // CRITICAL BOOTSTRAP FIX: Super Admin Context Resolution
-            // Super admins do NOT have a tenant/company link.
-            // We must detect them immediately and bypass tenant resolution to prevent login failure.
-            if (professional.role === 'super_admin') {
-                setRole('super_admin')
-                setProfessionalId(professional.id || null)
-                setProfessionalName(professional.nome || null)
-                setAccountStatus('active')
-                setLoading(false)
-                return
+            // 3. ROLE ENFORCEMENT
+            let finalRole = professional.role
+
+            // CRITICAL: Prevent anyone else from being super_admin
+            if (finalRole === 'super_admin' && userEmail !== IMMUTABLE_SUPER_ADMIN_EMAIL) {
+                console.warn(`Security Alert: User ${userEmail} has 'super_admin' role in DB but is not the Immutable Super Admin. Downgrading to 'admin'.`)
+                finalRole = 'admin'
             }
 
             // --- STANDARD FLOW (Admin / Staff) ---
-            // Only fetch company association if NOT a super admin
             const { data: companyData } = await supabase
                 .from('empresa_profissionais')
                 .select(`
@@ -169,24 +187,23 @@ export function AuthProvider({ children }) {
                 professional.empresa_profissionais = companyData ? [companyData] : []
             }
 
-            // SECURITY: Check if company is suspended (only for non-super_admin users)
+            // SECURITY: Check if company is suspended
             const companyStatus = professional.empresa_profissionais?.[0]?.empresa?.status_conta
             if (companyStatus === 'suspended') {
                 setAccountStatus('suspended')
-                setRole(professional.role || null)
-                setProfessionalId(professional.id || null)
-                setProfessionalName(professional.nome || null)
-                setLoading(false)
-                return
+                // We keep the role to allow "Suspended" page to show contextual info if needed, 
+                // but routes will block access based on AccountStatus if we implement that check.
+                // For now, let's allow role but UI handles "Suspended" page redirect.
             }
 
             // All checks passed, set user data
-            setRole(professional.role || null)
+            setRole(finalRole)
             setProfessionalId(professional.id || null)
             setProfessionalName(professional.nome || null)
             setAccountStatus('active')
             setLoading(false)
         } catch (error) {
+            console.error('Auth Context Error:', error)
             setRole(null)
             setProfessionalId(null)
             setProfessionalName(null)
@@ -203,6 +220,13 @@ export function AuthProvider({ children }) {
 
         if (error) throw error
 
+        const IMMUTABLE_SUPER_ADMIN_EMAIL = 'geovanepanini@agencyflow.com'
+
+        // 1. IMMUTABLE CHECK
+        if (email === IMMUTABLE_SUPER_ADMIN_EMAIL) {
+            return { ...data, role: 'super_admin' }
+        }
+
         // Fetch role immediately to allow redirect logic
         const { data: prof, error: profError } = await supabase
             .from('profissionais')
@@ -218,7 +242,13 @@ export function AuthProvider({ children }) {
             .update({ last_activity_at: new Date().toISOString() })
             .eq('id', data.user.id)
 
-        return { ...data, role: prof?.role }
+        // 2. SECURITY DOWNGRADE
+        let safeRole = prof?.role
+        if (safeRole === 'super_admin') {
+            safeRole = 'admin' // Force downgrade
+        }
+
+        return { ...data, role: safeRole }
     }
 
     async function signOut() {

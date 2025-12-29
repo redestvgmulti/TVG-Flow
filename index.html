@@ -39,10 +39,10 @@
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js')
           .then(registration => {
-            console.log('SW registered:', registration);
+            // ServiceWorker registered
           })
           .catch(registrationError => {
-            console.log('SW registration failed:', registrationError);
+            // ServiceWorker registration failed
           });
       });
     }

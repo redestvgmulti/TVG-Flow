@@ -23,7 +23,16 @@ export async function resolveTenantContext() {
         throw new Error('Professional not found');
     }
 
-    if (professional.role === 'super_admin') {
+    const IMMUTABLE_SUPER_ADMIN_EMAIL = 'geovanepanini@agencyflow.com';
+    let effectiveRole = professional.role;
+
+    // RULE: Only the specific email can be super_admin. Downgrade everyone else.
+    if (effectiveRole === 'super_admin' && user.email !== IMMUTABLE_SUPER_ADMIN_EMAIL) {
+        console.warn(`TenantContext: Downgrading ${user.email} from super_admin to admin`);
+        effectiveRole = 'admin';
+    }
+
+    if (effectiveRole === 'super_admin') {
         return { mode: 'super_admin', tenantId: null, role: 'super_admin' };
     }
 
@@ -44,5 +53,5 @@ export async function resolveTenantContext() {
         throw new Error('Tenant context not found');
     }
 
-    return { mode: 'tenant', tenantId, role: professional.role };
+    return { mode: 'tenant', tenantId, role: effectiveRole };
 }
