@@ -48,7 +48,7 @@ export default function TenantList({ companies }) {
                 </thead>
                 <tbody>
                     {companies.map(company => (
-                        <tr key={company.empresa_id} className="hover:bg-bg-subtle transition-colors">
+                        <tr key={company.id} className="hover:bg-bg-subtle transition-colors">
                             <td>
                                 <span className="font-semibold text-text-primary">{company.nome}</span>
                             </td>
@@ -74,7 +74,7 @@ export default function TenantList({ companies }) {
                             </td>
                             <td className="align-right">
                                 <button
-                                    onClick={() => navigate(`/platform/companies/${company.empresa_id}`)}
+                                    onClick={() => navigate(`/platform/companies/${company.id}`)}
                                     className="btn btn-secondary"
                                     style={{ padding: '6px', minWidth: '32px' }}
                                     title="Gerenciar Tenant"
