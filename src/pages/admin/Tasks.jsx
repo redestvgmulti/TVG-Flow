@@ -90,8 +90,9 @@ function Tasks() {
                     .eq('ativo', true)
                     .order('nome'),
                 supabase
-                    .from('clientes')
+                    .from('empresas')
                     .select('id, nome')
+                    .eq('empresa_tipo', 'operacional')
                     .order('nome')
             ])
 

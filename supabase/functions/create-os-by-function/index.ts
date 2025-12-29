@@ -53,7 +53,7 @@ serve(async (req) => {
                 .insert({
                     titulo,
                     descricao: descricao || null,
-                    cliente_id: empresa_id,
+                    empresa_id: empresa_id,
                     deadline: deadline_at,
                     status: 'pendente',
                     prioridade: normalizedPriority,
@@ -218,7 +218,7 @@ serve(async (req) => {
             const taskPayload = {
                 titulo: `${titulo} - ${prof.funcao}`,
                 descricao: descricao || null,
-                cliente_id: empresa_id,
+                empresa_id: empresa_id,
                 assigned_to: professional.id,
                 departamento_id: professional.departamento_id,
                 deadline: deadline_at,

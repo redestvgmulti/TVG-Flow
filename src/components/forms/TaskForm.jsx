@@ -54,6 +54,11 @@ export default function TaskForm({ onSuccess, onCancel }) {
             setLoadingCompanies(true)
             const data = await clientService.getAll()
             setCompanies(data || [])
+
+            // UX Guard: If no companies available (e.g., super admin), show appropriate state
+            if (!data || data.length === 0) {
+                console.warn('No operational companies available for this user')
+            }
         } catch (error) {
             console.error(error)
             toast.error('Erro ao carregar empresas')
@@ -272,14 +277,25 @@ export default function TaskForm({ onSuccess, onCancel }) {
                     className="admin-form-select"
                     value={empresaId}
                     onChange={e => setEmpresaId(e.target.value)}
-                    disabled={loadingCompanies}
+                    disabled={loadingCompanies || companies.length === 0}
                     required
                 >
-                    <option value="">Selecione...</option>
+                    <option value="">
+                        {loadingCompanies
+                            ? 'Carregando...'
+                            : companies.length === 0
+                                ? 'Nenhuma empresa operacional disponível'
+                                : 'Selecione...'}
+                    </option>
                     {companies.map(c => (
                         <option key={c.id} value={c.id}>{c.nome}</option>
                     ))}
                 </select>
+                {!loadingCompanies && companies.length === 0 && (
+                    <p className="admin-mode-description" style={{ color: 'var(--color-warning)', marginTop: '8px' }}>
+                        Super admins não criam tarefas para empresas operacionais.
+                    </p>
+                )}
             </div>
 
             {/* Title */}
@@ -322,6 +338,7 @@ export default function TaskForm({ onSuccess, onCancel }) {
                     className="admin-form-input"
                     value={deadline}
                     onChange={e => setDeadline(e.target.value)}
+                    max="2099-12-31T23:59"
                     required
                 />
             </div>

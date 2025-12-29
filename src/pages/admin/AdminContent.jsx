@@ -23,8 +23,9 @@ function Content() {
             setLoading(true)
 
             const { data, error } = await supabase
-                .from('clientes')
+                .from('empresas')
                 .select('*')
+                .eq('empresa_tipo', 'operacional')
                 .order('nome')
 
             if (error) throw error
@@ -71,7 +72,7 @@ function Content() {
 
         try {
             const { error } = await supabase
-                .from('clientes')
+                .from('empresas')
                 .update({
                     drive_link: configData.drive_link || null,
                     ativo: configData.ativo

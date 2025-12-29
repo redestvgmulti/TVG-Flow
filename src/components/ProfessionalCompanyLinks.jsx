@@ -147,7 +147,7 @@ export default function ProfessionalCompanyLinks({ professionalId }) {
                                 </div>
                                 <div>
                                     <h4 className="font-bold text-slate-800 flex items-center gap-2">
-                                        {link.clientes?.nome || 'Empresa desconhecida'}
+                                        {link.empresas?.nome || 'Empresa desconhecida'}
                                     </h4>
                                     <div className="flex items-center gap-2 text-sm text-slate-500 mt-0.5">
                                         <Briefcase size={14} />
@@ -160,8 +160,8 @@ export default function ProfessionalCompanyLinks({ professionalId }) {
                                 <button
                                     onClick={() => handleToggleStatus(link)}
                                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${link.ativo
-                                            ? 'bg-green-50 text-green-700 hover:bg-green-100'
-                                            : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                                        ? 'bg-green-50 text-green-700 hover:bg-green-100'
+                                        : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                                         }`}
                                     title="Clique para alternar status"
                                 >

@@ -19,8 +19,9 @@ function Content() {
             // Staff: only active companies with drive_link
             // Ordering: Alphabetical by name (already filtered to have drive_link)
             const { data, error } = await supabase
-                .from('clientes')
+                .from('empresas')
                 .select('*')
+                .eq('empresa_tipo', 'operacional')
                 .eq('ativo', true)
                 .not('drive_link', 'is', null)
                 .order('nome')

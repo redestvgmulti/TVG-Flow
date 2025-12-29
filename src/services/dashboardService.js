@@ -15,7 +15,7 @@ const MOCK_METRICS = {
             priority: 'alta',
             status: 'pending',
             responsavel: { id: 'p1', nome: 'Ana Silva' },
-            clientes: { nome: 'Empresa ABC' },
+            empresas: { nome: 'Empresa ABC' },
             departamentos: { nome: 'Financeiro', cor_hex: '#dc2626' }
         },
         {
@@ -25,7 +25,7 @@ const MOCK_METRICS = {
             priority: 'media',
             status: 'pending',
             responsavel: { id: 'p2', nome: 'Carlos Oliveira' },
-            clientes: { nome: 'Tech Solutions' },
+            empresas: { nome: 'Tech Solutions' },
             departamentos: { nome: 'Jurídico', cor_hex: '#2563eb' }
         },
         {
@@ -35,7 +35,7 @@ const MOCK_METRICS = {
             priority: 'alta',
             status: 'in_progress',
             responsavel: { id: 'p1', nome: 'Ana Silva' },
-            clientes: { nome: 'Global Imports' },
+            empresas: { nome: 'Global Imports' },
             departamentos: { nome: 'Contabilidade', cor_hex: '#059669' }
         }
     ],
@@ -52,7 +52,7 @@ const MOCK_TODAY_TASKS = [
         priority: 'alta',
         status: 'in_progress',
         responsavel: { id: 'p1', nome: 'Ana Silva' },
-        clientes: { nome: 'Grupo X' },
+        empresas: { nome: 'Grupo X' },
         departamentos: { nome: 'Contabilidade', cor_hex: '#059669' }
     },
     {
@@ -62,7 +62,7 @@ const MOCK_TODAY_TASKS = [
         priority: 'media',
         status: 'pending',
         responsavel: { id: 'p3', nome: 'Roberto Santos' },
-        clientes: { nome: 'Interno' },
+        empresas: { nome: 'Interno' },
         departamentos: { nome: 'RH', cor_hex: '#d97706' }
     },
     {
@@ -72,7 +72,7 @@ const MOCK_TODAY_TASKS = [
         priority: 'alta',
         status: 'pending',
         responsavel: { id: 'p2', nome: 'Carlos Oliveira' },
-        clientes: { nome: 'Padaria Central' },
+        empresas: { nome: 'Padaria Central' },
         departamentos: { nome: 'Financeiro', cor_hex: '#dc2626' }
     }
 ];

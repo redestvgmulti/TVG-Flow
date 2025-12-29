@@ -108,7 +108,7 @@ export const professionalsService = {
             .from('empresa_profissionais')
             .select(`
                 *,
-                clientes (id, nome)
+                empresas (id, nome)
             `)
             .eq('profissional_id', professionalId)
             .order('created_at', { ascending: true })

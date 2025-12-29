@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { resolveTenantContext } from '../utils/resolveTenantContext';
 
 // ==================== CRUD de Tarefas ====================
 
@@ -22,7 +23,7 @@ export const createTask = async (taskData) => {
         }])
         .select(`
       *,
-      clientes (id, nome),
+      empresas!tarefas_empresa_id_fkey (id, nome),
       profissionais (id, nome),
       departamentos (id, nome, cor_hex)
     `)
@@ -58,7 +59,7 @@ export const updateTask = async (taskId, updates) => {
         .eq('id', taskId)
         .select(`
       *,
-      clientes (id, nome),
+      empresas!tarefas_empresa_id_fkey (id, nome),
       profissionais (id, nome),
       departamentos (id, nome, cor_hex)
     `)
@@ -88,7 +89,7 @@ export const getTaskById = async (taskId) => {
         .from('tarefas')
         .select(`
       *,
-      clientes (id, nome),
+      empresas!tarefas_empresa_id_fkey (id, nome),
       profissionais (id, nome),
       departamentos (id, nome, cor_hex)
     `)
@@ -109,7 +110,7 @@ export const getAllTasks = async (filters = {}) => {
         .from('tarefas')
         .select(`
       *,
-      clientes (id, nome),
+      empresas!tarefas_empresa_id_fkey (id, nome),
       profissionais (id, nome),
       departamentos (id, nome, cor_hex)
     `)
@@ -157,12 +158,27 @@ export const getActiveProfessionals = async () => {
 };
 
 /**
- * Buscar clientes
+ * Buscar clientes (empresas operacionais)
+ * CRITICAL: Must respect tenant isolation
  */
 export const getClients = async (searchQuery = '') => {
+    const { mode, tenantId, role } = await resolveTenantContext();
+
+    // Super admins don't see operational companies
+    if (mode === 'super_admin') {
+        return [];
+    }
+
+    // Staff cannot list companies
+    if (role === 'staff') {
+        throw new Error('Operation not allowed for staff');
+    }
+
     let query = supabase
-        .from('clientes')
+        .from('empresas')
         .select('id, nome')
+        .eq('empresa_tipo', 'operacional')
+        .eq('tenant_id', tenantId)
         .order('nome');
 
     if (searchQuery) {
