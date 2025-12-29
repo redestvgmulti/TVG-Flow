@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
 import { Edit2, Trash2, ClipboardList, AlertTriangle, X, ExternalLink, Folder } from 'lucide-react'
 import { toast } from 'sonner'
+import MacroTaskDetail from '../../components/MacroTaskDetail'
 import '../../styles/adminTasks.css'
 
 function Tasks() {
@@ -1235,170 +1236,23 @@ function Tasks() {
                 </div>
             )}
 
-            {/* Detail Modal */}
+            {/* Detail Modal - Using MacroTaskDetail Component */}
             {showDetailModal && selectedTask && (
-                <div className="modal-backdrop" onClick={() => setShowDetailModal(false)}>
-                    <div className="modal" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h3>Detalhes da Tarefa</h3>
-                            <button className="modal-close" onClick={() => setShowDetailModal(false)}>×</button>
-                        </div>
-                        <div className="modal-body">
-                            <div className="modal-detail-section">
-                                <h4 className="modal-detail-title">{selectedTask.titulo}</h4>
-                                {selectedTask.descricao && (
-                                    <p className="text-muted">{selectedTask.descricao}</p>
-                                )}
-                            </div>
-
-                            <div className="modal-detail-grid">
-                                <div className="modal-detail-item">
-                                    <span className="modal-detail-label">Cliente</span>
-                                    <span className="modal-detail-value highlight">
-                                        {getClientName(selectedTask.cliente_id)}
-                                    </span>
-                                </div>
-                                <div className="modal-detail-item">
-                                    <span className="modal-detail-label">Departamento</span>
-                                    <span className="modal-detail-value">
-                                        {getDepartmentName(selectedTask.departamento_id)}
-                                    </span>
-                                </div>
-                                <div className="modal-detail-item">
-                                    <span className="modal-detail-label">Atribuída a</span>
-                                    <span className="modal-detail-value">
-                                        {getAssignedToName(selectedTask.assigned_to)}
-                                    </span>
-                                </div>
-                                <div className="modal-detail-item">
-                                    <span className="modal-detail-label">Prazo</span>
-                                    <span className="modal-detail-value">
-                                        {new Date(selectedTask.deadline).toLocaleString()}
-                                    </span>
-                                </div>
-                                <div className="modal-detail-item">
-                                    <span className="modal-detail-label">Status</span>
-                                    <span className="modal-detail-value">
-                                        <span className={`badge ${getStatusBadgeClass(selectedTask.status)}`}>
-                                            {getStatusLabel(selectedTask.status)}
-                                        </span>
-                                    </span>
-                                </div>
-                                <div className="modal-detail-item">
-                                    <span className="modal-detail-label">Prioridade</span>
-                                    <span className="modal-detail-value">
-                                        <span className={`badge ${getPriorityBadgeClass(selectedTask.priority)}`}>
-                                            {getPriorityLabel(selectedTask.priority)}
-                                        </span>
-                                    </span>
-                                </div>
-
-                                {selectedTask.drive_link && (
-                                    <div className="modal-detail-item full-width">
-                                        <span className="modal-detail-label">Arquivos</span>
-                                        <a
-                                            href={selectedTask.drive_link}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="btn btn-secondary w-full justify-start gap-2 text-sm"
-                                            style={{ marginTop: '4px', maxWidth: 'fit-content' }}
-                                        >
-                                            <Folder size={16} className="text-primary" />
-                                            Abrir Pasta do Drive
-                                            <ExternalLink size={12} className="text-tertiary ml-1" />
-                                        </a>
-                                    </div>
-                                )}
-                                {selectedTask.completed_at && (
-                                    <div className="modal-detail-item full-width">
-                                        <span className="modal-detail-label">Concluída em</span>
-                                        <span className="modal-detail-value">
-                                            {new Date(selectedTask.completed_at).toLocaleString()}
-                                        </span>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Workflow / Micro Tasks Section */}
-                            {selectedTask.micro_tasks && selectedTask.micro_tasks.length > 0 && (
-                                <div className="modal-workflow-section">
-                                    <h5 className="modal-workflow-title">
-                                        Progresso do Workflow
-                                    </h5>
-
-                                    <div className="timeline-container">
-                                        {selectedTask.micro_tasks
-                                            .sort((a, b) => a.id - b.id)
-                                            .map((mt, idx) => {
-                                                // Determine styles and labels
-                                                const stepNumber = idx + 1
-
-                                                let itemClass = 'timeline-item'
-                                                if (mt.status === 'pendente') itemClass += ' pending'
-
-                                                let statusLabel = 'Pendente'
-                                                let statusClass = 'timeline-status-badge pending'
-
-                                                if (mt.status === 'concluida') {
-                                                    itemClass += ' completed'
-                                                    statusLabel = 'Concluída'
-                                                    statusClass = 'timeline-status-badge completed'
-                                                } else if (mt.status === 'em_progresso' || mt.status === 'em_execucao') {
-                                                    itemClass += ' in-progress'
-                                                    statusLabel = 'Em Andamento'
-                                                    statusClass = 'timeline-status-badge in-progress'
-                                                } else if (mt.status === 'devolvida') {
-                                                    statusLabel = 'Devolvida'
-                                                    statusClass = 'timeline-status-badge overdue'
-                                                }
-
-                                                return (
-                                                    <div key={mt.id} className={itemClass}>
-                                                        <div className="timeline-marker">
-                                                            {mt.status === 'concluida' ? (
-                                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                                                            ) : (
-                                                                stepNumber
-                                                            )}
-                                                        </div>
-                                                        <div className="timeline-content">
-                                                            <div className="timeline-info">
-                                                                <span className="timeline-title">{mt.funcao}</span>
-                                                                <div className="timeline-meta">
-                                                                    <div className="timeline-assignee" title="Responsável">
-                                                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                                                                        {mt.profissional?.nome || 'A definir'}
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                            <span className={statusClass}>
-                                                                {statusLabel}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                )
-                                            })}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                        <div className="modal-footer">
-                            <button
-                                onClick={() => {
-                                    setShowDetailModal(false)
-                                    handleOpenEditModal(selectedTask)
-                                }}
-                                className="btn btn-secondary"
-                            >
-                                Editar
-                            </button>
-                            <button
-                                onClick={() => setShowDetailModal(false)}
-                                className="btn btn-primary"
-                            >
-                                Fechar
-                            </button>
-                        </div>
+                <div className="modal-backdrop" onClick={() => {
+                    setShowDetailModal(false)
+                    setSelectedTask(null)
+                    fetchData()
+                }}>
+                    <div className="modal modal-large" onClick={(e) => e.stopPropagation()}>
+                        <MacroTaskDetail
+                            taskId={selectedTask.id}
+                            isModal={true}
+                            onBack={() => {
+                                setShowDetailModal(false)
+                                setSelectedTask(null)
+                                fetchData() // Refresh to show any changes
+                            }}
+                        />
                     </div>
                 </div>
             )}

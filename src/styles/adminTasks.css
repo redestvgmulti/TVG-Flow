@@ -606,3 +606,52 @@
     color: var(--color-text-primary);
     margin-bottom: var(--space-4);
 }
+
+/* Large Modal for MacroTaskDetail - FORCE Override */
+.modal.modal-large {
+    max-width: 1200px !important;
+    width: 95vw !important;
+    max-height: 90vh !important;
+    height: 90vh !important;
+    overflow-y: hidden !important;
+    /* Let inner container handle scroll */
+    padding: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+/* Remove padding from MacroTaskDetail when inside modal */
+.modal-large .macro-task-container {
+    padding: 0 !important;
+    width: 100% !important;
+    min-height: 100% !important;
+    height: 100% !important;
+    background: transparent !important;
+    overflow-y: auto !important;
+    /* Scroll happens INSIDE the container */
+    border-radius: var(--radius-xl);
+}
+
+/* Mobile Responsiveness for Modal */
+@media (max-width: 768px) {
+    .modal-backdrop {
+        align-items: flex-end !important;
+        /* Bottom sheet feel or full screen */
+        padding: 0 !important;
+    }
+
+    .modal.modal-large {
+        width: 100% !important;
+        max-width: 100% !important;
+        height: 100vh !important;
+        max-height: 100vh !important;
+        border-radius: 0 !important;
+        border: none !important;
+    }
+
+    .modal-large .macro-task-container {
+        border-radius: 0 !important;
+        padding-bottom: 80px !important;
+        /* Safe area for bottom navigation if any */
+    }
+}

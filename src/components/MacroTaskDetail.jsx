@@ -1,29 +1,41 @@
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Clock, CheckCircle2, AlertCircle, Lock, RotateCcw, User } from 'lucide-react'
+import { ArrowLeft, Clock, CheckCircle2, AlertCircle, Lock, RotateCcw, User, Play, X } from 'lucide-react'
 import { supabase } from '../services/supabase'
 import { toast } from 'sonner'
+import { useAuth } from '../contexts/AuthContext'
+import { completeMicroTask, updateMicroTaskStatus, loadWorkflowProfessionals, returnMicroTask } from '../utils/taskExecution'
+import ReturnReasonModal from './ReturnReasonModal'
 import '../styles/macro-task.css'
 
-export default function MacroTaskDetail({ taskId, onBack }) {
-    const [macroTask, setMacroTask] = useState(null)
-    const [microTasks, setMicroTasks] = useState([])
-    const [logs, setLogs] = useState([])
+export default function MacroTaskDetail({ taskId, onBack, isModal = false }) {
+    const { user } = useAuth()
+    const [task, setTask] = useState(null)
     const [loading, setLoading] = useState(true)
+    const [error, setError] = useState(null)
+
+    // Return modal state
+    const [showReturnModal, setShowReturnModal] = useState(false)
+    const [selectedReturnTask, setSelectedReturnTask] = useState(null)
+    const [professionals, setProfessionals] = useState([])
+    const [activityLogs, setActivityLogs] = useState([])
 
     useEffect(() => {
         if (taskId) {
-            loadMacroTaskData()
+            fetchTaskDetails()
         }
     }, [taskId])
 
-    async function loadMacroTaskData() {
+    async function fetchTaskDetails() {
         try {
             setLoading(true)
 
             // Load macro task
             const { data: macro, error: macroError } = await supabase
                 .from('tarefas')
-                .select('*')
+                .select(`
+                    *,
+                    cliente:empresas(nome)
+                `)
                 .eq('id', taskId)
                 .single()
 
@@ -34,9 +46,10 @@ export default function MacroTaskDetail({ taskId, onBack }) {
                 .from('tarefas_micro')
                 .select(`
                     *,
-                    profissionais:profissional_id (
+                    profissional:profissionais (
                         id,
-                        nome
+                        nome,
+                        email
                     )
                 `)
                 .eq('tarefa_id', taskId)
@@ -44,57 +57,138 @@ export default function MacroTaskDetail({ taskId, onBack }) {
 
             if (microError) throw microError
 
-            // Load logs
-            const microTaskIds = micro?.map(mt => mt.id) || []
-            let allLogs = []
+            // Combine data
+            const taskData = {
+                ...macro,
+                micro_tasks: micro || []
+            }
 
-            if (microTaskIds.length > 0) {
-                const { data: logsData, error: logsError } = await supabase
+            setTask(taskData)
+
+            // Fetch logs
+            if (micro?.length > 0) {
+                const mtIds = micro.map(m => m.id)
+                const { data: logs } = await supabase
                     .from('tarefas_micro_logs')
-                    .select(`
-                        *,
-                        from_profissional:from_profissional_id (nome),
-                        to_profissional:to_profissional_id (nome)
-                    `)
-                    .in('tarefa_micro_id', microTaskIds)
+                    .select('*, from:from_profissional_id(nome), to:to_profissional_id(nome)')
+                    .in('tarefa_micro_id', mtIds)
                     .order('created_at', { ascending: false })
 
-                if (!logsError) {
-                    allLogs = logsData || []
+                if (logs) {
+                    const formattedLogs = logs.map(log => ({
+                        ...log,
+                        action: log.acao,
+                        description: generateLogDescription(log)
+                    }))
+                    setActivityLogs(formattedLogs)
                 }
             }
 
-            setMacroTask(macro)
-            setMicroTasks(micro || [])
-            setLogs(allLogs)
-
-        } catch (error) {
-            console.error('Error loading macro task:', error)
-            toast.error('Erro ao carregar detalhes da tarefa')
+        } catch (err) {
+            console.error('Error fetching task details:', err)
+            setError('Falha ao carregar detalhes da tarefa')
         } finally {
             setLoading(false)
         }
     }
 
-    if (loading) {
-        return (
+    function generateLogDescription(log) {
+        const fromName = log.from?.nome || 'Sistema'
+        const toName = log.to?.nome || 'Alguém'
+
+        switch (log.acao) {
+            case 'created': return `Etapa criada e atribuída a ${toName}`
+            case 'started': return `${fromName} iniciou a etapa`
+            case 'completed': return `${fromName} concluiu a etapa`
+            case 'returned': return `${fromName} devolveu para ${toName}`
+            case 'blocked': return 'Etapa bloqueada por dependência'
+            case 'unblocked': return 'Etapa desbloqueada'
+            default: return log.mensagem || 'Atividade registrada'
+        }
+    }
+
+    // Execution Handlers
+    async function handleStartMicroTask(microTaskId) {
+        try {
+            await updateMicroTaskStatus(microTaskId, 'em_execucao')
+            toast.success('Tarefa iniciada!')
+            fetchTaskDetails() // Refresh
+        } catch (error) {
+            console.error('Error starting micro task:', error)
+            toast.error(error.message || 'Erro ao iniciar tarefa')
+        }
+    }
+
+    async function handleCompleteMicroTask(microTaskId, currentStatus) {
+        if (currentStatus === 'bloqueada') {
+            toast.error('Esta tarefa está bloqueada. Aguarde a conclusão da etapa anterior.')
+            return
+        }
+
+        try {
+            await completeMicroTask(microTaskId)
+            toast.success('Micro tarefa concluída! 🎉')
+            fetchTaskDetails()
+        } catch (error) {
+            console.error('Error completing micro task:', error)
+            toast.error(error.message || 'Erro ao concluir tarefa')
+        }
+    }
+
+    async function handleOpenReturnModal(microTask) {
+        setSelectedReturnTask(microTask)
+        try {
+            const profs = await loadWorkflowProfessionals(taskId, user.id)
+            setProfessionals(profs)
+            setShowReturnModal(true)
+        } catch (error) {
+            console.error('Error loading professionals:', error)
+            toast.error('Erro ao carregar profissionais')
+        }
+    }
+
+    async function handleReturnTask(payload) {
+        try {
+            await returnMicroTask(payload)
+            toast.success('Tarefa devolvida com sucesso')
+            setShowReturnModal(false)
+            setSelectedReturnTask(null)
+            fetchTaskDetails()
+        } catch (error) {
+            console.error('Error returning task:', error)
+            toast.error(error.message || 'Erro ao devolver tarefa')
+        }
+    }
+
+    if (loading) return (
+        <div className="macro-task-container">
             <div className="macro-task-loading">
                 <div className="spinner"></div>
-                <p>Carregando...</p>
+                <p>Carregando detalhes da tarefa...</p>
             </div>
-        )
-    }
+        </div>
+    )
 
-    if (!macroTask) {
-        return (
+    if (error) return (
+        <div className="macro-task-container">
             <div className="macro-task-error">
                 <AlertCircle size={48} />
-                <p>Tarefa não encontrada</p>
-                <button onClick={onBack} className="btn-back">Voltar</button>
+                <p>{error}</p>
+                <button onClick={onBack} className="macro-task-back-btn">Voltar</button>
             </div>
-        )
+        </div>
+    )
+
+    if (!task) return null
+
+    // Helper to get professional name
+    const getProfessionalName = (mt) => {
+        return mt.profissional?.nome || 'Não atribuído'
     }
 
+    const microTasks = task.micro_tasks?.sort((a, b) => a.id - b.id) || []
+
+    // Progress calculation
     const totalWeight = microTasks.reduce((sum, mt) => sum + (mt.peso || 1), 0)
     const completedWeight = microTasks
         .filter(mt => mt.status === 'concluida')
@@ -102,27 +196,33 @@ export default function MacroTaskDetail({ taskId, onBack }) {
     const progress = totalWeight > 0 ? Math.round((completedWeight / totalWeight) * 100) : 0
 
     return (
-        <div className="macro-task-container">
+        <div className={`macro-task-container ${isModal ? 'is-modal' : ''}`}>
             {/* Header */}
             <div className="macro-task-header">
-                <button onClick={onBack} className="macro-task-back-btn">
-                    <ArrowLeft size={20} />
-                </button>
+                {!isModal && (
+                    <button onClick={onBack} className="macro-task-back-btn" title="Voltar">
+                        <ArrowLeft size={20} />
+                    </button>
+                )}
+
                 <div className="macro-task-header-content">
-                    <h1 className="macro-task-title">{macroTask.titulo}</h1>
-                    <div className="macro-task-meta">
-                        <span className={`macro-task-status status-${macroTask.status}`}>
-                            {macroTask.status === 'concluida' ? 'Concluída' :
-                                macroTask.status === 'em_progresso' ? 'Em Andamento' : 'Pendente'}
+                    <div className="macro-task-meta" style={{ marginBottom: '8px' }}>
+                        <span className={`macro-task-status status-${task.status}`}>
+                            {task.status?.replace('_', ' ')}
                         </span>
-                        {macroTask.deadline && (
-                            <span className="macro-task-deadline">
-                                <Clock size={14} />
-                                {new Date(macroTask.deadline).toLocaleDateString('pt-BR')}
-                            </span>
-                        )}
+                        <div className="macro-task-deadline">
+                            <Clock size={14} />
+                            {new Date(task.deadline).toLocaleDateString()}
+                        </div>
                     </div>
+                    <h1 className="macro-task-title">{task.titulo}</h1>
                 </div>
+
+                {isModal && (
+                    <button onClick={onBack} className="macro-task-back-btn" title="Fechar">
+                        <X size={20} />
+                    </button>
+                )}
             </div>
 
             {/* Progress Bar */}
@@ -145,10 +245,10 @@ export default function MacroTaskDetail({ taskId, onBack }) {
             {/* Body */}
             <div className="macro-task-body">
                 {/* Description */}
-                {macroTask.descricao && (
+                {task.descricao && (
                     <div className="macro-task-section">
                         <h3 className="section-title">DESCRIÇÃO</h3>
-                        <p className="macro-task-description">{macroTask.descricao}</p>
+                        <p className="macro-task-description">{task.descricao}</p>
                     </div>
                 )}
 
@@ -178,10 +278,49 @@ export default function MacroTaskDetail({ taskId, onBack }) {
                                         <span className="timeline-function">{mt.funcao}</span>
                                         <span className="timeline-professional">
                                             <User size={14} />
-                                            {mt.profissionais?.nome || 'Não atribuído'}
+                                            {getProfessionalName(mt)}
                                         </span>
                                         <span className="timeline-weight">Peso: {mt.peso}</span>
                                     </div>
+
+                                    {/* Action buttons for assigned tasks */}
+                                    {mt.profissional_id === user?.id && mt.status !== 'concluida' && (
+                                        <div className="timeline-actions">
+                                            {mt.status === 'pendente' && (
+                                                <button
+                                                    onClick={() => handleStartMicroTask(mt.id)}
+                                                    className="btn-micro-action btn-start"
+                                                >
+                                                    <Play size={14} />
+                                                    Iniciar
+                                                </button>
+                                            )}
+                                            {(mt.status === 'em_execucao' || mt.status === 'devolvida') && (
+                                                <>
+                                                    <button
+                                                        onClick={() => handleCompleteMicroTask(mt.id, mt.status)}
+                                                        className="btn-micro-action btn-complete"
+                                                    >
+                                                        <CheckCircle2 size={14} />
+                                                        Concluir
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleOpenReturnModal(mt)}
+                                                        className="btn-micro-action btn-return"
+                                                    >
+                                                        <RotateCcw size={14} />
+                                                        Solicitar Ajuste
+                                                    </button>
+                                                </>
+                                            )}
+                                            {mt.status === 'bloqueada' && (
+                                                <div className="timeline-blocked-message">
+                                                    <Lock size={12} />
+                                                    <span>Aguardando etapa anterior</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                                 {index < microTasks.length - 1 && (
                                     <div className="timeline-connector"></div>
@@ -194,26 +333,21 @@ export default function MacroTaskDetail({ taskId, onBack }) {
                 {/* Activity Log */}
                 <div className="macro-task-section">
                     <h3 className="section-title">HISTÓRICO DE ATIVIDADES</h3>
-                    {logs.length === 0 ? (
+                    {activityLogs.length === 0 ? (
                         <p className="empty-state">Nenhuma atividade registrada ainda</p>
                     ) : (
                         <div className="activity-log">
-                            {logs.map((log, index) => (
-                                <div key={index} className={`log-item log-${log.acao}`}>
+                            {activityLogs.map((log, index) => (
+                                <div key={index} className={`log-item log-${log.action}`}>
                                     <div className="log-icon">
-                                        {log.acao === 'completed' ? <CheckCircle2 size={16} /> :
-                                            log.acao === 'returned' ? <RotateCcw size={16} /> :
-                                                log.acao === 'blocked' ? <Lock size={16} /> :
+                                        {log.action === 'completed' ? <CheckCircle2 size={16} /> :
+                                            log.action === 'returned' ? <RotateCcw size={16} /> :
+                                                log.action === 'blocked' ? <Lock size={16} /> :
                                                     <Clock size={16} />}
                                     </div>
                                     <div className="log-content">
                                         <p className="log-message">
-                                            {log.acao === 'created' && `Etapa criada e atribuída a ${log.to_profissional?.nome}`}
-                                            {log.acao === 'started' && `${log.from_profissional?.nome} iniciou a etapa`}
-                                            {log.acao === 'completed' && `${log.from_profissional?.nome} concluiu a etapa`}
-                                            {log.acao === 'returned' && `${log.from_profissional?.nome} devolveu para ${log.to_profissional?.nome}`}
-                                            {log.acao === 'blocked' && 'Etapa bloqueada por dependência'}
-                                            {log.acao === 'unblocked' && 'Etapa desbloqueada'}
+                                            {log.description}
                                         </p>
                                         {log.motivo && (
                                             <p className="log-reason">Motivo: {log.motivo}</p>
@@ -228,6 +362,19 @@ export default function MacroTaskDetail({ taskId, onBack }) {
                     )}
                 </div>
             </div>
+
+            {/* Return Modal */}
+            {showReturnModal && selectedReturnTask && (
+                <ReturnReasonModal
+                    microTask={selectedReturnTask}
+                    professionals={professionals}
+                    onClose={() => {
+                        setShowReturnModal(false)
+                        setSelectedReturnTask(null)
+                    }}
+                    onSubmit={handleReturnTask}
+                />
+            )}
         </div>
     )
 }

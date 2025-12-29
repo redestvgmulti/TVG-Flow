@@ -55,15 +55,18 @@ export default function ReturnReasonModal({ microTask, professionals, onClose, o
                                 value={targetProfessionalId}
                                 onChange={(e) => setTargetProfessionalId(e.target.value)}
                                 required
+                                disabled={professionals.length === 0}
                             >
-                                <option value="">Selecione o profissional...</option>
-                                {professionals
-                                    .filter(p => p.funcao === microTask.funcao)
-                                    .map(p => (
-                                        <option key={p.profissional_id} value={p.profissional_id}>
-                                            {p.profissionais.nome}
-                                        </option>
-                                    ))}
+                                <option value="">
+                                    {professionals.length === 0
+                                        ? 'Nenhum outro profissional nesta tarefa'
+                                        : 'Selecione o profissional...'}
+                                </option>
+                                {professionals.map(p => (
+                                    <option key={p.profissional_id} value={p.profissional_id}>
+                                        {p.profissionais.nome}{p.funcao !== microTask.funcao ? ` (${p.funcao})` : ''}
+                                    </option>
+                                ))}
                             </select>
                         </div>
 

@@ -195,6 +195,12 @@ export default function StaffTasks() {
 
             // MICRO TASK: Use Edge Function
             if (task?.is_micro_task) {
+                // Prevent completing blocked tasks
+                if (newStatus === 'concluida' && task.status === 'bloqueada') {
+                    toast.error('Esta tarefa está bloqueada. Aguarde a conclusão da etapa anterior.')
+                    return
+                }
+
                 // Map generic 'em_progresso' to micro-task specific 'em_execucao'
                 let statusToSend = newStatus
                 if (newStatus === 'em_progresso') {
@@ -503,11 +509,19 @@ function ExecutionView({ task, onBack, onUpdateStatus, user }) {
     }
 
     async function loadProfessionalsForReturn() {
-        if (!task.is_micro_task || !task.tarefa_id) return
+        if (!task.is_micro_task || !task.tarefa_id) {
+            console.log('⚠️ Cannot load professionals - not a micro task or no tarefa_id', {
+                is_micro_task: task.is_micro_task,
+                tarefa_id: task.tarefa_id
+            })
+            return
+        }
 
         try {
             setLoadingProfessionals(true)
 
+            // Load ALL professionals from ALL stages of this workflow
+            // This allows cross-stage returns (e.g., Editor → Locutor)
             const { data, error } = await supabase
                 .from('tarefas_micro')
                 .select(`
@@ -519,8 +533,16 @@ function ExecutionView({ task, onBack, onUpdateStatus, user }) {
                     )
                 `)
                 .eq('tarefa_id', task.tarefa_id)
-                .neq('profissional_id', user.id)
+                .neq('profissional_id', user.id) // Exclude current user
 
+            console.log('🔍 DEBUG - All workflow professionals loaded:', {
+                macroTaskId: task.tarefa_id,
+                currentUserId: user.id,
+                currentUserFunction: task.funcao,
+                data,
+                count: data?.length || 0,
+                error
+            })
 
             if (error) throw error
             setProfessionals(data || [])

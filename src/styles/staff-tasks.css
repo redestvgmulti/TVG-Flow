@@ -226,6 +226,14 @@
     background-color: var(--color-warning);
 }
 
+.status-blocked {
+    background-color: var(--color-text-tertiary);
+}
+
+.status-returned {
+    background-color: var(--color-danger);
+}
+
 /* Overdue State */
 .staff-task-card.overdue {
     background-color: #FEF2F2;
@@ -241,6 +249,35 @@
     display: flex;
     align-items: center;
     gap: 4px;
+}
+
+/* Blocked State */
+.staff-task-card.blocked {
+    background-color: #F9FAFB;
+    /* Gray 50 */
+    border-color: #E5E7EB;
+    /* Gray 200 */
+    opacity: 0.8;
+}
+
+.dependency-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    color: var(--color-text-tertiary);
+    margin-bottom: 8px;
+}
+
+.micro-task-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    background-color: var(--color-primary-light);
+    color: var(--color-primary);
+    margin-bottom: 6px;
 }
 
 /* Priority */
