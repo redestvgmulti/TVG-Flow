@@ -848,25 +848,7 @@ function Tasks() {
                                                     >
                                                         {task.titulo}
                                                     </button>
-                                                    {/* Mobile Progress Bar (Visible only on small screens via CSS) */}
-                                                    <div className="mobile-progress-container">
-                                                        {(() => {
-                                                            const progress = calculateProgress(task)
-                                                            if (progress === null) return null
-                                                            let progressClass = 'progress-low'
-                                                            if (progress > 70) progressClass = 'progress-high'
-                                                            else if (progress > 30) progressClass = 'progress-medium'
 
-                                                            return (
-                                                                <div className="task-progress-bar-container mobile-size">
-                                                                    <div
-                                                                        className={`task-progress-fill ${progressClass}`}
-                                                                        style={{ width: `${progress}%` }}
-                                                                    ></div>
-                                                                </div>
-                                                            )
-                                                        })()}
-                                                    </div>
                                                 </div>
                                             </td>
                                             <td>
@@ -881,28 +863,7 @@ function Tasks() {
                                                     professionals.find(p => p.id === task.assigned_to)?.nome || 'Não atribuída'
                                                 )}
                                             </td>
-                                            <td>
-                                                {(() => {
-                                                    const progress = calculateProgress(task)
-                                                    if (progress === null) return <span className="text-slate-400 text-xs">-</span>
 
-                                                    let progressClass = 'progress-low'
-                                                    if (progress > 70) progressClass = 'progress-high'
-                                                    else if (progress > 30) progressClass = 'progress-medium'
-
-                                                    return (
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="task-progress-bar-container">
-                                                                <div
-                                                                    className={`task-progress-fill ${progressClass}`}
-                                                                    style={{ width: `${progress}%` }}
-                                                                ></div>
-                                                            </div>
-                                                            <span className="text-xs font-medium text-slate-600">{progress}%</span>
-                                                        </div>
-                                                    )
-                                                })()}
-                                            </td>
                                             <td>
                                                 <div className="flex items-center gap-1">
                                                     {isOverdue(task) && (
