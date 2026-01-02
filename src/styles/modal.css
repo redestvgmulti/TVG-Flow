@@ -198,6 +198,13 @@
     cursor: not-allowed;
 }
 
+/* Utility class for inline icons */
+.inline-icon {
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 6px;
+}
+
 /* Mobile */
 @media (max-width: 480px) {
     .modal-overlay {
