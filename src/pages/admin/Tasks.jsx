@@ -69,6 +69,10 @@ function Tasks() {
                     .from('tarefas')
                     .select(`
                         *,
+                        empresas (
+                            id,
+                            nome
+                        ),
                         micro_tasks:tarefas_micro (
                             id,
                             status,
@@ -590,15 +594,7 @@ function Tasks() {
         return prof ? prof.nome : 'Não atribuída'
     }
 
-    function getClientName(clientId) {
-        const client = clients.find(c => c.id === clientId)
-        return client ? client.nome : '-'
-    }
 
-    function getDepartmentName(deptId) {
-        const dept = departments.find(d => d.id === deptId)
-        return dept ? dept.nome : '-'
-    }
 
     const filteredTasks = getFilteredTasks()
     const allFilteredSelected = filteredTasks.length > 0 && selectedTasks.length === filteredTasks.length
@@ -822,7 +818,9 @@ function Tasks() {
                                                 {task.titulo}
                                             </button>
                                         </td>
-                                        <td>{getClientName(task.cliente_id)}</td>
+                                        <td>
+                                            {task.empresas?.nome || <span className="text-slate-400 italic font-normal text-sm">Sem cliente</span>}
+                                        </td>
                                         <td>
                                             {task.micro_tasks && task.micro_tasks.length > 0 ? (
                                                 <span className="badge badge-neutral" title="Tarefa Macro com múltiplas etapas">
