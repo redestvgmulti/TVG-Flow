@@ -818,7 +818,6 @@ function Tasks() {
                                     <th>Título</th>
                                     <th>Cliente</th>
                                     <th>Atribuída a</th>
-                                    <th>Progresso</th>
                                     <th>Prazo</th>
                                     <th>Status</th>
                                     <th>Prioridade</th>
