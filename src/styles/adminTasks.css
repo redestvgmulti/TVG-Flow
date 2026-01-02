@@ -661,3 +661,77 @@
         /* Safe area for bottom navigation if any */
     }
 }
+/* Progress Bar Styles */
+.task-progress-bar-container {
+    width: 100px;
+    height: 6px;
+    background-color: #f1f5f9;
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.task-progress-fill {
+    height: 100%;
+    border-radius: 999px;
+    transition: width 0.3s ease;
+}
+
+.progress-low {
+    background-color: #ef4444; /* Red for 0-30% */
+}
+
+.progress-medium {
+    background-color: #eab308; /* Yellow for 31-70% */
+}
+
+.progress-high {
+    background-color: #22c55e; /* Green for 71-100% */
+}
+
+/* Overdue Styles */
+.text-red-500 {
+    color: #ef4444;
+}
+
+.text-red-600 {
+    color: #dc2626;
+}
+
+.font-medium {
+    font-weight: 500;
+}
+
+.overdue-icon {
+    flex-shrink: 0;
+}
+
+/* Mobile Progress Bar */
+.mobile-progress-container {
+    display: none;
+    margin-top: 4px;
+}
+
+.task-progress-bar-container.mobile-size {
+    width: 100%;
+    max-width: 120px;
+    height: 4px;
+}
+
+/* Utilities */
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.items-center { align-items: center; }
+.gap-1 { gap: 0.25rem; }
+.gap-2 { gap: 0.5rem; }
+
+@media (max-width: 768px) {
+    .mobile-progress-container {
+        display: block;
+    }
+    
+    /* Hide the standalone progress column on mobile to save space */
+    .table th:nth-child(4), 
+    .table td:nth-child(4) {
+        display: none;
+    }
+}

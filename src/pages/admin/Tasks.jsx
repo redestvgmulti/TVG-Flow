@@ -595,6 +595,30 @@ function Tasks() {
     }
 
 
+    function calculateProgress(task) {
+        if (!task.micro_tasks || task.micro_tasks.length === 0) {
+            const normalizedStatus = task.status ? task.status.toLowerCase() : ''
+            return (normalizedStatus === 'completed' || normalizedStatus === 'concluida' || normalizedStatus === 'concluída') ? 100 : null
+        }
+
+        const total = task.micro_tasks.length
+        const completed = task.micro_tasks.filter(mt => {
+            const s = mt.status ? mt.status.toLowerCase() : ''
+            return s === 'completed' || s === 'concluida' || s === 'concluída'
+        }).length
+
+        return Math.round((completed / total) * 100)
+    }
+
+    function isOverdue(task) {
+        if (!task.deadline) return false
+        const normalizedStatus = task.status ? task.status.toLowerCase() : ''
+        if (normalizedStatus === 'completed' || normalizedStatus === 'concluída') return false
+
+        const deadlineDate = new Date(task.deadline)
+        const now = new Date()
+        return deadlineDate < now
+    }
 
     const filteredTasks = getFilteredTasks()
     const allFilteredSelected = filteredTasks.length > 0 && selectedTasks.length === filteredTasks.length
@@ -793,6 +817,7 @@ function Tasks() {
                                     <th>Título</th>
                                     <th>Cliente</th>
                                     <th>Atribuída a</th>
+                                    <th>Progresso</th>
                                     <th>Prazo</th>
                                     <th>Status</th>
                                     <th>Prioridade</th>
@@ -811,12 +836,33 @@ function Tasks() {
                                             />
                                         </td>
                                         <td>
-                                            <button
-                                                onClick={() => handleOpenDetailModal(task)}
-                                                className="admin-tasks-title-button"
-                                            >
-                                                {task.titulo}
-                                            </button>
+                                            <div className="flex flex-col gap-1">
+                                                <button
+                                                    onClick={() => handleOpenDetailModal(task)}
+                                                    className="admin-tasks-title-button"
+                                                >
+                                                    {task.titulo}
+                                                </button>
+                                                {/* Mobile Progress Bar (Visible only on small screens via CSS) */}
+                                                <div className="mobile-progress-container">
+                                                    {(() => {
+                                                        const progress = calculateProgress(task)
+                                                        if (progress === null) return null
+                                                        let progressClass = 'progress-low'
+                                                        if (progress > 70) progressClass = 'progress-high'
+                                                        else if (progress > 30) progressClass = 'progress-medium'
+
+                                                        return (
+                                                            <div className="task-progress-bar-container mobile-size">
+                                                                <div
+                                                                    className={`task-progress-fill ${progressClass}`}
+                                                                    style={{ width: `${progress}%` }}
+                                                                ></div>
+                                                            </div>
+                                                        )
+                                                    })()}
+                                                </div>
+                                            </div>
                                         </td>
                                         <td>
                                             {task.empresas?.nome || <span className="text-slate-400 italic font-normal text-sm">Sem cliente</span>}
@@ -827,10 +873,41 @@ function Tasks() {
                                                     Workflow ({task.micro_tasks.length})
                                                 </span>
                                             ) : (
-                                                getAssignedToName(task.assigned_to)
+                                                professionals.find(p => p.id === task.assigned_to)?.nome || 'Não atribuída'
                                             )}
                                         </td>
-                                        <td>{new Date(task.deadline).toLocaleDateString()}</td>
+                                        <td>
+                                            {(() => {
+                                                const progress = calculateProgress(task)
+                                                if (progress === null) return <span className="text-slate-400 text-xs">-</span>
+
+                                                let progressClass = 'progress-low'
+                                                if (progress > 70) progressClass = 'progress-high'
+                                                else if (progress > 30) progressClass = 'progress-medium'
+
+                                                return (
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="task-progress-bar-container">
+                                                            <div
+                                                                className={`task-progress-fill ${progressClass}`}
+                                                                style={{ width: `${progress}%` }}
+                                                            ></div>
+                                                        </div>
+                                                        <span className="text-xs font-medium text-slate-600">{progress}%</span>
+                                                    </div>
+                                                )
+                                            })()}
+                                        </td>
+                                        <td>
+                                            <div className="flex items-center gap-1">
+                                                {isOverdue(task) && (
+                                                    <AlertTriangle size={14} className="text-red-500 overdue-icon" />
+                                                )}
+                                                <span className={isOverdue(task) ? 'text-red-600 font-medium' : ''}>
+                                                    {new Date(task.deadline).toLocaleDateString()}
+                                                </span>
+                                            </div>
+                                        </td>
                                         <td>
                                             <span className={`badge ${getStatusBadgeClass(task.status)}`}>
                                                 {getStatusLabel(task.status)}
