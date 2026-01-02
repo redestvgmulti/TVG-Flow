@@ -549,7 +549,8 @@ function Tasks() {
         if (normalized === 'completed' || normalized === 'concluida' || normalized === 'concluída') return 'badge-success'
         if (normalized === 'in_progress' || normalized === 'em_progresso' || normalized === 'em progresso') return 'badge-primary'
         if (normalized === 'overdue' || normalized === 'atrasada') return 'badge-danger'
-        if (normalized === 'pending' || normalized === 'pendente') return 'badge-pending'
+        // Use subtle badge for pending
+        if (normalized === 'pending' || normalized === 'pendente') return 'badge-pending-subtle'
 
         return 'badge-neutral'
     }
@@ -825,119 +826,125 @@ function Tasks() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {filteredTasks.map(task => (
-                                    <tr key={task.id}>
-                                        <td className="admin-tasks-checkbox-cell">
-                                            <input
-                                                type="checkbox"
-                                                className="admin-tasks-checkbox"
-                                                checked={selectedTasks.includes(task.id)}
-                                                onChange={() => handleSelectTask(task.id)}
-                                            />
-                                        </td>
-                                        <td>
-                                            <div className="flex flex-col gap-1">
-                                                <button
-                                                    onClick={() => handleOpenDetailModal(task)}
-                                                    className="admin-tasks-title-button"
-                                                >
-                                                    {task.titulo}
-                                                </button>
-                                                {/* Mobile Progress Bar (Visible only on small screens via CSS) */}
-                                                <div className="mobile-progress-container">
-                                                    {(() => {
-                                                        const progress = calculateProgress(task)
-                                                        if (progress === null) return null
-                                                        let progressClass = 'progress-low'
-                                                        if (progress > 70) progressClass = 'progress-high'
-                                                        else if (progress > 30) progressClass = 'progress-medium'
+                                {filteredTasks.map(task => {
+                                    const progress = calculateProgress(task)
+                                    const overdue = isOverdue(task)
+                                    const isCritical = overdue && (progress === null || progress < 30)
 
-                                                        return (
-                                                            <div className="task-progress-bar-container mobile-size">
+                                    return (
+                                        <tr key={task.id} className={isCritical ? 'task-row-critical' : ''}>
+                                            <td className="admin-tasks-checkbox-cell">
+                                                <input
+                                                    type="checkbox"
+                                                    className="admin-tasks-checkbox"
+                                                    checked={selectedTasks.includes(task.id)}
+                                                    onChange={() => handleSelectTask(task.id)}
+                                                />
+                                            </td>
+                                            <td>
+                                                <div className="flex flex-col gap-1">
+                                                    <button
+                                                        onClick={() => handleOpenDetailModal(task)}
+                                                        className="admin-tasks-title-button"
+                                                    >
+                                                        {task.titulo}
+                                                    </button>
+                                                    {/* Mobile Progress Bar (Visible only on small screens via CSS) */}
+                                                    <div className="mobile-progress-container">
+                                                        {(() => {
+                                                            const progress = calculateProgress(task)
+                                                            if (progress === null) return null
+                                                            let progressClass = 'progress-low'
+                                                            if (progress > 70) progressClass = 'progress-high'
+                                                            else if (progress > 30) progressClass = 'progress-medium'
+
+                                                            return (
+                                                                <div className="task-progress-bar-container mobile-size">
+                                                                    <div
+                                                                        className={`task-progress-fill ${progressClass}`}
+                                                                        style={{ width: `${progress}%` }}
+                                                                    ></div>
+                                                                </div>
+                                                            )
+                                                        })()}
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                {task.empresas?.nome || <span className="text-slate-400 italic font-normal text-sm">Sem cliente</span>}
+                                            </td>
+                                            <td>
+                                                {task.micro_tasks && task.micro_tasks.length > 0 ? (
+                                                    <span className="badge badge-neutral" title="Tarefa Macro com múltiplas etapas">
+                                                        Workflow ({task.micro_tasks.length})
+                                                    </span>
+                                                ) : (
+                                                    professionals.find(p => p.id === task.assigned_to)?.nome || 'Não atribuída'
+                                                )}
+                                            </td>
+                                            <td>
+                                                {(() => {
+                                                    const progress = calculateProgress(task)
+                                                    if (progress === null) return <span className="text-slate-400 text-xs">-</span>
+
+                                                    let progressClass = 'progress-low'
+                                                    if (progress > 70) progressClass = 'progress-high'
+                                                    else if (progress > 30) progressClass = 'progress-medium'
+
+                                                    return (
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="task-progress-bar-container">
                                                                 <div
                                                                     className={`task-progress-fill ${progressClass}`}
                                                                     style={{ width: `${progress}%` }}
                                                                 ></div>
                                                             </div>
-                                                        )
-                                                    })()}
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td>
-                                            {task.empresas?.nome || <span className="text-slate-400 italic font-normal text-sm">Sem cliente</span>}
-                                        </td>
-                                        <td>
-                                            {task.micro_tasks && task.micro_tasks.length > 0 ? (
-                                                <span className="badge badge-neutral" title="Tarefa Macro com múltiplas etapas">
-                                                    Workflow ({task.micro_tasks.length})
-                                                </span>
-                                            ) : (
-                                                professionals.find(p => p.id === task.assigned_to)?.nome || 'Não atribuída'
-                                            )}
-                                        </td>
-                                        <td>
-                                            {(() => {
-                                                const progress = calculateProgress(task)
-                                                if (progress === null) return <span className="text-slate-400 text-xs">-</span>
-
-                                                let progressClass = 'progress-low'
-                                                if (progress > 70) progressClass = 'progress-high'
-                                                else if (progress > 30) progressClass = 'progress-medium'
-
-                                                return (
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="task-progress-bar-container">
-                                                            <div
-                                                                className={`task-progress-fill ${progressClass}`}
-                                                                style={{ width: `${progress}%` }}
-                                                            ></div>
+                                                            <span className="text-xs font-medium text-slate-600">{progress}%</span>
                                                         </div>
-                                                        <span className="text-xs font-medium text-slate-600">{progress}%</span>
-                                                    </div>
-                                                )
-                                            })()}
-                                        </td>
-                                        <td>
-                                            <div className="flex items-center gap-1">
-                                                {isOverdue(task) && (
-                                                    <AlertTriangle size={14} className="text-red-500 overdue-icon" />
-                                                )}
-                                                <span className={isOverdue(task) ? 'text-red-600 font-medium' : ''}>
-                                                    {new Date(task.deadline).toLocaleDateString()}
+                                                    )
+                                                })()}
+                                            </td>
+                                            <td>
+                                                <div className="flex items-center gap-1">
+                                                    {isOverdue(task) && (
+                                                        <AlertTriangle size={13} className="text-overdue overdue-icon" />
+                                                    )}
+                                                    <span className={isOverdue(task) ? 'text-overdue-muted font-medium' : ''}>
+                                                        {new Date(task.deadline).toLocaleDateString()}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span className={`badge ${getStatusBadgeClass(task.status)}`}>
+                                                    {getStatusLabel(task.status)}
                                                 </span>
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <span className={`badge ${getStatusBadgeClass(task.status)}`}>
-                                                {getStatusLabel(task.status)}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <span className={`badge ${getPriorityBadgeClass(task.priority)}`}>
-                                                {getPriorityLabel(task.priority)}
-                                            </span>
-                                        </td>
-                                        <td className="admin-tasks-actions-cell">
-                                            <div className="admin-tasks-actions-container">
-                                                <button
-                                                    onClick={() => handleOpenEditModal(task)}
-                                                    className="btn-icon"
-                                                    title="Editar"
-                                                >
-                                                    <Edit2 size={18} />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleOpenDeleteModal(task)}
-                                                    className="btn-icon admin-tasks-delete-button"
-                                                    title="Excluir"
-                                                >
-                                                    <Trash2 size={18} />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
+                                            </td>
+                                            <td>
+                                                <span className={`badge ${getPriorityBadgeClass(task.priority)}`}>
+                                                    {getPriorityLabel(task.priority)}
+                                                </span>
+                                            </td>
+                                            <td className="admin-tasks-actions-cell">
+                                                <div className="admin-tasks-actions-container">
+                                                    <button
+                                                        onClick={() => handleOpenEditModal(task)}
+                                                        className="btn-icon"
+                                                        title="Editar"
+                                                    >
+                                                        <Edit2 size={18} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleOpenDeleteModal(task)}
+                                                        className="btn-icon admin-tasks-delete-button"
+                                                        title="Excluir"
+                                                    >
+                                                        <Trash2 size={18} />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )
+                                })}
                             </tbody>
                         </table>
                     </div>

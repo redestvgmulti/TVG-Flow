@@ -661,10 +661,13 @@
         /* Safe area for bottom navigation if any */
     }
 }
+
 /* Progress Bar Styles */
 .task-progress-bar-container {
-    width: 100px;
-    height: 6px;
+    width: 120px;
+    /* Slightly wider for better visibility */
+    height: 8px;
+    /* Taller as requested */
     background-color: #f1f5f9;
     border-radius: 999px;
     overflow: hidden;
@@ -677,32 +680,55 @@
 }
 
 .progress-low {
-    background-color: #ef4444; /* Red for 0-30% */
+    background-color: #f87171;
+    /* Tailwind Red-400 (Softer) */
 }
 
 .progress-medium {
-    background-color: #eab308; /* Yellow for 31-70% */
+    background-color: #facc15;
+    /* Tailwind Yellow-400 */
 }
 
 .progress-high {
-    background-color: #22c55e; /* Green for 71-100% */
+    background-color: #4ade80;
+    /* Tailwind Green-400 */
 }
 
 /* Overdue Styles */
-.text-red-500 {
+.text-overdue {
     color: #ef4444;
+    /* Primary Red */
 }
 
-.text-red-600 {
-    color: #dc2626;
-}
-
-.font-medium {
-    font-weight: 500;
+.text-overdue-muted {
+    color: #f87171;
+    /* Softer Red */
 }
 
 .overdue-icon {
     flex-shrink: 0;
+    opacity: 0.8;
+    /* Reduced opacity */
+}
+
+/* Critical Row Hierarchy */
+.task-row-critical td:first-child {
+    border-left: 3px solid #f87171 !important;
+}
+
+.task-row-critical {
+    background-color: #fef2f2;
+    /* Very subtle red background */
+}
+
+/* Status Badge Refinement */
+.badge-pending-subtle {
+    background-color: #f1f5f9;
+    color: #64748b;
+    border: 1px solid #e2e8f0;
+    opacity: 0.9;
+    font-size: 0.7rem;
+    padding: 2px 8px;
 }
 
 /* Mobile Progress Bar */
@@ -718,19 +744,33 @@
 }
 
 /* Utilities */
-.flex { display: flex; }
-.flex-col { flex-direction: column; }
-.items-center { align-items: center; }
-.gap-1 { gap: 0.25rem; }
-.gap-2 { gap: 0.5rem; }
+.flex {
+    display: flex;
+}
+
+.flex-col {
+    flex-direction: column;
+}
+
+.items-center {
+    align-items: center;
+}
+
+.gap-1 {
+    gap: 0.25rem;
+}
+
+.gap-2 {
+    gap: 0.5rem;
+}
 
 @media (max-width: 768px) {
     .mobile-progress-container {
         display: block;
     }
-    
+
     /* Hide the standalone progress column on mobile to save space */
-    .table th:nth-child(4), 
+    .table th:nth-child(4),
     .table td:nth-child(4) {
         display: none;
     }
