@@ -20,7 +20,7 @@ export const NAV_ITEMS = [
         path: '/staff/dashboard',
         icon: LayoutGrid,
         roles: ['profissional'],
-        mobilePriority: false // Less important on mobile bottom nav? Check user requirement.
+        mobilePriority: false, // Less important on mobile bottom nav? Check user requirement.
         // User said: Mobile = Tarefas, Agenda, Solicitar, Conteúdo, Perfil. 
         // Dashboard is NOT in the user's list for Mobile BottomNav preference.
         // User list: "Mobile / PWA (BottomNav): Tarefas, Agenda, Solicitar (CTA central), Conteúdo, Perfil"
