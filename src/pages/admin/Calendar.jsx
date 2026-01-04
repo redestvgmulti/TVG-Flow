@@ -83,12 +83,23 @@ function Calendar() {
                 color = '#ff3b30' // red
             }
 
+            // Fix for "All Day" issue:
+            // 1. Never assume 00:00:00 is allDay
+            // 2. Default duration is 1 hour for visibility
+            // 3. Only set allDay if explicit property exists (defensive)
+
+            const start = deadline
+            const end = new Date(deadline.getTime() + 60 * 60 * 1000) // +1 hour artificial duration
+
+            // Check for explicit all_day flag (if it exists in future DB updates)
+            const hasExplicitAllDay = task.all_day === true || task.is_all_day === true
+
             return {
                 id: task.id,
                 title: task.titulo,
-                start: deadline,
-                end: deadline,
-                allDay: true,
+                start: start,
+                end: end,
+                allDay: hasExplicitAllDay,
                 resource: task,
                 style: {
                     backgroundColor: color,
