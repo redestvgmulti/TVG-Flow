@@ -27,7 +27,7 @@ export const NAV_ITEMS = [
         // We will keep Dashboard accessible but maybe not in the primary 5 slots if space is tight, OR we strictly follow the user's specific list for Mobile.
         // User explicit list for Mobile BottomNav: Tarefas, Agenda, Solicitar, Conteúdo, Perfil.
         // Dashboard is NOT in that list. We will strictly follow.
-        showOnMobileBottom: false
+        showOnMobileBottom: false,
     },
     {
         key: 'tasks',
