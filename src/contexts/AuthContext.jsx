@@ -62,7 +62,7 @@ export function AuthProvider({ children }) {
 
             setSession(session)
             setUser(session.user)
-            fetchProfessionalData(session.user.id)
+            fetchProfessionalData(session.user.id, session.user)
         }).catch(err => {
             console.error('Unexpected error during session init:', err)
             setLoading(false)
@@ -95,14 +95,18 @@ export function AuthProvider({ children }) {
             // Standard session update
             if (session) {
                 // Check if user changed (rare, but possible)
+                // Use default User ID for comparison if state is null (initial load)
                 if (session.user.id !== user?.id) {
+                    console.log('AuthContext: User changed or initial load. Fetching data...')
                     setSession(session)
                     setUser(session.user)
-                    // Re-fetch data for new user
-                    await fetchProfessionalData(session.user.id)
+                    // Re-fetch data for new user, PASS USER OBJECT to avoid redundant calls
+                    await fetchProfessionalData(session.user.id, session.user)
                 } else {
                     // Just update session token
+                    console.log('AuthContext: Session update only (same user).')
                     setSession(session)
+                    setLoading(false) // Ensure loading is cleared here too!
                 }
             } else {
                 // No session provided in event (should be covered by SIGNED_OUT, but safety net)
@@ -144,11 +148,20 @@ export function AuthProvider({ children }) {
         return () => window.removeEventListener('online', handleOnline)
     }, [connectionStatus])
 
-    async function fetchProfessionalData(userId) {
+    async function fetchProfessionalData(userId, userObject = null) {
+        console.log('AuthContext: fetchProfessionalData started for', userId)
         try {
             // Get current session user email for validation
-            const { data: { user } } = await supabase.auth.getUser()
-            const userEmail = user?.email
+            let currentUser = userObject
+            if (!currentUser) {
+                console.log('AuthContext: No userObject passed, fetching from Supabase...')
+                const { data: { user } } = await supabase.auth.getUser()
+                currentUser = user
+            }
+
+            const userEmail = currentUser?.email
+            console.log('AuthContext: User email resolved:', userEmail)
+
             const IMMUTABLE_SUPER_ADMIN_EMAIL = 'geovanepanini@agencyflow.com'
 
             // 1. IMMUTABLE SUPER ADMIN CHECK (Overrides DB)
@@ -190,6 +203,7 @@ export function AuthProvider({ children }) {
 
             // If no professional found, clear state
             if (!professional) {
+                console.warn('AuthContext: No professional profile found in DB')
                 setRole(null)
                 setProfessionalId(null)
                 setProfessionalName(null)
@@ -199,6 +213,7 @@ export function AuthProvider({ children }) {
 
             // SECURITY: Check if user is active
             if (!professional.ativo) {
+                console.warn('AuthContext: Professional account inactive')
                 setAccountStatus('inactive')
                 setRole(null) // Block access
                 setLoading(false)
@@ -240,6 +255,7 @@ export function AuthProvider({ children }) {
             }
 
             // All checks passed, set user data
+            console.log('AuthContext: Professional data loaded successfully. Role:', finalRole)
             setRole(finalRole)
             setProfessionalId(professional.id || null)
             setProfessionalName(professional.nome || null)
@@ -251,6 +267,7 @@ export function AuthProvider({ children }) {
             setProfessionalId(null)
             setProfessionalName(null)
         } finally {
+            console.log('AuthContext: fetchProfessionalData finished. Setting loading=false')
             setLoading(false)
         }
     }
