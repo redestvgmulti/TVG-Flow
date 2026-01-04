@@ -3,19 +3,17 @@ import { NavLink } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../services/supabase'
 import {
-    LayoutGrid,
     CheckSquare,
     Calendar,
     Settings,
     Users,
     BarChart,
-    Map,
     ChevronRight,
     LogOut,
-    User,
     Building,
     FolderOpen
 } from 'lucide-react'
+import { NAV_ITEMS, MANAGEMENT_ITEMS } from '../config/navigation'
 
 function Sidebar({ mobileMenuOpen, onClose }) {
     const { user, role, professionalName, signOut } = useAuth()
@@ -97,25 +95,18 @@ function Sidebar({ mobileMenuOpen, onClose }) {
                         <>
                             <div className="nav-section">
                                 <p className="nav-label">MENU PRINCIPAL</p>
-                                <NavLink to="/admin" end className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={handleNavClick}>
-                                    <LayoutGrid size={20} className="nav-icon" />
-                                    <span className="nav-text">Dashboard</span>
-                                </NavLink>
-
-                                <NavLink to="/admin/tasks" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={handleNavClick}>
-                                    <CheckSquare size={20} className="nav-icon" />
-                                    <span className="nav-text">Tarefas</span>
-                                </NavLink>
-
-                                <NavLink to="/admin/content" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={handleNavClick}>
-                                    <FolderOpen size={20} className="nav-icon" />
-                                    <span className="nav-text">Conteúdo</span>
-                                </NavLink>
-
-                                <NavLink to="/admin/calendar" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={handleNavClick}>
-                                    <Calendar size={20} className="nav-icon" />
-                                    <span className="nav-text">Calendário</span>
-                                </NavLink>
+                                {NAV_ITEMS.filter(item => item.roles.includes('admin') && !item.isCTA && item.key !== 'admin-team' && item.key !== 'admin-reports').map(item => (
+                                    <NavLink
+                                        key={item.key}
+                                        to={item.path}
+                                        end={item.path === '/admin'} // Exact match for dashboard
+                                        className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+                                        onClick={handleNavClick}
+                                    >
+                                        <item.icon size={20} className="nav-icon" />
+                                        <span className="nav-text">{item.label}</span>
+                                    </NavLink>
+                                ))}
                             </div>
 
                             <div className="nav-section">
@@ -134,22 +125,17 @@ function Sidebar({ mobileMenuOpen, onClose }) {
 
                                     {adminPanelOpen && (
                                         <div className="nav-sub">
-                                            <NavLink to="/admin/companies" className="nav-sub-item" onClick={handleNavClick}>
-                                                <Building size={16} />
-                                                <span>Empresas</span>
-                                            </NavLink>
-                                            {/* <NavLink to="/admin/areas" className="nav-sub-item" onClick={handleNavClick}>
-                                                <Map size={16} />
-                                                <span>Setores</span>
-                                            </NavLink> */}
-                                            <NavLink to="/admin/professionals" className="nav-sub-item" onClick={handleNavClick}>
-                                                <Users size={16} />
-                                                <span>Funcionários</span>
-                                            </NavLink>
-                                            <NavLink to="/admin/reports" className="nav-sub-item" onClick={handleNavClick}>
-                                                <BarChart size={16} />
-                                                <span>Relatórios</span>
-                                            </NavLink>
+                                            {MANAGEMENT_ITEMS.map(item => (
+                                                <NavLink
+                                                    key={item.key}
+                                                    to={item.path}
+                                                    className="nav-sub-item"
+                                                    onClick={handleNavClick}
+                                                >
+                                                    <item.icon size={16} />
+                                                    <span>{item.label}</span>
+                                                </NavLink>
+                                            ))}
                                         </div>
                                     )}
                                 </div>
@@ -161,30 +147,29 @@ function Sidebar({ mobileMenuOpen, onClose }) {
                     {role === 'profissional' && (
                         <div className="nav-section">
                             <p className="nav-label">MEU ESPAÇO</p>
-                            <NavLink to="/staff/dashboard" end className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={handleNavClick}>
-                                <LayoutGrid size={20} className="nav-icon" />
-                                <span className="nav-text">Dashboard</span>
-                            </NavLink>
 
-                            <NavLink to="/staff/tasks" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={handleNavClick}>
-                                <CheckSquare size={20} className="nav-icon" />
-                                <span className="nav-text">Minhas Tarefas</span>
-                                {incompleteTaskCount > 0 && (
-                                    <span className="nav-task-badge">
-                                        {incompleteTaskCount}
-                                    </span>
-                                )}
-                            </NavLink>
+                            {/* Render "Solicitar" specially if we want it at the top or emphasized, 
+                                BUT User asked for strict hierarchy: Dashboard -> Tasks -> Calendar -> Content -> Request.
+                                Let's map them in order of definition (which we can control via filter).
+                            */}
 
-                            <NavLink to="/staff/content" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={handleNavClick}>
-                                <FolderOpen size={20} className="nav-icon" />
-                                <span className="nav-text">Conteúdo</span>
-                            </NavLink>
-
-                            <NavLink to="/staff/calendar" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={handleNavClick}>
-                                <Calendar size={20} className="nav-icon" />
-                                <span className="nav-text">Agenda</span>
-                            </NavLink>
+                            {NAV_ITEMS.filter(item => item.roles.includes('profissional') && item.key !== 'profile').map(item => (
+                                <NavLink
+                                    key={item.key}
+                                    to={item.path}
+                                    end={item.path === '/staff/dashboard'}
+                                    className={({ isActive }) => `nav-item ${isActive ? 'active' : ''} ${item.isCTA ? 'nav-item-cta' : ''}`}
+                                    onClick={handleNavClick}
+                                >
+                                    <item.icon size={20} className="nav-icon" />
+                                    <span className="nav-text">{item.label}</span>
+                                    {item.key === 'tasks' && incompleteTaskCount > 0 && (
+                                        <span className="nav-task-badge">
+                                            {incompleteTaskCount}
+                                        </span>
+                                    )}
+                                </NavLink>
+                            ))}
                         </div>
                     )}
                 </nav>

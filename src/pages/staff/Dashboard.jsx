@@ -121,7 +121,7 @@ function StaffDashboard() {
 
             // Calculate Stats
             const now = new Date()
-            
+
             // Map statuses to general buckets
             const pendingTasks = allTasks.filter(t => ['pendente', 'em_progresso', 'em_execucao', 'devolvida'].includes(t.status))
             const completedTasks = allTasks.filter(t => t.status === 'concluida')
@@ -241,14 +241,14 @@ function StaffDashboard() {
 
             <div className="dashboard-grid-charts">
                 {/* Chart - Productivity */}
-                <div className="card">
+                <div className="card dashboard-card">
                     <div className="card-header">
                         <h3 className="card-title flex items-center gap-2">
                             <Activity size={18} />
                             Desempenho Semanal
                         </h3>
                     </div>
-                    <div style={{ width: '100%', height: 200 }}>
+                    <div style={{ width: '100%', flex: 1, minHeight: 0 }}>
                         <ResponsiveContainer>
                             <BarChart data={productivityData}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
@@ -273,7 +273,7 @@ function StaffDashboard() {
                 </div>
 
                 {/* Recent Tasks List */}
-                <div className="card">
+                <div className="card dashboard-card">
                     <div className="card-header">
                         <h3 className="card-title flex items-center gap-2">
                             <ListTodo size={18} />

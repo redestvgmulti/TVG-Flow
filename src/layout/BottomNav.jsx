@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutGrid, CheckSquare, Users, Calendar, BarChart, PlusSquare, User } from 'lucide-react'
+import { NAV_ITEMS } from '../config/navigation'
 import { useAuth } from '../contexts/AuthContext'
 
 function BottomNav() {
@@ -12,52 +12,46 @@ function BottomNav() {
             {/* ADMIN NAV */}
             {role === 'admin' && (
                 <>
-                    <NavLink to="/admin" end className="bottom-nav-link">
-                        <LayoutGrid size={20} />
-                        <span>Painel</span>
-                    </NavLink>
-                    <NavLink to="/admin/tasks" className="bottom-nav-link">
-                        <CheckSquare size={20} />
-                        <span>Tarefas</span>
-                    </NavLink>
-                    <NavLink to="/admin/professionals" className="bottom-nav-link">
-                        <Users size={20} />
-                        <span>Equipe</span>
-                    </NavLink>
-                    <NavLink to="/admin/calendar" className="bottom-nav-link">
-                        <Calendar size={20} />
-                        <span>Agenda</span>
-                    </NavLink>
-                    <NavLink to="/admin/reports" className="bottom-nav-link">
-                        <BarChart size={20} />
-                        <span>Relatórios</span>
-                    </NavLink>
+                    {/* Admin specific simplification for bottom nav if needed, or strictly follow NAV_ITEMS */}
+                    {NAV_ITEMS.filter(item => item.roles.includes('admin') && item.showOnMobileBottom).map(item => (
+                        <NavLink
+                            key={item.key}
+                            to={item.path}
+                            end={item.path === '/admin'}
+                            className="bottom-nav-link"
+                        >
+                            <item.icon size={20} />
+                            <span>{item.label}</span>
+                        </NavLink>
+                    ))}
                 </>
             )}
 
             {/* STAFF NAV */}
             {role === 'profissional' && (
                 <>
-                    <NavLink to="/staff/dashboard" end className="bottom-nav-link">
-                        <LayoutGrid size={20} />
-                        <span>Painel</span>
-                    </NavLink>
-                    <NavLink to="/staff/tasks" className="bottom-nav-link">
-                        <CheckSquare size={20} />
-                        <span>Tarefas</span>
-                    </NavLink>
-                    <NavLink to="/staff/requests/new" className="bottom-nav-link">
-                        <PlusSquare size={20} />
-                        <span>Solicitar</span>
-                    </NavLink>
-                    <NavLink to="/staff/calendar" className="bottom-nav-link">
-                        <Calendar size={20} />
-                        <span>Agenda</span>
-                    </NavLink>
-                    <NavLink to="/staff/profile" className="bottom-nav-link">
-                        <User size={20} />
-                        <span>Perfil</span>
-                    </NavLink>
+                    {/* 
+                      Order Requirement: Tasks, Agenda, Request (CTA), Content, Profile.
+                      We filter items that have showOnMobileBottom=true. 
+                      Note: Profile is NOT in NAV_ITEMS by default above for 'staff' in the config I wrote? 
+                      Wait, I added 'key: profile' to NAV_ITEMS in the previous step.
+                      So we can just map.
+                    */}
+                    {NAV_ITEMS.filter(item => item.roles.includes('profissional') && item.showOnMobileBottom).map(item => (
+                        <NavLink
+                            key={item.key}
+                            to={item.path}
+                            // Request is special: CTA
+                            className={({ isActive }) =>
+                                item.isCTA
+                                    ? `bottom-nav-link cta-button ${isActive ? 'active' : ''}`
+                                    : `bottom-nav-link ${isActive ? 'active' : ''}`
+                            }
+                        >
+                            <item.icon size={item.isCTA ? 24 : 20} />
+                            <span>{item.label}</span>
+                        </NavLink>
+                    ))}
                 </>
             )}
         </nav>
