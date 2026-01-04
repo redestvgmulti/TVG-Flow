@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState, useEffect, useRef } from 'react'
 import { supabase } from '../services/supabase'
 
 const AuthContext = createContext({})
@@ -8,14 +8,9 @@ export function useAuth() {
 }
 
 export function AuthProvider({ children }) {
-    const [user, setUser] = useState(null)
-    const [session, setSession] = useState(null)
-    const [loading, setLoading] = useState(true)
-    const [role, setRole] = useState(null)
-    const [professionalId, setProfessionalId] = useState(null)
-    const [professionalName, setProfessionalName] = useState(null)
-    const [accountStatus, setAccountStatus] = useState('active') // 'active' | 'inactive' | 'suspended'
-    const [connectionStatus, setConnectionStatus] = useState('online') // 'online' | 'offline' | 'reconnecting'
+    // Refs to track state without triggering re-renders and prevent race conditions
+    const isFetchingRef = useRef(false)
+    const userRef = useRef(null)
 
     // Detectar erro de rede
     function isNetworkError(error) {
@@ -28,54 +23,68 @@ export function AuthProvider({ children }) {
     }
 
     useEffect(() => {
-        // Get initial session
-        supabase.auth.getSession().then(({ data: { session }, error }) => {
-            if (error) {
-                console.error('Error getting session:', error)
+        let mounted = true
 
-                // Diferenciar erro de rede vs sessão expirada
-                if (isNetworkError(error)) {
-                    setConnectionStatus('offline')
-                    // NÃO deslogar sem certeza, apenas informar
-                } else {
-                    // Outros erros (ex: refresh token inválido): limpar tudo
-                    console.error('Critical session error:', error)
-                    setSession(null)
-                    setUser(null)
-                    // Optional: window.location.href = '/login' if we want to be aggressive, 
-                    // but usually setting user=null triggers ProtectedRoute to redirect.
+        const initSession = async () => {
+            try {
+                // Get initial session
+                const { data: { session }, error } = await supabase.auth.getSession()
+
+                if (!mounted) return
+
+                if (error) {
+                    console.error('Error getting session:', error)
+
+                    // Diferenciar erro de rede vs sessão expirada
+                    if (isNetworkError(error)) {
+                        setConnectionStatus('offline')
+                        // NÃO deslogar sem certeza, apenas informar
+                    } else {
+                        // Outros erros (ex: refresh token inválido): limpar tudo
+                        console.error('Critical session error:', error)
+                        setSession(null)
+                        setUser(null)
+                        userRef.current = null
+                    }
+                    setLoading(false)
+                    return
                 }
 
-                setLoading(false)
-                return
-            }
+                if (!session) {
+                    // No session found on startup
+                    setSession(null)
+                    setUser(null)
+                    userRef.current = null
+                    setLoading(false)
+                    return
+                }
 
-            if (!session) {
-                // No session found on startup
-                setSession(null)
-                setUser(null)
-                setLoading(false)
-                // We rely on ProtectedRoute to redirect, but if we are in a protected route 
-                // and just refreshed, this state update will trigger the redirect.
-                return
-            }
+                // Initial session found
+                setSession(session)
+                setUser(session.user)
+                userRef.current = session.user
 
-            setSession(session)
-            setUser(session.user)
-            fetchProfessionalData(session.user.id, session.user)
-        }).catch(err => {
-            console.error('Unexpected error during session init:', err)
-            setLoading(false)
-        })
+                // Fetch data for the initial user
+                await fetchProfessionalData(session.user.id, session.user)
+
+            } catch (err) {
+                console.error('Unexpected error during session init:', err)
+                if (mounted) setLoading(false)
+            }
+        }
+
+        initSession()
 
         // Listen for auth changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+            if (!mounted) return
             console.log('Auth State Change:', event)
 
             if (event === 'TOKEN_REFRESH_FAILED' || event === 'SIGNED_OUT') {
                 console.warn('Token Refresh Failed or Signed Out. Cleaning up...')
                 setSession(null)
                 setUser(null)
+                userRef.current = null
                 setRole(null)
                 setProfessionalId(null)
                 setProfessionalName(null)
@@ -95,28 +104,34 @@ export function AuthProvider({ children }) {
             // Standard session update
             if (session) {
                 // Check if user changed (rare, but possible)
-                // Use default User ID for comparison if state is null (initial load)
-                if (session.user.id !== user?.id) {
+                // Use Ref for comparison to avoid closure stale state
+                if (session.user.id !== userRef.current?.id) {
                     console.log('AuthContext: User changed or initial load. Fetching data...')
                     setSession(session)
                     setUser(session.user)
+                    userRef.current = session.user
+
                     // Re-fetch data for new user, PASS USER OBJECT to avoid redundant calls
                     await fetchProfessionalData(session.user.id, session.user)
                 } else {
                     // Just update session token
                     console.log('AuthContext: Session update only (same user).')
                     setSession(session)
-                    setLoading(false) // Ensure loading is cleared here too!
+                    // If we are still loading for some reason (rare race), ensure we turn it off
+                    // But usually fetchProfessionalData handles it.
                 }
             } else {
                 // No session provided in event (should be covered by SIGNED_OUT, but safety net)
                 if (event !== 'INITIAL_SESSION') {
-                    // Only clear if not initial load (which is handled above)
+                    // unexpected state
                 }
             }
         })
 
-        return () => subscription.unsubscribe()
+        return () => {
+            mounted = false
+            subscription.unsubscribe()
+        }
     }, [])
 
     // Retry silencioso em reconexão
@@ -133,6 +148,7 @@ export function AuthProvider({ children }) {
                         setConnectionStatus('online')
                         setSession(session)
                         setUser(session.user)
+                        userRef.current = session.user
                         fetchProfessionalData(session.user.id)
                     } else {
                         setConnectionStatus('online')
@@ -149,7 +165,24 @@ export function AuthProvider({ children }) {
     }, [connectionStatus])
 
     async function fetchProfessionalData(userId, userObject = null) {
+        // Prevent race conditions and duplicate calls
+        if (isFetchingRef.current) {
+            console.log('AuthContext: Fetch already in progress for', userId, 'skipping.')
+            return
+        }
+
+        isFetchingRef.current = true
         console.log('AuthContext: fetchProfessionalData started for', userId)
+
+        // Safety Timeout to prevent infinite loading
+        const timeoutId = setTimeout(() => {
+            if (isFetchingRef.current) {
+                console.error('AuthContext: fetchProfessionalData TIMED OUT. Forcing loading=false.')
+                setLoading(false)
+                isFetchingRef.current = false
+            }
+        }, 15000) // 15 seconds max
+
         try {
             // Get current session user email for validation
             let currentUser = userObject
@@ -267,6 +300,8 @@ export function AuthProvider({ children }) {
             setProfessionalId(null)
             setProfessionalName(null)
         } finally {
+            clearTimeout(timeoutId)
+            isFetchingRef.current = false
             console.log('AuthContext: fetchProfessionalData finished. Setting loading=false')
             setLoading(false)
         }
