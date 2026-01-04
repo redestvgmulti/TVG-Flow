@@ -34,19 +34,7 @@
   <link rel="manifest" href="/manifest.json" />
 
   <title>TVG Flow</title>
-  <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-          .then(registration => {
-            // ServiceWorker registered
-          })
-          .catch(registrationError => {
-            // ServiceWorker registration failed
-          });
-      });
-    }
-  </script>
+
 </head>
 
 <body>

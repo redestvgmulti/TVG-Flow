@@ -7,7 +7,7 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt', // User requirement: "New version available. Update now?"
       includeAssets: ['icons/*.png', 'offline.html'],
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}']
@@ -16,6 +16,9 @@ export default defineConfig({
       workbox: {
         importScripts: ['/push-sw.js'], // Import push notification logic
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        cleanupOutdatedCaches: true,
+        clientsClaim: true,
+        // navigateFallback: 'index.html', // Ensure SPA routing works offline if needed
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/gyooxmpyxncrezjiljrj\.supabase\.co\/.*$/,
@@ -48,7 +51,8 @@ export default defineConfig({
         ]
       },
       devOptions: {
-        enabled: false // DESABILITADO: SW causa problemas de cache em dev
+        enabled: true, // Enable for testing if needed, though usually false for prod
+        type: 'module'
       }
     })
   ],

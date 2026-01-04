@@ -40,6 +40,8 @@ import { Toaster } from 'sonner'
 import { RefreshProvider } from './contexts/RefreshContext'
 import { InAppNotificationProvider } from './contexts/InAppNotificationContext'
 import InAppNotificationBanner from './components/InAppNotificationBanner'
+import ReloadPrompt from './components/ReloadPrompt/ReloadPrompt'
+
 
 function App() {
   return (
@@ -47,6 +49,7 @@ function App() {
       <RefreshProvider>
         <InAppNotificationProvider>
           <Toaster position="top-right" richColors />
+          <ReloadPrompt />
           <InAppNotificationBanner />
           <AppLayout>
             <Routes>
