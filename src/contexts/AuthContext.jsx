@@ -36,39 +36,79 @@ export function AuthProvider({ children }) {
                 // Diferenciar erro de rede vs sessão expirada
                 if (isNetworkError(error)) {
                     setConnectionStatus('offline')
-                    // NÃO deslogar, apenas informar
+                    // NÃO deslogar sem certeza, apenas informar
                 } else {
-                    // Outros erros: apenas log, deixar Supabase Auth gerenciar
-                    console.error('Session error (not network):', error)
+                    // Outros erros (ex: refresh token inválido): limpar tudo
+                    console.error('Critical session error:', error)
+                    setSession(null)
+                    setUser(null)
+                    // Optional: window.location.href = '/login' if we want to be aggressive, 
+                    // but usually setting user=null triggers ProtectedRoute to redirect.
                 }
 
                 setLoading(false)
                 return
             }
 
-            setSession(session)
-            setUser(session?.user ?? null)
-            if (session?.user) {
-                fetchProfessionalData(session.user.id)
-            } else {
+            if (!session) {
+                // No session found on startup
+                setSession(null)
+                setUser(null)
                 setLoading(false)
+                // We rely on ProtectedRoute to redirect, but if we are in a protected route 
+                // and just refreshed, this state update will trigger the redirect.
+                return
             }
+
+            setSession(session)
+            setUser(session.user)
+            fetchProfessionalData(session.user.id)
         }).catch(err => {
             console.error('Unexpected error during session init:', err)
             setLoading(false)
         })
 
         // Listen for auth changes
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-            setSession(session)
-            setUser(session?.user ?? null)
-            if (session?.user) {
-                fetchProfessionalData(session.user.id)
-            } else {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+            console.log('Auth State Change:', event)
+
+            if (event === 'TOKEN_REFRESH_FAILED' || event === 'SIGNED_OUT') {
+                console.warn('Token Refresh Failed or Signed Out. Cleaning up...')
+                setSession(null)
+                setUser(null)
                 setRole(null)
                 setProfessionalId(null)
                 setProfessionalName(null)
+                setAccountStatus('active') // Reset status
+
+                // CRITICAL: Force redirect to login if session is lost to prevent "half-logged" state
+                // Only redirect if NOT already on login page to avoid loops if logic placed improperly
+                if (window.location.pathname !== '/login' && window.location.pathname !== '/reset-password') {
+                    // Using window.location to force full clean state
+                    window.location.href = '/login'
+                }
+
                 setLoading(false)
+                return
+            }
+
+            // Standard session update
+            if (session) {
+                // Check if user changed (rare, but possible)
+                if (session.user.id !== user?.id) {
+                    setSession(session)
+                    setUser(session.user)
+                    // Re-fetch data for new user
+                    await fetchProfessionalData(session.user.id)
+                } else {
+                    // Just update session token
+                    setSession(session)
+                }
+            } else {
+                // No session provided in event (should be covered by SIGNED_OUT, but safety net)
+                if (event !== 'INITIAL_SESSION') {
+                    // Only clear if not initial load (which is handled above)
+                }
             }
         })
 
