@@ -5,8 +5,19 @@ import AccountBlockedScreen from '../components/AccountBlockedScreen'
 function ProtectedRoute({ children }) {
     const { user, loading, accountStatus, connectionStatus } = useAuth()
 
+    console.log('ProtectedRoute: loading=', loading, 'user=', user?.email)
+
     if (loading) {
-        return null
+        return <div style={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            height: '100vh',
+            color: '#000',
+            fontSize: '24px'
+        }}>
+            Carregando Sistema... (Estado: {accountStatus})
+        </div>
     }
 
     if (!user) {

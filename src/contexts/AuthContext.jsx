@@ -153,6 +153,7 @@ export function AuthProvider({ children }) {
 
             // 1. IMMUTABLE SUPER ADMIN CHECK (Overrides DB)
             if (userEmail === IMMUTABLE_SUPER_ADMIN_EMAIL) {
+                console.log('AuthContext: Immutable Super Admin Detected')
                 setRole('super_admin')
                 // Super admin doesn't need specific professional ID for now, or fetch if exists
                 // For safety, let's try to fetch name if he exists in DB, otherwise default
@@ -168,6 +169,8 @@ export function AuthProvider({ children }) {
                 setLoading(false)
                 return
             }
+
+            console.log('AuthContext: Fetching standard profile for', userId)
 
             // 2. FETCH STANDARD DB PROFILE
             const { data: professional, error } = await supabase
