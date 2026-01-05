@@ -8,6 +8,15 @@ export function useAuth() {
 }
 
 export function AuthProvider({ children }) {
+    const [user, setUser] = useState(null)
+    const [session, setSession] = useState(null)
+    const [loading, setLoading] = useState(true)
+    const [role, setRole] = useState(null)
+    const [professionalId, setProfessionalId] = useState(null)
+    const [professionalName, setProfessionalName] = useState(null)
+    const [accountStatus, setAccountStatus] = useState('active') // 'active' | 'inactive' | 'suspended'
+    const [connectionStatus, setConnectionStatus] = useState('online') // 'online' | 'offline' | 'reconnecting'
+
     // Refs to track state without triggering re-renders and prevent race conditions
     const isFetchingRef = useRef(false)
     const userRef = useRef(null)
