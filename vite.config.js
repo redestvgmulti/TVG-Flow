@@ -18,6 +18,7 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         cleanupOutdatedCaches: true,
         clientsClaim: true,
+        skipWaiting: false, // Prevent silent takeover - user must confirm update
         // navigateFallback: 'index.html', // Ensure SPA routing works offline if needed
         runtimeCaching: [
           {

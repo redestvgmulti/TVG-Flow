@@ -40,7 +40,7 @@ import { Toaster } from 'sonner'
 import { RefreshProvider } from './contexts/RefreshContext'
 import { InAppNotificationProvider } from './contexts/InAppNotificationContext'
 import InAppNotificationBanner from './components/InAppNotificationBanner'
-import ReloadPrompt from './components/ReloadPrompt/ReloadPrompt'
+import { ReloadPrompt } from './components/ReloadPrompt'
 
 
 function App() {
