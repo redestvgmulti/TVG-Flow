@@ -250,9 +250,9 @@ function StaffDashboard() {
                             </h3>
                         </div>
 
-                        <div className="chart-wrapper">
+                        <div className="chart-container">
                             {productivityData.some(d => d.value > 0) ? (
-                                <ResponsiveContainer width="100%" height="100%">
+                                <ResponsiveContainer>
                                     <BarChart data={productivityData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
                                         <XAxis
