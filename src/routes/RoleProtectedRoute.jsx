@@ -15,7 +15,11 @@ function RoleProtectedRoute({ children, allowedRole }) {
     // Wait for role to be loaded before making routing decisions
     // If user exists but role is still null, we're still loading professional data
     if (user && role === null) {
-        return <div style={{ padding: 20 }}>Verificando permissões... (Role: null)</div>
+        return (
+            <div className="flex items-center justify-center h-screen bg-gray-50 flex-col gap-4">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
+            </div>
+        )
     }
 
     if (role !== allowedRole) {

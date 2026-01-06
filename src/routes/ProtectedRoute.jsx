@@ -5,19 +5,20 @@ import AccountBlockedScreen from '../components/AccountBlockedScreen'
 function ProtectedRoute({ children }) {
     const { user, loading, accountStatus, connectionStatus } = useAuth()
 
-    console.log('ProtectedRoute: loading=', loading, 'user=', user?.email)
+    // NUCLEAR OPTION: NO MORE LOADING SCREEN
+    // Let the dashboard render immediately and handle its own loading states
+    // This prevents the infinite "Carregando Sistema..." issue
 
+    // RESTORED: Loading check is required for persistence
+    // Without this, refresh redirects to login immediately (before auth init)
+    // Wait for session check to complete (Phase 1 only)
     if (loading) {
-        return <div style={{
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            height: '100vh',
-            color: '#000',
-            fontSize: '24px'
-        }}>
-            Carregando Sistema... (Estado: {accountStatus})
-        </div>
+        return (
+            <div className="flex items-center justify-center h-screen bg-gray-50 flex-col gap-4">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                <div className="text-gray-500 font-medium">Iniciando Sistema...</div>
+            </div>
+        )
     }
 
     if (!user) {

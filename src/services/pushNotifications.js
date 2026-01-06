@@ -46,6 +46,12 @@ export async function registerServiceWorker() {
  * HARDENED: Never throws, returns 'denied' on error
  */
 export async function requestNotificationPermission() {
+    // GUARD: Never request permission on login screen
+    if (window.location.pathname === '/login') {
+        console.log('[Push] Blocked permission request on login screen')
+        return 'denied'
+    }
+
     if (!('Notification' in window)) {
         console.warn('[Push] Notifications not supported')
         return 'denied'

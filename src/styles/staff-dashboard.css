@@ -1,77 +1,201 @@
 /* Staff Dashboard Specific Styles */
+/* PREMIUM MOBILE-FIRST UX */
 
 .staff-dashboard-container {
-    padding-bottom: 80px;
-    /* Space for bottom nav on mobile */
+    padding-bottom: 96px;
+    /* Space for bottom nav */
     animation: fadeIn 0.4s ease-out;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    /* Consistent vertical rhythm */
 }
 
-/* Reusing dashboard-grid-metrics from layout.css globally, 
-   but ensuring specific overrides if needed */
-
-/* Recent Tasks List Styling */
-.staff-recent-tasks-section {
-    margin-top: var(--space-8);
+/* 1. TYPOGRAPHY & HEADER */
+.dashboard-header {
+    padding: 0 4px;
+    margin-bottom: 8px;
 }
 
-/* Custom empty state for staff dashboard */
+.dashboard-header h2 {
+    font-size: 1.75rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--color-text-primary);
+    margin-bottom: 4px;
+}
+
+.dashboard-header p {
+    font-size: 0.95rem;
+    color: var(--color-text-secondary);
+    font-weight: 400;
+}
+
+/* 2. METRICS GRID (Improved Hierarchy) */
+.dashboard-grid-metrics {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    /* Consistent gap */
+}
+
+.metric-card {
+    background: var(--color-bg-primary);
+    border: 1px solid var(--color-border);
+    border-radius: 16px;
+    /* Modern radius */
+    padding: 16px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    /* Subtle depth */
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 120px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.metric-card:active {
+    transform: scale(0.98);
+}
+
+.metric-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+    color: var(--color-text-tertiary);
+    margin-bottom: 8px;
+}
+
+.metric-value {
+    font-size: 2.5rem;
+    /* Hero value */
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    color: var(--color-text-primary);
+    margin-bottom: auto;
+    /* Push footer down */
+}
+
+.metric-footer {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    margin-top: 12px;
+}
+
+/* Value variants */
+.metric-value-primary {
+    color: var(--color-primary);
+}
+
+.metric-value-success {
+    color: #16a34a;
+}
+
+.metric-value-danger {
+    color: #dc2626;
+}
+
+/* 3. CHART & CONTENT CARDS */
+.content-card {
+    background: var(--color-bg-primary);
+    border: 1px solid var(--color-border);
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    /* Slightly lifted */
+    display: flex;
+    flex-direction: column;
+    min-height: 400px;
+    /* Resilience */
+    overflow: hidden;
+}
+
+.card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+}
+
+.card-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    letter-spacing: -0.01em;
+}
+
+/* Chart Container Wrapper */
+.chart-wrapper {
+    width: 100%;
+    flex: 1;
+    min-height: 300px;
+    position: relative;
+}
+
+/* 4. LISTS & ITEMS */
+.staff-tasks-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-y: auto;
+    padding-right: 4px;
+    flex: 1;
+}
+
+/* Empty State Premium */
 .staff-empty-state {
-    padding: 64px 24px;
-    text-align: center;
-    background: var(--color-bg-subtle);
-    border-radius: var(--radius-lg);
-    border: 1px dashed var(--color-border);
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-height: 200px;
-}
-
-/* Standard Dashboard Card for consistent grid */
-.dashboard-card {
-    min-height: 140px;
-    max-height: 140px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    overflow-y: auto;
-    /* Allow vertical scroll if needed */
-    overflow-x: visible;
-    /* Prevent horizontal clipping */
-}
-
-/* Ensure Charts fit within the card */
-.dashboard-card .recharts-responsive-container {
-    max-height: 100% !important;
-}
-
-/* Ensure lists scroll internally instead of expanding the card */
-.dashboard-card .staff-tasks-list {
-    overflow-y: auto;
     flex: 1;
-    /* Take remaining space */
-    min-height: 0;
-    /* Crucial for flex scrolling */
-    padding-right: 4px;
-    /* Space for scrollbar */
-}
-
-/* Adjust empty state to fit small card */
-.dashboard-card .staff-empty-state {
-    min-height: auto;
-    padding: 12px;
-    flex: 1;
+    padding: 32px;
+    background: var(--color-bg-subtle);
+    border-radius: 12px;
+    border: 1px dashed var(--color-border);
+    min-height: 240px;
 }
 
 .staff-empty-state svg {
-    width: 32px;
-    height: 32px;
-    margin-bottom: 8px;
+    margin-bottom: 16px;
+    color: var(--color-text-tertiary);
+    opacity: 0.8;
+}
+
+.staff-empty-state p.title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin-bottom: 4px;
+}
+
+.staff-empty-state p.subtitle {
+    font-size: 0.875rem;
+    color: var(--color-text-secondary);
+    text-align: center;
 }
 
 @media (min-width: 1024px) {
     .staff-dashboard-container {
-        padding-bottom: var(--space-8);
+        padding-bottom: 32px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        /* 2 col fallback for big screens */
+        align-items: start;
+    }
+
+    .dashboard-header {
+        grid-column: 1 / -1;
+    }
+
+    .dashboard-grid-metrics {
+        grid-column: 1 / -1;
+        grid-template-columns: repeat(4, 1fr);
     }
 }

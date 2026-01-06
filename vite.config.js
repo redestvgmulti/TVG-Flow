@@ -17,7 +17,7 @@ export default defineConfig({
         importScripts: ['/push-sw.js'], // Import push notification logic
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         cleanupOutdatedCaches: true,
-        clientsClaim: true,
+        clientsClaim: false, // Prevent auto-takeover to avoid auth race conditions
         skipWaiting: false, // Prevent silent takeover - user must confirm update
         // navigateFallback: 'index.html', // Ensure SPA routing works offline if needed
         runtimeCaching: [
@@ -52,7 +52,7 @@ export default defineConfig({
         ]
       },
       devOptions: {
-        enabled: true, // Enable for testing if needed, though usually false for prod
+        enabled: false, // DISABLED: Service Worker breaks auth in dev mode
         type: 'module'
       }
     })
@@ -60,9 +60,9 @@ export default defineConfig({
   build: {
     // Remove all console statements in production for security
     minify: 'esbuild',
-    target: 'esnext'
-  },
-  esbuild: {
-    drop: ['console', 'debugger']
+    target: 'esnext',
+    esbuild: {
+      drop: ['console', 'debugger']
+    }
   }
 })

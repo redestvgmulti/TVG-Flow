@@ -34,7 +34,21 @@ export function ReloadPrompt() {
                         {needRefresh && (
                             <button
                                 className="btn btn-primary btn-sm"
-                                onClick={() => updateServiceWorker(true)}
+                                onClick={async () => {
+                                    // Preserve authentication state before update
+                                    const authState = localStorage.getItem('tvg-flow-auth')
+                                    
+                                    // Activate new Service Worker WITHOUT forcing reload
+                                    await updateServiceWorker(false)
+                                    
+                                    // Restore auth state if it was cleared
+                                    if (authState && !localStorage.getItem('tvg-flow-auth')) {
+                                        localStorage.setItem('tvg-flow-auth', authState)
+                                    }
+                                    
+                                    // Perform controlled reload
+                                    window.location.reload()
+                                }}
                             >
                                 Atualizar agora
                             </button>

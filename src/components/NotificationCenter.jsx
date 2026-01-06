@@ -34,7 +34,8 @@ function NotificationCenter() {
     const [isIOSPWAMode] = useState(isIOSPWA())
 
     useEffect(() => {
-
+        // GUARD: Never run notification logic on login screen
+        if (window.location.pathname === '/login') return
 
         if (professionalId) {
             fetchNotifications()
@@ -91,8 +92,11 @@ function NotificationCenter() {
         if (!session) {
             toast.error('Sessão expirada. Por favor, faça login novamente.')
             setShowOptInPrompt(false)
-            // Optional: Force reload to clear state
-            setTimeout(() => window.location.reload(), 1500)
+            // Redirect to login instead of reloading to prevent loops
+            setTimeout(() => {
+                localStorage.removeItem('tvg-flow-auth')
+                window.location.href = '/login'
+            }, 1500)
             return
         }
 

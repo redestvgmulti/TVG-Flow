@@ -16,6 +16,7 @@ import {
     AlertCircle
 } from 'lucide-react'
 import { BarChart, Bar, ResponsiveContainer, XAxis, Tooltip, CartesianGrid } from 'recharts'
+import { PageTransition } from '../../components/PageTransition'
 import '../../styles/staff-dashboard.css'
 import '../../styles/staff-tasks.css'
 
@@ -69,8 +70,7 @@ function StaffDashboard() {
 
             if (microError) throw microError
 
-            // Fetch Macro tasks for legacy check (to avoid duplicates if any mixed usage)
-            // But mainly we need Legacy Tasks (assigned directly to user in 'tarefas')
+            // Fetch Macro tasks
             const { data: legacyTasks, error: legacyError } = await supabase
                 .from('tarefas')
                 .select('id, titulo, deadline, status, prioridade, created_at, concluida_at, drive_link')
@@ -193,161 +193,180 @@ function StaffDashboard() {
     const firstName = professionalName?.split(' ')[0] || 'Colaborador'
 
     return (
-        <div className="dashboard-container staff-dashboard-container">
-            {/* Header */}
-            <div className="dashboard-header">
-                <h2>Olá, {firstName}.</h2>
-                <p className="text-secondary">Aqui está o panorama das suas atividades.</p>
-            </div>
-
-            {/* Metrics Grid */}
-            <div className="dashboard-grid-metrics">
-                <div className="card metric-card">
-                    <h3 className="metric-label">Em Aberto</h3>
-                    <p className="metric-value metric-value-primary">{stats.pending}</p>
-                    <div className="flex items-center gap-2 mt-2 text-xs text-secondary">
-                        <Clock size={14} />
-                        <span>Aguardando ação</span>
-                    </div>
+        <PageTransition>
+            <div className="dashboard-container staff-dashboard-container">
+                {/* Header */}
+                <div className="dashboard-header">
+                    <h2>Olá, {firstName}.</h2>
+                    <p className="text-secondary">Aqui está o panorama das suas atividades.</p>
                 </div>
 
-                <div className="card metric-card">
-                    <h3 className="metric-label">Atrasadas</h3>
-                    <p className="metric-value text-danger">{stats.overdue}</p>
-                    <div className="flex items-center gap-2 mt-2 text-xs text-danger">
-                        <AlertTriangle size={14} />
-                        <span>Atenção necessária</span>
-                    </div>
-                </div>
-
-                <div className="card metric-card">
-                    <h3 className="metric-label">Concluídas</h3>
-                    <p className="metric-value metric-value-success">{stats.completed}</p>
-                    <div className="flex items-center gap-2 mt-2 text-xs text-secondary">
-                        <CheckCircle2 size={14} className="text-success" />
-                        <span>Total histórico</span>
-                    </div>
-                </div>
-
-                <div className="card metric-card">
-                    <h3 className="metric-label">Produtividade (7d)</h3>
-                    <p className="metric-value">{stats.productivity}</p>
-                    <div className="flex items-center gap-2 mt-2 text-xs text-secondary">
-                        <TrendingUp size={14} />
-                        <span>Tarefas finalizadas</span>
-                    </div>
-                </div>
-            </div>
-
-            <div className="dashboard-grid-charts">
-                {/* Chart - Productivity */}
-                <div className="card dashboard-card">
-                    <div className="card-header">
-                        <h3 className="card-title flex items-center gap-2">
-                            <Activity size={18} />
-                            Desempenho Semanal
-                        </h3>
-                    </div>
-                    <div style={{ width: '100%', flex: 1, minHeight: 0 }}>
-                        <ResponsiveContainer>
-                            <BarChart data={productivityData}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
-                                <XAxis
-                                    dataKey="name"
-                                    tick={{ fontSize: 11, fill: '#64748b' }}
-                                    axisLine={false}
-                                    tickLine={false}
-                                />
-                                <Tooltip
-                                    cursor={{ fill: 'var(--color-bg-subtle)' }}
-                                    contentStyle={{
-                                        borderRadius: '8px',
-                                        border: 'none',
-                                        boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-                                    }}
-                                />
-                                <Bar dataKey="value" fill="var(--color-primary)" radius={[4, 4, 0, 0]} barSize={32} />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
-
-                {/* Recent Tasks List */}
-                <div className="card dashboard-card">
-                    <div className="card-header">
-                        <h3 className="card-title flex items-center gap-2">
-                            <ListTodo size={18} />
-                            Próximas Tarefas
-                        </h3>
-                        <button
-                            onClick={() => navigate('/staff/tasks')}
-                            className="btn btn-ghost btn-sm"
-                        >
-                            Ver todas
-                        </button>
-                    </div>
-
-                    {recentTasks.length === 0 ? (
-                        <div className="staff-empty-state">
-                            <CheckCircle2 size={48} className="text-success opacity-20 mb-4" />
-                            <p className="font-medium text-secondary">Tudo em dia!</p>
-                            <p className="text-sm text-tertiary">Você não tem tarefas pendentes.</p>
+                {/* Metrics Grid */}
+                <div className="dashboard-grid-metrics">
+                    <div className="card metric-card">
+                        <h3 className="metric-label">Em Aberto</h3>
+                        <p className="metric-value metric-value-primary">{stats.pending}</p>
+                        <div className="metric-footer">
+                            <Clock size={14} />
+                            <span>Aguardando ação</span>
                         </div>
-                    ) : (
-                        <div className="staff-tasks-list">
-                            {recentTasks.map(task => {
-                                const isOverdue = new Date(task.deadline) < new Date() && task.status !== 'concluida'
-                                const statusClass = task.status === 'concluida' ? 'status-completed' : task.status === 'em_progresso' ? 'status-in-progress' : 'status-pending'
-                                const statusText = task.status === 'concluida' ? 'Concluída' : task.status === 'em_progresso' ? 'Em Andamento' : 'Pendente'
+                    </div>
 
-                                return (
-                                    <div
-                                        key={task.id}
-                                        className={`staff-task-card ${isOverdue ? 'overdue' : ''}`}
-                                        onClick={() => navigate('/staff/tasks')}
-                                    >
-                                        <div className="staff-task-content">
-                                            <div className="staff-task-header">
-                                                <span className={`staff-task-status-dot ${statusClass}`}></span>
-                                                <span className="staff-task-status-text">{statusText}</span>
-                                                {isOverdue && (
-                                                    <span className="staff-task-badge-overdue">
-                                                        <AlertCircle size={10} />
-                                                        Atrasada
-                                                    </span>
-                                                )}
+                    <div className="card metric-card">
+                        <h3 className="metric-label">Atrasadas</h3>
+                        <p className="metric-value metric-value-danger">{stats.overdue}</p>
+                        <div className="metric-footer text-danger">
+                            <AlertTriangle size={14} />
+                            <span>Atenção necessária</span>
+                        </div>
+                    </div>
+
+                    <div className="card metric-card">
+                        <h3 className="metric-label">Concluídas</h3>
+                        <p className="metric-value metric-value-success">{stats.completed}</p>
+                        <div className="metric-footer">
+                            <CheckCircle2 size={14} className="text-success" />
+                            <span>Total histórico</span>
+                        </div>
+                    </div>
+
+                    <div className="card metric-card">
+                        <h3 className="metric-label">Produtividade</h3>
+                        <p className="metric-value">{stats.productivity}</p>
+                        <div className="metric-footer">
+                            <TrendingUp size={14} />
+                            <span>Últimos 7 dias</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="dashboard-grid-charts">
+                    {/* Chart - Productivity */}
+                    <div className="card content-card">
+                        <div className="card-header">
+                            <h3 className="card-title flex items-center gap-2">
+                                <Activity size={20} className="text-primary" />
+                                Desempenho Semanal
+                            </h3>
+                        </div>
+
+                        <div className="chart-wrapper">
+                            {productivityData.some(d => d.value > 0) ? (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={productivityData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
+                                        <XAxis
+                                            dataKey="name"
+                                            tick={{ fontSize: 11, fill: 'var(--color-text-tertiary)' }}
+                                            axisLine={false}
+                                            tickLine={false}
+                                            dy={10}
+                                        />
+                                        <Tooltip
+                                            cursor={{ fill: 'var(--color-bg-subtle)' }}
+                                            contentStyle={{
+                                                borderRadius: '12px',
+                                                border: 'none',
+                                                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                                                background: 'var(--color-bg-primary)',
+                                                color: 'var(--color-text-primary)'
+                                            }}
+                                        />
+                                        <Bar
+                                            dataKey="value"
+                                            fill="var(--color-primary)"
+                                            radius={[6, 6, 0, 0]}
+                                            barSize={32}
+                                            animationDuration={1000}
+                                        />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <div className="staff-empty-state">
+                                    <TrendingUp size={48} className="text-tertiary mb-4" />
+                                    <p className="title">Sem dados recentes</p>
+                                    <p className="subtitle">Complete tarefas para visualizar sua produtividade.</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Recent Tasks List */}
+                    <div className="card content-card">
+                        <div className="card-header">
+                            <h3 className="card-title flex items-center gap-2">
+                                <ListTodo size={18} />
+                                Próximas Tarefas
+                            </h3>
+                            <button
+                                onClick={() => navigate('/staff/tasks')}
+                                className="btn btn-ghost btn-sm"
+                            >
+                                Ver todas
+                            </button>
+                        </div>
+
+                        {recentTasks.length === 0 ? (
+                            <div className="staff-empty-state">
+                                <CheckCircle2 size={48} className="text-success opacity-20 mb-4" />
+                                <p className="title">Tudo em dia!</p>
+                                <p className="subtitle">Você não tem tarefas pendentes.</p>
+                            </div>
+                        ) : (
+                            <div className="staff-tasks-list">
+                                {recentTasks.map(task => {
+                                    const isOverdue = new Date(task.deadline) < new Date() && task.status !== 'concluida'
+                                    const statusClass = task.status === 'concluida' ? 'status-completed' : task.status === 'em_progresso' ? 'status-in-progress' : 'status-pending'
+                                    const statusText = task.status === 'concluida' ? 'Concluída' : task.status === 'em_progresso' ? 'Em Andamento' : 'Pendente'
+
+                                    return (
+                                        <div
+                                            key={task.id}
+                                            className={`staff-task-card ${isOverdue ? 'overdue' : ''}`}
+                                            onClick={() => navigate('/staff/tasks')}
+                                        >
+                                            <div className="staff-task-content">
+                                                <div className="staff-task-header">
+                                                    <span className={`staff-task-status-dot ${statusClass}`}></span>
+                                                    <span className="staff-task-status-text">{statusText}</span>
+                                                    {isOverdue && (
+                                                        <span className="staff-task-badge-overdue">
+                                                            <AlertCircle size={10} />
+                                                            Atrasada
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                <h3 className="staff-task-title">
+                                                    {task.titulo}
+                                                </h3>
+
+                                                <div className="staff-task-meta">
+                                                    {task.deadline && (
+                                                        <div className="staff-task-meta-item">
+                                                            <Calendar size={12} />
+                                                            <span>{new Date(task.deadline).toLocaleDateString('pt-BR')}</span>
+                                                        </div>
+                                                    )}
+                                                    {task.prioridade === 'urgente' && (
+                                                        <span className="staff-task-priority-urgent">Urgente</span>
+                                                    )}
+                                                </div>
                                             </div>
 
-                                            <h3 className="staff-task-title">
-                                                {task.titulo}
-                                            </h3>
-
-                                            <div className="staff-task-meta">
-                                                {task.deadline && (
-                                                    <div className="staff-task-meta-item">
-                                                        <Calendar size={12} />
-                                                        <span>{new Date(task.deadline).toLocaleDateString('pt-BR')}</span>
-                                                    </div>
-                                                )}
-                                                {task.prioridade === 'urgente' && (
-                                                    <span className="staff-task-priority-urgent">Urgente</span>
-                                                )}
+                                            <div className="staff-task-action">
+                                                <ChevronRight size={20} />
                                             </div>
                                         </div>
-
-                                        <div className="staff-task-action">
-                                            <ChevronRight size={20} />
-                                        </div>
-                                    </div>
-                                )
-                            })}
-                        </div>
-                    )}
+                                    )
+                                })}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
-        </div>
+        </PageTransition >
     )
 }
-
 
 export default StaffDashboard

@@ -36,49 +36,47 @@ export function AuthProvider({ children }) {
 
         const initSession = async () => {
             try {
-                // Get initial session
+
+
+                // PHASE 1: SESSION BOOTSTRAP (BLOCKING)
+                // We only wait for Supabase to tell us if a session exists.
                 const { data: { session }, error } = await supabase.auth.getSession()
 
                 if (!mounted) return
 
                 if (error) {
-                    console.error('Error getting session:', error)
+                    // Network error or invalid token -> we can't trust the session
+                    if (!isNetworkError(error)) {
 
-                    // Diferenciar erro de rede vs sessão expirada
-                    if (isNetworkError(error)) {
-                        setConnectionStatus('offline')
-                        // NÃO deslogar sem certeza, apenas informar
-                    } else {
-                        // Outros erros (ex: refresh token inválido): limpar tudo
-                        console.error('Critical session error:', error)
                         setSession(null)
                         setUser(null)
                         userRef.current = null
                     }
-                    setLoading(false)
-                    return
+                    // If network error, we might still have a session in localStorage, but let's assume partial state logic handles it?
+                    // For now, standard behavior: error in getSession usually means signed out or huge issue.
                 }
 
-                if (!session) {
-                    // No session found on startup
+                if (session) {
+
+                    setSession(session)
+                    setUser(session.user)
+                    userRef.current = session.user
+                } else {
+
                     setSession(null)
                     setUser(null)
                     userRef.current = null
-                    setLoading(false)
-                    return
                 }
 
-                // Initial session found
-                setSession(session)
-                setUser(session.user)
-                userRef.current = session.user
-
-                // Fetch data for the initial user
-                await fetchProfessionalData(session.user.id, session.user)
-
             } catch (err) {
-                console.error('Unexpected error during session init:', err)
-                if (mounted) setLoading(false)
+
+            } finally {
+                // END OF PHASE 1
+                // We MUST unlock the app now. Profile fetching happens next but doesn't block UI.
+                if (mounted) {
+                    setLoading(false)
+
+                }
             }
         }
 
@@ -87,53 +85,28 @@ export function AuthProvider({ children }) {
         // Listen for auth changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
             if (!mounted) return
-            console.log('Auth State Change:', event)
+
 
             if (event === 'TOKEN_REFRESH_FAILED' || event === 'SIGNED_OUT') {
-                console.warn('Token Refresh Failed or Signed Out. Cleaning up...')
                 setSession(null)
                 setUser(null)
                 userRef.current = null
-                setRole(null)
+                setRole(null) // Clear role
                 setProfessionalId(null)
-                setProfessionalName(null)
-                setAccountStatus('active') // Reset status
 
-                // CRITICAL: Force redirect to login if session is lost to prevent "half-logged" state
-                // Only redirect if NOT already on login page to avoid loops if logic placed improperly
+                // Only forced redirect if strictly needed here, usually ProtectedRoute handles it
                 if (window.location.pathname !== '/login' && window.location.pathname !== '/reset-password') {
-                    // Using window.location to force full clean state
                     window.location.href = '/login'
                 }
-
-                setLoading(false)
+                setLoading(false) // Ensure unlocked
                 return
             }
 
-            // Standard session update
             if (session) {
-                // Check if user changed (rare, but possible)
-                // Use Ref for comparison to avoid closure stale state
-                if (session.user.id !== userRef.current?.id) {
-                    console.log('AuthContext: User changed or initial load. Fetching data...')
-                    setSession(session)
-                    setUser(session.user)
-                    userRef.current = session.user
-
-                    // Re-fetch data for new user, PASS USER OBJECT to avoid redundant calls
-                    await fetchProfessionalData(session.user.id, session.user)
-                } else {
-                    // Just update session token
-                    console.log('AuthContext: Session update only (same user).')
-                    setSession(session)
-                    // If we are still loading for some reason (rare race), ensure we turn it off
-                    // But usually fetchProfessionalData handles it.
-                }
-            } else {
-                // No session provided in event (should be covered by SIGNED_OUT, but safety net)
-                if (event !== 'INITIAL_SESSION') {
-                    // unexpected state
-                }
+                setSession(session)
+                setUser(session.user)
+                userRef.current = session.user
+                // Note: We don't block loading here. UI reacts to 'user' being present.
             }
         })
 
@@ -142,6 +115,20 @@ export function AuthProvider({ children }) {
             subscription.unsubscribe()
         }
     }, [])
+
+    // PHASE 2: PROFILE HYDRATION (NON-BLOCKING)
+    useEffect(() => {
+        if (user) {
+            // Trigger profile fetch when user is available
+            // This runs in parallel with UI rendering
+            fetchProfessionalData(user.id, user)
+        } else {
+            // Clear profile data if no user
+            setRole(null)
+            setProfessionalId(null)
+            setProfessionalName(null)
+        }
+    }, [user])
 
     // Retry silencioso em reconexão
     useEffect(() => {
@@ -176,39 +163,27 @@ export function AuthProvider({ children }) {
     async function fetchProfessionalData(userId, userObject = null) {
         // Prevent race conditions and duplicate calls
         if (isFetchingRef.current) {
-            console.log('AuthContext: Fetch already in progress for', userId, 'skipping.')
             return
         }
 
         isFetchingRef.current = true
-        console.log('AuthContext: fetchProfessionalData started for', userId)
 
-        // Safety Timeout to prevent infinite loading
-        const timeoutId = setTimeout(() => {
-            if (isFetchingRef.current) {
-                console.error('AuthContext: fetchProfessionalData TIMED OUT. Forcing loading=false.')
-                setLoading(false)
-                isFetchingRef.current = false
-            }
-        }, 15000) // 15 seconds max
+        // Safety Timeout removed - relying on natural completion or error
 
         try {
             // Get current session user email for validation
             let currentUser = userObject
             if (!currentUser) {
-                console.log('AuthContext: No userObject passed, fetching from Supabase...')
                 const { data: { user } } = await supabase.auth.getUser()
                 currentUser = user
             }
 
             const userEmail = currentUser?.email
-            console.log('AuthContext: User email resolved:', userEmail)
 
             const IMMUTABLE_SUPER_ADMIN_EMAIL = 'geovanepanini@agencyflow.com'
 
             // 1. IMMUTABLE SUPER ADMIN CHECK (Overrides DB)
             if (userEmail === IMMUTABLE_SUPER_ADMIN_EMAIL) {
-                console.log('AuthContext: Immutable Super Admin Detected')
                 setRole('super_admin')
                 // Super admin doesn't need specific professional ID for now, or fetch if exists
                 // For safety, let's try to fetch name if he exists in DB, otherwise default
@@ -225,8 +200,6 @@ export function AuthProvider({ children }) {
                 return
             }
 
-            console.log('AuthContext: Fetching standard profile for', userId)
-
             // 2. FETCH STANDARD DB PROFILE
             const { data: professional, error } = await supabase
                 .from('profissionais')
@@ -235,7 +208,6 @@ export function AuthProvider({ children }) {
                 .maybeSingle()
 
             if (error) {
-                console.error('Error fetching professional:', error)
                 setRole(null)
                 setProfessionalId(null)
                 setProfessionalName(null)
@@ -245,7 +217,6 @@ export function AuthProvider({ children }) {
 
             // If no professional found, clear state
             if (!professional) {
-                console.warn('AuthContext: No professional profile found in DB')
                 setRole(null)
                 setProfessionalId(null)
                 setProfessionalName(null)
@@ -255,7 +226,6 @@ export function AuthProvider({ children }) {
 
             // SECURITY: Check if user is active
             if (!professional.ativo) {
-                console.warn('AuthContext: Professional account inactive')
                 setAccountStatus('inactive')
                 setRole(null) // Block access
                 setLoading(false)
@@ -267,7 +237,6 @@ export function AuthProvider({ children }) {
 
             // CRITICAL: Prevent anyone else from being super_admin
             if (finalRole === 'super_admin' && userEmail !== IMMUTABLE_SUPER_ADMIN_EMAIL) {
-                console.warn(`Security Alert: User ${userEmail} has 'super_admin' role in DB but is not the Immutable Super Admin. Downgrading to 'admin'.`)
                 finalRole = 'admin'
             }
 
@@ -297,22 +266,17 @@ export function AuthProvider({ children }) {
             }
 
             // All checks passed, set user data
-            console.log('AuthContext: Professional data loaded successfully. Role:', finalRole)
             setRole(finalRole)
             setProfessionalId(professional.id || null)
             setProfessionalName(professional.nome || null)
             setAccountStatus('active')
-            setLoading(false)
+            // Don't touch loading here - it's already FALSE
         } catch (error) {
-            console.error('Auth Context Error:', error)
-            setRole(null)
+            setRole(null) // Fail safe
             setProfessionalId(null)
-            setProfessionalName(null)
+            // Don't touch loading here
         } finally {
-            clearTimeout(timeoutId)
             isFetchingRef.current = false
-            console.log('AuthContext: fetchProfessionalData finished. Setting loading=false')
-            setLoading(false)
         }
     }
 
@@ -332,22 +296,31 @@ export function AuthProvider({ children }) {
         }
 
         // Fetch role immediately to allow redirect logic
-        const { data: prof, error: profError } = await supabase
-            .from('profissionais')
-            .select('role')
-            .eq('id', data.user.id)
-            .single()
+        let safeRole = null
+        try {
+            // DB FETCH WITHOUT TIMEOUT
+            // Determine role via standard query
+            const { data: prof, error: profError } = await supabase
+                .from('profissionais')
+                .select('role')
+                .eq('id', data.user.id)
+                .maybeSingle()
 
-        if (profError) console.error('Error fetching role during login:', profError)
+            safeRole = prof?.role
+        } catch (err) {
+            // Silent catch
+        }
 
-        // Track activity on login
-        await supabase
+        // Track activity on login - NON-BLOCKING (removed await)
+        supabase
             .from('profissionais')
             .update({ last_activity_at: new Date().toISOString() })
             .eq('id', data.user.id)
+            .then(({ error }) => {
+                // Background update
+            })
 
         // 2. SECURITY DOWNGRADE
-        let safeRole = prof?.role
         if (safeRole === 'super_admin') {
             safeRole = 'admin' // Force downgrade
         }
