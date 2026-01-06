@@ -5,6 +5,8 @@ import { useAuth } from '../../contexts/AuthContext'
 import { toast } from 'sonner'
 import { Save, User, Calendar, AlertTriangle, FileText, ArrowLeft } from 'lucide-react'
 
+import '../../styles/request-create.css'
+
 function StaffRequestCreate() {
     const navigate = useNavigate()
     const { user } = useAuth()
@@ -32,7 +34,7 @@ function StaffRequestCreate() {
                 .from('profissionais')
                 .select('id, nome')
                 .eq('ativo', true)
-                .neq('id', user?.id) // Optional: exclude self if requests are meant for OTHERS
+                .neq('id', user?.id)
                 .order('nome')
 
             if (error) throw error
@@ -63,9 +65,7 @@ function StaffRequestCreate() {
                     assigned_to: formData.assigned_to,
                     deadline: new Date(formData.deadline).toISOString(),
                     drive_link: formData.drive_link,
-                    status: 'pending',
-                    // Note: 'created_by' isn't in your schema yet based on earlier context, 
-                    // but if it were, we'd add it here. RLS handles auth.
+                    status: 'pending'
                 }])
 
             if (error) throw error
@@ -81,32 +81,31 @@ function StaffRequestCreate() {
     }
 
     return (
-        <div className="animation-fade-in max-w-2xl mx-auto pb-12">
-            <button
-                onClick={() => navigate(-1)}
-                className="mb-6 text-sm text-secondary hover:text-primary flex items-center gap-1 transition-colors"
-            >
-                <ArrowLeft size={16} />
-                Voltar
-            </button>
-
-            <div className="mb-8">
-                <h1 className="text-3xl font-bold text-primary mb-2">Nova Solicitação</h1>
-                <p className="text-secondary">Crie uma tarefa para outro colaborador.</p>
+        <div className="request-create-container">
+            <div className="request-header">
+                <button
+                    onClick={() => navigate(-1)}
+                    className="request-back-btn"
+                >
+                    <ArrowLeft size={18} />
+                    Voltar
+                </button>
+                <h1 className="request-title">Nova Solicitação</h1>
+                <p className="request-subtitle">Crie uma tarefa para outro colaborador.</p>
             </div>
 
-            <div className="card p-8">
-                <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+            <div className="request-card">
+                <form onSubmit={handleSubmit} className="request-form">
 
                     {/* Title */}
                     <div className="form-group">
-                        <label className="flex items-center gap-2 mb-1">
-                            <FileText size={16} className="text-brand" />
-                            Título da Solicitação <span className="text-danger">*</span>
+                        <label className="form-label">
+                            <FileText size={18} className="form-label-icon" />
+                            Título da Solicitação <span className="form-required">*</span>
                         </label>
                         <input
                             type="text"
-                            className="input"
+                            className="form-input"
                             placeholder="Ex: Atualizar relatório de vendas"
                             value={formData.titulo}
                             onChange={e => setFormData({ ...formData, titulo: e.target.value })}
@@ -116,26 +115,26 @@ function StaffRequestCreate() {
 
                     {/* Description */}
                     <div className="form-group">
-                        <label className="flex items-center gap-2 mb-1">
+                        <label className="form-label">
                             Descrição Detalhada
                         </label>
                         <textarea
-                            className="input min-h-[120px]"
+                            className="form-textarea"
                             placeholder="Descreva o que precisa ser feito..."
                             value={formData.descricao}
                             onChange={e => setFormData({ ...formData, descricao: e.target.value })}
                         />
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="form-grid">
                         {/* Assign To */}
                         <div className="form-group">
-                            <label className="flex items-center gap-2 mb-1">
-                                <User size={16} className="text-brand" />
-                                Para Quem? <span className="text-danger">*</span>
+                            <label className="form-label">
+                                <User size={18} className="form-label-icon" />
+                                Para Quem? <span className="form-required">*</span>
                             </label>
                             <select
-                                className="input"
+                                className="form-select"
                                 value={formData.assigned_to}
                                 onChange={e => setFormData({ ...formData, assigned_to: e.target.value })}
                                 required
@@ -151,12 +150,12 @@ function StaffRequestCreate() {
 
                         {/* Priority */}
                         <div className="form-group">
-                            <label className="flex items-center gap-2 mb-1">
-                                <AlertTriangle size={16} className="text-brand" />
+                            <label className="form-label">
+                                <AlertTriangle size={18} className="form-label-icon" />
                                 Prioridade
                             </label>
                             <select
-                                className="input"
+                                className="form-select"
                                 value={formData.priority}
                                 onChange={e => setFormData({ ...formData, priority: e.target.value })}
                             >
@@ -168,16 +167,16 @@ function StaffRequestCreate() {
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="form-grid">
                         {/* Deadline */}
                         <div className="form-group">
-                            <label className="flex items-center gap-2 mb-1">
-                                <Calendar size={16} className="text-brand" />
-                                Prazo Final <span className="text-danger">*</span>
+                            <label className="form-label">
+                                <Calendar size={18} className="form-label-icon" />
+                                Prazo Final <span className="form-required">*</span>
                             </label>
                             <input
                                 type="datetime-local"
-                                className="input"
+                                className="form-input"
                                 value={formData.deadline}
                                 onChange={e => setFormData({ ...formData, deadline: e.target.value })}
                                 required
@@ -186,12 +185,12 @@ function StaffRequestCreate() {
 
                         {/* Drive Link */}
                         <div className="form-group">
-                            <label className="flex items-center gap-2 mb-1">
+                            <label className="form-label">
                                 Link de Arquivos (opcional)
                             </label>
                             <input
                                 type="url"
-                                className="input"
+                                className="form-input"
                                 placeholder="https://drive.google.com/..."
                                 value={formData.drive_link}
                                 onChange={e => setFormData({ ...formData, drive_link: e.target.value })}
@@ -199,14 +198,14 @@ function StaffRequestCreate() {
                         </div>
                     </div>
 
-                    <div className="pt-4 border-t border-gray-100 mt-2">
+                    <div className="form-footer">
                         <button
                             type="submit"
                             disabled={loading}
-                            className="btn btn-primary w-full py-3 text-base justify-center"
+                            className="btn-submit"
                         >
                             {loading ? 'Criando...' : 'Enviar Solicitação'}
-                            <Save size={18} />
+                            <Save size={20} />
                         </button>
                     </div>
                 </form>

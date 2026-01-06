@@ -102,6 +102,12 @@
 }
 
 /* 3. CHART & CONTENT CARDS */
+.dashboard-grid-charts {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
 .content-card {
     background: var(--color-bg-primary);
     border: 1px solid var(--color-border);
@@ -197,5 +203,13 @@
     .dashboard-grid-metrics {
         grid-column: 1 / -1;
         grid-template-columns: repeat(4, 1fr);
+    }
+
+    .dashboard-grid-charts {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+        align-items: start;
     }
 }
