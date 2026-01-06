@@ -23,3 +23,8 @@ dist-ssr
 *.sln
 *.sw?
 scripts/
+
+# Sensitive SQL files with credentials (DO NOT COMMIT)
+supabase/CRON_JOB_CONFIG.sql
+supabase/CREATE_CRON_JOB.sql
+FIX_USER_ROLE.sql

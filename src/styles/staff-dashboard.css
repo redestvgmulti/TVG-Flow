@@ -35,7 +35,10 @@
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    overflow: hidden; /* Ensure content doesn't spill */
+    overflow-y: auto;
+    /* Allow vertical scroll if needed */
+    overflow-x: visible;
+    /* Prevent horizontal clipping */
 }
 
 /* Ensure Charts fit within the card */
@@ -46,9 +49,12 @@
 /* Ensure lists scroll internally instead of expanding the card */
 .dashboard-card .staff-tasks-list {
     overflow-y: auto;
-    flex: 1; /* Take remaining space */
-    min-height: 0; /* Crucial for flex scrolling */
-    padding-right: 4px; /* Space for scrollbar */
+    flex: 1;
+    /* Take remaining space */
+    min-height: 0;
+    /* Crucial for flex scrolling */
+    padding-right: 4px;
+    /* Space for scrollbar */
 }
 
 /* Adjust empty state to fit small card */
@@ -59,9 +65,9 @@
 }
 
 .staff-empty-state svg {
-   width: 32px;
-   height: 32px;
-   margin-bottom: 8px;
+    width: 32px;
+    height: 32px;
+    margin-bottom: 8px;
 }
 
 @media (min-width: 1024px) {

@@ -641,14 +641,21 @@
   }
 }
 
-/* Desktop: 4 columns for metrics, 2 for charts */
-@media (min-width: 1200px) {
+/* Small Desktop/Large Tablet: 3 columns for metrics */
+@media (min-width: 1024px) {
   .dashboard-grid-metrics {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
   }
 
   .dashboard-grid-charts {
     grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Large Desktop: 4 columns for metrics */
+@media (min-width: 1400px) {
+  .dashboard-grid-metrics {
+    grid-template-columns: repeat(4, 1fr);
   }
 }
 
