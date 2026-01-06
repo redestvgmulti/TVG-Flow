@@ -74,14 +74,14 @@ function Content() {
                     {companies.map(company => (
                         <div
                             key={company.id}
-                            className="card company-card content-card"
+                            className="card company-card"
                         >
                             {/* Header with Avatar */}
                             <div className="company-card-header">
                                 <div className="company-avatar">
                                     {getInitials(company.nome)}
                                 </div>
-                                <div style={{ flex: 1 }}>
+                                <div className="company-info">
                                     <h3 className="company-name">{company.nome}</h3>
                                     <span className="content-status content-status-linked">
                                         <CheckCircle size={14} />
