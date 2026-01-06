@@ -7,7 +7,6 @@ import Suspended from './pages/Suspended'
 import Dashboard from './pages/admin/Dashboard'
 import Tasks from './pages/admin/Tasks'
 import NewOS from './pages/admin/tasks/NewOS'
-// import Professionals from './pages/admin/Professionals' // Old
 import ProfessionalsList from './pages/admin/professionals/index'
 
 import ProfessionalEdit from './pages/admin/professionals/Edit'
