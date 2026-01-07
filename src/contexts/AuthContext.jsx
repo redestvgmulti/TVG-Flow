@@ -150,7 +150,7 @@ export function AuthProvider({ children }) {
                         setConnectionStatus('online')
                     }
                 } catch (err) {
-                    console.error('Error during reconnection:', err)
+                    // Silent failure - reconnection will retry automatically
                     setConnectionStatus('online')
                 }
             }
