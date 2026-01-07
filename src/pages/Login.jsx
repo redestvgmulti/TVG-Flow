@@ -23,9 +23,7 @@ function Login() {
         // alert('DEBUG: 1. Botão clicado! Iniciando login...')
 
         try {
-            console.log('Calling signIn...')
             const { role } = await signIn(email, password)
-            console.log('SignIn success, role:', role)
 
             if (role === 'super_admin') {
                 navigate('/platform')
@@ -33,9 +31,6 @@ function Login() {
                 navigate('/staff/dashboard')
             }
         } catch (error) {
-            console.error('Login error:', error)
-            // Show alert for critical visibility
-            // alert('Erro no Login: ' + (error.message || 'Desconhecido'))
             setError(error.message)
             setLoading(false)
         }
