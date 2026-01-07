@@ -1,348 +1,534 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
-import {
-    Activity,
-    CheckCircle,
-    Clock,
-    AlertTriangle,
-    Building2,
-    LayoutDashboard,
-    ArrowUpRight
-} from 'lucide-react'
-import { useAuth } from '../../contexts/AuthContext'
-import { toast } from 'sonner'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { Clock, User, AlertCircle, CheckCircle, ExternalLink, Calendar, Activity, ListTodo } from 'lucide-react'
+import TaskForm from '../../components/forms/TaskForm'
+import OperationalFeed from '../../components/dashboard/OperationalFeed'
 
-export default function Dashboard() {
+function Painel() {
     const navigate = useNavigate()
-    const { user } = useAuth()
+    const [stats, setStats] = useState({
+        totalTasks: 0,
+        activeTasks: 0,
+        completedTasks: 0,
+        totalProfissionais: 0
+    })
+    const [recentTasks, setRecentTasks] = useState([])
+    const [tasksOverTime, setTasksOverTime] = useState([])
+    const [tasksByStatus, setTasksByStatus] = useState([])
+    const [tasksByPriority, setTasksByPriority] = useState([])
+    const [professionals, setProfissionais] = useState([])
+    const [loading, setLoading] = useState(true)
+    const [reassigningTask, setReatribuiringTask] = useState(null)
+    const [reassignTo, setReatribuirTo] = useState('')
+    const [reassigning, setReatribuiring] = useState(false)
+    const [feedback, setFeedback] = useState({ show: false, type: '', message: '' })
+    const [selectedTask, setSelectedTask] = useState(null)
 
-    // Multi-tenant State
-    const [companies, setCompanies] = useState([])
-    const [selectedCompanyId, setSelectedCompanyId] = useState(null)
-    const [loadingCompanies, setLoadingCompanies] = useState(true)
-
-    // Dashboard Data State
-    const [data, setData] = useState(null)
-    const [loadingData, setLoadingData] = useState(false)
-    const [error, setError] = useState(null)
-
-    // 1. Initialize: Fetch User's Companies
     useEffect(() => {
-        if (!user) return
+        fetchPainelData()
+        fetchProfissionais()
+    }, [])
 
-        async function fetchUserCompanies() {
-            try {
-                setLoadingCompanies(true)
+    useEffect(() => {
+        if (feedback.show) {
+            const timer = setTimeout(() => {
+                setFeedback({ show: false, type: '', message: '' })
+            }, 5000)
+            return () => clearTimeout(timer)
+        }
+    }, [feedback.show])
 
-                // Get companies linked to this professional
-                const { data: links, error: linksError } = await supabase
-                    .from('empresa_profissionais')
-                    .select(`
-                        empresa_id,
-                        empresas ( id, nome, slug, logo_url )
-                    `)
-                    .eq('profissional_id', user.id)
-                    .eq('ativo', true)
+    async function fetchProfissionais() {
+        try {
+            const { data, error } = await supabase
+                .from('profissionais')
+                .select('id, nome')
+                .eq('role', 'profissional')
+                .eq('ativo', true)
+                .order('nome')
 
-                if (linksError) throw linksError
+            if (error) throw error
+            setProfissionais(data || [])
+        } catch (error) {
+            console.error('Error fetching professionals:', error)
+        }
+    }
 
-                const validCompanies = links
-                    ?.map(l => l.empresas)
-                    .filter(Boolean) || []
+    async function fetchPainelData() {
+        try {
+            setLoading(true)
 
-                if (validCompanies.length === 0) {
-                    setError('Você não está vinculado a nenhuma empresa.')
-                    return
+            const { data: allTasks, error: allTasksError } = await supabase
+                .from('tarefas_com_status_real')
+                .select('id, status, titulo, deadline, priority, created_at, assigned_to, drive_link, is_overdue')
+                .order('created_at', { ascending: false })
+
+            if (allTasksError) throw allTasksError
+
+            const { count: profCount, error: profError } = await supabase
+                .from('profissionais')
+                .select('*', { count: 'exact', head: true })
+
+            if (profError) throw profError
+
+            const total = allTasks?.length || 0
+            const active = allTasks?.filter(t => t.status === 'in_progress' || t.status === 'pending').length || 0
+            const completed = allTasks?.filter(t => t.status === 'completed').length || 0
+
+            setStats({
+                totalTasks: total,
+                activeTasks: active,
+                completedTasks: completed,
+                totalProfissionais: profCount || 0
+            })
+
+            setRecentTasks(allTasks?.slice(0, 5) || [])
+
+            const last30Days = getLast30Days()
+            const tasksTimeData = last30Days.map(date => {
+                const count = allTasks?.filter(t => {
+                    const taskDate = new Date(t.created_at).toDateString()
+                    return taskDate === date.toDateString()
+                }).length || 0
+                return {
+                    date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+                    tasks: count
                 }
+            })
+            setTasksOverTime(tasksTimeData)
 
-                setCompanies(validCompanies)
+            const statusData = [
+                { name: 'Pending', value: allTasks?.filter(t => t.status === 'pending').length || 0, color: '#6e6e73' },
+                { name: 'In Progress', value: allTasks?.filter(t => t.status === 'in_progress').length || 0, color: '#007aff' },
+                { name: 'Concluídas', value: allTasks?.filter(t => t.status === 'completed').length || 0, color: '#34c759' },
+                { name: 'Overdue', value: allTasks?.filter(t => t.status === 'overdue').length || 0, color: '#ff3b30' }
+            ]
+            setTasksByStatus(statusData.filter(s => s.value > 0))
 
-                // 2. Select Active Company (Priority: LocalStorage > URL > First)
-                const storedId = localStorage.getItem('@FlowOS:dashboard_empresa_id')
-                const urlParams = new URLSearchParams(window.location.search)
-                const urlId = urlParams.get('empresa_id')
+            const priorityData = [
+                { name: 'Low', value: allTasks?.filter(t => t.priority === 'low').length || 0 },
+                { name: 'Medium', value: allTasks?.filter(t => t.priority === 'medium').length || 0 },
+                { name: 'High', value: allTasks?.filter(t => t.priority === 'high').length || 0 },
+                { name: 'Urgent', value: allTasks?.filter(t => t.priority === 'urgent').length || 0 }
+            ]
+            setTasksByPriority(priorityData.filter(p => p.value > 0))
 
-                let targetId = validCompanies[0].id
+        } catch (error) {
+            console.error('Error fetching dashboard data:', error)
+            showFeedback('error', 'Failed to load dashboard data. Please refresh the page.')
+        } finally {
+            setLoading(false)
+        }
+    }
 
-                if (urlId && validCompanies.find(c => c.id === urlId)) {
-                    targetId = urlId
-                } else if (storedId && validCompanies.find(c => c.id === storedId)) {
-                    targetId = storedId
-                }
+    function showFeedback(type, message) {
+        setFeedback({ show: true, type, message })
+    }
 
-                setSelectedCompanyId(targetId)
+    function handleOpenReatribuirModal(task) {
+        setReatribuiringTask(task)
+        setReatribuirTo(task.assigned_to || '')
+        // setShowReatribuirModal(true) // This state is removed, so this line should be commented out or removed if it's not used elsewhere.
+    }
 
-            } catch (err) {
-                console.error('Error loading companies:', err)
-                setError('Erro ao carregar empresas.')
-            } finally {
-                setLoadingCompanies(false)
-            }
+    async function handleReatribuirTask(e) {
+        e.preventDefault()
+
+        if (!confirm(`Reatribuir "${reassigningTask.titulo}" to ${professionals.find(p => p.id === reassignTo)?.nome || 'Não atribuída'}?`)) {
+            return
         }
 
-        fetchUserCompanies()
-    }, [user])
+        setReatribuiring(true)
 
-    // 3. Fetch Dashboard Data when Company Changes
-    useEffect(() => {
-        if (!selectedCompanyId) return
+        try {
+            const { error } = await supabase
+                .from('tarefas')
+                .update({ assigned_to: reassignTo || null })
+                .eq('id', reassigningTask.id)
 
-        // Persist selection
-        localStorage.setItem('@FlowOS:dashboard_empresa_id', selectedCompanyId)
+            if (error) throw error
 
-        async function loadDashboard() {
-            try {
-                setLoadingData(true)
-                setError(null)
+            // setShowReatribuirModal(false) // This state is removed
+            setReatribuiringTask(null)
+            showFeedback('success', 'Task reassigned successfully!')
+            await fetchPainelData()
+        } catch (error) {
+            console.error('Error reassigning task:', error)
+            showFeedback('error', 'Failed to reassign task')
+        } finally {
+            setReatribuiring(false)
+        }
+    }
 
-                // Calls the secure RPC
-                const { data: rpcData, error: rpcError } = await supabase
-                    .rpc('get_dashboard_data', {
-                        p_empresa_id: selectedCompanyId
-                    })
-
-                if (rpcError) throw rpcError
-
-                setData(rpcData)
-            } catch (err) {
-                console.error('Error fetching dashboard:', err)
-                setError('Erro ao carregar dados do dashboard.')
-                toast.error('Falha ao atualizar dados')
-            } finally {
-                setLoadingData(false)
-            }
+    async function handleUpdateStatus(taskId, newStatus, taskTitle) {
+        if (!confirm(`Change status of "${taskTitle}" to ${newStatus}?`)) {
+            return
         }
 
-        loadDashboard()
-    }, [selectedCompanyId])
+        try {
+            const { error } = await supabase
+                .from('tarefas')
+                .update({
+                    status: newStatus,
+                    completed_at: newStatus === 'completed' ? new Date().toISOString() : null
+                })
+                .eq('id', taskId)
 
-    const handleCompanyChange = (e) => {
-        setSelectedCompanyId(e.target.value)
+            if (error) throw error
+
+            showFeedback('success', `Task status updated to ${newStatus}`)
+            await fetchPainelData()
+        } catch (error) {
+            console.error('Error updating task:', error)
+            showFeedback('error', 'Failed to update task status')
+        }
     }
 
-    if (loadingCompanies) {
+    async function handleCompleteTask(taskId, taskTitle) {
+        if (!confirm(`Mark "${taskTitle}" as completed?`)) {
+            return
+        }
+
+        try {
+            const { error } = await supabase
+                .from('tarefas')
+                .update({
+                    status: 'completed',
+                    completed_at: new Date().toISOString()
+                })
+                .eq('id', taskId)
+
+            if (error) throw error
+
+            showFeedback('success', 'Task completed!')
+            await fetchPainelData()
+        } catch (error) {
+            console.error('Error completing task:', error)
+            showFeedback('error', 'Failed to complete task')
+        }
+    }
+
+    function getLast30Days() {
+        const days = []
+        for (let i = 29; i >= 0; i--) {
+            const date = new Date()
+            date.setDate(date.getDate() - i)
+            days.push(date)
+        }
+        return days
+    }
+
+    function getStatusBadgeClass(status) {
+        switch (status) {
+            case 'completed':
+                return 'badge-success'
+            case 'in_progress':
+                return 'badge-primary'
+            case 'overdue':
+                return 'badge-danger'
+            default:
+                return ''
+        }
+    }
+
+    function getPriorityBadgeClass(priority) {
+        switch (priority) {
+            case 'urgent':
+                return 'badge-danger'
+            case 'high':
+                return 'badge-warning'
+            default:
+                return ''
+        }
+    }
+
+    function getAssignedToName(assignedToId) {
+        const prof = professionals.find(p => p.id === assignedToId)
+        return prof ? prof.nome : 'Não atribuída'
+    }
+
+    if (loading) {
         return (
-            <div className="flex items-center justify-center h-screen bg-gray-50">
-                <div className="flex flex-col items-center gap-3">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-                    <p className="text-gray-500 font-medium">Carregando perfil...</p>
-                </div>
-            </div>
-        )
-    }
-
-    if (error && !data) {
-        return (
-            <div className="p-8 max-w-2xl mx-auto mt-10">
-                <div className="bg-red-50 border border-red-200 rounded-lg p-6 flex flex-col items-center text-center">
-                    <AlertTriangle className="h-10 w-10 text-red-500 mb-2" />
-                    <h3 className="text-lg font-semibold text-red-800">Acesso Indisponível</h3>
-                    <p className="text-red-600 mt-1">{error}</p>
-                    <button
-                        onClick={() => window.location.reload()}
-                        className="mt-4 px-4 py-2 bg-red-100 text-red-700 rounded-md hover:bg-red-200 transition-colors"
-                    >
-                        Tentar Novamente
-                    </button>
-                </div>
-            </div>
-        )
-    }
-
-    return (
-        <div className="min-h-screen bg-gray-50/50 p-6 space-y-6 animate-in fade-in duration-500">
-            {/* Header with Company Selector */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 pb-6">
-                <div>
-                    <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                        <LayoutDashboard className="h-6 w-6 text-indigo-600" />
-                        Visão Executiva
-                    </h1>
-                    <p className="text-slate-500 mt-1">
-                        Acompanhamento estratégico e operacional.
+            <div>
+                <h2>Painel</h2>
+                <div className="card loading-card">
+                    <p className="loading-text-primary">
+                        Carregando seu painel...
+                    </p>
+                    <p className="loading-text-secondary">
+                        Buscando tarefas, KPIs e gráficos
                     </p>
                 </div>
-
-                <div className="flex items-center gap-3 bg-white p-2 rounded-lg border border-gray-200 shadow-sm">
-                    <div className="p-2 bg-indigo-50 rounded-md">
-                        <Building2 className="h-5 w-5 text-indigo-600" />
-                    </div>
-                    <div className="flex flex-col">
-                        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                            Empresa
-                        </span>
-                        {companies.length > 1 ? (
-                            <select
-                                value={selectedCompanyId || ''}
-                                onChange={handleCompanyChange}
-                                className="text-sm font-semibold text-slate-700 bg-transparent border-none p-0 pr-6 focus:ring-0 cursor-pointer outline-none"
-                            >
-                                {companies.map(c => (
-                                    <option key={c.id} value={c.id}>{c.nome}</option>
-                                ))}
-                            </select>
-                        ) : (
-                            <span className="text-sm font-semibold text-slate-700">
-                                {companies[0]?.nome}
-                            </span>
-                        )}
-                    </div>
-                </div>
             </div>
-
-            {loadingData ? (
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                    {[1, 2, 3, 4].map(i => (
-                        <div key={i} className="h-32 bg-gray-100 rounded-xl animate-pulse"></div>
-                    ))}
-                </div>
-            ) : data ? (
-                <>
-                    {/* KPIs Row */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                        <KpiCard
-                            title="Total de Tarefas"
-                            value={data.summary.total}
-                            icon={<LayoutDashboard />}
-                            color="indigo"
-                        />
-                        <KpiCard
-                            title="Em Execução"
-                            value={data.summary.active}
-                            icon={<Activity />}
-                            color="blue"
-                        />
-                        <KpiCard
-                            title="Concluídas"
-                            value={data.summary.completed}
-                            icon={<CheckCircle />}
-                            color="emerald"
-                        />
-                        <KpiCard
-                            title="Atrasadas"
-                            value={data.summary.overdue}
-                            icon={<AlertTriangle />}
-                            color="red"
-                            isAlert={data.summary.overdue > 0}
-                        />
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        {/* Main Chart / Recent Tasks Area */}
-                        <div className="lg:col-span-2 space-y-6">
-                            {/* Graphic Placeholder using Recharts if needed, or simple list for now */}
-                            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-                                <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
-                                    <Clock className="h-5 w-5 text-slate-400" />
-                                    Tarefas Recentes
-                                </h3>
-                                <div className="space-y-3">
-                                    {data.recent_tasks.length === 0 ? (
-                                        <p className="text-slate-500 py-4 text-center">Nenhuma tarefa recente.</p>
-                                    ) : (
-                                        data.recent_tasks.map(task => (
-                                            <div key={task.id} className="group flex items-center justify-between p-3 hover:bg-slate-50 rounded-lg border border-transparent hover:border-slate-100 transition-all cursor-pointer" onClick={() => navigate(`/admin/tarefas/${task.id}`)}>
-                                                <div className="flex items-center gap-3">
-                                                    <div className={`w-2 h-2 rounded-full ${getPriorityColor(task.priority)}`} title={`Prioridade: ${task.priority}`} />
-                                                    <div>
-                                                        <h4 className="text-sm font-medium text-slate-800 group-hover:text-indigo-600 transition-colors">
-                                                            {task.titulo}
-                                                        </h4>
-                                                        <span className="text-xs text-slate-400">
-                                                            {new Date(task.created_at).toLocaleDateString()}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-3">
-                                                    <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusBadge(task.status)}`}>
-                                                        {task.status}
-                                                    </span>
-                                                    <ArrowUpRight className="h-4 w-4 text-slate-300 group-hover:text-indigo-600" />
-                                                </div>
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Productivity / Stats Column */}
-                        <div className="space-y-6">
-                            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 h-full">
-                                <h3 className="text-lg font-semibold text-slate-800 mb-4">Produtividade</h3>
-                                <div className="space-y-4">
-                                    {data.productivity.map(p => (
-                                        <div key={p.id} className="flex items-center justify-between">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-600">
-                                                    {p.nome.charAt(0)}
-                                                </div>
-                                                <span className="text-sm font-medium text-slate-700">{p.nome}</span>
-                                            </div>
-                                            <div className="flex gap-2 text-xs font-mono">
-                                                <span className="bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded" title="Em andamento">{p.active_count}</span>
-                                                <span className="bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded" title="Concluídas">{p.completed_count}</span>
-                                            </div>
-                                        </div>
-                                    ))}
-                                    {data.productivity.length === 0 && (
-                                        <p className="text-slate-400 text-sm">Nenhum dado disponível.</p>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </>
-            ) : null}
-        </div>
-    )
-}
-
-// Sub-components & Helpers
-
-function KpiCard({ title, value, icon, color, isAlert }) {
-    const colors = {
-        indigo: 'bg-indigo-50 text-indigo-600',
-        blue: 'bg-blue-50 text-blue-600',
-        emerald: 'bg-emerald-50 text-emerald-600',
-        red: 'bg-red-50 text-red-600'
+        )
     }
 
     return (
-        <div className={`bg-white rounded-xl p-6 border transition-all ${isAlert ? 'border-red-200 shadow-red-100/50 shadow-lg' : 'border-gray-100 shadow-sm'}`}>
-            <div className="flex items-center justify-between mb-4">
-                <span className="text-sm font-medium text-slate-500">{title}</span>
-                <div className={`p-2 rounded-lg ${colors[color] || colors.indigo}`}>
-                    {React.cloneElement(icon, { size: 20 })}
+        <div className="dashboard-container animation-fade-in">
+            <div className="dashboard-header">
+                <h2>Painel</h2>
+            </div>
+
+            {feedback.show && (
+                <div className={`card mb-6 p-4 border-${feedback.type === 'success' ? 'success' : 'danger'} bg-${feedback.type === 'success' ? 'success' : 'danger'}-subtle`}>
+                    <p className={`text-${feedback.type === 'success' ? 'success' : 'danger'} font-medium m-0`}>
+                        {feedback.message}
+                    </p>
+                </div>
+            )}
+
+            {/* KPI Cards */}
+            <div className="dashboard-grid-metrics">
+                <div className="card metric-card">
+                    <h3 className="metric-label">Total de Tarefas</h3>
+                    <p className="metric-value">{stats.totalTasks}</p>
+                </div>
+
+                <div className="card metric-card">
+                    <h3 className="metric-label">Tarefas Ativas</h3>
+                    <p className="metric-value metric-value-primary">{stats.activeTasks}</p>
+                </div>
+
+                <div className="card metric-card">
+                    <h3 className="metric-label">Concluídas</h3>
+                    <p className="metric-value metric-value-success">{stats.completedTasks}</p>
+                </div>
+
+                <div className="card metric-card">
+                    <h3 className="metric-label">Profissionais</h3>
+                    <p className="metric-value">{stats.totalProfissionais}</p>
                 </div>
             </div>
-            <div className="flex items-baseline gap-2">
-                <h3 className={`text-3xl font-bold ${isAlert ? 'text-red-600' : 'text-slate-800'}`}>
-                    {value}
-                </h3>
+
+            {/* Charts Row */}
+            <div className="dashboard-grid-charts">
+                <div className="card">
+                    <div className="card-header">
+                        <h3 className="card-title">Tarefas (30 dias)</h3>
+                    </div>
+                    {tasksOverTime.length > 0 ? (
+                        <ResponsiveContainer width="100%" height={250}>
+                            <LineChart data={tasksOverTime}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+                                <XAxis
+                                    dataKey="date"
+                                    tick={{ fontSize: 11, fill: '#6B7280' }}
+                                    axisLine={false}
+                                    tickLine={false}
+                                    dy={10}
+                                />
+                                <YAxis
+                                    tick={{ fontSize: 11, fill: '#6B7280' }}
+                                    axisLine={false}
+                                    tickLine={false}
+                                />
+                                <Tooltip
+                                    contentStyle={{
+                                        borderRadius: '8px',
+                                        border: 'none',
+                                        boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                                    }}
+                                />
+                                <Line
+                                    type="monotone"
+                                    dataKey="tasks"
+                                    stroke="var(--color-primary)"
+                                    strokeWidth={3}
+                                    dot={{ fill: 'var(--color-primary)', strokeWidth: 2, r: 4, stroke: '#fff' }}
+                                    activeDot={{ r: 6 }}
+                                />
+                            </LineChart>
+                        </ResponsiveContainer>
+                    ) : (
+                        <div className="empty-state">
+                            <span className="empty-icon">📉</span>
+                            <p className="empty-text">Sem dados suficientes para exibir o gráfico.</p>
+                        </div>
+                    )}
+                </div>
+
+                <div className="card">
+                    <div className="card-header">
+                        <h3 className="card-title flex items-center gap-2">
+                            <Activity size={18} className="text-primary" />
+                            Feed Operacional
+                        </h3>
+                    </div>
+                    <OperationalFeed />
+                </div>
             </div>
+
+            {/* Recent Tasks */}
+            <div className="card">
+                <div className="card-header">
+                    <h3 className="card-title flex items-center gap-2">
+                        <ListTodo size={18} />
+                        Tarefas Recentes
+                    </h3>
+                    <button
+                        onClick={() => navigate('/admin/tarefas/nova')}
+                        className="btn btn-primary shadow-lg shadow-indigo-500/20"
+                    >
+                        + Nova Tarefa
+                    </button>
+                </div>
+
+                {recentTasks.length === 0 ? (
+                    <div className="empty-state">
+                        <span className="empty-icon">📝</span>
+                        <p className="empty-text">Você ainda não tem tarefas criadas. Comece agora!</p>
+                        <button onClick={() => navigate('/admin/tarefas/nova')} className="btn btn-primary">
+                            Criar Primeira Tarefa
+                        </button>
+                    </div>
+                ) : (
+                    <div className="task-list">
+                        {recentTasks.map(task => {
+                            const isOverdue = task.is_overdue === true && task.status !== 'concluida'
+
+                            return (
+                                <div
+                                    key={task.id}
+                                    className={`task-item card task-card-horizontal ${isOverdue ? 'task-card-overdue task-card-overdue-pulse' : ''}`}
+                                >
+                                    {/* ESQUERDA — INFORMAÇÕES */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: 0 }}>
+                                        <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            {task.titulo}
+                                        </h3>
+
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#64748b' }}>
+                                            <svg style={{ width: '14px', height: '14px', color: '#94a3b8', flexShrink: 0 }} viewBox="0 0 24 24" fill="none">
+                                                <path
+                                                    d="M12 12c2.761 0 5-2.239 5-5S14.761 2 12 2 7 4.239 7 7s2.239 5 5 5Zm0 2c-3.33 0-10 1.67-10 5v3h20v-3c0-3.33-6.67-5-10-5Z"
+                                                    fill="currentColor"
+                                                />
+                                            </svg>
+                                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                {getAssignedToName(task.assigned_to)}
+                                            </span>
+                                        </div>
+
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 500 }}>
+                                            <span style={{ color: isOverdue ? '#b91c1c' : '#475569', textTransform: 'uppercase', fontSize: '11px', fontWeight: 700, letterSpacing: '0.02em' }}>
+                                                {isOverdue ? 'ATRASADA' : task.status}
+                                            </span>
+                                            <span style={{ color: '#cbd5e1' }}>·</span>
+                                            <span style={{ color: isOverdue ? '#dc2626' : '#64748b' }}>
+                                                Prazo {new Date(task.deadline).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* DIREITA — AÇÕES */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '16px' }}>
+                                        <button
+                                            onClick={() => handleOpenReatribuirModal(task)}
+                                            style={{
+                                                width: '36px',
+                                                height: '36px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                borderRadius: '50%',
+                                                border: '1px solid #e2e8f0',
+                                                background: 'transparent',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s'
+                                            }}
+                                            title="Reatribuir"
+                                            onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                        >
+                                            <User size={16} color="#64748b" />
+                                        </button>
+
+                                        {task.status !== 'completed' && (
+                                            <button
+                                                onClick={() => handleCompleteTask(task.id, task.titulo)}
+                                                style={{
+                                                    width: '36px',
+                                                    height: '36px',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    borderRadius: '50%',
+                                                    border: '1px solid #e2e8f0',
+                                                    background: 'transparent',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.2s'
+                                                }}
+                                                title="Concluir"
+                                                onMouseEnter={e => e.currentTarget.style.background = '#f0fdf4'}
+                                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                            >
+                                                <CheckCircle size={16} color="#16a34a" />
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
+                )}
+            </div>
+
+            {/* Reatribuir Modal */}
+            {reassigningTask && (
+                <div className="modal-backdrop" onClick={() => setReatribuiringTask(null)}>
+                    <div className="modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h3>Reatribuir Tarefa</h3>
+                            <button className="modal-close" onClick={() => setReatribuiringTask(null)}>×</button>
+                        </div>
+                        <form onSubmit={handleReatribuirTask}>
+                            <div className="modal-body">
+                                <p className="text-muted modal-text-muted">
+                                    Tarefa: <strong className="text-primary">{reassigningTask.titulo}</strong>
+                                </p>
+
+                                <div className="input-group">
+                                    <label htmlFor="reassign_to">Novo Responsável</label>
+                                    <select
+                                        id="reassign_to"
+                                        className="input"
+                                        value={reassignTo}
+                                        onChange={(e) => setReatribuirTo(e.target.value)}
+                                        required
+                                    >
+                                        <option value="">-- Selecione --</option>
+                                        {professionals.map(prof => (
+                                            <option key={prof.id} value={prof.id}>{prof.nome}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="modal-footer">
+                                <button
+                                    type="button"
+                                    onClick={() => setReatribuiringTask(null)}
+                                    className="btn btn-secondary"
+                                    disabled={reassigning}
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="btn btn-primary"
+                                    disabled={reassigning}
+                                >
+                                    {reassigning ? 'Salvando...' : 'Confirmar'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
 
-function getPriorityColor(priority) {
-    switch (priority) {
-        case 'urgent': return 'bg-red-500'
-        case 'high': return 'bg-orange-500'
-        case 'medium': return 'bg-yellow-500'
-        default: return 'bg-blue-300'
-    }
-}
-
-function getStatusBadge(status) {
-    const styles = {
-        completed: 'bg-emerald-100 text-emerald-700',
-        done: 'bg-emerald-100 text-emerald-700',
-        concluida: 'bg-emerald-100 text-emerald-700',
-        in_progress: 'bg-blue-100 text-blue-700',
-        pending: 'bg-slate-100 text-slate-700',
-        overdue: 'bg-red-100 text-red-700'
-    }
-    return styles[status] || 'bg-gray-100 text-gray-700'
-}
+export default Painel
