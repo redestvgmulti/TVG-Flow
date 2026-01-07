@@ -14,12 +14,14 @@ import {
     Filter,
     Lock,
     FileText,
-    ExternalLink
+    ExternalLink,
+    Trash2
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '../../contexts/AuthContext'
 import { useRefresh } from '../../contexts/RefreshContext'
 import ReturnReasonModal from '../../components/ReturnReasonModal'
+import ConfirmDeleteModal from '../../components/ConfirmDeleteModal'
 import '../../styles/staff-tasks.css'
 import '../../styles/task-details.css'
 
@@ -96,7 +98,7 @@ export default function StaffTasks() {
             const { data: legacyTasks, error: legacyError } = await supabase
                 .from('tarefas')
                 .select('*')
-                .eq('assigned_to', user.id)
+                .or(`assigned_to.eq.${user.id},created_by.eq.${user.id}`)
                 .order('deadline', { ascending: true, nullsFirst: false })
 
             if (legacyError) {
@@ -282,6 +284,45 @@ export default function StaffTasks() {
         }
     }
 
+    async function handleDeleteTask(taskId) {
+        try {
+            const task = tasks.find(t => t.id === taskId) || selectedTask
+
+            // Only allow creator to delete
+            if (task?.created_by !== user.id) {
+                toast.error('Apenas quem criou a tarefa pode excluí-la')
+                return
+            }
+
+            // For legacy tasks, delete directly from database
+            if (!task.is_micro_task) {
+                const { error } = await supabase
+                    .from('tarefas')
+                    .delete()
+                    .eq('id', taskId)
+
+                if (error) throw error
+
+                // Remove from local state (affects current user's UI)
+                setTasks(prev => prev.filter(t => t.id !== taskId))
+
+                // Close details view if open
+                if (selectedTask?.id === taskId) {
+                    setSelectedTask(null)
+                }
+
+                toast.success('Tarefa excluída com sucesso')
+            } else {
+                // For micro tasks, would need different logic
+                toast.error('Não é possível excluir micro tarefas individualmente')
+            }
+
+        } catch (error) {
+            console.error('Error deleting task:', error)
+            toast.error(error.message || 'Erro ao excluir tarefa')
+        }
+    }
+
     // --- RENDER ---
 
     if (loading) {
@@ -299,6 +340,7 @@ export default function StaffTasks() {
                 task={selectedTask}
                 onBack={() => setSelectedTask(null)}
                 onUpdateStatus={handleUpdateStatus}
+                onDeleteTask={handleDeleteTask}
                 user={user}
             />
         )
@@ -340,8 +382,8 @@ export default function StaffTasks() {
                 />
                 <FilterChip
                     label="Em Andamento"
-                    active={statusFilter === 'em_progresso'}
-                    onClick={() => setStatusFilter('em_progresso')}
+                    active={statusFilter === 'em_execucao'}
+                    onClick={() => setStatusFilter('em_execucao')}
                 />
                 <FilterChip
                     label="Concluídas"
@@ -457,8 +499,9 @@ function TaskCard({ task, onClick }) {
     )
 }
 
-function ExecutionView({ task, onBack, onUpdateStatus, user }) {
+function ExecutionView({ task, onBack, onUpdateStatus, onDeleteTask, user }) {
     const isCompleted = task.status === 'concluida'
+    const isCreator = task.created_by === user.id
 
     // Simple state for comments/timeline
     const [timeline, setTimeline] = useState([])
@@ -468,6 +511,10 @@ function ExecutionView({ task, onBack, onUpdateStatus, user }) {
     const [showReturnModal, setShowReturnModal] = useState(false)
     const [professionals, setProfessionals] = useState([])
     const [loadingProfessionals, setLoadingProfessionals] = useState(false)
+
+    // Delete confirmation modal state
+    const [showDeleteModal, setShowDeleteModal] = useState(false)
+    const [isDeleting, setIsDeleting] = useState(false)
 
     useEffect(() => {
         // Fetch timeline logic (Simplified for this view)
@@ -578,6 +625,18 @@ function ExecutionView({ task, onBack, onUpdateStatus, user }) {
     function openReturnModal() {
         loadProfessionalsForReturn()
         setShowReturnModal(true)
+    }
+
+    async function handleConfirmDelete() {
+        setIsDeleting(true)
+        try {
+            await onDeleteTask(task.id)
+            setShowDeleteModal(false)
+        } catch (error) {
+            console.error('Delete error:', error)
+        } finally {
+            setIsDeleting(false)
+        }
     }
 
     const statusClass = isCompleted ? 'completed' : task.status === 'em_progresso' ? 'active' : 'pending'
@@ -719,6 +778,33 @@ function ExecutionView({ task, onBack, onUpdateStatus, user }) {
                 {/* Footer / Actions */}
                 <div className="task-actions">
                     <div className="task-actions-inner">
+                        {/* Delete Button - Only for Creator */}
+                        {isCreator && !task.is_micro_task && (
+                            <button
+                                onClick={() => setShowDeleteModal(true)}
+                                className="task-btn-delete"
+                                style={{
+                                    background: '#ef4444',
+                                    color: 'white',
+                                    border: 'none',
+                                    padding: '10px 16px',
+                                    borderRadius: '8px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    fontSize: '14px',
+                                    fontWeight: '500',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s'
+                                }}
+                                onMouseEnter={(e) => e.target.style.background = '#dc2626'}
+                                onMouseLeave={(e) => e.target.style.background = '#ef4444'}
+                            >
+                                <Trash2 size={16} />
+                                Excluir Tarefa
+                            </button>
+                        )}
+
                         {!isCompleted ? (
                             <>
                                 {task.status === 'pendente' && (
@@ -764,6 +850,16 @@ function ExecutionView({ task, onBack, onUpdateStatus, user }) {
                         professionals={professionals}
                         onClose={() => setShowReturnModal(false)}
                         onSubmit={handleReturnTask}
+                    />
+                )}
+
+                {/* Delete Confirmation Modal */}
+                {showDeleteModal && (
+                    <ConfirmDeleteModal
+                        taskTitle={task.titulo}
+                        onClose={() => setShowDeleteModal(false)}
+                        onConfirm={handleConfirmDelete}
+                        isDeleting={isDeleting}
                     />
                 )}
             </div>

@@ -4,9 +4,12 @@ import { toast } from 'sonner'
 import { clientService } from '../../services/clientService'
 import { professionalsService } from '../../services/professionals'
 import { supabase } from '../../services/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 import '../../styles/admin-forms.css'
 
 export default function TaskForm({ onSuccess, onCancel }) {
+    const { user } = useAuth()
+
     // Data
     const [companies, setCompanies] = useState([])
     const [availableFunctions, setAvailableFunctions] = useState([])
@@ -209,7 +212,8 @@ export default function TaskForm({ onSuccess, onCancel }) {
                 descricao: descricao || null,
                 deadline_at: new Date(deadline).toISOString(),
                 prioridade: prioridade,
-                drive_link: driveLink || null
+                drive_link: driveLink || null,
+                created_by: user.id
             }
 
             // Add workflow stages or legacy functions

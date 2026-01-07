@@ -20,7 +20,7 @@ function Login() {
         setLoading(true)
 
         // DEBUG: Alert to confirm function is running
-        alert('DEBUG: 1. Botão clicado! Iniciando login...')
+        // alert('DEBUG: 1. Botão clicado! Iniciando login...')
 
         try {
             console.log('Calling signIn...')
@@ -35,7 +35,7 @@ function Login() {
         } catch (error) {
             console.error('Login error:', error)
             // Show alert for critical visibility
-            alert('Erro no Login: ' + (error.message || 'Desconhecido'))
+            // alert('Erro no Login: ' + (error.message || 'Desconhecido'))
             setError(error.message)
             setLoading(false)
         }

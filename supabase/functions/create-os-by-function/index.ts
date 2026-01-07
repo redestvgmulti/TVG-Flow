@@ -25,23 +25,74 @@ serve(async (req) => {
             funcoes,
             prioridade,
             workflow_stages, // NEW: Optional workflow stages for macro/micro tasks
-            drive_link
+            drive_link,
+            created_by // ETAPA 1: Obrigatório
         } = await req.json()
 
-        console.log('Received payload:', { empresa_id, titulo, descricao, deadline_at, funcoes, prioridade, workflow_stages })
+        console.log('Received payload:', { empresa_id, titulo, funcoes, workflow_stages, created_by })
 
         // Validation
-        if (!empresa_id || !titulo || !deadline_at) {
-            console.error('Validation failed:', { empresa_id: !!empresa_id, titulo: !!titulo, deadline_at: !!deadline_at })
+        if (!empresa_id || !titulo || !deadline_at || !created_by) {
+            console.error('Validation failed:', { empresa_id: !!empresa_id, titulo: !!titulo, deadline_at: !!deadline_at, created_by: !!created_by })
             return new Response(
-                JSON.stringify({ error: 'Missing required fields: empresa_id, titulo, deadline_at' }),
+                JSON.stringify({ error: 'Missing required fields: empresa_id, titulo, deadline_at, created_by' }),
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             )
         }
 
-        // Validate and normalize priority
+        // AJUSTE OBRIGATÓRIO: Blindagem de status - nunca confiar no frontend
         const validPriorities = ['baixa', 'normal', 'alta', 'urgente']
-        const normalizedPriority = prioridade && validPriorities.includes(prioridade) ? prioridade : 'normal'
+        let normalizedPriority = 'normal' // default seguro
+
+        if (prioridade && validPriorities.includes(prioridade)) {
+            normalizedPriority = prioridade
+        } else if (prioridade) {
+            console.warn('Invalid priority received, using default:', prioridade)
+        }
+
+        // Status é SEMPRE 'pendente' para novas tarefas
+        const safeStatus = 'pendente'
+
+        // AJUSTE OBRIGATÓRIO: Validar permissão (admin bypassa)
+        const { data: userProfile, error: profileError } = await supabaseClient
+            .from('profissionais')
+            .select('role')
+            .eq('id', created_by)
+            .single()
+
+        if (profileError || !userProfile) {
+            console.error('User not found:', profileError)
+            return new Response(
+                JSON.stringify({ error: 'Usuário não encontrado' }),
+                { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+        }
+
+        // Admin bypassa validação de empresa_profissionais
+        if (userProfile.role !== 'admin') {
+            // Staff: validar vínculo com empresa
+            const { data: permission, error: permError } = await supabaseClient
+                .from('empresa_profissionais')
+                .select('empresa_id')
+                .eq('profissional_id', created_by)
+                .eq('empresa_id', empresa_id)
+                .eq('ativo', true)
+                .maybeSingle()
+
+            if (permError || !permission) {
+                console.error('Permission denied: user not linked to this company', {
+                    created_by,
+                    empresa_id,
+                    role: userProfile.role
+                })
+                return new Response(
+                    JSON.stringify({
+                        error: 'Você não tem permissão para criar tarefas nesta empresa'
+                    }),
+                    { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                )
+            }
+        }
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         // NEW WORKFLOW: Macro/Micro Tasks
@@ -54,8 +105,9 @@ serve(async (req) => {
                     titulo,
                     descricao: descricao || null,
                     empresa_id: empresa_id,
+                    created_by: created_by, // ETAPA 1
                     deadline: deadline_at,
-                    status: 'pendente',
+                    status: safeStatus, // Blindado
                     prioridade: normalizedPriority,
                     progress: 0,
                     drive_link: drive_link || null
@@ -219,10 +271,11 @@ serve(async (req) => {
                 titulo: `${titulo} - ${prof.funcao}`,
                 descricao: descricao || null,
                 empresa_id: empresa_id,
+                created_by: created_by, // ETAPA 1
                 assigned_to: professional.id,
                 departamento_id: professional.departamento_id,
                 deadline: deadline_at,
-                status: 'pendente',
+                status: safeStatus, // Blindado
                 prioridade: normalizedPriority,
                 drive_link: drive_link || null
             }
