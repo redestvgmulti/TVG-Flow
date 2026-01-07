@@ -108,7 +108,7 @@ export default function PullToRefresh({ children, className = '' }) {
     }
 
     const contentStyle = {
-        transform: `translateY(${pullY}px)`
+        transform: pullY > 0 || isRefreshing ? `translateY(${pullY}px)` : 'none'
     }
 
     return (

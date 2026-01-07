@@ -7,12 +7,14 @@
     min-height: 100vh;
     padding: var(--space-6);
 
-    /* CityOS Glassmorphism Base */
-    background: var(--glass-bg);
-    backdrop-filter: blur(var(--backdrop-blur));
-    -webkit-backdrop-filter: blur(var(--backdrop-blur));
-    border: 1px solid var(--glass-border);
-    box-shadow: var(--glass-shadow);
+    /* Enhanced CityOS Glassmorphism */
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 252, 0.98) 100%);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(226, 232, 240, 0.8);
+    box-shadow:
+        0 4px 24px rgba(0, 0, 0, 0.04),
+        0 1px 3px rgba(0, 0, 0, 0.02);
     color: var(--color-text-primary);
     font-family: var(--font-body);
 }
@@ -21,8 +23,7 @@
 .macro-task-container.is-modal {
     min-height: auto;
     border-radius: var(--radius-xl);
-    background: rgba(255, 255, 255, 0.85);
-    /* Slightly more opaque for modal */
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 1) 100%);
 }
 
 .macro-task-loading,
@@ -147,10 +148,13 @@
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
 .macro-task-progress-section {
-    background: rgba(255, 255, 255, 0.4);
-    backdrop-filter: blur(12px);
-    border: 1px solid var(--glass-border);
-    box-shadow: var(--shadow-soft);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.7) 100%);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(226, 232, 240, 0.8);
+    box-shadow:
+        0 10px 40px rgba(0, 0, 0, 0.06),
+        0 2px 8px rgba(0, 0, 0, 0.03),
+        inset 0 1px 0 rgba(255, 255, 255, 0.9);
     border-radius: var(--radius-lg);
     padding: var(--space-6);
     margin-bottom: var(--space-8);
@@ -346,18 +350,22 @@
 /* Content Card */
 .timeline-content {
     flex: 1;
-    background: rgba(255, 255, 255, 0.6);
-    backdrop-filter: blur(8px);
-    border: 1px solid var(--glass-border);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.75) 100%);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(226, 232, 240, 0.6);
     border-radius: var(--radius-lg);
     padding: var(--space-5);
     transition: var(--transition-smooth);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
 }
 
 .timeline-content:hover {
-    background: rgba(255, 255, 255, 0.9);
-    box-shadow: var(--shadow-float);
+    background: rgba(255, 255, 255, 0.98);
+    box-shadow:
+        0 12px 32px rgba(0, 0, 0, 0.08),
+        0 4px 12px rgba(0, 0, 0, 0.04);
     transform: translateY(-2px);
+    border-color: rgba(99, 102, 241, 0.3);
 }
 
 .timeline-header {
@@ -606,4 +614,50 @@
         left: 15px;
         top: 32px;
     }
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   MODAL POSITIONING OVERRIDES - CRITICAL FIX
+   Ensures modal always opens in the center of the VIEWPORT, not the document
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.modal-backdrop {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    inset: 0 !important;
+    z-index: 9999 !important;
+    background-color: rgba(15, 23, 42, 0.5) !important;
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    /* Reset any transform that might cause fixed to behave as absolute */
+    transform: none !important;
+}
+
+.modal.modal-large {
+    /* Ensure it doesn't overflow viewport height */
+    max-height: 90vh !important;
+    height: auto !important;
+    /* Allow it to shrink if content is small */
+    margin: auto !important;
+    /* Extra centering safety */
+    position: relative !important;
+    /* Reset position */
+    top: auto !important;
+    left: auto !important;
+    transform: none !important;
+}
+
+/* Mobile Specific Cleanup */
+@media (max-width: 768px) {
+    .modal-backdrop {
+        align-items: flex-end !important;
+    }
+
+    /* Let adminTasks.css handle the modal shape */
 }

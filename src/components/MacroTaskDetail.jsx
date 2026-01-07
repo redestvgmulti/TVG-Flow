@@ -255,76 +255,77 @@ export default function MacroTaskDetail({ taskId, onBack, isModal = false }) {
                 {/* Workflow Timeline */}
                 <div className="macro-task-section">
                     <h3 className="section-title">FLUXO DE TRABALHO</h3>
-                    <div className="workflow-timeline">
+                    <div className="timeline-container">
                         {microTasks.map((mt, index) => (
-                            <div key={mt.id} className={`timeline-item status-${mt.status}`}>
+                            <div key={mt.id} className={`timeline-item ${mt.status === 'em_execucao' ? 'in-progress' : mt.status === 'concluida' ? 'completed' : 'pending'}`}>
                                 <div className="timeline-marker">
-                                    {mt.status === 'concluida' ? <CheckCircle2 size={20} /> :
-                                        mt.status === 'bloqueada' ? <Lock size={20} /> :
-                                            mt.status === 'devolvida' ? <RotateCcw size={20} /> :
-                                                <div className="timeline-dot"></div>}
+                                    {mt.status === 'concluida' ? <CheckCircle2 size={16} /> :
+                                        mt.status === 'bloqueada' ? <Lock size={16} /> :
+                                            mt.status === 'devolvida' ? <RotateCcw size={16} /> :
+                                                index + 1}
                                 </div>
                                 <div className="timeline-content">
-                                    <div className="timeline-header">
-                                        <span className="timeline-step">Etapa {index + 1}</span>
-                                        <span className={`timeline-status status-${mt.status}`}>
-                                            {mt.status === 'concluida' ? 'Concluída' :
-                                                mt.status === 'bloqueada' ? 'Bloqueada' :
-                                                    mt.status === 'devolvida' ? 'Devolvida' :
-                                                        mt.status === 'em_execucao' ? 'Em Execução' : 'Pendente'}
-                                        </span>
-                                    </div>
-                                    <div className="timeline-info">
-                                        <span className="timeline-function">{mt.funcao}</span>
-                                        <span className="timeline-professional">
-                                            <User size={14} />
-                                            {getProfessionalName(mt)}
-                                        </span>
-                                        <span className="timeline-weight">Peso: {mt.peso}</span>
-                                    </div>
-
-                                    {/* Action buttons for assigned tasks */}
-                                    {mt.profissional_id === user?.id && mt.status !== 'concluida' && (
-                                        <div className="timeline-actions">
-                                            {mt.status === 'pendente' && (
-                                                <button
-                                                    onClick={() => handleStartMicroTask(mt.id)}
-                                                    className="btn-micro-action btn-start"
-                                                >
-                                                    <Play size={14} />
-                                                    Iniciar
-                                                </button>
-                                            )}
-                                            {(mt.status === 'em_execucao' || mt.status === 'devolvida') && (
-                                                <>
-                                                    <button
-                                                        onClick={() => handleCompleteMicroTask(mt.id, mt.status)}
-                                                        className="btn-micro-action btn-complete"
-                                                    >
-                                                        <CheckCircle2 size={14} />
-                                                        Concluir
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleOpenReturnModal(mt)}
-                                                        className="btn-micro-action btn-return"
-                                                    >
-                                                        <RotateCcw size={14} />
-                                                        Solicitar Ajuste
-                                                    </button>
-                                                </>
-                                            )}
-                                            {mt.status === 'bloqueada' && (
-                                                <div className="timeline-blocked-message">
-                                                    <Lock size={12} />
-                                                    <span>Aguardando etapa anterior</span>
-                                                </div>
-                                            )}
+                                    <div className="timeline-info" style={{ width: '100%' }}>
+                                        <div className="flex items-center justify-between" style={{ marginBottom: '8px' }}>
+                                            <span className={`timeline-status-badge ${mt.status === 'em_execucao' ? 'in-progress' : mt.status}`}>
+                                                {mt.status === 'concluida' ? 'Concluída' :
+                                                    mt.status === 'bloqueada' ? 'Bloqueada' :
+                                                        mt.status === 'devolvida' ? 'Devolvida' :
+                                                            mt.status === 'em_execucao' ? 'Em Execução' : 'Pendente'}
+                                            </span>
+                                            {mt.peso && <span className="text-xs text-gray-400">Peso: {mt.peso}</span>}
                                         </div>
-                                    )}
+
+                                        <h4 className="timeline-title">{mt.funcao}</h4>
+
+                                        <div className="timeline-meta" style={{ marginTop: '8px' }}>
+                                            <span className="timeline-assignee">
+                                                <User size={14} />
+                                                {getProfessionalName(mt)}
+                                            </span>
+                                        </div>
+
+                                        {/* Action buttons for assigned tasks */}
+                                        {mt.profissional_id === user?.id && mt.status !== 'concluida' && (
+                                            <div className="timeline-actions" style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
+                                                {mt.status === 'pendente' && (
+                                                    <button
+                                                        onClick={() => handleStartMicroTask(mt.id)}
+                                                        className="btn-micro-action btn-start"
+                                                    >
+                                                        <Play size={14} />
+                                                        Iniciar
+                                                    </button>
+                                                )}
+                                                {(mt.status === 'em_execucao' || mt.status === 'devolvida') && (
+                                                    <>
+                                                        <button
+                                                            onClick={() => handleCompleteMicroTask(mt.id, mt.status)}
+                                                            className="btn-micro-action btn-complete"
+                                                        >
+                                                            <CheckCircle2 size={14} />
+                                                            Concluir
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleOpenReturnModal(mt)}
+                                                            className="btn-micro-action btn-return"
+                                                        >
+                                                            <RotateCcw size={14} />
+                                                            Ajuste
+                                                        </button>
+                                                    </>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {mt.status === 'bloqueada' && (
+                                            <div className="timeline-blocked-message" style={{ marginTop: '8px', fontSize: '12px', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <Lock size={12} />
+                                                <span>Aguardando etapa anterior</span>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
-                                {index < microTasks.length - 1 && (
-                                    <div className="timeline-connector"></div>
-                                )}
                             </div>
                         ))}
                     </div>

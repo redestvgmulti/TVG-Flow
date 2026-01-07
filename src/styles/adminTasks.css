@@ -628,7 +628,8 @@
 
 /* Remove padding from MacroTaskDetail when inside modal */
 .modal-large .macro-task-container {
-    padding: 0 !important;
+    padding: 32px !important;
+    /* Give it breathing room on desktop too */
     width: 100% !important;
     min-height: 100% !important;
     height: 100% !important;
@@ -639,26 +640,32 @@
 }
 
 /* Mobile Responsiveness for Modal */
+/* Fix for mobile specific alignment */
 @media (max-width: 768px) {
     .modal-backdrop {
         align-items: flex-end !important;
-        /* Bottom sheet feel or full screen */
-        padding: 0 !important;
+        padding-bottom: 24px !important;
+        /* Lift from bottom */
     }
 
     .modal.modal-large {
-        width: 100% !important;
+        width: calc(100% - 32px) !important;
+        /* 16px margin on each side */
         max-width: 100% !important;
-        height: 100vh !important;
-        max-height: 100vh !important;
-        border-radius: 0 !important;
-        border: none !important;
+        height: auto !important;
+        max-height: 85vh !important;
+        /* Don't cover full height */
+        border-radius: 24px !important;
+        /* Premium rounded corners */
+        margin: 0 auto !important;
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+        box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.15) !important;
     }
 
     .modal-large .macro-task-container {
-        border-radius: 0 !important;
-        padding-bottom: 80px !important;
-        /* Safe area for bottom navigation if any */
+        border-radius: 24px !important;
+        padding: 20px !important;
+        /* Restore internal padding so content isn't stuck to edges */
     }
 }
 

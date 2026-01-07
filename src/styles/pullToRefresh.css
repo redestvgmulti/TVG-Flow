@@ -40,8 +40,7 @@
 
 .ptr-content {
     /* Optimizations for smooth transforms */
-    will-change: transform;
-    transform: translateZ(0);
+    /* transform and will-change removed to prevent stacking context creation */
 }
 
 .ptr-content.releasing {
