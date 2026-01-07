@@ -15,24 +15,31 @@ import {
     Lock,
     FileText,
     ExternalLink,
-    Trash2
+    Trash2,
+    Workflow
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '../../contexts/AuthContext'
 import { useRefresh } from '../../contexts/RefreshContext'
 import ReturnReasonModal from '../../components/ReturnReasonModal'
 import ConfirmDeleteModal from '../../components/ConfirmDeleteModal'
+import Timeline from '../../components/Timeline'
+import ComentarioForm from '../../components/ComentarioForm'
+import ConversaoWorkflowModal from '../../components/ConversaoWorkflowModal'
+import PermissionGuard from '../../components/PermissionGuard'
 import '../../styles/staff-tasks.css'
 import '../../styles/task-details.css'
 
 export default function StaffTasks() {
-    const { user } = useAuth()
+    const { user, role } = useAuth()
     const { registerRefresh, unregisterRefresh } = useRefresh()
     const [tasks, setTasks] = useState([])
     const [loading, setLoading] = useState(true)
 
     // View State
+    // View State
     const [selectedTask, setSelectedTask] = useState(null) // If set, shows ExecutionView
+    const [taskToConvert, setTaskToConvert] = useState(null) // OS selecionada para conversão
 
     // Filter State
     const [search, setSearch] = useState('')
@@ -50,115 +57,95 @@ export default function StaffTasks() {
     }, [])
 
     async function fetchTasks(silent = false) {
+        if (!user?.id) return
+
         try {
-            if (!silent) setLoading(true)
+            setLoading(true)
 
-            if (!user?.id) {
-                setTasks([])
-                return
-            }
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            // ETAPA 2: QUERY UNIFICADA
+            // Busca TODAS as OS (simples + complexas) em UMA query
+            // RLS automática filtra: created_by, assigned_to, micro-tasks
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-
-
-            // HYBRID QUERY: Fetch micro tasks + legacy tasks
-
-            // 1. Fetch micro tasks assigned to this user
-            const { data: microTasks, error: microError } = await supabase
-                .from('tarefas_micro')
-                .select('*')
-                .eq('profissional_id', user.id)
+            const { data, error } = await supabase
+                .from('tarefas')
+                .select(`
+                    *,
+                    tarefas_micro (
+                        id,
+                        profissional_id,
+                        status,
+                        funcao,
+                        peso,
+                        depends_on,
+                        created_at,
+                        updated_at
+                    )
+                `)
                 .order('created_at', { ascending: false })
 
+            if (error) throw error
 
-
-            if (microError) {
-                console.error('Error fetching micro tasks:', microError)
-            }
-
-            // Fetch macro tasks for the micro tasks
-            const macroTaskIds = [...new Set(microTasks?.map(mt => mt.tarefa_id) || [])]
-
-
-            const { data: macroTasks, error: macroError } = await supabase
-                .from('tarefas')
-                .select('id, titulo, descricao, deadline, prioridade, drive_link')
-                .in('id', macroTaskIds)
-
-
-
-            if (macroError) {
-                console.error('Error fetching macro tasks:', macroError)
-            }
-
-            // Create a map of macro tasks by ID
-            const macroTaskMap = new Map()
-            macroTasks?.forEach(mt => macroTaskMap.set(mt.id, mt))
-
-            // 2. Fetch legacy tasks (tasks without micro tasks)
-            const { data: legacyTasks, error: legacyError } = await supabase
-                .from('tarefas')
-                .select('*')
-                .or(`assigned_to.eq.${user.id},created_by.eq.${user.id}`)
-                .order('deadline', { ascending: true, nullsFirst: false })
-
-            if (legacyError) {
-                console.error('Error fetching legacy tasks:', legacyError)
-            }
-
-            // 3. Merge and normalize tasks
+            // Processar resultado: separar OS simples de OS complexas
             const allTasks = []
 
-            // Add micro tasks (with special flag)
-            if (microTasks) {
+            data?.forEach(osTask => {
+                // Verifica se tem micro-tasks associadas
+                const microTasks = osTask.tarefas_micro || []
+                const temWorkflow = microTasks.length > 0
 
-                microTasks.forEach(mt => {
-                    const macroTask = macroTaskMap.get(mt.tarefa_id)
+                if (temWorkflow) {
+                    // OS COMPLEXA: Criar uma tarefa por micro-task atribuída ao usuário
+                    const myMicroTasks = microTasks.filter(mt => mt.profissional_id === user.id)
 
-                    allTasks.push({
-                        ...mt,
-                        // Normalize structure for compatibility
-                        id: mt.id,
-                        titulo: macroTask?.titulo || `[${mt.funcao}] Sem título`,
-                        descricao: macroTask?.descricao,
-                        deadline: macroTask?.deadline,
-                        prioridade: macroTask?.prioridade || 'normal',
-                        drive_link: macroTask?.drive_link, // Propagate from macro task
-                        status: mt.status, // Use micro task status
-                        funcao: mt.funcao, // Micro task specific
-                        is_micro_task: true, // Flag for UI
-                        tarefa_id: mt.tarefa_id, // Reference to macro task
-                        depends_on: mt.depends_on, // Dependency
-                        peso: mt.peso
-                    })
-                })
-            }
-
-            // Add legacy tasks (only if they don't have micro tasks)
-            if (legacyTasks) {
-                // Filter out macro tasks that have micro tasks
-                const macroTaskIds = new Set(microTasks?.map(mt => mt.tarefa_id) || [])
-
-
-
-                legacyTasks.forEach(task => {
-                    if (!macroTaskIds.has(task.id)) {
+                    myMicroTasks.forEach(mt => {
                         allTasks.push({
-                            ...task,
-                            is_micro_task: false // Flag for UI
+                            // Dados da micro-task
+                            id: mt.id,
+                            status: mt.status,
+                            funcao: mt.funcao,
+                            entrega_link: mt.entrega_link,
+                            observacoes: mt.observacoes,
+                            depends_on: mt.depends_on,
+                            peso: mt.peso,
+                            created_at: mt.created_at,
+                            updated_at: mt.updated_at,
+                            concluida_at: mt.concluida_at,
+
+                            // Dados da macro-task (OS)
+                            titulo: osTask.titulo,
+                            descricao: osTask.descricao,
+                            deadline: osTask.deadline,
+                            prioridade: osTask.prioridade,
+                            drive_link: osTask.drive_link,
+
+                            // Flags e referências
+                            is_micro_task: true,
+                            is_os_complexa: true,
+                            is_os_simples: false,
+                            tarefa_id: osTask.id,
+                            tem_workflow: true
                         })
-                    } else {
-
-                    }
-                })
-            }
-
+                    })
+                } else {
+                    // OS SIMPLES: Mostrar a tarefa principal diretamente
+                    allTasks.push({
+                        ...osTask,
+                        is_micro_task: false,
+                        is_os_simples: true,
+                        is_os_complexa: false,
+                        tem_workflow: false
+                    })
+                }
+            })
 
             setTasks(allTasks)
         } catch (error) {
             console.error('Error in fetchTasks:', error)
             toast.error('Erro ao carregar tarefas')
         } finally {
-            if (!silent) setLoading(false)
+            setLoading(false)
         }
     }
 
@@ -342,6 +329,10 @@ export default function StaffTasks() {
                 onUpdateStatus={handleUpdateStatus}
                 onDeleteTask={handleDeleteTask}
                 user={user}
+                role={role}
+                setTaskToConvert={setTaskToConvert}
+                taskToConvert={taskToConvert}
+                onRefresh={fetchTasks}
             />
         )
     }
@@ -499,13 +490,9 @@ function TaskCard({ task, onClick }) {
     )
 }
 
-function ExecutionView({ task, onBack, onUpdateStatus, onDeleteTask, user }) {
+function ExecutionView({ task, onBack, onUpdateStatus, onDeleteTask, user, role, setTaskToConvert, taskToConvert, onRefresh }) {
     const isCompleted = task.status === 'concluida'
     const isCreator = task.created_by === user.id
-
-    // Simple state for comments/timeline
-    const [timeline, setTimeline] = useState([])
-    const [comment, setComment] = useState('')
 
     // Return modal state
     const [showReturnModal, setShowReturnModal] = useState(false)
@@ -516,43 +503,11 @@ function ExecutionView({ task, onBack, onUpdateStatus, onDeleteTask, user }) {
     const [showDeleteModal, setShowDeleteModal] = useState(false)
     const [isDeleting, setIsDeleting] = useState(false)
 
-    useEffect(() => {
-        // Fetch timeline logic (Simplified for this view)
-        async function loadTimeline() {
-            const { data } = await supabase
-                .from('task_comments')
-                .select('id, content, created_at, profissionais(nome)')
-                .eq('task_id', task.id)
-                .order('created_at', { ascending: true })
+    // Timeline refresh key (para forçar refresh após adicionar comentário)
+    const [timelineKey, setTimelineKey] = useState(0)
 
-            if (data) setTimeline(data)
-        }
-        loadTimeline()
-    }, [task.id])
-
-    async function sendComment(e) {
-        e.preventDefault()
-        if (!comment.trim()) return
-
-        try {
-            await supabase.from('task_comments').insert({
-                task_id: task.id,
-                author_id: user.id,
-                content: comment
-            })
-            setComment('')
-            // Optimistic update
-            setTimeline(prev => [...prev, {
-                id: Date.now(),
-                content: comment,
-                created_at: new Date(),
-                profissionais: { nome: 'Você' }
-            }])
-            toast.success('Nota adicionada!')
-        } catch (err) {
-            console.error('Error sending comment:', err)
-            toast.error('Erro ao enviar nota')
-        }
+    function refreshTimeline() {
+        setTimelineKey(prev => prev + 1)
     }
 
     async function loadProfessionalsForReturn() {
@@ -572,13 +527,13 @@ function ExecutionView({ task, onBack, onUpdateStatus, onDeleteTask, user }) {
             const { data, error } = await supabase
                 .from('tarefas_micro')
                 .select(`
-                    profissional_id,
-                    funcao,
-                    profissionais!inner (
-                        id,
-                        nome
-                    )
-                `)
+            profissional_id,
+            funcao,
+            profissionais!inner (
+            id,
+            nome
+            )
+            `)
                 .eq('tarefa_id', task.tarefa_id)
                 .neq('profissional_id', user.id) // Exclude current user
 
@@ -642,228 +597,242 @@ function ExecutionView({ task, onBack, onUpdateStatus, onDeleteTask, user }) {
     const statusClass = isCompleted ? 'completed' : task.status === 'em_progresso' ? 'active' : 'pending'
     const statusText = isCompleted ? 'Concluída' : task.status === 'em_progresso' ? 'Em Andamento' : 'Pendente'
 
-    return createPortal(
-        <div className="task-detail-overlay" onClick={(e) => { if (e.target === e.currentTarget) onBack() }}>
-            <div className="task-detail-modal">
-                {/* Header */}
-                <div className="task-detail-header">
-                    <button onClick={onBack} className="task-detail-back-btn">
-                        <ArrowLeft size={20} />
-                    </button>
-                    <div className="task-detail-header-content">
-                        <div className="task-title-wrapper">
-                            <FileText size={18} className="task-title-icon" />
-                            <h2 className="task-title">{task.titulo}</h2>
-                        </div>
-                    </div>
+    return (
+        <div className="execution-container">
+            {/* --- HEADER (Normal Flow) --- */}
+            <div className="execution-header">
+                {/* Breadcrumb / Back */}
+                <div className="execution-breadcrumbs">
+                    <span onClick={onBack}>
+                        <ArrowLeft size={16} />
+                        Voltar para Lista
+                    </span>
                 </div>
 
-                {/* Body */}
-                <div className="task-detail-body">
-                    {/* Summary Card */}
-                    <div className="task-summary-card">
-                        <div className={`task-status-badge ${statusClass}`}>
-                            {statusText}
+                {/* Title */}
+                <div className="execution-title-row">
+                    <h1 className="execution-title">{task.titulo}</h1>
+                </div>
+
+                {/* Meta Data Grid */}
+                <div className="execution-meta-grid">
+                    {/* Status Badge */}
+                    <span className={`meta-badge status-${task.status === 'concluida' ? 'completed' : task.status === 'em_progresso' ? 'active' : 'pending'}`}>
+                        {isCompleted && <CheckCircle2 size={14} />}
+                        {task.status === 'em_progresso' && <Clock size={14} />}
+                        {statusText}
+                    </span>
+
+                    {/* Type Badge */}
+                    <span className="meta-badge type-workflow">
+                        {task.is_micro_task ? <Workflow size={14} /> : <FileText size={14} />}
+                        {task.is_micro_task ? 'Micro-tarefa' : 'OS Padrão'}
+                    </span>
+
+                    {/* Deadline */}
+                    {task.deadline && (
+                        <span className="priority-indicator">
+                            <Calendar size={14} />
+                            {new Date(task.deadline).toLocaleDateString('pt-BR')}
+                        </span>
+                    )}
+
+                    {/* Priority */}
+                    {task.prioridade === 'urgente' && (
+                        <span className="priority-indicator urgent">
+                            <AlertCircle size={14} />
+                            Urgente
+                        </span>
+                    )}
+                </div>
+            </div>
+
+            {/* --- SCROLLABLE CONTENT --- */}
+            <div className="execution-content">
+
+                {/* Description Section */}
+                <section className="execution-section">
+                    <div className="execution-section-title">
+                        <FileText size={14} />
+                        Sobre a Tarefa
+                    </div>
+                    <div className="description-card">
+                        <div className={`description-text ${!task.descricao ? 'description-empty' : ''}`}>
+                            {task.descricao || 'Sem descrição fornecida para esta tarefa.'}
                         </div>
-                        {task.deadline && (
-                            <div className="task-deadline-wrapper">
-                                <span className="task-deadline-label">Prazo:</span>
-                                <span className="task-deadline-value">
-                                    {new Date(task.deadline).toLocaleString('pt-BR', {
-                                        day: '2-digit',
-                                        month: '2-digit',
-                                        year: 'numeric',
-                                        hour: '2-digit',
-                                        minute: '2-digit'
-                                    })}
-                                </span>
+
+                        {/* Drive Link - View Mode */}
+                        {task.drive_link && (
+                            <div className="drive-link-wrapper">
+                                <a
+                                    href={task.drive_link}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="drive-btn"
+                                >
+                                    <ExternalLink size={18} />
+                                    Acessar Arquivos no Drive
+                                </a>
+                            </div>
+                        )}
+
+                        {/* Drive Link - Edit Mode (Input) */}
+                        {!isCompleted && (
+                            <div className="drive-link-wrapper">
+                                <input
+                                    type="url"
+                                    placeholder={task.drive_link ? "Atualizar link do Drive..." : "Adicionar link do Drive..."}
+                                    className="drive-link-input"
+                                    defaultValue={task.drive_link || ''}
+                                    onBlur={async (e) => {
+                                        const newLink = e.target.value.trim()
+                                        if (newLink === task.drive_link) return
+
+                                        try {
+                                            const tableName = task.is_micro_task ? 'tarefas_micro' : 'tarefas'
+                                            const { error } = await supabase
+                                                .from(tableName)
+                                                .update({ drive_link: newLink || null })
+                                                .eq('id', task.id)
+
+                                            if (error) throw error
+                                            toast.success('Link atualizado!')
+                                        } catch (error) {
+                                            console.error('Error updating link:', error)
+                                            toast.error('Erro ao atualizar link')
+                                        }
+                                    }}
+                                />
                             </div>
                         )}
                     </div>
+                </section>
 
-                    {/* Description */}
-                    <div className="task-section">
-                        <h3 className="task-section-title">Descrição</h3>
-                        <div className="task-description">
-                            {task.descricao || 'Sem descrição.'}
+                {/* Return/Block Reason */}
+                {(task.status === 'devolvida' || task.status === 'bloqueada') && task.observacoes && (
+                    <section className="execution-section">
+                        <div className="execution-section-title" style={{ color: '#ef4444' }}>
+                            <AlertCircle size={14} />
+                            {task.status === 'devolvida' ? 'Motivo da Devolução' : 'Motivo do Bloqueio'}
                         </div>
-                    </div>
-
-                    {/* Link */}
-                    {task.drive_link && (
-                        <div className="task-section">
-                            <h3 className="task-section-title">Arquivos da Tarefa</h3>
-                            <a
-                                href={task.drive_link}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="btn btn-secondary w-full justify-start gap-2"
-                                style={{ padding: '12px 16px' }}
-                            >
-                                <ExternalLink size={18} className="text-primary" />
-                                <span className="font-medium">Abrir Pasta do Drive</span>
-                            </a>
+                        <div className="description-card" style={{ borderColor: '#fca5a5', background: '#fef2f2' }}>
+                            <p style={{ color: '#991b1b', margin: 0 }}>{task.observacoes}</p>
                         </div>
-                    )}
-
-                    {/* Add/Edit Drive Link */}
-                    {!isCompleted && (
-                        <div className="task-section">
-                            <h3 className="task-section-title">Link para Arquivos</h3>
-                            <input
-                                type="url"
-                                placeholder="Cole o link do Google Drive, Dropbox, etc..."
-                                className="task-note-input"
-                                defaultValue={task.drive_link || ''}
-                                onBlur={async (e) => {
-                                    const newLink = e.target.value.trim()
-                                    if (newLink === task.drive_link) return
-
-                                    try {
-                                        const tableName = task.is_micro_task ? 'tarefas_micro' : 'tarefas'
-                                        const { error } = await supabase
-                                            .from(tableName)
-                                            .update({ drive_link: newLink || null })
-                                            .eq('id', task.id)
-
-                                        if (error) throw error
-                                        toast.success('Link atualizado!')
-                                    } catch (error) {
-                                        console.error('Error updating link:', error)
-                                        toast.error('Erro ao atualizar link')
-                                    }
-                                }}
-                            />
-                        </div>
-                    )}
-
-                    {/* Timeline / Comments */}
-                    <div className="task-notes">
-                        <h3 className="task-section-title">Atividade & Notas</h3>
-                        <div className="task-notes-list">
-                            {timeline.length === 0 ? (
-                                <p className="task-notes-empty">Nenhuma nota ainda.</p>
-                            ) : (
-                                timeline.map(item => (
-                                    <div key={item.id} className="task-note-item">
-                                        <div className="task-note-header">
-                                            <span className="task-note-author">{item.profissionais?.nome || 'Usuário'}</span>
-                                            <span className="task-note-date">{new Date(item.created_at).toLocaleDateString()}</span>
-                                        </div>
-                                        <p className="task-note-content">{item.content}</p>
-                                    </div>
-                                ))
-                            )}
-                        </div>
-
-                        <form onSubmit={sendComment} className="task-note-form">
-                            <input
-                                type="text"
-                                placeholder="Adicionar nota rápida..."
-                                className="task-note-input"
-                                value={comment}
-                                onChange={e => setComment(e.target.value)}
-                            />
-                            <button
-                                type="submit"
-                                disabled={!comment.trim()}
-                                className="task-note-submit"
-                            >
-                                <Send size={14} />
-                            </button>
-                        </form>
-                    </div>
-                </div>
-
-                {/* Footer / Actions */}
-                <div className="task-actions">
-                    <div className="task-actions-inner">
-                        {/* Delete Button - Only for Creator */}
-                        {isCreator && !task.is_micro_task && (
-                            <button
-                                onClick={() => setShowDeleteModal(true)}
-                                className="task-btn-delete"
-                                style={{
-                                    background: '#ef4444',
-                                    color: 'white',
-                                    border: 'none',
-                                    padding: '10px 16px',
-                                    borderRadius: '8px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '8px',
-                                    fontSize: '14px',
-                                    fontWeight: '500',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s'
-                                }}
-                                onMouseEnter={(e) => e.target.style.background = '#dc2626'}
-                                onMouseLeave={(e) => e.target.style.background = '#ef4444'}
-                            >
-                                <Trash2 size={16} />
-                                Excluir Tarefa
-                            </button>
-                        )}
-
-                        {!isCompleted ? (
-                            <>
-                                {task.status === 'pendente' && (
-                                    <button
-                                        onClick={() => onUpdateStatus(task.id, 'em_progresso')}
-                                        className="task-btn-secondary"
-                                    >
-                                        Iniciar
-                                    </button>
-                                )}
-                                {task.is_micro_task && task.status !== 'bloqueada' && (
-                                    <button
-                                        onClick={openReturnModal}
-                                        className="task-btn-secondary"
-                                        disabled={loadingProfessionals}
-                                    >
-                                        Solicitar Ajuste
-                                    </button>
-                                )}
-                                <button
-                                    onClick={() => onUpdateStatus(task.id, 'concluida')}
-                                    className="task-btn-primary"
-                                >
-                                    <CheckCircle2 size={20} />
-                                    Concluir Tarefa
-                                </button>
-                            </>
-                        ) : (
-                            <button
-                                onClick={() => onUpdateStatus(task.id, 'em_progresso')}
-                                className="task-btn-reopen"
-                            >
-                                Reabrir Tarefa
-                            </button>
-                        )}
-                    </div>
-                </div>
-
-                {/* Return Modal */}
-                {showReturnModal && task.is_micro_task && (
-                    <ReturnReasonModal
-                        microTask={task}
-                        professionals={professionals}
-                        onClose={() => setShowReturnModal(false)}
-                        onSubmit={handleReturnTask}
-                    />
+                    </section>
                 )}
 
-                {/* Delete Confirmation Modal */}
-                {showDeleteModal && (
-                    <ConfirmDeleteModal
-                        taskTitle={task.titulo}
-                        onClose={() => setShowDeleteModal(false)}
-                        onConfirm={handleConfirmDelete}
-                        isDeleting={isDeleting}
+                {/* Timeline Section */}
+                <section className="execution-section timeline-section">
+                    <div className="execution-section-title">
+                        <Clock size={14} />
+                        Histórico & Comentários
+                    </div>
+
+                    <Timeline
+                        osId={task.tarefa_id || task.id}
+                        key={timelineKey}
                     />
-                )}
+
+                    <div style={{ marginTop: '24px' }}>
+                        <ComentarioForm
+                            taskId={task.tarefa_id || task.id}
+                            onCommentAdded={refreshTimeline}
+                        />
+                    </div>
+                </section>
             </div>
-        </div>,
-        document.body
+
+            {/* --- STICKY ACTIONS BAR --- */}
+            <div className="actions-bar">
+                {/* Secondary Group (Left) */}
+                <div className="actions-group-secondary">
+                    {/* Delete (Icon Only) */}
+                    {isCreator && !task.is_micro_task && (
+                        <button
+                            className="btn-destructive-icon"
+                            onClick={() => setShowDeleteModal(true)}
+                            title="Excluir Tarefa"
+                        >
+                            <Trash2 size={20} />
+                        </button>
+                    )}
+                </div>
+
+                {/* Primary Group (Right) */}
+                <div className="actions-group-primary">
+                    {/* Convert to Workflow */}
+                    <PermissionGuard can={role === 'admin' || role === 'super_admin'} fallback={null}>
+                        {!task.is_micro_task && !task.has_micro_tasks && !isCompleted && (
+                            <button onClick={() => setTaskToConvert(task)} className="btn-action secondary">
+                                <Workflow size={18} />
+                                <span className="hidden sm:inline">Converter</span>
+                            </button>
+                        )}
+                    </PermissionGuard>
+
+                    {/* Return Adjustment (Micro Task) */}
+                    {task.is_micro_task && task.status !== 'bloqueada' && !isCompleted && (
+                        <button onClick={openReturnModal} className="btn-action secondary" disabled={loadingProfessionals}>
+                            Solicitar Ajuste
+                        </button>
+                    )}
+
+                    {/* Start Task */}
+                    {task.status === 'pendente' && (
+                        <button onClick={() => onUpdateStatus(task.id, 'em_progresso')} className="btn-action primary">
+                            Iniciar Execução
+                        </button>
+                    )}
+
+                    {/* Reopen Task */}
+                    {isCompleted && (
+                        <button onClick={() => onUpdateStatus(task.id, 'em_progresso')} className="btn-action secondary">
+                            Reabrir Tarefa
+                        </button>
+                    )}
+
+                    {/* Complete Task */}
+                    {task.status === 'em_progresso' && (
+                        <button onClick={() => onUpdateStatus(task.id, 'concluida')} className="btn-action primary">
+                            <CheckCircle2 size={18} />
+                            Concluir Tarefa
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            {/* Modals */}
+            {showReturnModal && (
+                <ReturnReasonModal
+                    isOpen={showReturnModal}
+                    task={task}
+                    professionals={professionals}
+                    onClose={() => setShowReturnModal(false)}
+                    onSubmit={handleReturnTask}
+                />
+            )}
+
+            {showDeleteModal && (
+                <ConfirmDeleteModal
+                    taskTitle={task.titulo}
+                    onClose={() => setShowDeleteModal(false)}
+                    onConfirm={handleConfirmDelete}
+                    isDeleting={isDeleting}
+                />
+            )}
+
+            {taskToConvert && (
+                <ConversaoWorkflowModal
+                    os={taskToConvert}
+                    isOpen={!!taskToConvert}
+                    onClose={() => setTaskToConvert(null)}
+                    onSuccess={() => {
+                        setTaskToConvert(null)
+                        setSelectedTask(null)
+                        onRefresh()
+                    }}
+                />
+            )}
+        </div>
     )
 }

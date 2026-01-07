@@ -1,0 +1,195 @@
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Permission Guard Styles - ETAPA 4 FASE 3
+   Estilos para componente de controle de permissões
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.permission-guard-disabled {
+    position: relative;
+    display: inline-block;
+}
+
+.permission-guard-disabled button,
+.permission-guard-disabled input {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.permission-guard-tooltip {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-bottom: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: #2d3748;
+    color: #fff;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    display: none;
+    align-items: center;
+    gap: 0.25rem;
+    z-index: 1000;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.permission-guard-tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: #2d3748;
+}
+
+.permission-guard-disabled:hover .permission-guard-tooltip {
+    display: flex;
+}
+
+/* Permission Button */
+.permission-button-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.permission-button-wrapper.disabled button {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.permission-tooltip {
+    position: absolute;
+    bottom: calc(100% + 0.5rem);
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 0.5rem 0.75rem;
+    background: #2d3748;
+    color: #fff;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    display: none;
+    z-index: 1000;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.permission-tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: #2d3748;
+}
+
+.permission-button-wrapper:hover .permission-tooltip {
+    display: block;
+}
+
+/* Blocked Action Modal */
+.blocked-action-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    padding: 1rem;
+}
+
+.blocked-action-content {
+    background: #fff;
+    border-radius: 12px;
+    padding: 2rem;
+    max-width: 400px;
+    width: 100%;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+.blocked-action-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.blocked-action-header svg {
+    color: #f59e0b;
+}
+
+.blocked-action-header h3 {
+    margin: 0;
+    font-size: 1.25rem;
+    color: #1a202c;
+}
+
+.blocked-action-body {
+    color: #4a5568;
+    line-height: 1.6;
+    margin-bottom: 1.5rem;
+}
+
+.blocked-action-reason {
+    background: #f7fafc;
+    border-left: 3px solid #4299e1;
+    padding: 0.75rem 1rem;
+    margin: 1rem 0;
+    border-radius: 4px;
+}
+
+.blocked-action-reason strong {
+    display: block;
+    color: #2d3748;
+    margin-bottom: 0.25rem;
+    font-size: 0.875rem;
+}
+
+.blocked-action-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.blocked-action-actions button {
+    padding: 0.5rem 1.5rem;
+    background: #4299e1;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.blocked-action-actions button:hover {
+    background: #3182ce;
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+
+    .permission-tooltip,
+    .permission-guard-tooltip {
+        position: fixed;
+        bottom: 1rem;
+        left: 1rem;
+        right: 1rem;
+        transform: none;
+        white-space: normal;
+        text-align: center;
+    }
+
+    .permission-tooltip::after,
+    .permission-guard-tooltip::after {
+        display: none;
+    }
+
+    .blocked-action-content {
+        padding: 1.5rem;
+    }
+}

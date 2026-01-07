@@ -1,0 +1,130 @@
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Comment Form Styles - ETAPA 3 FASE 5
+   Estilos para formulário de criação de comentários
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.comment-form {
+    width: 100%;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.comment-form-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.comment-form-header label {
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: #2d3748;
+}
+
+.comment-form-counter {
+    font-size: 0.75rem;
+    color: #a0aec0;
+}
+
+.comment-form-textarea {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid #cbd5e0;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    resize: vertical;
+    min-height: 80px;
+    transition: all 0.2s;
+}
+
+.comment-form-textarea::placeholder {
+    color: #cbd5e0;
+}
+
+.comment-form-textarea:focus {
+    outline: none;
+    border-color: #4299e1;
+    box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+}
+
+.comment-form-textarea:disabled {
+    background: #f7fafc;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.comment-form-error {
+    margin-top: 0.5rem;
+    padding: 0.75rem;
+    background: #fff5f5;
+    border-left: 3px solid #f56565;
+    border-radius: 4px;
+    color: #c53030;
+    font-size: 0.875rem;
+}
+
+.comment-form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+
+.comment-form-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.comment-form-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.comment-form-btn-clear {
+    background: #e2e8f0;
+    color: #4a5568;
+}
+
+.comment-form-btn-clear:hover:not(:disabled) {
+    background: #cbd5e0;
+}
+
+.comment-form-btn-submit {
+    background: #4299e1;
+    color: #fff;
+}
+
+.comment-form-btn-submit:hover:not(:disabled) {
+    background: #3182ce;
+    box-shadow: 0 4px 8px rgba(66, 153, 225, 0.3);
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+    .comment-form {
+        padding: 0.75rem;
+    }
+
+    .comment-form-actions {
+        flex-direction: column-reverse;
+    }
+
+    .comment-form-btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
