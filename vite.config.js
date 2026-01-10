@@ -34,20 +34,51 @@ export default defineConfig({
         skipWaiting: false, // Prevent silent takeover - user must confirm update
         // navigateFallback: 'index.html', // Ensure SPA routing works offline if needed
         runtimeCaching: [
+          // 🔐 AUTH ROUTES — NEVER CACHE (CRITICAL FIX FOR MOBILE LOGOUT)
+          // iOS/Android clear SW cache in background, but NOT localStorage.
+          // If auth routes are cached, token refresh fails → forced logout.
+          // Solution: Always fetch auth from network, never from cache.
           {
-            urlPattern: /^https:\/\/gyooxmpyxncrezjiljrj\.supabase\.co\/.*$/,
+            urlPattern: /^https:\/\/gyooxmpyxncrezjiljrj\.supabase\.co\/auth\/.*$/,
+            handler: 'NetworkOnly', // ← CRITICAL: No caching for auth
+          },
+
+          // 📊 DATA API — NETWORK FIRST WITH CACHE FALLBACK
+          // Rest API can be cached for performance, but prioritize fresh data
+          {
+            urlPattern: /^https:\/\/gyooxmpyxncrezjiljrj\.supabase\.co\/rest\/.*$/,
             handler: 'NetworkFirst',
             options: {
-              cacheName: 'supabase-api',
+              cacheName: 'supabase-data-api',
+              networkTimeoutSeconds: 10,
               expiration: {
                 maxEntries: 50,
-                maxAgeSeconds: 60 * 60 * 24 // 24 horas
+                maxAgeSeconds: 60 * 60 * 24 // 24 hours
               },
               cacheableResponse: {
                 statuses: [0, 200]
               }
             }
           },
+
+          // 📦 STORAGE (FILES) — CACHE FIRST FOR PERFORMANCE
+          // Static assets can be heavily cached
+          {
+            urlPattern: /^https:\/\/gyooxmpyxncrezjiljrj\.supabase\.co\/storage\/.*$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'supabase-storage',
+              expiration: {
+                maxEntries: 100,
+                maxAgeSeconds: 60 * 60 * 24 * 7 // 7 days
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
+          },
+
+          // 🎨 GOOGLE FONTS — CACHE FIRST (UNCHANGED)
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
             handler: 'CacheFirst',
@@ -55,7 +86,7 @@ export default defineConfig({
               cacheName: 'google-fonts-cache',
               expiration: {
                 maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 365 // 1 ano
+                maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
               },
               cacheableResponse: {
                 statuses: [0, 200]
