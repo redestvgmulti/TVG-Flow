@@ -385,3 +385,88 @@
         /* Slightly smaller on mobile to save space */
     }
 }
+
+/* --- Attachments Section --- */
+.attachments-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.attachment-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: white;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid var(--ios-gray-200);
+    transition: all 0.2s;
+}
+
+.attachment-card:hover {
+    border-color: var(--ios-blue-500);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.attachment-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--ios-gray-100);
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    flex-shrink: 0;
+}
+
+.attachment-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.attachment-name {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--ios-gray-900);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.attachment-size {
+    font-size: 0.75rem;
+    color: var(--ios-gray-500);
+}
+
+.attachment-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.attachment-action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    color: var(--ios-gray-400);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.attachment-action-btn:hover {
+    background: var(--ios-gray-100);
+    color: var(--ios-blue-600);
+}
+
+.attachment-action-btn.destructive:hover {
+    background: var(--ios-red-50);
+    color: var(--ios-red-600);
+}

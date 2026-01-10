@@ -1,0 +1,86 @@
+-- Migration: Create Storage Bucket for Task Attachments
+-- Description: Creates the 'task-attachments' bucket and sets up RLS policies
+-- Author: System
+-- Date: 2026-01-10
+
+-- Create the storage bucket if it doesn't exist
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+  'task-attachments',
+  'task-attachments',
+  false,
+  10485760, -- 10MB limit
+  ARRAY[
+    'application/pdf',
+    'image/jpeg',
+    'image/png',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/zip',
+    'application/x-zip-compressed'
+  ]
+) ON CONFLICT (id) DO UPDATE SET
+  file_size_limit = EXCLUDED.file_size_limit,
+  allowed_mime_types = EXCLUDED.allowed_mime_types;
+
+-- RLS Policies for Storage
+
+-- Policy: Authenticated users can read files from their company's folder or own uploads
+-- Folder structure: {empresa_id}/{tarefa_id}/{filename}
+CREATE POLICY "Company members can view attachments"
+ON storage.objects FOR SELECT
+USING (
+  bucket_id = 'task-attachments' AND
+  auth.role() = 'authenticated' AND
+  (
+    -- Check if user belongs to the company in the path
+    EXISTS (
+      SELECT 1 FROM empresa_profissionais ep
+      WHERE ep.profissional_id = auth.uid()
+      AND ep.empresa_id::text = (storage.foldername(name))[1]
+      AND ep.ativo = true
+    )
+  )
+);
+
+-- Policy: Users can upload to their company's folder in the bucket
+CREATE POLICY "Users can upload to company folder"
+ON storage.objects FOR INSERT
+WITH CHECK (
+  bucket_id = 'task-attachments' AND
+  auth.role() = 'authenticated' AND
+  (
+    -- Check if user belongs to the company in the path
+    EXISTS (
+      SELECT 1 FROM empresa_profissionais ep
+      WHERE ep.profissional_id = auth.uid()
+      AND ep.empresa_id::text = (storage.foldername(name))[1]
+      AND ep.ativo = true
+    )
+  )
+);
+
+-- Policy: Users can delete their own uploads
+CREATE POLICY "Users can delete own uploads"
+ON storage.objects FOR DELETE
+USING (
+  bucket_id = 'task-attachments' AND
+  auth.uid() = owner
+);
+
+-- Policy: Admins can delete uploads in their company
+CREATE POLICY "Admins can delete company uploads"
+ON storage.objects FOR DELETE
+USING (
+  bucket_id = 'task-attachments' AND
+  auth.role() = 'authenticated' AND
+  EXISTS (
+    SELECT 1 FROM empresa_profissionais ep
+    JOIN profissionais p ON p.id = ep.profissional_id
+    WHERE ep.profissional_id = auth.uid()
+    AND ep.empresa_id::text = (storage.foldername(name))[1]
+    AND p.role = 'admin'
+  )
+);

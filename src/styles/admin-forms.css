@@ -338,3 +338,121 @@
 .admin-function-btn.selected:hover {
     background-color: var(--color-primary-light, #dbeafe);
 }
+
+/* File Upload Component */
+.file-upload-container {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.file-drop-zone {
+    border: 2px dashed var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 32px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    cursor: pointer;
+    background-color: var(--color-bg-subtle);
+    transition: all 0.2s ease;
+}
+
+.file-drop-zone:hover,
+.file-drop-zone.dragging {
+    border-color: var(--color-primary);
+    background-color: var(--color-primary-light-subtle, #eff6ff);
+}
+
+.drop-zone-icon {
+    color: var(--color-text-tertiary);
+    margin-bottom: 12px;
+    transition: color 0.2s ease;
+}
+
+.file-drop-zone:hover .drop-zone-icon {
+    color: var(--color-primary);
+}
+
+.drop-zone-text {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    margin: 0 0 4px 0;
+}
+
+.drop-zone-text span {
+    color: var(--color-primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.drop-zone-hint {
+    font-size: 0.8rem;
+    color: var(--color-text-tertiary);
+    margin: 0;
+}
+
+.file-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.file-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px;
+    background-color: var(--color-bg-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    transition: border-color 0.2s ease;
+}
+
+.file-item:hover {
+    border-color: var(--color-border-hover);
+}
+
+.file-item-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.file-item-details {
+    display: flex;
+    flex-direction: column;
+}
+
+.file-name {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    word-break: break-all;
+}
+
+.file-size {
+    font-size: 0.75rem;
+    color: var(--color-text-tertiary);
+}
+
+.file-remove-btn {
+    padding: 6px;
+    background: transparent;
+    border: none;
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.file-remove-btn:hover {
+    background-color: var(--color-danger-subtle, #fee2e2);
+    color: var(--color-danger);
+}

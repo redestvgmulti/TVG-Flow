@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
-import { CheckCircle, AlertTriangle, Layers, Building2, Calendar as CalendarIcon, Plus, X, GripVertical, Folder } from 'lucide-react'
+import { CheckCircle, AlertTriangle, Layers, Building2, Calendar as CalendarIcon, Plus, X, GripVertical, Link, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { clientService } from '../../services/clientService'
-import { professionalsService } from '../../services/professionals'
+import { professionalsService } from '../../services/professionalsService'
 import { supabase } from '../../services/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import { fileService } from '../../services/fileService'
+import FileUpload from './FileUpload'
 import '../../styles/admin-forms.css'
 
 export default function TaskForm({ onSuccess, onCancel }) {
@@ -22,6 +24,7 @@ export default function TaskForm({ onSuccess, onCancel }) {
     const [deadline, setDeadline] = useState('')
     const [prioridade, setPrioridade] = useState('normal')
     const [driveLink, setDriveLink] = useState('')
+    const [attachments, setAttachments] = useState([]) // New: Files state
     const [selectedFunctions, setSelectedFunctions] = useState([])
 
     // Workflow Mode
@@ -33,6 +36,7 @@ export default function TaskForm({ onSuccess, onCancel }) {
     const [loadingFunctions, setLoadingFunctions] = useState(false)
     const [loadingProfessionals, setLoadingProfessionals] = useState(false)
     const [submitting, setSubmitting] = useState(false)
+    const [uploadingFiles, setUploadingFiles] = useState(false) // New: Upload state
 
     useEffect(() => {
         loadCompanies()
@@ -232,7 +236,6 @@ export default function TaskForm({ onSuccess, onCancel }) {
 
             if (error) {
                 console.error('Edge Function error:', error)
-                // Try to extract error message from response
                 const errorMessage = error.message || error.msg || 'Erro ao criar OS'
                 toast.error(`Erro: ${errorMessage}`)
                 throw new Error(errorMessage)
@@ -251,6 +254,41 @@ export default function TaskForm({ onSuccess, onCancel }) {
                 throw new Error(errorMessage)
             }
 
+            // --- FILE UPLOAD LOGIC ---
+            if (attachments.length > 0) {
+                setUploadingFiles(true)
+                let targetTaskId = null
+
+                if (data.mode === 'macro_micro' && data.macro_task_id) {
+                    targetTaskId = data.macro_task_id
+                } else if (data.mode === 'legacy' && data.tasks && data.tasks.length > 0) {
+                    // In legacy mode (multiple tasks), attach to the first one as primary
+                    targetTaskId = data.tasks[0].id
+                }
+
+                if (targetTaskId) {
+                    toast.loading('Enviando arquivos...', { id: 'upload-toast' })
+
+                    const uploadResults = await fileService.uploadTaskAttachments(
+                        attachments,
+                        targetTaskId,
+                        empresaId,
+                        user.id
+                    )
+
+                    toast.dismiss('upload-toast')
+
+                    if (uploadResults.failed.length > 0) {
+                        toast.warning(`${uploadResults.success.length} arquivos enviados. ${uploadResults.failed.length} falharam.`)
+                    } else {
+                        toast.success(`${uploadResults.success.length} arquivos anexados com sucesso!`)
+                    }
+                } else {
+                    console.warn('Could not determine target task ID for attachments')
+                    toast.warning('OS criada, mas não foi possível anexar os arquivos (ID não encontrado)')
+                }
+            }
+
             const successMessage = useWorkflow
                 ? `Macro tarefa criada! (${data.micro_tasks_created} etapas geradas)`
                 : `OS criada! (${data.tasks_created} tarefas geradas)`
@@ -266,6 +304,7 @@ export default function TaskForm({ onSuccess, onCancel }) {
             toast.error(error.message || 'Falha ao criar OS')
         } finally {
             setSubmitting(false)
+            setUploadingFiles(false)
         }
     }
 
@@ -367,7 +406,7 @@ export default function TaskForm({ onSuccess, onCancel }) {
             {/* Drive Link */}
             <div className="admin-form-group">
                 <label className="admin-form-label">
-                    <Folder className="admin-form-label-icon" />
+                    <Link className="admin-form-label-icon" />
                     Link do Drive
                 </label>
                 <input
@@ -377,6 +416,21 @@ export default function TaskForm({ onSuccess, onCancel }) {
                     onChange={e => setDriveLink(e.target.value)}
                     placeholder="https://drive.google.com/..."
                 />
+            </div>
+
+            {/* File Attachments */}
+            <div className="admin-form-group">
+                <label className="admin-form-label">
+                    <Upload className="admin-form-label-icon" />
+                    Anexar Arquivos
+                </label>
+                <FileUpload
+                    files={attachments}
+                    onFilesChange={setAttachments}
+                />
+                <p className="admin-form-helper" style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
+                    Máx 5 arquivos de até 10MB cada.
+                </p>
             </div>
 
             {/* Workflow Mode Toggle */}
@@ -611,7 +665,9 @@ export default function TaskForm({ onSuccess, onCancel }) {
                     className="admin-form-btn-submit"
                     disabled={submitting || (useWorkflow ? workflowStages.length === 0 : selectedFunctions.length === 0)}
                 >
-                    {submitting ? 'Criando...' : (useWorkflow ? 'Criar Macro Tarefa' : 'Criar OS')}
+                    {submitting
+                        ? (uploadingFiles ? 'Enviando arquivos...' : 'Criando...')
+                        : (useWorkflow ? 'Criar Macro Tarefa' : 'Criar OS')}
                 </button>
             </div>
         </form>
