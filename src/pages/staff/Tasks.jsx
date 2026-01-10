@@ -594,8 +594,8 @@ function ExecutionView({ task, onBack, onUpdateStatus, onDeleteTask, user, role,
         }
     }
 
-    const statusClass = isCompleted ? 'completed' : task.status === 'em_progresso' ? 'active' : 'pending'
-    const statusText = isCompleted ? 'Concluída' : task.status === 'em_progresso' ? 'Em Andamento' : 'Pendente'
+    const statusClass = isCompleted ? 'completed' : (task.status === 'em_progresso' || task.status === 'em_execucao') ? 'active' : 'pending'
+    const statusText = isCompleted ? 'Concluída' : (task.status === 'em_progresso' || task.status === 'em_execucao') ? 'Em Andamento' : 'Pendente'
 
     return (
         <div className="execution-container">
@@ -617,9 +617,9 @@ function ExecutionView({ task, onBack, onUpdateStatus, onDeleteTask, user, role,
                 {/* Meta Data Grid */}
                 <div className="execution-meta-grid">
                     {/* Status Badge */}
-                    <span className={`meta-badge status-${task.status === 'concluida' ? 'completed' : task.status === 'em_progresso' ? 'active' : 'pending'}`}>
+                    <span className={`meta-badge status-${task.status === 'concluida' ? 'completed' : (task.status === 'em_progresso' || task.status === 'em_execucao') ? 'active' : 'pending'}`}>
                         {isCompleted && <CheckCircle2 size={14} />}
-                        {task.status === 'em_progresso' && <Clock size={14} />}
+                        {(task.status === 'em_progresso' || task.status === 'em_execucao') && <Clock size={14} />}
                         {statusText}
                     </span>
 
@@ -779,7 +779,7 @@ function ExecutionView({ task, onBack, onUpdateStatus, onDeleteTask, user, role,
 
                     {/* Start Task */}
                     {task.status === 'pendente' && (
-                        <button onClick={() => onUpdateStatus(task.id, 'em_progresso')} className="btn-action primary">
+                        <button onClick={() => onUpdateStatus(task.id, task.is_micro_task ? 'em_execucao' : 'em_progresso')} className="btn-action primary">
                             Iniciar Execução
                         </button>
                     )}
@@ -792,7 +792,7 @@ function ExecutionView({ task, onBack, onUpdateStatus, onDeleteTask, user, role,
                     )}
 
                     {/* Complete Task */}
-                    {task.status === 'em_progresso' && (
+                    {(task.status === 'em_progresso' || task.status === 'em_execucao') && (
                         <button onClick={() => onUpdateStatus(task.id, 'concluida')} className="btn-action primary">
                             <CheckCircle2 size={18} />
                             Concluir Tarefa
