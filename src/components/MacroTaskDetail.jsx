@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Clock, CheckCircle2, AlertCircle, Lock, RotateCcw, User, Play, X } from 'lucide-react'
+import { ArrowLeft, Clock, CheckCircle2, AlertCircle, Lock, RotateCcw, User, Play, X, Paperclip, Download, FileText, Trash2 } from 'lucide-react'
 import { supabase } from '../services/supabase'
 import { toast } from 'sonner'
 import { useAuth } from '../contexts/AuthContext'
+import { fileService } from '../services/fileService'
 import { completeMicroTask, updateMicroTaskStatus, loadWorkflowProfessionals, returnMicroTask } from '../utils/taskExecution'
 import ReturnReasonModal from './ReturnReasonModal'
 import '../styles/macro-task.css'
@@ -19,11 +20,63 @@ export default function MacroTaskDetail({ taskId, onBack, isModal = false }) {
     const [professionals, setProfessionals] = useState([])
     const [activityLogs, setActivityLogs] = useState([])
 
+    // Attachments State
+    const [attachments, setAttachments] = useState([])
+    const [loadingAttachments, setLoadingAttachments] = useState(false)
+
     useEffect(() => {
         if (taskId) {
             fetchTaskDetails()
+            loadAttachments()
         }
     }, [taskId])
+
+    async function loadAttachments() {
+        try {
+            setLoadingAttachments(true)
+            const files = await fileService.getTaskAttachments(taskId)
+            setAttachments(files || [])
+        } catch (error) {
+            console.error('Error loading attachments:', error)
+        } finally {
+            setLoadingAttachments(false)
+        }
+    }
+
+    async function handleDownload(file) {
+        try {
+            toast.loading('Preparando download...', { id: 'download' })
+            const url = await fileService.getDownloadUrl(file.storage_path)
+
+            const a = document.createElement('a')
+            a.href = url
+            a.download = file.original_filename
+            document.body.appendChild(a)
+            a.click()
+            document.body.removeChild(a)
+
+            toast.dismiss('download')
+        } catch (error) {
+            console.error('Download error:', error)
+            toast.error('Erro ao baixar arquivo')
+        }
+    }
+
+    async function handleDeleteAttachment(fileId) {
+        if (!confirm('Tem certeza que deseja excluir este anexo?')) return
+
+        try {
+            toast.loading('Excluindo...', { id: 'delete-file' })
+            await fileService.deleteAttachment(fileId)
+
+            setAttachments(prev => prev.filter(f => f.id !== fileId))
+            toast.success('Arquivo excluído')
+            toast.dismiss('delete-file')
+        } catch (error) {
+            console.error('Delete error:', error)
+            toast.error('Erro ao excluir arquivo')
+        }
+    }
 
     async function fetchTaskDetails() {
         try {
@@ -252,7 +305,53 @@ export default function MacroTaskDetail({ taskId, onBack, isModal = false }) {
                     </div>
                 )}
 
-                {/* Workflow Timeline */}
+                {/* Attachments */}
+                {attachments.length > 0 && (
+                    <div className="macro-task-section">
+                        <h3 className="section-title">
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <Paperclip size={16} /> ANEXOS ({attachments.length})
+                            </span>
+                        </h3>
+                        <div className="attachments-grid">
+                            {attachments.map(file => (
+                                <div key={file.id} className="attachment-card">
+                                    <div className="attachment-icon">
+                                        <FileText size={20} className="text-secondary" />
+                                    </div>
+                                    <div className="attachment-info">
+                                        <span className="attachment-name" title={file.original_filename}>
+                                            {file.original_filename}
+                                        </span>
+                                        <span className="attachment-size">
+                                            {(file.file_size / 1024).toFixed(0)} KB
+                                        </span>
+                                    </div>
+                                    <div className="attachment-actions">
+                                        <button
+                                            onClick={() => handleDownload(file)}
+                                            className="attachment-action-btn"
+                                            title="Baixar"
+                                        >
+                                            <Download size={14} />
+                                        </button>
+                                        {(file.uploaded_by === user?.id || user?.role === 'admin' || user?.role === 'super_admin') && (
+                                            <button
+                                                onClick={() => handleDeleteAttachment(file.id)}
+                                                className="attachment-action-btn destructive"
+                                                title="Excluir"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Workflow Timeline - Modern Vertical Step */}
                 <div className="macro-task-section">
                     <h3 className="section-title">FLUXO DE TRABALHO</h3>
                     <div className="timeline-container">

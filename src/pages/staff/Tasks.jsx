@@ -16,11 +16,14 @@ import {
     FileText,
     ExternalLink,
     Trash2,
-    Workflow
+    Workflow,
+    Paperclip,
+    Download
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '../../contexts/AuthContext'
 import { useRefresh } from '../../contexts/RefreshContext'
+import { fileService } from '../../services/fileService'
 import ReturnReasonModal from '../../components/ReturnReasonModal'
 import ConfirmDeleteModal from '../../components/ConfirmDeleteModal'
 import Timeline from '../../components/Timeline'
@@ -494,6 +497,69 @@ function ExecutionView({ task, onBack, onUpdateStatus, onDeleteTask, user, role,
     const isCompleted = task.status === 'concluida'
     const isCreator = task.created_by === user.id
 
+    // Attachments State
+    const [attachments, setAttachments] = useState([])
+    const [loadingAttachments, setLoadingAttachments] = useState(false)
+
+    useEffect(() => {
+        loadAttachments()
+    }, [task.id])
+
+    async function loadAttachments() {
+        try {
+            setLoadingAttachments(true)
+            // Use parent task ID if it's a micro task, or the task ID itself
+            // Actually, we attach to the task ID effectively.
+            // If it's a micro task, the attachment might be on the macro task (tarefa_id).
+            // Let's check both or prefer macro task if available.
+            // Logic: if micro task, attachments are likely on the macro task (the "OS").
+            const targetId = task.tarefa_id || task.id
+            const files = await fileService.getTaskAttachments(targetId)
+            setAttachments(files || [])
+        } catch (error) {
+            console.error('Error loading attachments:', error)
+            toast.error('Erro ao carregar anexos')
+        } finally {
+            setLoadingAttachments(false)
+        }
+    }
+
+    async function handleDownload(file) {
+        try {
+            toast.loading('Preparando download...', { id: 'download' })
+            const url = await fileService.getDownloadUrl(file.storage_path)
+
+            // Create temporary link and click it
+            const a = document.createElement('a')
+            a.href = url
+            a.download = file.original_filename
+            document.body.appendChild(a)
+            a.click()
+            document.body.removeChild(a)
+
+            toast.dismiss('download')
+        } catch (error) {
+            console.error('Download error:', error)
+            toast.error('Erro ao baixar arquivo')
+        }
+    }
+
+    async function handleDeleteAttachment(fileId) {
+        if (!confirm('Tem certeza que deseja excluir este anexo?')) return
+
+        try {
+            toast.loading('Excluindo...', { id: 'delete-file' })
+            await fileService.deleteAttachment(fileId)
+
+            setAttachments(prev => prev.filter(f => f.id !== fileId))
+            toast.success('Arquivo excluído')
+            toast.dismiss('delete-file')
+        } catch (error) {
+            console.error('Delete error:', error)
+            toast.error('Erro ao excluir arquivo')
+        }
+    }
+
     // Return modal state
     const [showReturnModal, setShowReturnModal] = useState(false)
     const [professionals, setProfessionals] = useState([])
@@ -707,6 +773,52 @@ function ExecutionView({ task, onBack, onUpdateStatus, onDeleteTask, user, role,
                         )}
                     </div>
                 </section>
+
+                {/* Attachments Section */}
+                {attachments.length > 0 && (
+                    <section className="execution-section">
+                        <div className="execution-section-title">
+                            <Paperclip size={14} />
+                            Anexos ({attachments.length})
+                        </div>
+                        <div className="attachments-grid">
+                            {attachments.map(file => (
+                                <div key={file.id} className="attachment-card">
+                                    <div className="attachment-icon">
+                                        <FileText size={20} className="text-secondary" />
+                                    </div>
+                                    <div className="attachment-info">
+                                        <span className="attachment-name" title={file.original_filename}>
+                                            {file.original_filename}
+                                        </span>
+                                        <span className="attachment-size">
+                                            {(file.file_size / 1024).toFixed(0)} KB
+                                        </span>
+                                    </div>
+                                    <div className="attachment-actions">
+                                        <button
+                                            onClick={() => handleDownload(file)}
+                                            className="attachment-action-btn"
+                                            title="Baixar"
+                                        >
+                                            <Download size={14} />
+                                        </button>
+                                        {/* Allow delete if user is owner or admin */}
+                                        {(file.uploaded_by === user.id || role === 'admin' || role === 'super_admin') && (
+                                            <button
+                                                onClick={() => handleDeleteAttachment(file.id)}
+                                                className="attachment-action-btn destructive"
+                                                title="Excluir"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                )}
 
                 {/* Return/Block Reason */}
                 {(task.status === 'devolvida' || task.status === 'bloqueada') && task.observacoes && (
