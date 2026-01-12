@@ -910,6 +910,21 @@ function ExecutionView({ task, onBack, onUpdateStatus, onDeleteTask, user, role,
                             Concluir Tarefa
                         </button>
                     )}
+
+                    {/* Blocked State Feedback */}
+                    {task.status === 'bloqueada' && (
+                        <button disabled className="btn-action secondary" style={{ opacity: 0.7 }}>
+                            <Lock size={18} />
+                            Bloqueada
+                        </button>
+                    )}
+
+                    {/* Returned State */}
+                    {task.status === 'devolvida' && (
+                        <button onClick={() => onUpdateStatus(task.id, task.is_micro_task ? 'em_execucao' : 'em_progresso')} className="btn-action primary">
+                            Reiniciar Execução
+                        </button>
+                    )}
                 </div>
             </div>
 

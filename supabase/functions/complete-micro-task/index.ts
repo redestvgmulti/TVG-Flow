@@ -45,13 +45,27 @@ serve(async (req) => {
             )
         }
 
+        // Check if user is admin
+        const { data: professional } = await supabaseClient
+            .from('profissionais')
+            .select('role')
+            .eq('id', user.id)
+            .single()
+
+        const isAdmin = professional?.role === 'admin'
+
         // Fetch micro task and validate ownership
-        const { data: microTask, error: fetchError } = await supabaseClient
+        let query = supabaseClient
             .from('tarefas_micro')
             .select('*, tarefas(titulo)')
             .eq('id', micro_task_id)
-            .eq('profissional_id', user.id)
-            .single()
+
+        // Only enforce ownership if not admin
+        if (!isAdmin) {
+            query = query.eq('profissional_id', user.id)
+        }
+
+        const { data: microTask, error: fetchError } = await query.single()
 
         if (fetchError || !microTask) {
             return new Response(
