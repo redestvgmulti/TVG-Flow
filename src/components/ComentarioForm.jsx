@@ -7,7 +7,10 @@ import '../styles/comment-form.css'
  * Componente ComentarioForm - ETAPA 3 FASE 5
  * Formulário para adicionar novos comentários em uma OS
  */
-export default function ComentarioForm({ osId, onSuccess }) {
+export default function ComentarioForm({ taskId, osId, onSuccess }) {
+    // BACKWARD COMPATIBILITY: Accept either taskId or osId
+    const finalTaskId = taskId || osId
+    
     const [content, setContent] = React.useState('')
     const [isSubmitting, setIsSubmitting] = React.useState(false)
     const [error, setError] = React.useState(null)
@@ -27,6 +30,13 @@ export default function ComentarioForm({ osId, onSuccess }) {
             setError('Comentário muito longo (máx 5000 caracteres)')
             return
         }
+        
+        // GUARD CLAUSE: Critical fix for NULL task_id
+        if (!finalTaskId) {
+            console.error('CRITICAL: Tentativa de comentar sem ID da tarefa (taskId/osId is null)')
+            setError('Erro interno: ID da tarefa não identificado. Tente recarregar a página.')
+            return
+        }
 
         try {
             setIsSubmitting(true)
@@ -43,7 +53,7 @@ export default function ComentarioForm({ osId, onSuccess }) {
             const { error: insertError } = await supabase
                 .from('task_comments')
                 .insert({
-                    task_id: osId,
+                    task_id: finalTaskId, // Fixed: Using the validated ID
                     author_id: user.id,
                     content: trimmedContent
                 })
