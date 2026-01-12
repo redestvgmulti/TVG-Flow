@@ -20,9 +20,9 @@ function MicroTasksList({ taskId, isAdmin = false, currentUserId = null }) {
         try {
             setLoading(true)
 
-            // FIX 1: Use profissionais table instead of usuarios
+            // Use tarefas_micro (correct table) with SLA fields
             const { data, error } = await supabase
-                .from('tarefas_itens')
+                .from('tarefas_micro')
                 .select(`
                     *,
                     deadline_at,
@@ -65,7 +65,7 @@ function MicroTasksList({ taskId, isAdmin = false, currentUserId = null }) {
             const newStatus = currentStatus === 'concluida' ? 'pendente' : 'concluida'
 
             const { error } = await supabase
-                .from('tarefas_itens')
+                .from('tarefas_micro')
                 .update({ status: newStatus })
                 .eq('id', microTaskId)
 

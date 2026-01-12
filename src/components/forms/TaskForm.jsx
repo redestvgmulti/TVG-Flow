@@ -127,7 +127,8 @@ export default function TaskForm({ onSuccess, onCancel }) {
             profissional_id: '',
             tags: [],
             prioridade: 'normal',
-            depends_on_ordem: workflowStages.length > 0 ? workflowStages.length : null
+            depends_on_ordem: workflowStages.length > 0 ? workflowStages.length : null,
+            deadline_at: ''
         }])
     }
 
@@ -141,7 +142,8 @@ export default function TaskForm({ onSuccess, onCancel }) {
             profissional_id: profissionalId,
             tags: [],
             prioridade: 'normal',
-            depends_on_ordem: workflowStages.length > 0 ? workflowStages.length : null
+            depends_on_ordem: workflowStages.length > 0 ? workflowStages.length : null,
+            deadline_at: ''
         }])
     }
 
@@ -606,6 +608,28 @@ export default function TaskForm({ onSuccess, onCancel }) {
                                                         updateWorkflowStage(index, 'tags', tags)
                                                     }}
                                                 />
+                                            </div>
+
+                                            {/* Deadline Row */}
+                                            <div>
+                                                <label className="admin-workflow-label">
+                                                    <CalendarIcon size={14} style={{ marginRight: '4px', display: 'inline' }} />
+                                                    Prazo da Etapa (opcional)
+                                                </label>
+                                                <input
+                                                    type="datetime-local"
+                                                    className="admin-form-input"
+                                                    value={stage.deadline_at || ''}
+                                                    onChange={(e) => updateWorkflowStage(index, 'deadline_at', e.target.value)}
+                                                    max="2099-12-31T23:59"
+                                                />
+                                                <p className="admin-form-helper" style={{
+                                                    fontSize: '0.7rem',
+                                                    color: 'var(--color-text-tertiary)',
+                                                    marginTop: '2px'
+                                                }}>
+                                                    Deixe em branco se não houver SLA para esta etapa
+                                                </p>
                                             </div>
                                         </div>
                                     </div>

@@ -143,7 +143,8 @@ serve(async (req) => {
                     funcao: stage.funcao,
                     peso: 1, // Default weight since we removed it from UI
                     status: initialStatus,
-                    depends_on: null // Will be set after creation
+                    depends_on: null, // Will be set after creation
+                    deadline_at: stage.deadline_at || null // SLA deadline for this micro task
                 }
 
                 const { data: microTask, error: microError } = await supabaseClient
