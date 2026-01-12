@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../services/supabase'
 import { Users, CheckCircle, Clock, Link as LinkIcon } from 'lucide-react'
 import { toast } from 'sonner'
+import SLAIndicator from './SLAIndicator'
 import '../styles/microTasks.css'
+
 
 function MicroTasksList({ taskId, isAdmin = false, currentUserId = null }) {
     const [microTasks, setMicroTasks] = useState([])
@@ -23,6 +25,9 @@ function MicroTasksList({ taskId, isAdmin = false, currentUserId = null }) {
                 .from('tarefas_itens')
                 .select(`
                     *,
+                    deadline_at,
+                    started_at,
+                    finished_at,
                     profissionais (
                         id,
                         nome,
@@ -161,6 +166,26 @@ function MicroTasksList({ taskId, isAdmin = false, currentUserId = null }) {
                                     <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', margin: 0 }}>
                                         {microTask.observacoes}
                                     </p>
+                                )}
+
+                                {/* Deadline e SLA */}
+                                {microTask.deadline_at && (
+                                    <div className="micro-task-deadline">
+                                        <Clock size={12} />
+                                        <span>
+                                            Prazo: {new Date(microTask.deadline_at).toLocaleString('pt-BR', {
+                                                day: '2-digit',
+                                                month: '2-digit',
+                                                hour: '2-digit',
+                                                minute: '2-digit'
+                                            })}
+                                        </span>
+                                        <SLAIndicator
+                                            deadlineAt={microTask.deadline_at}
+                                            status={microTask.status}
+                                            size="small"
+                                        />
+                                    </div>
                                 )}
 
                                 {microTask.concluida_at && (

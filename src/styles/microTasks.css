@@ -210,4 +210,27 @@
     .micro-task-actions button {
         flex: 1;
     }
+
+    .micro-task-actions button:hover {
+        background: #f1f5f9;
+    }
+}
+
+/* Deadline Display */
+.micro-task-deadline {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    margin-top: 8px;
+    flex-wrap: wrap;
+}
+
+.micro-task-deadline svg {
+    flex-shrink: 0;
+}
+
+.micro-task-deadline .sla-badge {
+    margin-left: auto;
 }
