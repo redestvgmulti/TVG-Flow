@@ -30,6 +30,7 @@ import Timeline from '../../components/Timeline'
 import ComentarioForm from '../../components/ComentarioForm'
 import ConversaoWorkflowModal from '../../components/ConversaoWorkflowModal'
 import PermissionGuard from '../../components/PermissionGuard'
+import { normalizeStatus, isValidStatus } from '../../utils/validators'
 import '../../styles/staff-tasks.css'
 import '../../styles/task-details.css'
 
@@ -242,9 +243,22 @@ export default function StaffTasks() {
             }
             // LEGACY TASK: Direct update
             else {
+                // Normalize status (e.g. em_progresso -> em_execucao)
+                const normalizedStatus = normalizeStatus(newStatus)
+
+                // Validate before sending
+                if (!isValidStatus(normalizedStatus)) {
+                    console.error(`Invalid status for tarefas table: ${normalizedStatus} (original: ${newStatus})`)
+                    // Optionally fallback or error
+                    // But if it's 'bloqueada' or 'devolvida' trying to go to macro task, we should block it?
+                    // Macro tasks usually don't have blocked/devolvida state in strict mode.
+                    // But for now, let's just proceed if valid, else throw.
+                    throw new Error(`Status inválido para tarefa macro: ${normalizedStatus}`)
+                }
+
                 const updates = {
-                    status: newStatus,
-                    concluida_at: newStatus === 'concluida' ? new Date().toISOString() : null
+                    status: normalizedStatus,
+                    concluida_at: normalizedStatus === 'concluida' ? new Date().toISOString() : null
                 }
 
                 const { error } = await supabase
@@ -261,7 +275,7 @@ export default function StaffTasks() {
                     setSelectedTask(prev => ({ ...prev, ...updates }))
                 }
 
-                if (newStatus === 'concluida') {
+                if (normalizedStatus === 'concluida') {
                     toast.success('Tarefa concluída! 🎉')
                 } else {
                     toast.success('Status atualizado')
