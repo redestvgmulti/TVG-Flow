@@ -36,6 +36,11 @@ function StaffDashboard() {
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
+        // Only fetch if we have professionalId
+        if (!professionalId) {
+            return
+        }
+
         fetchDashboardData()
 
         registerRefresh(async () => {
@@ -43,7 +48,7 @@ function StaffDashboard() {
         })
 
         return () => unregisterRefresh()
-    }, [])
+    }, [professionalId])
 
     async function fetchDashboardData(silent = false) {
         try {
