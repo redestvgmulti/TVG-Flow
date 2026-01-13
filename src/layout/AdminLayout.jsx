@@ -11,7 +11,7 @@ function AdminLayout() {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
     // Staff role should not have access to mobile sidebar
-    const isStaff = role === 'profissional'
+    const isStaff = role === 'staff'
 
     const handleMobileMenuToggle = () => {
         if (isStaff) return
