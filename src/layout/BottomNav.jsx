@@ -10,10 +10,10 @@ function BottomNav() {
     return (
         <nav className="bottom-nav">
             {/* ADMIN NAV */}
-            {role === 'admin' && (
+            {(role === 'admin' || role === 'super_admin') && (
                 <>
                     {/* Admin specific simplification for bottom nav if needed, or strictly follow NAV_ITEMS */}
-                    {NAV_ITEMS.filter(item => item.roles.includes('admin') && item.showOnMobileBottom).map(item => (
+                    {NAV_ITEMS.filter(item => (item.roles.includes('admin') || item.roles.includes('super_admin')) && item.showOnMobileBottom).map(item => (
                         <NavLink
                             key={item.key}
                             to={item.path}
@@ -28,7 +28,7 @@ function BottomNav() {
             )}
 
             {/* STAFF NAV */}
-            {role === 'staff' && (
+            {(role === 'staff' || role === 'profissional') && (
                 <>
                     {/* 
                       Order Requirement: Tasks, Agenda, Request (CTA), Content, Profile.
@@ -37,7 +37,7 @@ function BottomNav() {
                       Wait, I added 'key: profile' to NAV_ITEMS in the previous step.
                       So we can just map.
                     */}
-                    {NAV_ITEMS.filter(item => item.roles.includes('staff') && item.showOnMobileBottom).map(item => (
+                    {NAV_ITEMS.filter(item => (item.roles.includes('staff') || item.roles.includes('profissional')) && item.showOnMobileBottom).map(item => (
                         <NavLink
                             key={item.key}
                             to={item.path}

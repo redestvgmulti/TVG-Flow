@@ -19,7 +19,7 @@ export const NAV_ITEMS = [
         label: 'Dashboard',
         path: '/staff/dashboard',
         icon: LayoutGrid,
-        roles: ['staff'],
+        roles: ['staff', 'profissional'],
         mobilePriority: false, // Less important on mobile bottom nav? Check user requirement.
         // User said: Mobile = Tarefas, Agenda, Solicitar, Conteúdo, Perfil. 
         // Dashboard is NOT in the user's list for Mobile BottomNav preference.
@@ -34,7 +34,7 @@ export const NAV_ITEMS = [
         label: 'Tarefas',
         path: '/staff/tasks',
         icon: CheckSquare,
-        roles: ['staff'],
+        roles: ['staff', 'profissional'],
         showOnMobileBottom: true
     },
     {
@@ -42,7 +42,7 @@ export const NAV_ITEMS = [
         label: 'Agenda',
         path: '/staff/calendar',
         icon: Calendar,
-        roles: ['staff'],
+        roles: ['staff', 'profissional'],
         showOnMobileBottom: true
     },
     {
@@ -50,7 +50,7 @@ export const NAV_ITEMS = [
         label: 'Solicitar',
         path: '/staff/requests/new',
         icon: PlusSquare,
-        roles: ['staff'],
+        roles: ['staff', 'profissional'],
         isCTA: true,
         showOnMobileBottom: true
     },
@@ -59,7 +59,7 @@ export const NAV_ITEMS = [
         label: 'Conteúdo',
         path: '/staff/content',
         icon: FolderOpen,
-        roles: ['staff'],
+        roles: ['staff', 'profissional'],
         showOnMobileBottom: true
     },
     {
@@ -67,7 +67,7 @@ export const NAV_ITEMS = [
         label: 'Perfil',
         path: '/staff/profile',
         icon: User,
-        roles: ['staff'],
+        roles: ['staff', 'profissional'],
         showOnMobileBottom: true // Typically handled separately in code but defined here for completeness
     },
 
@@ -77,7 +77,7 @@ export const NAV_ITEMS = [
         label: 'Dashboard',
         path: '/admin',
         icon: LayoutGrid,
-        roles: ['admin'],
+        roles: ['admin', 'super_admin'],
         showOnMobileBottom: true
     },
     {
@@ -85,7 +85,7 @@ export const NAV_ITEMS = [
         label: 'Tarefas',
         path: '/admin/tasks',
         icon: CheckSquare,
-        roles: ['admin'],
+        roles: ['admin', 'super_admin'],
         showOnMobileBottom: true
     },
     {
@@ -93,7 +93,7 @@ export const NAV_ITEMS = [
         label: 'Conteúdo',
         path: '/admin/content',
         icon: FolderOpen,
-        roles: ['admin'],
+        roles: ['admin', 'super_admin'],
         showOnMobileBottom: true // Adding Content to Admin Mobile as per Rule: "Todas as funcionalidades acessíveis em todos os dispositivos"
     },
     {
@@ -101,7 +101,7 @@ export const NAV_ITEMS = [
         label: 'Agenda',
         path: '/admin/calendar',
         icon: Calendar,
-        roles: ['admin'],
+        roles: ['admin', 'super_admin'],
         showOnMobileBottom: true
     },
     {
@@ -109,7 +109,7 @@ export const NAV_ITEMS = [
         label: 'Equipe',
         path: '/admin/professionals',
         icon: Users,
-        roles: ['admin'],
+        roles: ['admin', 'super_admin'],
         showOnMobileBottom: true
     },
     {
@@ -117,7 +117,7 @@ export const NAV_ITEMS = [
         label: 'Relatórios',
         path: '/admin/reports',
         icon: BarChart,
-        roles: ['admin'],
+        roles: ['admin', 'super_admin'],
         showOnMobileBottom: true
     }
 ]

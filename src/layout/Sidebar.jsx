@@ -23,7 +23,7 @@ function Sidebar({ mobileMenuOpen, onClose }) {
 
     // Fetch incomplete task count for staff
     useEffect(() => {
-        if (role === 'staff') {
+        if (role === 'staff' || role === 'profissional') {
             fetchIncompleteTaskCount()
 
             // Subscribe to real-time updates
@@ -91,11 +91,11 @@ function Sidebar({ mobileMenuOpen, onClose }) {
                 {/* Navigation */}
                 <nav className="sidebar-nav">
                     {/* ADMIN MENU */}
-                    {role === 'admin' && (
+                    {(role === 'admin' || role === 'super_admin') && (
                         <>
                             <div className="nav-section">
                                 <p className="nav-label">MENU PRINCIPAL</p>
-                                {NAV_ITEMS.filter(item => item.roles.includes('admin') && !item.isCTA && item.key !== 'admin-team' && item.key !== 'admin-reports').map(item => (
+                                {NAV_ITEMS.filter(item => (item.roles.includes('admin') || item.roles.includes('super_admin')) && !item.isCTA && item.key !== 'admin-team' && item.key !== 'admin-reports').map(item => (
                                     <NavLink
                                         key={item.key}
                                         to={item.path}
@@ -144,7 +144,7 @@ function Sidebar({ mobileMenuOpen, onClose }) {
                     )}
 
                     {/* STAFF MENU */}
-                    {role === 'staff' && (
+                    {(role === 'staff' || role === 'profissional') && (
                         <div className="nav-section">
                             <p className="nav-label">MEU ESPAÇO</p>
 
@@ -153,7 +153,7 @@ function Sidebar({ mobileMenuOpen, onClose }) {
                                 Let's map them in order of definition (which we can control via filter).
                             */}
 
-                            {NAV_ITEMS.filter(item => item.roles.includes('staff') && item.key !== 'profile').map(item => (
+                            {NAV_ITEMS.filter(item => (item.roles.includes('staff') || item.roles.includes('profissional')) && item.key !== 'profile').map(item => (
                                 <NavLink
                                     key={item.key}
                                     to={item.path}
