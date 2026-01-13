@@ -19,7 +19,7 @@ export const NAV_ITEMS = [
         label: 'Dashboard',
         path: '/staff/dashboard',
         icon: LayoutGrid,
-        roles: ['profissional'],
+        roles: ['staff'],
         mobilePriority: false, // Less important on mobile bottom nav? Check user requirement.
         // User said: Mobile = Tarefas, Agenda, Solicitar, Conteúdo, Perfil. 
         // Dashboard is NOT in the user's list for Mobile BottomNav preference.
@@ -34,7 +34,7 @@ export const NAV_ITEMS = [
         label: 'Tarefas',
         path: '/staff/tasks',
         icon: CheckSquare,
-        roles: ['profissional'],
+        roles: ['staff'],
         showOnMobileBottom: true
     },
     {
@@ -42,7 +42,7 @@ export const NAV_ITEMS = [
         label: 'Agenda',
         path: '/staff/calendar',
         icon: Calendar,
-        roles: ['profissional'],
+        roles: ['staff'],
         showOnMobileBottom: true
     },
     {
@@ -50,7 +50,7 @@ export const NAV_ITEMS = [
         label: 'Solicitar',
         path: '/staff/requests/new',
         icon: PlusSquare,
-        roles: ['profissional'],
+        roles: ['staff'],
         isCTA: true,
         showOnMobileBottom: true
     },
@@ -59,7 +59,7 @@ export const NAV_ITEMS = [
         label: 'Conteúdo',
         path: '/staff/content',
         icon: FolderOpen,
-        roles: ['profissional'],
+        roles: ['staff'],
         showOnMobileBottom: true
     },
     {
@@ -67,7 +67,7 @@ export const NAV_ITEMS = [
         label: 'Perfil',
         path: '/staff/profile',
         icon: User,
-        roles: ['profissional'],
+        roles: ['staff'],
         showOnMobileBottom: true // Typically handled separately in code but defined here for completeness
     },
 

@@ -23,7 +23,7 @@ function Sidebar({ mobileMenuOpen, onClose }) {
 
     // Fetch incomplete task count for staff
     useEffect(() => {
-        if (role === 'profissional') {
+        if (role === 'staff') {
             fetchIncompleteTaskCount()
 
             // Subscribe to real-time updates
@@ -144,7 +144,7 @@ function Sidebar({ mobileMenuOpen, onClose }) {
                     )}
 
                     {/* STAFF MENU */}
-                    {role === 'profissional' && (
+                    {role === 'staff' && (
                         <div className="nav-section">
                             <p className="nav-label">MEU ESPAÇO</p>
 
@@ -153,7 +153,7 @@ function Sidebar({ mobileMenuOpen, onClose }) {
                                 Let's map them in order of definition (which we can control via filter).
                             */}
 
-                            {NAV_ITEMS.filter(item => item.roles.includes('profissional') && item.key !== 'profile').map(item => (
+                            {NAV_ITEMS.filter(item => item.roles.includes('staff') && item.key !== 'profile').map(item => (
                                 <NavLink
                                     key={item.key}
                                     to={item.path}

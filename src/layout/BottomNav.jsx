@@ -28,7 +28,7 @@ function BottomNav() {
             )}
 
             {/* STAFF NAV */}
-            {role === 'profissional' && (
+            {role === 'staff' && (
                 <>
                     {/* 
                       Order Requirement: Tasks, Agenda, Request (CTA), Content, Profile.
@@ -37,7 +37,7 @@ function BottomNav() {
                       Wait, I added 'key: profile' to NAV_ITEMS in the previous step.
                       So we can just map.
                     */}
-                    {NAV_ITEMS.filter(item => item.roles.includes('profissional') && item.showOnMobileBottom).map(item => (
+                    {NAV_ITEMS.filter(item => item.roles.includes('staff') && item.showOnMobileBottom).map(item => (
                         <NavLink
                             key={item.key}
                             to={item.path}
