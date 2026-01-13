@@ -36,9 +36,11 @@ import SystemStatusPage from './pages/super-admin/SystemStatusPage'
 
 import { Toaster } from 'sonner'
 
+import { AuthProvider } from './contexts/AuthContext'
 import { RefreshProvider } from './contexts/RefreshContext'
 import { InAppNotificationProvider } from './contexts/InAppNotificationContext'
 import InAppNotificationBanner from './components/InAppNotificationBanner'
+import TenantErrorBoundary from './components/TenantErrorBoundary'
 
 
 
@@ -47,99 +49,101 @@ import { UpdateBanner } from './components/UpdateBanner'
 function App() {
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-      <RefreshProvider>
-        <InAppNotificationProvider>
-          <Toaster position="top-right" richColors />
-          <UpdateBanner />
+      <AuthProvider>
+        <RefreshProvider>
+          <InAppNotificationProvider>
+            <Toaster position="top-right" richColors />
+            <UpdateBanner />
 
-          <InAppNotificationBanner />
-          <AppLayout>
-            <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route path="/reset-password" element={<ResetPassword />} />
-              <Route path="/suspended" element={<Suspended />} />
+            <InAppNotificationBanner />
+            <TenantErrorBoundary>
+              <AppLayout>
+                <Routes>
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/reset-password" element={<ResetPassword />} />
+                  <Route path="/suspended" element={<Suspended />} />
 
-              {/* Admin Routes */}
-              <Route
-                path="/admin"
-                element={
-                  <ProtectedRoute>
-                    <RoleProtectedRoute allowedRole="admin">
-                      <AdminLayout />
-                    </RoleProtectedRoute>
-                  </ProtectedRoute>
-                }
-              >
-                <Route index element={<Dashboard />} />
-                <Route path="dashboard" element={<Dashboard />} />
-                <Route path="tasks" element={<Tasks />} />
-                <Route path="tarefas/nova" element={<NewOS />} />
-                <Route path="areas" element={<Areas />} />
+                  {/* Admin Routes */}
+                  <Route
+                    path="/admin"
+                    element={
+                      <ProtectedRoute>
+                        <RoleProtectedRoute allowedRole="admin">
+                          <AdminLayout />
+                        </RoleProtectedRoute>
+                      </ProtectedRoute>
+                    }
+                  >
+                    <Route index element={<Dashboard />} />
+                    <Route path="dashboard" element={<Dashboard />} />
+                    <Route path="tasks" element={<Tasks />} />
+                    <Route path="tarefas/nova" element={<NewOS />} />
+                    <Route path="areas" element={<Areas />} />
 
-                {/* Professionals Module */}
-                <Route path="professionals">
-                  <Route index element={<ProfessionalsList />} />
-                  <Route path=":id/edit" element={<ProfessionalEdit />} />
-                </Route>
+                    {/* Professionals Module */}
+                    <Route path="professionals">
+                      <Route index element={<ProfessionalsList />} />
+                      <Route path=":id/edit" element={<ProfessionalEdit />} />
+                    </Route>
 
-                {/* Companies Module */}
-                <Route path="companies">
-                  <Route index element={<Companies />} />
-                  <Route path=":id" element={<CompanyDetails />} />
-                </Route>
+                    {/* Companies Module */}
+                    <Route path="companies">
+                      <Route index element={<Companies />} />
+                      <Route path=":id" element={<CompanyDetails />} />
+                    </Route>
 
-                <Route path="calendar" element={<Calendar />} />
-                <Route path="content" element={<AdminContent />} />
-                <Route path="reports" element={<Reports />} />
-              </Route>
+                    <Route path="calendar" element={<Calendar />} />
+                    <Route path="content" element={<AdminContent />} />
+                    <Route path="reports" element={<Reports />} />
+                  </Route>
 
-              {/* Staff Routes */}
-              <Route
-                path="/staff"
-                element={
-                  <ProtectedRoute>
-                    <RoleProtectedRoute allowedRole="profissional">
-                      <AdminLayout />
-                    </RoleProtectedRoute>
-                  </ProtectedRoute>
-                }
-              >
-                <Route index element={<Navigate to="/staff/dashboard" replace />} />
-                <Route path="dashboard" element={<StaffDashboard />} />
-                <Route path="tasks" element={<StaffTasks />} />
+                  {/* Staff Routes */}
+                  <Route
+                    path="/staff"
+                    element={
+                      <ProtectedRoute>
+                        <AdminLayout />
+                      </ProtectedRoute>
+                    }
+                  >
+                    <Route index element={<Navigate to="/staff/dashboard" replace />} />
+                    <Route path="dashboard" element={<StaffDashboard />} />
+                    <Route path="tasks" element={<StaffTasks />} />
 
-                <Route path="requests/new" element={<StaffRequestCreate />} />
-                <Route path="calendar" element={<StaffCalendar />} />
-                <Route path="content" element={<StaffContent />} />
-                <Route path="profile" element={<StaffProfile />} />
-                <Route path="today" element={<StaffToday />} />
-              </Route>
-
-
-              {/* Super Admin Routes */}
-              <Route
-                path="/platform"
-                element={
-                  <ProtectedRoute>
-                    <SuperAdminRoute>
-                      <SuperAdminLayout />
-                    </SuperAdminRoute>
-                  </ProtectedRoute>
-                }
-              >
-                <Route index element={<SuperAdminDashboard />} />
-                <Route path="companies" element={<TenantListPage />} />
-                <Route path="companies/:id" element={<TenantDetail />} />
-                <Route path="reports" element={<ReportsPage />} />
-                <Route path="system" element={<SystemStatusPage />} />
-              </Route>
+                    <Route path="requests/new" element={<StaffRequestCreate />} />
+                    <Route path="calendar" element={<StaffCalendar />} />
+                    <Route path="content" element={<StaffContent />} />
+                    <Route path="profile" element={<StaffProfile />} />
+                    <Route path="today" element={<StaffToday />} />
+                  </Route>
 
 
-              <Route path="/" element={<Navigate to="/login" replace />} />
-            </Routes>
-          </AppLayout>
-        </InAppNotificationProvider>
-      </RefreshProvider>
+                  {/* Super Admin Routes */}
+                  <Route
+                    path="/platform"
+                    element={
+                      <ProtectedRoute>
+                        <SuperAdminRoute>
+                          <SuperAdminLayout />
+                        </SuperAdminRoute>
+                      </ProtectedRoute>
+                    }
+                  >
+                    <Route index element={<SuperAdminDashboard />} />
+                    <Route path="companies" element={<TenantListPage />} />
+                    <Route path="companies/:id" element={<TenantDetail />} />
+                    <Route path="reports" element={<ReportsPage />} />
+                    <Route path="system" element={<SystemStatusPage />} />
+                  </Route>
+
+
+                  <Route path="/" element={<Navigate to="/login" replace />} />
+                </Routes>
+              </AppLayout>
+            </TenantErrorBoundary>
+          </InAppNotificationProvider>
+        </RefreshProvider>
+      </AuthProvider>
     </BrowserRouter>
   )
 }

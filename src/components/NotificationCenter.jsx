@@ -34,48 +34,54 @@ function NotificationCenter() {
     const [isIOSPWAMode] = useState(isIOSPWA())
 
     useEffect(() => {
-        // GUARD: Never run notification logic on login screen
-        if (window.location.pathname === '/login') return
+        // GUARD 1: Never run notification logic on login screen
+        if (window.location.pathname === '/login') {
+            return
+        }
 
-        if (professionalId) {
-            fetchNotifications()
-            checkPushStatus()
+        // GUARD 2: Wait for professionalId before connecting
+        if (!professionalId) {
+            return
+        }
 
-            // Subscribe to real-time notifications with unique channel name
-            const channelName = `notifications:${professionalId}`
+        // Only execute if both guards pass
+        fetchNotifications()
+        checkPushStatus()
+
+        // Subscribe to real-time notifications with unique channel name
+        const channelName = `notifications:${professionalId}`
 
 
-            const channel = supabase
-                .channel(channelName)
-                .on('postgres_changes', {
-                    event: 'INSERT',
-                    schema: 'public',
-                    table: 'notifications',
-                    filter: `profissional_id=eq.${professionalId}`
-                }, (payload) => {
+        const channel = supabase
+            .channel(channelName)
+            .on('postgres_changes', {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'notifications',
+                filter: `profissional_id=eq.${professionalId}`
+            }, (payload) => {
 
-                    handleNewNotification(payload)
-                })
-                .subscribe((status, err) => {
+                handleNewNotification(payload)
+            })
+            .subscribe((status, err) => {
 
-                    if (err) {
-                        console.error('[NotificationCenter] Realtime subscription error:', err)
-                    }
-                    if (status === 'SUBSCRIBED') {
+                if (err) {
+                    console.error('[NotificationCenter] Realtime subscription error:', err)
+                }
+                if (status === 'SUBSCRIBED') {
 
-                    }
-                    if (status === 'CHANNEL_ERROR') {
-                        console.error('[NotificationCenter] ❌ Channel error - realtime may not be enabled')
-                    }
-                    if (status === 'TIMED_OUT') {
-                        console.error('[NotificationCenter] ❌ Subscription timed out')
-                    }
-                })
+                }
+                if (status === 'CHANNEL_ERROR') {
+                    console.error('[NotificationCenter] ❌ Channel error - realtime may not be enabled')
+                }
+                if (status === 'TIMED_OUT') {
+                    console.error('[NotificationCenter] ❌ Subscription timed out')
+                }
+            })
 
-            return () => {
+        return () => {
 
-                supabase.removeChannel(channel)
-            }
+            supabase.removeChannel(channel)
         }
     }, [professionalId])
 
