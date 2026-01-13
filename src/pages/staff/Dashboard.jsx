@@ -23,7 +23,7 @@ import '../../styles/staff-tasks.css'
 
 function StaffDashboard() {
     const navigate = useNavigate()
-    const { professionalName, professionalId } = useAuth()
+    const { professionalName, professionalId, loading: authLoading } = useAuth()
     const { registerRefresh, unregisterRefresh } = useRefresh()
     const [stats, setStats] = useState({
         pending: 0,
@@ -33,7 +33,7 @@ function StaffDashboard() {
     })
     const [recentTasks, setRecentTasks] = useState([])
     const [productivityData, setProductivityData] = useState([])
-    const [loading, setLoading] = useState(true)
+    const [dataLoading, setDataLoading] = useState(true)
 
     useEffect(() => {
         // Only fetch if we have professionalId
@@ -52,12 +52,15 @@ function StaffDashboard() {
 
     async function fetchDashboardData(silent = false) {
         try {
-            if (!silent) setLoading(true)
+            if (!silent) setDataLoading(true)
 
             if (!professionalId) {
-                setLoading(false)
+                console.warn('[Staff Dashboard] NO professionalId - skipping data fetch')
+                setDataLoading(false)
                 return
             }
+
+            console.log('[Staff Dashboard] Fetching data for professionalId:', professionalId)
 
             // 1. Fetch Micro Tasks (Workflow)
             const { data: microTasks, error: microError } = await supabase
@@ -82,6 +85,11 @@ function StaffDashboard() {
                 .eq('assigned_to', professionalId)
 
             if (legacyError) throw legacyError
+
+            console.log('[Staff Dashboard] Query results:', {
+                microTasks: microTasks?.length || 0,
+                legacyTasks: legacyTasks?.length || 0
+            })
 
             // Normalize and Merge
             const allTasks = []
@@ -181,15 +189,18 @@ function StaffDashboard() {
         } catch (error) {
             console.error('Error fetching dashboard data:', error)
         } finally {
-            setLoading(false)
+            setDataLoading(false)
         }
     }
 
-    if (loading) {
+    if (authLoading || !professionalId) {
         return (
             <div className="dashboard-container">
                 <div className="card loading-card">
                     <p className="loading-text-primary">Carregando painel...</p>
+                    <p className="loading-text-secondary">
+                        {authLoading ? 'Autenticando...' : 'Carregando perfil...'}
+                    </p>
                 </div>
             </div>
         )

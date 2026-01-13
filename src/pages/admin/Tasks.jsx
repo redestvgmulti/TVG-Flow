@@ -17,7 +17,7 @@ function Tasks() {
 
     // Filters
     const [searchTerm, setSearchTerm] = useState('')
-    const [statusFilter, setStatusFilter] = useState('all')
+    const [statusFilter, setStatusFilter] = useState('pending')  // Padrão: mostrar apenas pendentes
     const [priorityFilter, setPriorityFilter] = useState('all')
     const [assignedToFilter, setAssignedToFilter] = useState('all')
     const [deadlineFilter, setDeadlineFilter] = useState('all')
@@ -512,10 +512,59 @@ function Tasks() {
         setSelectedTasks([])
     }
 
+    function sortTasksByPriority(tasks) {
+        return [...tasks].sort((a, b) => {
+            // 1️⃣ Não concluídas primeiro
+            const aCompleted = ['completed', 'concluída', 'concluida'].includes(a.status?.toLowerCase())
+            const bCompleted = ['completed', 'concluída', 'concluida'].includes(b.status?.toLowerCase())
+
+            if (aCompleted !== bCompleted) {
+                return aCompleted ? 1 : -1
+            }
+
+            // 2️⃣ Prazo mais próximo
+            if (!a.deadline && !b.deadline) return 0
+            if (!a.deadline) return 1
+            if (!b.deadline) return -1
+
+            const deadlineDiff = new Date(a.deadline) - new Date(b.deadline)
+            if (deadlineDiff !== 0) return deadlineDiff
+
+            // 3️⃣ Desempate: Prioridade (urgente → alta → média → baixa)
+            const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 }
+            const aPriority = priorityOrder[a.priority] ?? 4
+            const bPriority = priorityOrder[b.priority] ?? 4
+
+            if (aPriority !== bPriority) {
+                return aPriority - bPriority
+            }
+
+            // 4️⃣ Desempate final: Mais recente primeiro (created_at DESC)
+            return new Date(b.created_at) - new Date(a.created_at)
+        })
+    }
+
     function getFilteredTasks() {
-        return tasks.filter(task => {
+        const filtered = tasks.filter(task => {
             const matchesSearch = task.titulo.toLowerCase().includes(searchTerm.toLowerCase())
-            const matchesStatus = statusFilter === 'all' || task.status === statusFilter
+
+            // Status filter com normalização
+            const matchesStatus = statusFilter === 'all' || (() => {
+                const normalizedTask = task.status?.toLowerCase()
+                const normalizedFilter = statusFilter.toLowerCase()
+
+                // Map de equivalências
+                const statusMap = {
+                    'completed': ['completed', 'concluída', 'concluida'],
+                    'in_progress': ['in_progress', 'em_progresso', 'em progresso'],
+                    'pending': ['pending', 'pendente'],
+                    'overdue': ['overdue', 'atrasada']
+                }
+
+                const validStatuses = statusMap[normalizedFilter] || [normalizedFilter]
+                return validStatuses.includes(normalizedTask)
+            })()
+
             const matchesPriority = priorityFilter === 'all' || task.priority === priorityFilter
             const matchesAssignedTo = assignedToFilter === 'all' || task.assigned_to === assignedToFilter
 
@@ -540,6 +589,9 @@ function Tasks() {
 
             return matchesSearch && matchesStatus && matchesPriority && matchesAssignedTo && matchesDeadline
         })
+
+        // Aplicar ordenação inteligente
+        return sortTasksByPriority(filtered)
     }
 
     function getStatusBadgeClass(status) {

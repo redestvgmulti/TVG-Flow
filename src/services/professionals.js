@@ -155,6 +155,8 @@ export const professionalsService = {
     },
 
     // Buscar funções disponíveis em uma empresa
+    // REVERTED TO ORIGINAL: Query empresa_profissionais directly
+    // This table already contains the professional-company-function relationship
     async getFunctionsByCompany(companyId) {
         const { data, error } = await supabase
             .from('empresa_profissionais')
@@ -163,7 +165,67 @@ export const professionalsService = {
             .eq('ativo', true)
 
         if (error) throw error
-        // Retorna lista única de funções
-        return [...new Set(data.map(item => item.funcao))]
+
+        // Return unique list of function names
+        return [...new Set(data.map(item => item.funcao).filter(f => f != null))]
+    },
+
+    // ============================================================
+    // Permission-Based Professional Listing (Tenant-First Model)
+    // ============================================================
+
+    /**
+     * Get professionals allowed to work on a specific operational company
+     * Uses the permission table (empresa_profissionais_permitidos)
+     * Also fetches funcao from empresa_profissionais for workflow compatibility
+     * 
+     * @param {string} companyId - Operational company ID
+     * @returns {Promise<Array>} Professionals with permissions for this company
+     */
+    async getProfessionalsByCompany(companyId) {
+        // First, get professionals allowed on this company
+        const { data: permissions, error: permError } = await supabase
+            .from('empresa_profissionais_permitidos')
+            .select(`
+                profissional_id,
+                profissionais!inner (
+                    id,
+                    nome
+                )
+            `)
+            .eq('empresa_operacional_id', companyId)
+            .eq('ativo', true)
+
+        if (permError) throw permError
+
+        if (!permissions || permissions.length === 0) {
+            return []
+        }
+
+        // Get funcao from empresa_profissionais for each allowed professional
+        // This maintains backward compatibility with workflow mode
+        const professionalIds = permissions.map(p => p.profissional_id)
+
+        const { data: funcoes, error: funcError } = await supabase
+            .from('empresa_profissionais')
+            .select('profissional_id, funcao')
+            .eq('empresa_id', companyId)
+            .in('profissional_id', professionalIds)
+            .eq('ativo', true)
+
+        if (funcError) throw funcError
+
+        // Create a map of profissional_id -> funcao
+        const funcaoMap = {}
+        funcoes.forEach(f => {
+            funcaoMap[f.profissional_id] = f.funcao
+        })
+
+        // Merge permissions and funcoes
+        return permissions.map(item => ({
+            profissional_id: item.profissional_id,
+            funcao: funcaoMap[item.profissional_id] || null,
+            profissionais: item.profissionais
+        }))
     }
 }

@@ -44,10 +44,12 @@ export default function TaskForm({ onSuccess, onCancel }) {
 
     useEffect(() => {
         if (empresaId) {
+            // Load functions (used by workflow mode)
             loadFunctions(empresaId)
-            if (useWorkflow) {
-                loadProfessionals(empresaId)
-            }
+
+            // CRITICAL FIX: Load professionals in BOTH modes (legacy and workflow)
+            // Previously this was only called if useWorkflow === true, breaking legacy mode
+            loadProfessionals(empresaId)
         } else {
             setAvailableFunctions([])
             setSelectedFunctions([])
@@ -98,6 +100,8 @@ export default function TaskForm({ onSuccess, onCancel }) {
     async function loadProfessionals(companyId) {
         try {
             setLoadingProfessionals(true)
+
+            // ORIGINAL: Direct query to empresa_profissionais
             const { data, error } = await supabase
                 .from('empresa_profissionais')
                 .select(`
@@ -112,6 +116,8 @@ export default function TaskForm({ onSuccess, onCancel }) {
                 .eq('ativo', true)
 
             if (error) throw error
+
+            console.log('DEBUG - Professionals loaded:', data) // DEBUG
             setProfessionals(data || [])
         } catch (error) {
             console.error(error)
