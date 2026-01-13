@@ -36,11 +36,6 @@ function StaffDashboard() {
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
-        // Only fetch if we have professionalId
-        if (!professionalId) {
-            return
-        }
-
         fetchDashboardData()
 
         registerRefresh(async () => {
@@ -48,7 +43,7 @@ function StaffDashboard() {
         })
 
         return () => unregisterRefresh()
-    }, [professionalId])
+    }, [])
 
     async function fetchDashboardData(silent = false) {
         try {
@@ -179,6 +174,7 @@ function StaffDashboard() {
             setRecentTasks(sortedTasks.slice(0, 5))
 
         } catch (error) {
+            console.error('Error fetching dashboard data:', error)
         } finally {
             setLoading(false)
         }

@@ -1,14 +1,5 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../services/supabase'
-
-// ROLE ENUM - Prevents typos and ensures consistency
-const ROLE = {
-    SUPER_ADMIN: 'super_admin',
-    ADMIN: 'admin',
-    STAFF: 'staff',
-    PROFESSIONAL: 'professional'
-}
 
 const AuthContext = createContext({})
 
@@ -29,11 +20,6 @@ export function AuthProvider({ children }) {
     // Refs to track state without triggering re-renders and prevent race conditions
     const isFetchingRef = useRef(false)
     const userRef = useRef(null)
-    const hasRedirectedRef = useRef(false) // Track if we've already redirected
-
-    // React Router hooks
-    const navigate = useNavigate()
-    const location = useLocation()
 
     // Detectar erro de rede
     function isNetworkError(error) {
@@ -51,51 +37,45 @@ export function AuthProvider({ children }) {
         const initSession = async () => {
             try {
 
+
                 // PHASE 1: SESSION BOOTSTRAP (BLOCKING)
                 // We only wait for Supabase to tell us if a session exists.
                 const { data: { session }, error } = await supabase.auth.getSession()
 
-                if (!mounted) {
-                    return
-                }
+                if (!mounted) return
 
                 if (error) {
                     // Network error or invalid token -> we can't trust the session
-                        message: error.message,
-                        status: error.status
-                    });
-
-                    // If it's an auth error (bad token), clear everything
-                    if (error.message?.includes('refresh_token') || error.message?.includes('Invalid') || error.status === 400) {
-                        await supabase.auth.signOut({ scope: 'local' }); // Clear local storage only
-                    }
-
                     if (!isNetworkError(error)) {
+
                         setSession(null)
                         setUser(null)
                         userRef.current = null
                     }
+                    // If network error, we might still have a session in localStorage, but let's assume partial state logic handles it?
+                    // For now, standard behavior: error in getSession usually means signed out or huge issue.
                 }
 
                 if (session) {
-                        userId: session.user.id,
-                        email: session.user.email
-                    })
+
                     setSession(session)
                     setUser(session.user)
                     userRef.current = session.user
                 } else {
+
                     setSession(null)
                     setUser(null)
                     userRef.current = null
                 }
 
             } catch (err) {
+
             } finally {
                 // END OF PHASE 1
                 // We MUST unlock the app now. Profile fetching happens next but doesn't block UI.
                 if (mounted) {
                     setLoading(false)
+
                 }
             }
         }
@@ -106,17 +86,8 @@ export function AuthProvider({ children }) {
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
             if (!mounted) return
 
-                hasSession: !!session,
-                userId: session?.user?.id
-            })
 
             if (event === 'TOKEN_REFRESH_FAILED' || event === 'SIGNED_OUT') {
-
-                // Clear corrupted tokens completely
-                if (event === 'TOKEN_REFRESH_FAILED') {
-                    await supabase.auth.signOut({ scope: 'local' });
-                }
-
                 setSession(null)
                 setUser(null)
                 userRef.current = null
@@ -132,15 +103,6 @@ export function AuthProvider({ children }) {
             }
 
             if (session) {
-                    userId: session.user.id,
-                    event
-                })
-
-                // CRITICAL: Reset redirect flag on new sign-in to allow navigation
-                if (event === 'SIGNED_IN') {
-                    hasRedirectedRef.current = false
-                }
-
                 setSession(session)
                 setUser(session.user)
                 userRef.current = session.user
@@ -167,88 +129,6 @@ export function AuthProvider({ children }) {
             setProfessionalName(null)
         }
     }, [user])
-
-    // PHASE 3: CENTRALIZED NAVIGATION (AFTER AUTHENTICATION COMPLETE)
-    useEffect(() => {
-            loading,
-            hasSession: !!session,
-            hasUser: !!user,
-            role,
-            hasRedirectedRef: hasRedirectedRef.current,
-            currentPath: location.pathname
-        })
-
-        // GUARD 1: Still initializing
-        if (loading) {
-            return
-        }
-
-        // GUARD 2: Not authenticated
-        if (!session || !user) {
-            hasRedirectedRef.current = false // Reset redirect flag when logged out
-            return
-        }
-
-        // GUARD 3: Role not yet resolved
-        if (!role) {
-            return
-        }
-
-        // GUARD 4: Already redirected this session
-        if (hasRedirectedRef.current) {
-            return
-        }
-
-        // GUARD 5: Already on a protected route (page refresh case)
-        // DO NOT mark hasRedirectedRef here - only when navigate() is actually called
-        const currentPath = location.pathname
-        const isLoginRoute = currentPath.startsWith('/login') || currentPath === '/'
-
-        if (!isLoginRoute) {
-            // CRITICAL: Do NOT set hasRedirectedRef.current = true here
-            // User is already where they should be (refresh case)
-            return
-        }
-
-        // ALL GUARDS PASSED - EXECUTE NAVIGATION
-            role,
-            currentPath,
-            userId: user.id
-        })
-
-        let targetRoute = null
-
-        // Route decision based on role enum
-        switch (role) {
-            case ROLE.SUPER_ADMIN:
-                targetRoute = '/platform'
-                break
-            case ROLE.ADMIN:
-                targetRoute = '/admin/dashboard'
-                break
-            case ROLE.STAFF:
-            case ROLE.PROFESSIONAL:
-                targetRoute = '/staff/dashboard'
-                break
-            default:
-                // ENTERPRISE FALLBACK: Unknown/invalid role
-                // Force logout to prevent user being stuck
-                signOut().then(() => {
-                    window.location.href = '/login'
-                })
-                return
-        }
-
-
-        try {
-            // RULE: hasRedirectedRef ONLY changes when navigate() is called
-            hasRedirectedRef.current = true
-            navigate(targetRoute, { replace: true })
-        } catch (error) {
-            hasRedirectedRef.current = false // Reset on error
-            throw error
-        }
-    }, [loading, session, user, role, location.pathname, navigate])
 
     // Retry silencioso em reconexão
     useEffect(() => {
@@ -304,7 +184,7 @@ export function AuthProvider({ children }) {
 
             // 1. IMMUTABLE SUPER ADMIN CHECK (Overrides DB)
             if (userEmail === IMMUTABLE_SUPER_ADMIN_EMAIL) {
-                setRole(ROLE.SUPER_ADMIN)
+                setRole('super_admin')
                 // Super admin doesn't need specific professional ID for now, or fetch if exists
                 // For safety, let's try to fetch name if he exists in DB, otherwise default
                 const { data: profile } = await supabase
@@ -344,11 +224,6 @@ export function AuthProvider({ children }) {
                 return
             }
 
-                id: professional.id,
-                role: professional.role,
-                ativo: professional.ativo
-            })
-
             // SECURITY: Check if user is active
             if (!professional.ativo) {
                 setAccountStatus('inactive')
@@ -361,14 +236,8 @@ export function AuthProvider({ children }) {
             let finalRole = professional.role
 
             // CRITICAL: Prevent anyone else from being super_admin
-            if (finalRole === ROLE.SUPER_ADMIN && userEmail !== IMMUTABLE_SUPER_ADMIN_EMAIL) {
-                finalRole = ROLE.ADMIN
-            }
-
-            // ENTERPRISE: Validate role is from enum (prevent DB corruption issues)
-            const validRoles = Object.values(ROLE)
-            if (!validRoles.includes(finalRole)) {
-                finalRole = ROLE.STAFF
+            if (finalRole === 'super_admin' && userEmail !== IMMUTABLE_SUPER_ADMIN_EMAIL) {
+                finalRole = 'admin'
             }
 
             // --- STANDARD FLOW (Admin / Staff) ---
@@ -397,10 +266,6 @@ export function AuthProvider({ children }) {
             }
 
             // All checks passed, set user data
-                role: finalRole,
-                professionalId: professional.id,
-                name: professional.nome
-            })
             setRole(finalRole)
             setProfessionalId(professional.id || null)
             setProfessionalName(professional.nome || null)
@@ -421,22 +286,13 @@ export function AuthProvider({ children }) {
             password
         })
 
-        if (error) {
-                message: error.message,
-                status: error.status
-            })
-            throw error
-        }
-
-            userId: data.user.id,
-            email: data.user.email
-        })
+        if (error) throw error
 
         const IMMUTABLE_SUPER_ADMIN_EMAIL = 'geovanepanini@agencyflow.com'
 
         // 1. IMMUTABLE CHECK
         if (email === IMMUTABLE_SUPER_ADMIN_EMAIL) {
-            return { ...data, role: ROLE.SUPER_ADMIN }
+            return { ...data, role: 'super_admin' }
         }
 
         // Fetch role immediately to allow redirect logic
@@ -452,6 +308,7 @@ export function AuthProvider({ children }) {
 
             safeRole = prof?.role
         } catch (err) {
+            // Silent catch
         }
 
         // Track activity on login - NON-BLOCKING (removed await)
@@ -464,8 +321,8 @@ export function AuthProvider({ children }) {
             })
 
         // 2. SECURITY DOWNGRADE
-        if (safeRole === ROLE.SUPER_ADMIN) {
-            safeRole = ROLE.ADMIN // Force downgrade
+        if (safeRole === 'super_admin') {
+            safeRole = 'admin' // Force downgrade
         }
 
         return { ...data, role: safeRole }

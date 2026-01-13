@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { Eye, EyeOff } from 'lucide-react'
 import { PageTransition } from '../components/PageTransition'
@@ -10,6 +11,7 @@ function Login() {
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState(null)
 
+    const navigate = useNavigate()
     const { signIn } = useAuth()
 
     const handleSubmit = async (e) => {
@@ -17,16 +19,18 @@ function Login() {
         setError(null)
         setLoading(true)
 
+        // DEBUG: Alert to confirm function is running
+        // alert('DEBUG: 1. Botão clicado! Iniciando login...')
 
         try {
-            await signIn(email, password)
-            // Navigation happens in AuthContext via useEffect
-            // Loading state will be cleared by unmount or error
+            const { role } = await signIn(email, password)
+
+            if (role === 'super_admin') {
+                navigate('/platform')
+            } else {
+                navigate('/staff/dashboard')
+            }
         } catch (error) {
-                message: error.message,
-                code: error.code,
-                status: error.status
-            })
             setError(error.message)
             setLoading(false)
         }
