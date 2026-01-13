@@ -38,11 +38,9 @@ function StaffDashboard() {
     useEffect(() => {
         // Only fetch if we have professionalId
         if (!professionalId) {
-            console.log('[Dashboard] ⏳ Waiting for professionalId...')
             return
         }
 
-        console.log('[Dashboard] 🔄 professionalId available, fetching data', { professionalId })
         fetchDashboardData()
 
         registerRefresh(async () => {
@@ -181,7 +179,6 @@ function StaffDashboard() {
             setRecentTasks(sortedTasks.slice(0, 5))
 
         } catch (error) {
-            console.error('Error fetching dashboard data:', error)
         } finally {
             setLoading(false)
         }

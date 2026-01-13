@@ -17,16 +17,12 @@ function Login() {
         setError(null)
         setLoading(true)
 
-        console.log('[LOGIN] 🔵 Starting login attempt', { email })
 
         try {
-            console.log('[LOGIN] ⏳ Calling signIn...')
             await signIn(email, password)
-            console.log('[LOGIN] ✅ signIn completed - AuthContext will handle navigation')
             // Navigation happens in AuthContext via useEffect
             // Loading state will be cleared by unmount or error
         } catch (error) {
-            console.error('[LOGIN] ❌ Login failed', {
                 message: error.message,
                 code: error.code,
                 status: error.status
