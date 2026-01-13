@@ -139,9 +139,11 @@
 /* Chart Container Wrapper */
 .chart-wrapper {
     width: 100%;
-    flex: 1;
-    min-height: 300px;
+    height: 300px;
+    /* Explicit height for Recharts */
     position: relative;
+    overflow: hidden;
+    /* Prevent spill */
 }
 
 /* 4. LISTS & ITEMS */
@@ -187,7 +189,7 @@
     text-align: center;
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
     .staff-dashboard-container {
         padding-bottom: 32px;
         display: grid;

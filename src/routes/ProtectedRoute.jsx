@@ -5,6 +5,8 @@ import AccountBlockedScreen from '../components/AccountBlockedScreen'
 function ProtectedRoute({ children }) {
     const { user, loading, accountStatus, connectionStatus } = useAuth()
 
+    console.log('[ProtectedRoute] Check:', { user: !!user, loading, accountStatus })
+
     // NUCLEAR OPTION: NO MORE LOADING SCREEN
     // Let the dashboard render immediately and handle its own loading states
     // This prevents the infinite "Carregando Sistema..." issue
@@ -22,6 +24,7 @@ function ProtectedRoute({ children }) {
     }
 
     if (!user) {
+        console.warn('[ProtectedRoute] No user found, redirecting to login')
         return <Navigate to="/login" replace />
     }
 

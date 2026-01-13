@@ -46,15 +46,25 @@ function Sidebar({ mobileMenuOpen, onClose }) {
 
     async function fetchIncompleteTaskCount() {
         try {
+            // Guard clause for missing auth
+            if (!user) return
+
             const { count, error } = await supabase
                 .from('tarefas')
                 .select('*', { count: 'exact', head: true })
                 .neq('status', 'completed')
 
-            if (error) throw error
+            if (error) {
+                // Silent fail - don't crash UI for a badge
+                console.warn('Silent error fetching sidebar count:', error)
+                return
+            }
+
             setIncompleteTaskCount(count || 0)
         } catch (error) {
             console.error('Error fetching task count:', error)
+            // Ensure state is valid
+            setIncompleteTaskCount(0)
         }
     }
 

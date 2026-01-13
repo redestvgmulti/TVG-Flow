@@ -1,74 +1,50 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../services/supabase'
-import { Building2, Users, Ban, Activity } from 'lucide-react'
+import { Building2, Activity, Ban, TrendingUp, AlertTriangle } from 'lucide-react'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import '../../styles/super-admin-dashboard.css'
 
 export default function SuperAdminDashboard() {
-    const [companies, setCompanies] = useState([])
-    const [stats, setStats] = useState({
-        totalCompanies: 0,
-        activeCompanies: 0,
-        suspendedCompanies: 0,
-        totalUsers: 0
-    })
+    const [data, setData] = useState(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
 
     useEffect(() => {
-        fetchDashboardStats()
+        fetchDashboardData()
     }, [])
 
-    async function fetchDashboardStats() {
+    async function fetchDashboardData() {
         try {
             setLoading(true)
             setError(null)
 
-            const { data, error: rpcError } = await supabase.rpc('get_companies_stats')
+            const { data: response, error: rpcError } = await supabase
+                .rpc('get_super_admin_dashboard_stats')
 
             if (rpcError) {
                 console.error('RPC Error:', rpcError)
                 throw rpcError
             }
 
-            console.log('Companies data:', data)
-            setCompanies(data || [])
-
-            if (data && data.length > 0) {
-                const totalCompanies = data.length
-                const activeCompanies = data.filter(c => c.status_conta === 'active').length
-                const suspendedCompanies = data.filter(c => c.status_conta === 'suspended').length
-                const totalUsers = data.reduce((sum, c) => sum + Number(c.users_count || 0), 0)
-
-                setStats({
-                    totalCompanies,
-                    activeCompanies,
-                    suspendedCompanies,
-                    totalUsers
-                })
-            }
+            console.log('Dashboard data:', response)
+            setData(response)
         } catch (error) {
-            console.error('Error fetching dashboard stats:', error)
+            console.error('Error fetching dashboard data:', error)
             setError(error.message)
         } finally {
             setLoading(false)
         }
     }
 
-    const kpis = [
-        { label: 'Total de Empresas', value: stats.totalCompanies, icon: Building2, color: '#3b82f6' },
-        { label: 'Empresas Ativas', value: stats.activeCompanies, icon: Activity, color: '#10b981' },
-        { label: 'Empresas Suspensas', value: stats.suspendedCompanies, icon: Ban, color: '#ef4444' },
-        { label: 'Usuários Totais', value: stats.totalUsers, icon: Users, color: '#8b5cf6' },
-    ]
-
     if (loading) {
         return (
-            <div className="dashboard-container">
+            <div className="super-admin-container">
                 <div className="dashboard-header">
-                    <h2>Painel Super Admin</h2>
+                    <h1>Painel Super Admin</h1>
+                    <p className="dashboard-subtitle">Visão Executiva do FlowOS</p>
                 </div>
                 <div className="card loading-card">
-                    <p className="loading-text-primary">Carregando métricas...</p>
+                    <p className="loading-text">Carregando métricas executivas...</p>
                     <div className="spinner"></div>
                 </div>
             </div>
@@ -77,79 +53,202 @@ export default function SuperAdminDashboard() {
 
     if (error) {
         return (
-            <div className="dashboard-container">
+            <div className="super-admin-container">
                 <div className="dashboard-header">
-                    <h2>Painel Super Admin</h2>
+                    <h1>Painel Super Admin</h1>
+                    <p className="dashboard-subtitle">Visão Executiva do FlowOS</p>
                 </div>
                 <div className="error-state card">
-                    <p>Erro ao carregar dados: {error}</p>
-                    <button onClick={fetchDashboardStats} className="btn btn-primary">Tentar Novamente</button>
+                    <p>❌ Erro ao carregar dados: {error}</p>
+                    <button onClick={fetchDashboardData} className="btn btn-primary">
+                        Tentar Novamente
+                    </button>
                 </div>
             </div>
         )
     }
 
+    const { metrics, growthData, healthStatus, alerts, summary } = data || {}
+
+    // Health status configuration
+    const getHealthConfig = () => {
+        if (!healthStatus) return { icon: '🟢', text: 'Saudável', className: 'health-healthy' }
+
+        if (healthStatus.latency < 500) {
+            return { icon: '🟢', text: 'Saudável', className: 'health-healthy' }
+        } else if (healthStatus.latency < 800) {
+            return { icon: '🟡', text: 'Atenção', className: 'health-warning' }
+        } else {
+            return { icon: '🔴', text: 'Crítico', className: 'health-critical' }
+        }
+    }
+
+    const healthConfig = getHealthConfig()
+
     return (
-        <div className="dashboard-container animation-fade-in">
+        <div className="super-admin-container">
+            {/* Header */}
             <div className="dashboard-header">
-                <h2>Painel Super Admin</h2>
+                <h1>Painel Super Admin</h1>
+                <p className="dashboard-subtitle">Visão Executiva do FlowOS</p>
             </div>
 
-            {/* KPI Cards - Using standard 'metric-card' structure from Admin Dashboard */}
-            <div className="dashboard-grid-metrics">
-                <div className="card metric-card">
-                    <h3 className="metric-label">Total de Empresas</h3>
-                    <p className="metric-value">{stats.totalCompanies}</p>
+            {/* BLOCO 1: Métricas Principais */}
+            <div className="metrics-grid">
+                {/* Card 1: Total de Empresas */}
+                <div className="metric-card">
+                    <div className="metric-icon" style={{ backgroundColor: '#3b82f620' }}>
+                        <Building2 size={24} color="#3b82f6" />
+                    </div>
+                    <div className="metric-content">
+                        <h3 className="metric-label">Empresas Ativas no FlowOS</h3>
+                        <p className="metric-value">{metrics?.totalTenants || 0}</p>
+                        <span className="metric-description">Total de tenants vendidos</span>
+                    </div>
                 </div>
 
-                <div className="card metric-card">
-                    <h3 className="metric-label">Empresas Ativas</h3>
-                    <p className="metric-value metric-value-success">{stats.activeCompanies}</p>
+                {/* Card 2: Empresas Ativas (7 dias) */}
+                <div className="metric-card">
+                    <div className="metric-icon" style={{ backgroundColor: '#10b98120' }}>
+                        <Activity size={24} color="#10b981" />
+                    </div>
+                    <div className="metric-content">
+                        <h3 className="metric-label">Empresas Ativas (Últimos 7 dias)</h3>
+                        <p className="metric-value metric-highlight">
+                            {metrics?.activeTenants || 0} de {metrics?.totalTenants || 0}
+                        </p>
+                        <span className="metric-description">
+                            {metrics?.activeRatio || 0}% com atividade recente
+                        </span>
+                    </div>
                 </div>
 
-                <div className="card metric-card">
-                    <h3 className="metric-label">Empresas Suspensas</h3>
-                    <p className="metric-value metric-value-danger">{stats.suspendedCompanies}</p>
+                {/* Card 3: Empresas Suspensas */}
+                <div className="metric-card">
+                    <div className="metric-icon" style={{ backgroundColor: '#ef444420' }}>
+                        <Ban size={24} color="#ef4444" />
+                    </div>
+                    <div className="metric-content">
+                        <h3 className="metric-label">Empresas Suspensas</h3>
+                        <p className="metric-value metric-danger">
+                            {metrics?.suspendedTenants || 0}
+                        </p>
+                        <span className="metric-description">Tenants com acesso bloqueado</span>
+                    </div>
                 </div>
 
-                <div className="card metric-card">
-                    <h3 className="metric-label">Usuários Totais</h3>
-                    <p className="metric-value">{stats.totalUsers}</p>
+                {/* Card 4: Saúde Geral do Sistema */}
+                <div className="metric-card">
+                    <div className={`metric-icon ${healthConfig.className}`}>
+                        <TrendingUp size={24} />
+                    </div>
+                    <div className="metric-content">
+                        <h3 className="metric-label">Saúde Geral do Sistema</h3>
+                        <p className="metric-value">
+                            {healthConfig.icon} {healthConfig.text}
+                        </p>
+                        <span className="metric-description">
+                            Latência: {healthStatus?.latency || 0}ms
+                        </span>
+                    </div>
                 </div>
             </div>
 
-            {/* Activity Block - Styled as a standard card */}
-            <div className="card mt-6">
+            {/* BLOCO 2: Gráfico de Crescimento */}
+            <div className="card growth-card">
                 <div className="card-header">
-                    <h3 className="card-title flex items-center gap-2">
-                        <Activity size={18} className="text-primary" />
-                        Atividade Recente
-                    </h3>
+                    <h2 className="card-title">
+                        <TrendingUp size={20} />
+                        Crescimento de Empresas (30 dias)
+                    </h2>
+                    <p className="card-subtitle">Total acumulado de tenants vendidos</p>
                 </div>
-
-                <div className="activity-list p-4">
-                    {companies.length > 0 ? (
-                        <div className="activity-item p-3 rounded bg-subtle flex items-center gap-3">
-                            <div className="activity-icon bg-white p-2 rounded shadow-sm">
-                                <Building2 size={20} className="text-primary" />
-                            </div>
-                            <div className="activity-content">
-                                <p className="font-medium m-0 text-primary">
-                                    {companies.filter(c => c.status_conta === 'active').length} empresa(s) ativa(s) no sistema
-                                </p>
-                                <span className="text-sm text-secondary">
-                                    Última atualização: agora
-                                </span>
-                            </div>
-                        </div>
+                <div className="chart-container">
+                    {growthData && growthData.length > 0 ? (
+                        <ResponsiveContainer width="100%" height={300}>
+                            <LineChart data={growthData}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                                <XAxis
+                                    dataKey="date"
+                                    stroke="#6b7280"
+                                    tickFormatter={(value) => {
+                                        const date = new Date(value)
+                                        return `${date.getDate()}/${date.getMonth() + 1}`
+                                    }}
+                                />
+                                <YAxis stroke="#6b7280" />
+                                <Tooltip
+                                    labelFormatter={(value) => {
+                                        const date = new Date(value)
+                                        return date.toLocaleDateString('pt-BR')
+                                    }}
+                                    formatter={(value) => [`${value} empresas`, 'Total']}
+                                />
+                                <Line
+                                    type="monotone"
+                                    dataKey="total"
+                                    stroke="#3b82f6"
+                                    strokeWidth={2}
+                                    dot={{ fill: '#3b82f6', r: 4 }}
+                                    activeDot={{ r: 6 }}
+                                />
+                            </LineChart>
+                        </ResponsiveContainer>
                     ) : (
-                        <div className="activity-empty text-center p-8 text-secondary">
-                            <p>Nenhuma empresa cadastrada ainda</p>
+                        <div className="chart-empty">
+                            <p>Sem dados de crescimento disponíveis</p>
                         </div>
                     )}
+                </div>
+            </div>
+
+            {/* BLOCO 3: Alertas Rápidos */}
+            <div className="card alerts-card">
+                <div className="card-header">
+                    <h2 className="card-title">
+                        <AlertTriangle size={20} />
+                        Atenções Recentes
+                    </h2>
+                    <p className="card-subtitle">Resumo de alertas do sistema</p>
+                </div>
+                <div className="alerts-container">
+                    {alerts && (alerts.critical > 0 || alerts.warning > 0) ? (
+                        <>
+                            {alerts.critical > 0 && (
+                                <div className="alert-item alert-critical">
+                                    <span className="alert-indicator">🔴</span>
+                                    <span className="alert-text">
+                                        {alerts.critical} empresa{alerts.critical !== 1 ? 's' : ''} com atenção crítica
+                                    </span>
+                                </div>
+                            )}
+                            {alerts.warning > 0 && (
+                                <div className="alert-item alert-warning">
+                                    <span className="alert-indicator">🟡</span>
+                                    <span className="alert-text">
+                                        {alerts.warning} empresa{alerts.warning !== 1 ? 's' : ''} com baixa atividade
+                                    </span>
+                                </div>
+                            )}
+                        </>
+                    ) : (
+                        <div className="alert-item alert-success">
+                            <span className="alert-indicator">🟢</span>
+                            <span className="alert-text">Nenhuma atenção necessária no momento</span>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* BLOCO 4: Resumo Executivo */}
+            <div className="card summary-card">
+                <div className="card-header">
+                    <h2 className="card-title">Resumo Executivo</h2>
+                </div>
+                <div className="summary-content">
+                    <p className="summary-text">{summary}</p>
                 </div>
             </div>
         </div>
     )
 }
-

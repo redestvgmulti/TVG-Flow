@@ -27,7 +27,9 @@ import StaffRequestCreate from './pages/staff/RequestCreate'
 import ProtectedRoute from './routes/ProtectedRoute'
 import RoleProtectedRoute from './routes/RoleProtectedRoute'
 import SuperAdminRoute from './routes/SuperAdminRoute'
+import StrictSuperAdminRoute from './routes/StrictSuperAdminRoute'
 import SuperAdminLayout from './layout/SuperAdminLayout'
+import StaffLayout from './layout/StaffLayout'
 import SuperAdminDashboard from './pages/super-admin/SuperAdminDashboard'
 import TenantListPage from './pages/super-admin/TenantListPage'
 import TenantDetail from './pages/super-admin/TenantDetail'
@@ -102,7 +104,9 @@ function App() {
                     path="/staff"
                     element={
                       <ProtectedRoute>
-                        <AdminLayout />
+                        <RoleProtectedRoute allowedRole="staff">
+                          <StaffLayout />
+                        </RoleProtectedRoute>
                       </ProtectedRoute>
                     }
                   >
@@ -123,9 +127,9 @@ function App() {
                     path="/platform"
                     element={
                       <ProtectedRoute>
-                        <SuperAdminRoute>
+                        <StrictSuperAdminRoute>
                           <SuperAdminLayout />
-                        </SuperAdminRoute>
+                        </StrictSuperAdminRoute>
                       </ProtectedRoute>
                     }
                   >

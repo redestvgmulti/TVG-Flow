@@ -23,7 +23,7 @@ import '../../styles/staff-tasks.css'
 
 function StaffDashboard() {
     const navigate = useNavigate()
-    const { professionalName, professionalId, loading: authLoading } = useAuth()
+    const { professionalName, professionalId, loading: authLoading, user } = useAuth()
     const { registerRefresh, unregisterRefresh } = useRefresh()
     const [stats, setStats] = useState({
         pending: 0,
@@ -55,12 +55,14 @@ function StaffDashboard() {
             if (!silent) setDataLoading(true)
 
             if (!professionalId) {
-                console.warn('[Staff Dashboard] NO professionalId - skipping data fetch')
+                console.warn('[Staff Dashboard] NO professionalId - skipping data fetch. User object:', user)
                 setDataLoading(false)
                 return
             }
 
-            console.log('[Staff Dashboard] Fetching data for professionalId:', professionalId)
+            console.group('[Staff Dashboard] Data Fetch')
+            console.log('Fetching data for professionalId:', professionalId)
+            console.log('Current Auth User:', user)
 
             // 1. Fetch Micro Tasks (Workflow)
             const { data: microTasks, error: microError } = await supabase
@@ -76,7 +78,11 @@ function StaffDashboard() {
                 `)
                 .eq('profissional_id', professionalId)
 
-            if (microError) throw microError
+            if (microError) {
+                console.error('[Staff Dashboard] Error fetching micro tasks:', microError)
+                throw microError
+            }
+            console.log('[Staff Dashboard] Micro Tasks found:', microTasks?.length, microTasks)
 
             // Fetch Macro tasks
             const { data: legacyTasks, error: legacyError } = await supabase
@@ -84,11 +90,15 @@ function StaffDashboard() {
                 .select('id, titulo, deadline, status, prioridade, created_at, concluida_at, drive_link')
                 .eq('assigned_to', professionalId)
 
-            if (legacyError) throw legacyError
+            if (legacyError) {
+                console.error('[Staff Dashboard] Error fetching legacy tasks:', legacyError)
+                throw legacyError
+            }
+            console.log('[Staff Dashboard] Legacy Tasks found:', legacyTasks?.length, legacyTasks)
 
-            console.log('[Staff Dashboard] Query results:', {
-                microTasks: microTasks?.length || 0,
-                legacyTasks: legacyTasks?.length || 0
+            console.log('[Staff Dashboard] Query results summary:', {
+                microTasksCount: microTasks?.length || 0,
+                legacyTasksCount: legacyTasks?.length || 0
             })
 
             // Normalize and Merge
@@ -189,6 +199,7 @@ function StaffDashboard() {
         } catch (error) {
             console.error('Error fetching dashboard data:', error)
         } finally {
+            console.groupEnd()
             setDataLoading(false)
         }
     }
@@ -208,6 +219,16 @@ function StaffDashboard() {
 
     const firstName = professionalName?.split(' ')[0] || 'Colaborador'
 
+    console.log('[StaffDashboard] Render reached', {
+        tasksCount: recentTasks?.length,
+        productivityCount: productivityData?.length,
+        stats
+    })
+
+    // Safety check for critical data structures
+    const safeRecentTasks = Array.isArray(recentTasks) ? recentTasks : []
+    const safeProductivityData = Array.isArray(productivityData) ? productivityData : []
+
     return (
         <PageTransition>
             <div className="dashboard-container staff-dashboard-container">
@@ -221,7 +242,7 @@ function StaffDashboard() {
                 <div className="dashboard-grid-metrics">
                     <div className="card metric-card">
                         <h3 className="metric-label">Em Aberto</h3>
-                        <p className="metric-value metric-value-primary">{stats.pending}</p>
+                        <p className="metric-value metric-value-primary">{stats?.pending || 0}</p>
                         <div className="metric-footer">
                             <Clock size={14} />
                             <span>Aguardando ação</span>
@@ -230,7 +251,7 @@ function StaffDashboard() {
 
                     <div className="card metric-card">
                         <h3 className="metric-label">Atrasadas</h3>
-                        <p className="metric-value metric-value-danger">{stats.overdue}</p>
+                        <p className="metric-value metric-value-danger">{stats?.overdue || 0}</p>
                         <div className="metric-footer text-danger">
                             <AlertTriangle size={14} />
                             <span>Atenção necessária</span>
@@ -239,7 +260,7 @@ function StaffDashboard() {
 
                     <div className="card metric-card">
                         <h3 className="metric-label">Concluídas</h3>
-                        <p className="metric-value metric-value-success">{stats.completed}</p>
+                        <p className="metric-value metric-value-success">{stats?.completed || 0}</p>
                         <div className="metric-footer">
                             <CheckCircle2 size={14} className="text-success" />
                             <span>Total histórico</span>
@@ -248,7 +269,7 @@ function StaffDashboard() {
 
                     <div className="card metric-card">
                         <h3 className="metric-label">Produtividade</h3>
-                        <p className="metric-value">{stats.productivity}</p>
+                        <p className="metric-value">{stats?.productivity || 0}</p>
                         <div className="metric-footer">
                             <TrendingUp size={14} />
                             <span>Últimos 7 dias</span>
@@ -266,10 +287,10 @@ function StaffDashboard() {
                             </h3>
                         </div>
 
-                        <div className="chart-container">
-                            {productivityData.some(d => d.value > 0) ? (
-                                <ResponsiveContainer>
-                                    <BarChart data={productivityData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                        <div className="chart-wrapper">
+                            {safeProductivityData.some(d => d.value > 0) ? (
+                                <ResponsiveContainer width="100%" height={300}>
+                                    <BarChart data={safeProductivityData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
                                         <XAxis
                                             dataKey="name"
@@ -322,7 +343,7 @@ function StaffDashboard() {
                             </button>
                         </div>
 
-                        {recentTasks.length === 0 ? (
+                        {safeRecentTasks.length === 0 ? (
                             <div className="staff-empty-state">
                                 <CheckCircle2 size={48} className="text-success opacity-20 mb-4" />
                                 <p className="title">Tudo em dia!</p>
@@ -330,7 +351,7 @@ function StaffDashboard() {
                             </div>
                         ) : (
                             <div className="staff-tasks-list">
-                                {recentTasks.map(task => {
+                                {safeRecentTasks.map(task => {
                                     const isOverdue = new Date(task.deadline) < new Date() && task.status !== 'concluida'
                                     const statusClass = task.status === 'concluida' ? 'status-completed' : task.status === 'em_progresso' ? 'status-in-progress' : 'status-pending'
                                     const statusText = task.status === 'concluida' ? 'Concluída' : task.status === 'em_progresso' ? 'Em Andamento' : 'Pendente'

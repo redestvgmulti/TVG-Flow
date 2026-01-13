@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react'
 import { supabase } from '../services/supabase'
+import { normalizeRole } from '../utils/roles'
 
 const AuthContext = createContext({})
 
@@ -40,7 +41,9 @@ export function AuthProvider({ children }) {
 
                 // PHASE 1: SESSION BOOTSTRAP (BLOCKING)
                 // We only wait for Supabase to tell us if a session exists.
+                console.log('[AuthContext] checking session...')
                 const { data: { session }, error } = await supabase.auth.getSession()
+                console.log('[AuthContext] getSession result:', { session: !!session, error })
 
                 if (!mounted) return
 
@@ -180,7 +183,7 @@ export function AuthProvider({ children }) {
 
             const userEmail = currentUser?.email
 
-            const IMMUTABLE_SUPER_ADMIN_EMAIL = 'geovanepanini@agencyflow.com'
+            const IMMUTABLE_SUPER_ADMIN_EMAIL = 'geovanepanini@icloud.com'
 
             // 1. IMMUTABLE SUPER ADMIN CHECK (Overrides DB)
             if (userEmail === IMMUTABLE_SUPER_ADMIN_EMAIL) {
@@ -232,8 +235,19 @@ export function AuthProvider({ children }) {
                 return
             }
 
+
+
+            // ... existing imports
+
             // 3. ROLE ENFORCEMENT
-            let finalRole = professional.role
+            const rawRole = professional.role
+            const finalRole = normalizeRole(rawRole)
+
+            console.log('[AuthContext] Role Normalization:', {
+                raw: rawRole,
+                normalized: finalRole,
+                user: userEmail
+            })
 
             // CRITICAL: Prevent anyone else from being super_admin
             if (finalRole === 'super_admin' && userEmail !== IMMUTABLE_SUPER_ADMIN_EMAIL) {
@@ -288,7 +302,7 @@ export function AuthProvider({ children }) {
 
         if (error) throw error
 
-        const IMMUTABLE_SUPER_ADMIN_EMAIL = 'geovanepanini@agencyflow.com'
+        const IMMUTABLE_SUPER_ADMIN_EMAIL = 'geovanepanini@icloud.com'
 
         // 1. IMMUTABLE CHECK
         if (email === IMMUTABLE_SUPER_ADMIN_EMAIL) {
@@ -320,9 +334,9 @@ export function AuthProvider({ children }) {
                 // Background update
             })
 
-        // 2. SECURITY DOWNGRADE
-        if (safeRole === 'super_admin') {
-            safeRole = 'admin' // Force downgrade
+        // 2. SECURITY DOWNGRADE (but preserve immutable super admin)
+        if (safeRole === 'super_admin' && email !== IMMUTABLE_SUPER_ADMIN_EMAIL) {
+            safeRole = 'admin' // Force downgrade for non-immutable accounts
         }
 
         return { ...data, role: safeRole }

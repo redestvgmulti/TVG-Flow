@@ -67,7 +67,7 @@ export async function resolveTenantContext() {
     // ========================================
     // STEP 3: Super Admin Validation
     // ========================================
-    const IMMUTABLE_SUPER_ADMIN_EMAIL = 'geovanepanini@agencyflow.com';
+    const IMMUTABLE_SUPER_ADMIN_EMAIL = 'geovanepanini@icloud.com';
     let effectiveRole = professional.role;
 
     // Security: Only specific email can be super_admin

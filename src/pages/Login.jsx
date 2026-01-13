@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { Eye, EyeOff } from 'lucide-react'
 import { PageTransition } from '../components/PageTransition'
+import { normalizeRole } from '../utils/roles'
 
 function Login() {
     const [email, setEmail] = useState('')
@@ -14,6 +15,9 @@ function Login() {
     const navigate = useNavigate()
     const { signIn } = useAuth()
 
+
+    // ... existing imports
+
     const handleSubmit = async (e) => {
         e.preventDefault()
         setError(null)
@@ -23,18 +27,21 @@ function Login() {
         // alert('DEBUG: 1. Botão clicado! Iniciando login...')
 
         try {
-            const { role } = await signIn(email, password)
+            const { role: rawRole } = await signIn(email, password)
+            const role = normalizeRole(rawRole)
 
-            // Route based on role
-            if (role === 'super_admin') {
+            const IMMUTABLE_SUPER_ADMIN_EMAIL = 'geovanepanini@icloud.com'
+
+            // Route based on role with EXPLICIT email check for super admin
+            if (email === IMMUTABLE_SUPER_ADMIN_EMAIL && role === 'super_admin') {
                 navigate('/platform')
             } else if (role === 'admin') {
                 navigate('/admin')
             } else if (role === 'staff') {
                 navigate('/staff/dashboard')
             } else {
-                // Default fallback for 'profissional' or any other role
-                navigate('/staff/dashboard')
+                // No permissive fallback - throw error for invalid roles
+                throw new Error('Invalid role or unauthorized access')
             }
         } catch (error) {
             setError(error.message)
