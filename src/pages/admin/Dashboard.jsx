@@ -66,7 +66,7 @@ function Painel() {
             const { data: allTasks, error: allTasksError } = await supabase
                 .from('tarefas_com_status_real')
                 .select('id, status, titulo, deadline, priority, created_at, assigned_to, drive_link, is_overdue')
-                .order('created_at', { ascending: false })
+                .order('deadline', { ascending: true })  // Ordenar por prazo (mais urgente primeiro)
                 .limit(1000)
 
             if (allTasksError) throw allTasksError

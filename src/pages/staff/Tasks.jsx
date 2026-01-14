@@ -88,7 +88,7 @@ export default function StaffTasks() {
                         updated_at
                     )
                 `)
-                .order('created_at', { ascending: false })
+                .order('deadline', { ascending: true })  // Ordenar por prazo (mais urgente primeiro)
                 .limit(500)
 
             if (error) throw error

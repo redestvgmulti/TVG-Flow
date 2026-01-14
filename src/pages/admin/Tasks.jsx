@@ -156,7 +156,7 @@ function Tasks() {
             }
 
             tasksQuery = tasksQuery
-                .order('created_at', { ascending: false })
+                .order('deadline', { ascending: true })  // Ordenar por prazo (mais urgente primeiro)
                 .range(rangeStart, rangeEnd)
 
             // Reference data (professionals, departments, clients) - load once
