@@ -16,7 +16,7 @@ import ErrorBoundary from '../components/ErrorBoundary'
 function StaffLayout() {
     const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false)
 
-    console.log('[StaffLayout] Rendering layout')
+
 
     return (
         <div className="admin-layout">

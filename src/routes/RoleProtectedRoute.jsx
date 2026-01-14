@@ -15,7 +15,7 @@ function RoleProtectedRoute({ children, allowedRole }) {
     // Wait for role to be loaded before making routing decisions
     // If user exists but role is still null, we're still loading professional data
     if (user && role === null) {
-        console.log('[RoleProtectedRoute] Waiting for role...')
+
         return (
             <div className="flex items-center justify-center h-screen bg-gray-50 flex-col gap-4">
                 <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
@@ -28,7 +28,7 @@ function RoleProtectedRoute({ children, allowedRole }) {
     const isAllowed = role === allowedRole || (allowedRole === 'staff' && role === 'profissional')
 
     if (!isAllowed) {
-        console.warn('[RoleProtectedRoute] Role mismatch:', { required: allowedRole, current: role })
+
 
         // Explicit handling for ALL roles - no ambiguity
         if (role === 'super_admin') {
@@ -49,7 +49,7 @@ function RoleProtectedRoute({ children, allowedRole }) {
         return <Navigate to="/login" replace />
     }
 
-    console.log('[RoleProtectedRoute] Access granted')
+
     return children
 }
 
