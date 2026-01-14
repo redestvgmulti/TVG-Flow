@@ -41,9 +41,7 @@ export function AuthProvider({ children }) {
 
                 // PHASE 1: SESSION BOOTSTRAP (BLOCKING)
                 // We only wait for Supabase to tell us if a session exists.
-                console.log('[AuthContext] checking session...')
                 const { data: { session }, error } = await supabase.auth.getSession()
-                console.log('[AuthContext] getSession result:', { session: !!session, error })
 
                 if (!mounted) return
 
@@ -242,12 +240,6 @@ export function AuthProvider({ children }) {
             // 3. ROLE ENFORCEMENT
             const rawRole = professional.role
             const finalRole = normalizeRole(rawRole)
-
-            console.log('[AuthContext] Role Normalization:', {
-                raw: rawRole,
-                normalized: finalRole,
-                user: userEmail
-            })
 
             // CRITICAL: Prevent anyone else from being super_admin
             if (finalRole === 'super_admin' && userEmail !== IMMUTABLE_SUPER_ADMIN_EMAIL) {
