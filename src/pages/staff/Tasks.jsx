@@ -434,11 +434,6 @@ export default function StaffTasks() {
                     onClick={() => setStatusFilter('all')}
                 />
                 <FilterChip
-                    label="Pendentes"
-                    active={statusFilter === 'pendente'}
-                    onClick={() => setStatusFilter('pendente')}
-                />
-                <FilterChip
                     label="Em Andamento"
                     active={statusFilter === 'em_execucao'}
                     onClick={() => setStatusFilter('em_execucao')}
