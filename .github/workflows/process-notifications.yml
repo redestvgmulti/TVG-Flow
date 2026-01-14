@@ -1,0 +1,16 @@
+name: Process Notification Queue
+
+on:
+  schedule:
+    - cron: '* * * * *'
+  workflow_dispatch:
+
+jobs:
+  process-queue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Edge Function
+        run: |
+          curl -X POST https://gyooxmpyxncrezjiljrj.supabase.co/functions/v1/process-notifications \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -f || exit 0
