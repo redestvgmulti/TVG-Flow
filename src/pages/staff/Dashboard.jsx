@@ -77,6 +77,8 @@ function StaffDashboard() {
                     )
                 `)
                 .eq('profissional_id', professionalId)
+            // Note: Cannot order by tarefas.deadline here (nested relation)
+            // Client-side sort happens after merge (line 191)
 
             if (microError) {
                 console.error('[Staff Dashboard] Error fetching micro tasks:', microError)
@@ -89,6 +91,7 @@ function StaffDashboard() {
                 .from('tarefas')
                 .select('id, titulo, deadline, status, prioridade, created_at, concluida_at, drive_link')
                 .eq('assigned_to', professionalId)
+                .order('deadline', { ascending: true })  // Ordenar por prazo (mais urgente primeiro)
 
             if (legacyError) {
                 console.error('[Staff Dashboard] Error fetching legacy tasks:', legacyError)
