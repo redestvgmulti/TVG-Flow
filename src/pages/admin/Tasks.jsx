@@ -15,6 +15,13 @@ function Tasks() {
     const [loading, setLoading] = useState(true)
     const [fetchError, setFetchError] = useState(null)
 
+    // Pagination state
+    const PAGE_SIZE = 50
+    const [currentPage, setCurrentPage] = useState(0)
+    const [hasMore, setHasMore] = useState(true)
+    const [isLoadingMore, setIsLoadingMore] = useState(false)
+    const [totalCount, setTotalCount] = useState(0)
+
     // Filters
     const [searchTerm, setSearchTerm] = useState('')
     const [statusFilter, setStatusFilter] = useState('pending')  // Padrão: mostrar apenas pendentes
@@ -60,62 +67,168 @@ function Tasks() {
         fetchData()
     }, [])
 
-    async function fetchData() {
-        try {
-            setLoading(true)
+    // Reset pagination when filters change
+    useEffect(() => {
+        setCurrentPage(0)
+        setTasks([])
+        fetchData(true) // true = reset
+    }, [statusFilter, priorityFilter, assignedToFilter, deadlineFilter, searchTerm])
 
-            const [tasksResult, profsResult, deptsResult, clientsResult] = await Promise.all([
-                supabase
-                    .from('tarefas')
-                    .select(`
-                        *,
-                        empresas (
+    async function fetchData(reset = false) {
+        try {
+            const isInitialLoad = reset || currentPage === 0
+            if (isInitialLoad) {
+                setLoading(true)
+            } else {
+                setIsLoadingMore(true)
+            }
+
+            const pageToFetch = reset ? 0 : currentPage
+            const rangeStart = pageToFetch * PAGE_SIZE
+            const rangeEnd = rangeStart + PAGE_SIZE - 1
+
+            // Build tasks query with pagination
+            let tasksQuery = supabase
+                .from('tarefas')
+                .select(`
+                    *,
+                    empresas (
+                        id,
+                        nome
+                    ),
+                    micro_tasks:tarefas_micro (
+                        id,
+                        status,
+                        funcao,
+                        profissional:profissionais (
                             id,
                             nome
-                        ),
-                        micro_tasks:tarefas_micro (
-                            id,
-                            status,
-                            funcao,
-                            profissional:profissionais (
-                                id,
-                                nome
-                            )
                         )
-                    `)
-                    .order('created_at', { ascending: false }),
-                supabase
-                    .from('profissionais')
-                    .select('id, nome')
-                    .eq('ativo', true)
-                    .order('nome'),
-                supabase
-                    .from('areas')
-                    .select('id, nome')
-                    .eq('ativo', true)
-                    .order('nome'),
-                supabase
-                    .from('empresas')
-                    .select('id, nome')
-                    .eq('empresa_tipo', 'operacional')
-                    .order('nome')
-            ])
+                    )
+                `, { count: 'exact' })
+
+            // Apply filters BEFORE ordering and pagination
+            if (searchTerm) {
+                tasksQuery = tasksQuery.ilike('titulo', `%${searchTerm}%`)
+            }
+
+            if (statusFilter && statusFilter !== 'all') {
+                if (statusFilter === 'pending') {
+                    tasksQuery = tasksQuery.in('status', ['pending', 'pendente'])
+                } else if (statusFilter === 'in_progress') {
+                    tasksQuery = tasksQuery.in('status', ['in_progress', 'em_progresso', 'em progresso'])
+                } else if (statusFilter === 'completed') {
+                    tasksQuery = tasksQuery.in('status', ['completed', 'concluída', 'concluida'])
+                } else if (statusFilter === 'overdue') {
+                    tasksQuery = tasksQuery.in('status', ['overdue', 'atrasada'])
+                } else {
+                    tasksQuery = tasksQuery.eq('status', statusFilter)
+                }
+            }
+
+            if (priorityFilter && priorityFilter !== 'all') {
+                tasksQuery = tasksQuery.eq('priority', priorityFilter)
+            }
+
+            if (assignedToFilter && assignedToFilter !== 'all') {
+                tasksQuery = tasksQuery.eq('assigned_to', assignedToFilter)
+            }
+
+            // Deadline filters
+            if (deadlineFilter === 'overdue') {
+                tasksQuery = tasksQuery
+                    .lt('deadline', new Date().toISOString())
+                    .neq('status', 'completed')
+            } else if (deadlineFilter === 'today') {
+                const today = new Date()
+                const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+                const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1)
+                tasksQuery = tasksQuery
+                    .gte('deadline', startOfDay.toISOString())
+                    .lt('deadline', endOfDay.toISOString())
+            } else if (deadlineFilter === 'week') {
+                const now = new Date()
+                const weekFromNow = new Date(now)
+                weekFromNow.setDate(weekFromNow.getDate() + 7)
+                tasksQuery = tasksQuery
+                    .gte('deadline', now.toISOString())
+                    .lte('deadline', weekFromNow.toISOString())
+            }
+
+            tasksQuery = tasksQuery
+                .order('created_at', { ascending: false })
+                .range(rangeStart, rangeEnd)
+
+            // Reference data (professionals, departments, clients) - load once
+            const shouldLoadReferenceData = isInitialLoad || professionals.length === 0
+
+            const queries = [tasksQuery]
+
+            if (shouldLoadReferenceData) {
+                queries.push(
+                    supabase
+                        .from('profissionais')
+                        .select('id, nome')
+                        .eq('ativo', true)
+                        .order('nome'),
+                    supabase
+                        .from('areas')
+                        .select('id, nome')
+                        .eq('ativo', true)
+                        .order('nome'),
+                    supabase
+                        .from('empresas')
+                        .select('id, nome')
+                        .eq('empresa_tipo', 'operacional')
+                        .order('nome')
+                )
+            }
+
+            const results = await Promise.all(queries)
+            const tasksResult = results[0]
 
             if (tasksResult.error) throw tasksResult.error
-            if (profsResult.error) throw profsResult.error
-            if (deptsResult.error) throw deptsResult.error
-            if (clientsResult.error) throw clientsResult.error
 
-            setTasks(tasksResult.data || [])
-            setProfessionals(profsResult.data || [])
-            setDepartments(deptsResult.data || [])
-            setClients(clientsResult.data || [])
+            const newTasks = tasksResult.data || []
+            const count = tasksResult.count || 0
+
+            setTotalCount(count)
+            setHasMore(rangeEnd < count - 1)
+
+            if (reset) {
+                setTasks(newTasks)
+                setCurrentPage(1)
+            } else {
+                setTasks(prev => [...prev, ...newTasks])
+                setCurrentPage(prev => prev + 1)
+            }
+
+            // Update reference data if loaded
+            if (shouldLoadReferenceData && results.length > 1) {
+                const [, profsResult, deptsResult, clientsResult] = results
+
+                if (profsResult?.error) throw profsResult.error
+                if (deptsResult?.error) throw deptsResult.error
+                if (clientsResult?.error) throw clientsResult.error
+
+                setProfessionals(profsResult?.data || [])
+                setDepartments(deptsResult?.data || [])
+                setClients(clientsResult?.data || [])
+            }
+
         } catch (error) {
             console.error('Error fetching data:', error)
             setFetchError(error.message || 'Erro desconhecido ao buscar dados')
             toast.error('Erro ao carregar dados. Por favor, recarregue a página.')
         } finally {
             setLoading(false)
+            setIsLoadingMore(false)
+        }
+    }
+
+    function loadMore() {
+        if (!isLoadingMore && hasMore) {
+            fetchData(false)
         }
     }
 
@@ -500,11 +613,11 @@ function Tasks() {
     }
 
     function handleSelectAll() {
-        const filteredTaskIds = getFilteredTasks().map(task => task.id)
-        if (selectedTasks.length === filteredTaskIds.length) {
+        const taskIds = tasks.map(task => task.id)
+        if (selectedTasks.length === taskIds.length) {
             setSelectedTasks([])
         } else {
-            setSelectedTasks(filteredTaskIds)
+            setSelectedTasks(taskIds)
         }
     }
 
@@ -673,8 +786,8 @@ function Tasks() {
         return deadlineDate < now
     }
 
-    const filteredTasks = getFilteredTasks()
-    const allFilteredSelected = filteredTasks.length > 0 && selectedTasks.length === filteredTasks.length
+    // Tasks are already filtered server-side
+    const allFilteredSelected = tasks.length > 0 && selectedTasks.length === tasks.length
 
     if (loading) {
         return (
@@ -838,11 +951,11 @@ function Tasks() {
             <div className="card admin-tasks-table-card admin-tasks-section-spacing">
                 <div className="admin-tasks-table-header">
                     <h3 className="admin-tasks-count-title">
-                        {filteredTasks.length} {filteredTasks.length === 1 ? 'tarefa encontrada' : 'tarefas encontradas'}
+                        {totalCount > 0 ? `${totalCount} ${totalCount === 1 ? 'tarefa' : 'tarefas'} no total` : 'Sem tarefas'}
                     </h3>
                 </div>
 
-                {filteredTasks.length === 0 ? (
+                {tasks.length === 0 ? (
                     <div className="empty-state">
                         <span className="admin-tasks-empty-icon">
                             <ClipboardList size={64} className="text-slate-300" strokeWidth={1} />
@@ -877,7 +990,7 @@ function Tasks() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {filteredTasks.map(task => {
+                                {tasks.map(task => {
                                     const progress = calculateProgress(task)
                                     const overdue = isOverdue(task)
                                     const isCritical = overdue && (progress === null || progress < 30)
@@ -959,6 +1072,44 @@ function Tasks() {
                                 })}
                             </tbody>
                         </table>
+
+                        {/* Pagination Info and Load More Button */}
+                        <div style={{
+                            padding: '20px',
+                            borderTop: '1px solid #e2e8f0',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            gap: '12px'
+                        }}>
+                            <p style={{
+                                fontSize: '14px',
+                                color: '#64748b',
+                                margin: 0
+                            }}>
+                                Mostrando {tasks.length} de {totalCount} tarefas
+                            </p>
+
+                            {hasMore && (
+                                <button
+                                    onClick={loadMore}
+                                    disabled={isLoadingMore}
+                                    className="btn btn-secondary"
+                                    style={{
+                                        minWidth: '200px'
+                                    }}
+                                >
+                                    {isLoadingMore ? (
+                                        <>
+                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900" style={{ display: 'inline-block', marginRight: '8px' }}></div>
+                                            Carregando...
+                                        </>
+                                    ) : (
+                                        `Carregar Mais (${Math.min(PAGE_SIZE, totalCount - tasks.length)} itens)`
+                                    )}
+                                </button>
+                            )}
+                        </div>
                     </div>
                 )}
             </div>

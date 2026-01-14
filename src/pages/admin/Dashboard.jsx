@@ -60,10 +60,14 @@ function Painel() {
         try {
             setLoading(true)
 
+            // PERFORMANCE: Hard limit to prevent loading entire dataset
+            // KPIs will be calculated from most recent 1000 tasks
+            // For 100% accurate KPIs across 10k+ tasks, use materialized view (future optimization)
             const { data: allTasks, error: allTasksError } = await supabase
                 .from('tarefas_com_status_real')
                 .select('id, status, titulo, deadline, priority, created_at, assigned_to, drive_link, is_overdue')
                 .order('created_at', { ascending: false })
+                .limit(1000)
 
             if (allTasksError) throw allTasksError
 

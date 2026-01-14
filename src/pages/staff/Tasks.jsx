@@ -70,6 +70,7 @@ export default function StaffTasks() {
             // ETAPA 2: QUERY UNIFICADA
             // Busca TODAS as OS (simples + complexas) em UMA query
             // RLS automática filtra: created_by, assigned_to, micro-tasks
+            // PERFORMANCE: Hard limit para prevenir sobrecarga (RLS já filtra por profissional)
             // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
             const { data, error } = await supabase
@@ -88,6 +89,7 @@ export default function StaffTasks() {
                     )
                 `)
                 .order('created_at', { ascending: false })
+                .limit(500)
 
             if (error) throw error
 
