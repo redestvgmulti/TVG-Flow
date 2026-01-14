@@ -155,8 +155,52 @@ export default function StaffTasks() {
         }
     }
 
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // SMART SORTING: Prioritize current tasks over very old ones
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    function smartSortTasks(tasksToSort) {
+        const now = new Date()
+        const sixtyDaysAgo = new Date()
+        sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60)
+
+        // Separate into 3 buckets
+        const urgentAndCurrent = [] // Not completed, deadline within next 60 days or recent overdue
+        const veryOverdue = []       // Not completed, deadline > 60 days ago
+        const completed = []         // All completed tasks
+
+        tasksToSort.forEach(task => {
+            if (task.status === 'concluida') {
+                completed.push(task)
+            } else if (task.deadline) {
+                const taskDeadline = new Date(task.deadline)
+                if (taskDeadline < sixtyDaysAgo) {
+                    veryOverdue.push(task)
+                } else {
+                    urgentAndCurrent.push(task)
+                }
+            } else {
+                // No deadline = urgent (needs attention)
+                urgentAndCurrent.push(task)
+            }
+        })
+
+        // Sort each bucket by deadline ASC (closest first)
+        const sortByDeadline = (a, b) => {
+            if (!a.deadline) return 1
+            if (!b.deadline) return -1
+            return new Date(a.deadline) - new Date(b.deadline)
+        }
+
+        urgentAndCurrent.sort(sortByDeadline)
+        veryOverdue.sort(sortByDeadline)
+        completed.sort(sortByDeadline)
+
+        // Concatenate: urgent → very overdue → completed
+        return [...urgentAndCurrent, ...veryOverdue, ...completed]
+    }
+
     // Filter Logic
-    const filteredTasks = tasks.filter(task => {
+    const filteredTasks = smartSortTasks(tasks.filter(task => {
         // Search
         if (search) {
             const lowerDate = search.toLowerCase()
@@ -172,6 +216,10 @@ export default function StaffTasks() {
             } else {
                 if (task.status !== statusFilter) return false
             }
+        } else {
+            // CRITICAL: 'all' tab should ONLY show non-completed tasks
+            // Completed tasks appear only in 'concluida' tab
+            if (task.status === 'concluida') return false
         }
 
         // Priority
@@ -180,7 +228,7 @@ export default function StaffTasks() {
         }
 
         return true
-    })
+    }))
 
     // Actions
     async function handleUpdateStatus(taskId, newStatus) {
