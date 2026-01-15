@@ -33,8 +33,8 @@ export default function OperationalFeed() {
                     status,
                     funcao,
                     updated_at,
-                    profissional:profissionais(nome),
-                    tarefa:tarefas(titulo)
+                    profissionais!profissional_id(nome),
+                    tarefas!tarefa_id(titulo)
                 `)
                 .neq('status', 'pendente') // Only show active/completed/returned
                 .gt('updated_at', twoDaysAgo)
@@ -71,8 +71,8 @@ export default function OperationalFeed() {
                             status,
                             funcao,
                             updated_at,
-                            profissional:profissionais(nome),
-                            tarefa:tarefas(titulo)
+                            profissionais!profissional_id(nome),
+                            tarefas!tarefa_id(titulo)
                         `)
                         .eq('id', payload.new.id)
                         .single()
@@ -106,9 +106,9 @@ export default function OperationalFeed() {
         return {
             id: item.id + '_' + item.updated_at, // Unique key for animation
             type,
-            user: item.profissional?.nome || 'Alguém',
+            user: item.profissionais?.nome || 'Alguém',
             action: getActionText(type, item.funcao),
-            task: item.tarefa?.titulo || 'Tarefa desconhecida',
+            task: item.tarefas?.titulo || 'Tarefa desconhecida',
             timestamp: new Date(item.updated_at)
         }
     }

@@ -100,7 +100,7 @@ function Tasks() {
                         id,
                         status,
                         funcao,
-                        profissional:profissionais (
+                        profissionais!profissional_id (
                             id,
                             nome
                         )
@@ -199,7 +199,12 @@ function Tasks() {
                 setTasks(newTasks)
                 setCurrentPage(1)
             } else {
-                setTasks(prev => [...prev, ...newTasks])
+                // Prevent duplicate tasks by filtering out IDs that already exist
+                setTasks(prev => {
+                    const existingIds = new Set(prev.map(t => t.id))
+                    const uniqueNewTasks = newTasks.filter(t => !existingIds.has(t.id))
+                    return [...prev, ...uniqueNewTasks]
+                })
                 setCurrentPage(prev => prev + 1)
             }
 
@@ -313,7 +318,7 @@ function Tasks() {
             setEditingMicroTasks(task.micro_tasks.map(mt => ({
                 id: mt.id,
                 funcao: mt.funcao,
-                profissional_id: mt.profissional?.id || '', // Handle alias or direct access
+                profissional_id: mt.profissionais?.id || '', // Updated to profissionais
                 status: mt.status,
                 original: true
             })))
@@ -407,7 +412,7 @@ function Tasks() {
                         funcao,
                         created_at,
                         updated_at,
-                        profissional:profissionais (
+                        profissionais!profissional_id (
                             id,
                             nome
                         )
@@ -883,7 +888,7 @@ function Tasks() {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="card" style={{ padding: '20px' }}>
                         <p className="text-sm text-slate-500 mb-1">Total de Tarefas</p>
-                        <p className="text-2xl font-semibold text-slate-900">{tasks.length}</p>
+                        <p className="text-2xl font-semibold text-slate-900">{totalCount}</p>
                     </div>
                     <div className="card" style={{ padding: '20px' }}>
                         <p className="text-sm text-slate-500 mb-1">Em Andamento</p>

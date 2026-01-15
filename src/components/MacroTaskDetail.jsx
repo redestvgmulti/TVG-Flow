@@ -99,7 +99,7 @@ export default function MacroTaskDetail({ taskId, onBack, isModal = false }) {
                 .from('tarefas_micro')
                 .select(`
                     *,
-                    profissional:profissionais (
+                    profissionais!profissional_id (
                         id,
                         nome,
                         email
@@ -236,7 +236,7 @@ export default function MacroTaskDetail({ taskId, onBack, isModal = false }) {
 
     // Helper to get professional name
     const getProfessionalName = (mt) => {
-        return mt.profissional?.nome || 'Não atribuído'
+        return mt.profissionais?.nome || 'Não atribuído'
     }
 
     const microTasks = task.micro_tasks?.sort((a, b) => a.id - b.id) || []
