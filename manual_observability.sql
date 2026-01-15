@@ -1,111 +1,158 @@
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
--- MANUAL OBSERVABILITY SETUP (FASE 5) - FINAL
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
--- INSTRUCTIONS:
--- 1. Copy this script.
--- 2. Go to Supabase Dashboard > SQL Editor.
--- 3. Run it to create monitoring views.
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+-- ============================================================================
+-- FLOWOS - MANUAL OBSERVABILITY VIEWS
+-- ============================================================================
+-- Purpose: Passive monitoring for query performance, locks, and data growth
+-- Overhead: Minimal (view-only, no triggers/cron)
+-- Dependencies: pg_stat_statements (Supabase default)
+-- ============================================================================
 
-BEGIN;
+-- ============================================================================
+-- 1. QUERY PERFORMANCE MONITORING
+-- ============================================================================
 
--- 1. ENABLE EXTENSION (Idempotent)
-CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
-
--- 2. QUERY PERFORMANCE VIEW (vw_slow_queries)
--- Shows top 50 slowest queries.
--- NOTE: pg_stat_statements does NOT provide real p95/p99 percentiles without
--- significant overhead. We use mean_exec_time as the primary indicator.
+-- View: vw_slow_queries
+-- Purpose: Track slow queries based on mean execution time
+-- IMPORTANT LIMITATION: pg_stat_statements does NOT provide real percentiles
+-- (p95/p99). We only expose accurate metrics: mean, max, calls, total.
+-- ============================================================================
 CREATE OR REPLACE VIEW vw_slow_queries AS
 SELECT 
-    substring(query, 1, 150) as query_snippet,
+    SUBSTRING(query, 1, 200) AS query_snippet,
+    query,
     calls,
-    round(total_exec_time::numeric / 1000, 4) as total_seconds,
-    round(mean_exec_time::numeric, 2) as mean_ms,
-    round(max_exec_time::numeric, 2) as max_ms,
-    rows
-FROM pg_stat_statements
-WHERE query NOT ILIKE '%pg_stat_statements%' 
-  AND query NOT ILIKE '%pg_catalog%'
-  AND query NOT ILIKE '%information_schema%'
-  -- Focus on application queries (SELECT, INSERT, UPDATE, DELETE)
-  AND (
-      query ILIKE 'SELECT%' OR 
-      query ILIKE 'INSERT%' OR 
-      query ILIKE 'UPDATE%' OR 
-      query ILIKE 'DELETE%'
-  )
-  AND calls > 5
-ORDER BY mean_exec_time DESC
-LIMIT 50;
+    ROUND(mean_exec_time::numeric, 2) AS mean_exec_time_ms,
+    ROUND(max_exec_time::numeric, 2) AS max_exec_time_ms,
+    ROUND(total_exec_time::numeric, 2) AS total_exec_time_ms,
+    ROUND((total_exec_time / NULLIF(calls, 0))::numeric, 2) AS avg_time_per_call_ms
+FROM 
+    pg_stat_statements
+WHERE 
+    -- Filter out system and observability queries
+    query NOT LIKE '%pg_catalog%'
+    AND query NOT LIKE '%information_schema%'
+    AND query NOT LIKE '%pg_stat_statements%'
+    AND query NOT LIKE '%vw_slow_queries%'
+    AND query NOT LIKE '%vw_active_locks%'
+    AND query NOT LIKE '%vw_blocked_queries%'
+    AND query NOT LIKE '%vw_table_sizes%'
+    -- Focus on app queries only
+    AND dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
+ORDER BY 
+    mean_exec_time DESC;
 
-COMMENT ON VIEW vw_slow_queries IS 'Top 50 slowest application queries. NOTE: p95/p99 are not available in pg_stat_statements standard view.';
+COMMENT ON VIEW vw_slow_queries IS 
+'Query performance monitoring. LIMITATION: pg_stat_statements does not provide true percentiles (p95/p99). Use mean_exec_time and max_exec_time for analysis.';
 
--- 3. ACTIVE LOCKS VIEW (vw_active_locks)
--- Shows current active locks and their duration
+-- ============================================================================
+-- 2. LOCK MONITORING
+-- ============================================================================
+
+-- View: vw_active_locks
+-- Purpose: Show all active locks with duration
+-- ============================================================================
 CREATE OR REPLACE VIEW vw_active_locks AS
 SELECT 
-    pid,
-    usename as user,
-    pg_blocking_pids(pid) as blocked_by,
-    mode as lock_mode,
-    locktype,
-    granted,
-    state,
-    (now() - query_start) as lock_duration,
-    substring(query, 1, 100) as query_snippet
-FROM pg_stat_activity
-JOIN pg_locks USING (pid)
-WHERE pid != pg_backend_pid()
-  AND (state = 'active' OR locktype = 'advisory')
-  AND database = (SELECT oid FROM pg_database WHERE datname = current_database());
+    l.pid,
+    l.locktype,
+    l.mode,
+    COALESCE(c.relname, 'N/A') AS relation,
+    a.query,
+    a.state,
+    EXTRACT(EPOCH FROM (now() - a.query_start))::integer AS lock_duration_seconds,
+    a.query_start,
+    a.wait_event_type,
+    a.wait_event
+FROM 
+    pg_locks l
+    LEFT JOIN pg_class c ON l.relation = c.oid
+    LEFT JOIN pg_stat_activity a ON l.pid = a.pid
+WHERE 
+    -- Only active locks
+    (a.state = 'active' OR a.wait_event_type = 'Lock')
+    -- Exclude our own monitoring queries
+    AND a.query NOT LIKE '%vw_active_locks%'
+    AND a.query NOT LIKE '%vw_blocked_queries%'
+ORDER BY 
+    lock_duration_seconds DESC;
 
--- 4. BLOCKED QUERIES VIEW (vw_blocked_queries)
--- Detailed view of who is blocking whom
+COMMENT ON VIEW vw_active_locks IS 
+'Active locks with duration. Shows only locks from active queries or queries waiting on locks.';
+
+-- ============================================================================
+-- View: vw_blocked_queries
+-- Purpose: Identify blocking relationships (who is blocking whom)
+-- ============================================================================
 CREATE OR REPLACE VIEW vw_blocked_queries AS
 SELECT 
-    blocked_locks.pid     AS blocked_pid,
-    blocked_activity.usename  AS blocked_user,
-    blocked_activity.query    AS blocked_query,
-    blocking_locks.pid     AS blocking_pid,
-    blocking_activity.usename AS blocking_user,
-    blocking_activity.query   AS blocking_query,
-    (now() - blocked_activity.query_start) AS wait_duration
-FROM pg_catalog.pg_locks         blocked_locks
-JOIN pg_catalog.pg_stat_activity blocked_activity  ON blocked_activity.pid = blocked_locks.pid
-JOIN pg_catalog.pg_locks         blocking_locks 
-    ON blocking_locks.locktype = blocked_locks.locktype
-    AND blocking_locks.database IS NOT DISTINCT FROM blocked_locks.database
-    AND blocking_locks.relation IS NOT DISTINCT FROM blocked_locks.relation
-    AND blocking_locks.page IS NOT DISTINCT FROM blocked_locks.page
-    AND blocking_locks.tuple IS NOT DISTINCT FROM blocked_locks.tuple
-    AND blocking_locks.virtualxid IS NOT DISTINCT FROM blocked_locks.virtualxid
-    AND blocking_locks.transactionid IS NOT DISTINCT FROM blocked_locks.transactionid
-    AND blocking_locks.classid IS NOT DISTINCT FROM blocked_locks.classid
-    AND blocking_locks.objid IS NOT DISTINCT FROM blocked_locks.objid
-    AND blocking_locks.objsubid IS NOT DISTINCT FROM blocked_locks.objsubid
-    AND blocking_locks.pid != blocked_locks.pid
-JOIN pg_catalog.pg_stat_activity blocking_activity ON blocking_activity.pid = blocking_locks.pid
-WHERE NOT blocked_locks.granted;
+    blocked.pid AS blocked_pid,
+    blocked.query AS blocked_query,
+    blocked.state AS blocked_state,
+    EXTRACT(EPOCH FROM (now() - blocked.query_start))::integer AS blocked_duration_seconds,
+    blocking.pid AS blocking_pid,
+    blocking.query AS blocking_query,
+    blocking.state AS blocking_state,
+    EXTRACT(EPOCH FROM (now() - blocking.query_start))::integer AS blocking_duration_seconds
+FROM 
+    pg_stat_activity AS blocked
+    JOIN pg_locks AS blocked_locks ON blocked.pid = blocked_locks.pid
+    JOIN pg_locks AS blocking_locks ON blocked_locks.locktype = blocking_locks.locktype
+        AND blocked_locks.database IS NOT DISTINCT FROM blocking_locks.database
+        AND blocked_locks.relation IS NOT DISTINCT FROM blocking_locks.relation
+        AND blocked_locks.page IS NOT DISTINCT FROM blocking_locks.page
+        AND blocked_locks.tuple IS NOT DISTINCT FROM blocking_locks.tuple
+        AND blocked_locks.virtualxid IS NOT DISTINCT FROM blocking_locks.virtualxid
+        AND blocked_locks.transactionid IS NOT DISTINCT FROM blocking_locks.transactionid
+        AND blocked_locks.classid IS NOT DISTINCT FROM blocking_locks.classid
+        AND blocked_locks.objid IS NOT DISTINCT FROM blocking_locks.objid
+        AND blocked_locks.objsubid IS NOT DISTINCT FROM blocking_locks.objsubid
+        AND blocked_locks.pid != blocking_locks.pid
+    JOIN pg_stat_activity AS blocking ON blocking_locks.pid = blocking.pid
+WHERE 
+    NOT blocked_locks.granted
+    AND blocking_locks.granted
+    -- Exclude monitoring queries
+    AND blocked.query NOT LIKE '%vw_blocked_queries%'
+    AND blocking.query NOT LIKE '%vw_blocked_queries%'
+ORDER BY 
+    blocked_duration_seconds DESC;
 
--- 5. TABLE SIZES VIEW (vw_table_sizes)
--- Shows real disk usage of tables
+COMMENT ON VIEW vw_blocked_queries IS 
+'Shows blocking relationships: which queries are blocked and by whom, with durations.';
+
+-- ============================================================================
+-- 3. GROWTH MONITORING
+-- ============================================================================
+
+-- View: vw_table_sizes
+-- Purpose: Track table and index sizes for growth analysis
+-- ============================================================================
 CREATE OR REPLACE VIEW vw_table_sizes AS
-SELECT
-    relname as table_name,
-    pg_size_pretty(pg_total_relation_size(relid)) as total_size,
-    pg_size_pretty(pg_relation_size(relid)) as data_size,
-    pg_size_pretty(pg_total_relation_size(relid) - pg_relation_size(relid)) as index_size,
-    n_live_tup as live_csv_rows_estimate
-FROM pg_stat_user_tables
-ORDER BY pg_total_relation_size(relid) DESC;
+SELECT 
+    n.nspname AS schema_name,
+    c.relname AS table_name,
+    pg_size_pretty(pg_total_relation_size(c.oid)) AS total_size_pretty,
+    pg_total_relation_size(c.oid) AS total_size_bytes,
+    pg_size_pretty(pg_relation_size(c.oid)) AS table_size_pretty,
+    pg_relation_size(c.oid) AS table_size_bytes,
+    pg_size_pretty(pg_total_relation_size(c.oid) - pg_relation_size(c.oid)) AS index_size_pretty,
+    (pg_total_relation_size(c.oid) - pg_relation_size(c.oid)) AS index_size_bytes,
+    c.reltuples::bigint AS estimated_row_count
+FROM 
+    pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE 
+    c.relkind = 'r'  -- Regular tables only
+    AND n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
+ORDER BY 
+    pg_total_relation_size(c.oid) DESC;
 
-COMMIT;
+COMMENT ON VIEW vw_table_sizes IS 
+'Table and index sizes for growth monitoring. Includes estimated row counts.';
 
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
--- VERIFICATION COMMANDS
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
--- SELECT * FROM vw_slow_queries LIMIT 5;
--- SELECT * FROM vw_active_locks;
--- SELECT * FROM vw_blocked_queries;
--- SELECT * FROM vw_table_sizes;
+-- ============================================================================
+-- USAGE INSTRUCTIONS
+-- ============================================================================
+-- Weekly:  SELECT * FROM vw_slow_queries WHERE mean_exec_time_ms > 200;
+-- Monthly: Compare vw_table_sizes total_size_bytes over time for >20% growth
+-- Incident: SELECT * FROM vw_blocked_queries; to diagnose lock issues
+-- ============================================================================

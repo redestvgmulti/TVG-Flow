@@ -1,10 +1,11 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { Calendar as BigCalendar, dateFnsLocalizer } from 'react-big-calendar'
 import { format, parse, startOfWeek, getDay } from 'date-fns'
 import ptBR from 'date-fns/locale/pt-BR'
-import { supabase } from '../../services/supabase'
+import { fetchAdminCalendarEvents, getEventClasses } from '../../services/calendarService'
 import { Calendar as CalendarIcon, Clock, User, ExternalLink, AlertCircle, CheckCircle } from 'lucide-react'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
+import '../../styles/calendar.css'
 
 const localizer = dateFnsLocalizer({
     format,
@@ -33,10 +34,9 @@ const messages = {
 }
 
 function Calendar() {
-    const [tasks, setTasks] = useState([])
-    const [professionals, setProfessionals] = useState([])
+    const [events, setEvents] = useState([])
     const [loading, setLoading] = useState(true)
-    const [selectedTask, setSelectedTask] = useState(null)
+    const [selectedEvent, setSelectedEvent] = useState(null)
     const [showDetailModal, setShowDetailModal] = useState(false)
     const [view, setView] = useState('month')
     const [date, setDate] = useState(new Date())
@@ -48,22 +48,8 @@ function Calendar() {
     async function fetchData() {
         try {
             setLoading(true)
-
-            const [tasksResult, profsResult] = await Promise.all([
-                supabase
-                    .from('tarefas')
-                    .select('id, titulo, deadline, status, priority, assigned_to, drive_link, created_at, descricao')
-                    .order('deadline'),
-                supabase
-                    .from('profissionais')
-                    .select('id, nome')
-            ])
-
-            if (tasksResult.error) throw tasksResult.error
-            if (profsResult.error) throw profsResult.error
-
-            setTasks(tasksResult.data || [])
-            setProfessionals(profsResult.data || [])
+            const calendarEvents = await fetchAdminCalendarEvents()
+            setEvents(calendarEvents)
         } catch (error) {
             console.error('Error fetching calendar data:', error)
         } finally {
@@ -71,56 +57,14 @@ function Calendar() {
         }
     }
 
-    const events = useMemo(() => {
-        return tasks.map(task => {
-            const deadline = new Date(task.deadline)
-            const isOverdue = deadline < new Date() && task.status !== 'completed'
-
-            let color = '#007aff' // blue - default
-            if (task.status === 'completed') {
-                color = '#34c759' // green
-            } else if (isOverdue) {
-                color = '#ff3b30' // red
-            }
-
-            // Fix for "All Day" issue:
-            // 1. Never assume 00:00:00 is allDay
-            // 2. Default duration is 1 hour for visibility
-            // 3. Only set allDay if explicit property exists (defensive)
-
-            const start = deadline
-            const end = new Date(deadline.getTime() + 60 * 60 * 1000) // +1 hour artificial duration
-
-            // Check for explicit all_day flag (if it exists in future DB updates)
-            const hasExplicitAllDay = task.all_day === true || task.is_all_day === true
-
-            return {
-                id: task.id,
-                title: task.titulo,
-                start: start,
-                end: end,
-                allDay: hasExplicitAllDay,
-                resource: task,
-                style: {
-                    backgroundColor: color,
-                    borderColor: color
-                }
-            }
-        })
-    }, [tasks])
-
     function handleSelectEvent(event) {
-        setSelectedTask(event.resource)
+        setSelectedEvent(event)
         setShowDetailModal(true)
-    }
-
-    function getAssignedToName(assignedToId) {
-        const prof = professionals.find(p => p.id === assignedToId)
-        return prof ? prof.nome : 'Não atribuído'
     }
 
     const eventStyleGetter = (event) => {
         return {
+            className: getEventClasses(event),
             style: event.style
         }
     }
@@ -142,6 +86,9 @@ function Calendar() {
         <div className="animation-fade-in">
             <div className="dashboard-header">
                 <h2>Calendário de Tarefas</h2>
+                <p className="text-secondary">
+                    Visualize macro tasks (referência) e micro tasks (operacionais)
+                </p>
             </div>
 
             <div className="card calendar-container">
@@ -153,7 +100,7 @@ function Calendar() {
                     className="calendar-full-height"
                     onSelectEvent={handleSelectEvent}
                     eventPropGetter={eventStyleGetter}
-                    views={['month', 'week', 'agenda']}
+                    views={['month', 'agenda']}
                     view={view}
                     date={date}
                     onView={setView}
@@ -165,95 +112,206 @@ function Calendar() {
             </div>
 
             {/* Task Detail Modal */}
-            {showDetailModal && selectedTask && (
-                <div className="modal-backdrop" onClick={() => setShowDetailModal(false)}>
-                    <div className="modal" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h3>Detalhes da Tarefa</h3>
-                            <button className="modal-close" onClick={() => setShowDetailModal(false)}>×</button>
+            {showDetailModal && selectedEvent && (
+                <TaskDetailModal
+                    event={selectedEvent}
+                    onClose={() => setShowDetailModal(false)}
+                />
+            )}
+        </div>
+    )
+}
+
+/**
+ * Task Detail Modal Component
+ * Shows detailed information about a calendar event (macro or micro task)
+ * ZERO inline CSS - all styling via calendar.css
+ */
+function TaskDetailModal({ event, onClose }) {
+    const task = event.resource
+    const isMacro = event.eventType === 'macro'
+    const deadlineDate = isMacro ? new Date(task.deadline) : new Date(task.deadline_at)
+    const isOverdue = deadlineDate < new Date() && task.status !== 'completed' && task.status !== 'concluida'
+
+    // Status display
+    const getStatusText = (status) => {
+        const statusMap = {
+            'pending': 'Pendente',
+            'pendente': 'Pendente',
+            'in_progress': 'Em Andamento',
+            'em_execucao': 'Em Execução',
+            'completed': 'Concluída',
+            'concluida': 'Concluída',
+            'bloqueada': 'Bloqueada',
+            'devolvida': 'Devolvida'
+        }
+        return statusMap[status] || status
+    }
+
+    const getStatusClass = (status) => {
+        if (status === 'completed' || status === 'concluida') return 'success'
+        if (status === 'in_progress' || status === 'em_execucao') return 'primary'
+        if (status === 'bloqueada') return 'warning'
+        if (status === 'devolvida') return 'danger'
+        return 'neutral'
+    }
+
+    return (
+        <div className="modal-backdrop" onClick={onClose}>
+            <div className="modal task-detail-modal" onClick={(e) => e.stopPropagation()}>
+                <div className="modal-header">
+                    <h3>Detalhes da Tarefa</h3>
+                    <button className="modal-close" onClick={onClose}>×</button>
+                </div>
+
+                <div className="modal-body">
+                    <div className="task-detail-header">
+                        <h2 className="task-detail-title">
+                            {isMacro ? task.titulo : task.funcao}
+                        </h2>
+
+                        <div className="task-detail-metadata">
+                            <span className={`task-detail-badge task-detail-badge--${isMacro ? 'macro' : 'micro'}`}>
+                                {isMacro ? '📋 Macro Task' : '⚡ Micro Task'}
+                            </span>
+                            <span className={`badge badge-${getStatusClass(task.status)}`}>
+                                {task.status === 'concluida' && <CheckCircle size={12} />}
+                                {getStatusText(task.status)}
+                            </span>
                         </div>
-                        <div className="modal-body">
-                            <div className="detail-group">
-                                <label>Título</label>
-                                <p className="detail-value">{selectedTask.titulo}</p>
-                            </div>
+                    </div>
 
-                            <div className="detail-group">
-                                <label>Descrição</label>
-                                <p className="detail-value" style={{ whiteSpace: 'pre-wrap' }}>
-                                    {selectedTask.descricao || 'Sem descrição'}
-                                </p>
+                    {/* Deadline Section */}
+                    <div className={`task-detail-deadline ${isOverdue ? 'task-detail-deadline--overdue' : ''}`}>
+                        <Clock size={20} className="task-detail-deadline-icon" />
+                        <div>
+                            <div className="task-detail-deadline-text">
+                                {isOverdue ? '🔴 ATRASADA - ' : ''}
+                                Prazo: {deadlineDate.toLocaleDateString('pt-BR')} às {deadlineDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                             </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="detail-group">
-                                    <label>Status</label>
-                                    <span className={`badge badge-${selectedTask.status === 'completed' ? 'success' : selectedTask.status === 'in_progress' ? 'primary' : 'neutral'} flex items-center gap-1 w-fit`}>
-                                        {selectedTask.status === 'completed' && <CheckCircle size={12} />}
-                                        {selectedTask.status === 'completed' ? 'Concluída' : selectedTask.status === 'in_progress' ? 'Em Andamento' : 'Pendente'}
-                                    </span>
+                            {task.started_at && (
+                                <div className="text-sm text-secondary mt-1">
+                                    Iniciada em: {new Date(task.started_at).toLocaleDateString('pt-BR')}
                                 </div>
-
-                                <div className="detail-group">
-                                    <label>Prioridade</label>
-                                    <span className={`badge badge-${selectedTask.priority === 'urgent' ? 'danger' : selectedTask.priority === 'high' ? 'warning' : 'neutral'} flex items-center gap-1 w-fit`}>
-                                        {selectedTask.priority === 'urgent' && <AlertCircle size={12} />}
-                                        {selectedTask.priority === 'urgent' ? 'Urgente' : selectedTask.priority === 'high' ? 'Alta' : 'Normal'}
-                                    </span>
+                            )}
+                            {task.finished_at && (
+                                <div className="text-sm text-success mt-1">
+                                    Concluída em: {new Date(task.finished_at).toLocaleDateString('pt-BR')}
                                 </div>
-                            </div>
+                            )}
+                        </div>
+                    </div>
 
-                            <div className="detail-group">
-                                <label>Responsável</label>
-                                <div className="flex items-center gap-2 mt-1">
-                                    <div className="avatar-placeholder w-8 h-8 text-xs">
-                                        {getAssignedToName(selectedTask.assigned_to)?.charAt(0) || '?'}
-                                    </div>
-                                    <p className="detail-value mb-0">
-                                        {getAssignedToName(selectedTask.assigned_to)}
-                                    </p>
-                                </div>
-                            </div>
+                    {/* Description */}
+                    {task.descricao && (
+                        <div className="task-detail-section">
+                            <div className="task-detail-section-title">Descrição</div>
+                            <div className="task-detail-section-content">{task.descricao}</div>
+                        </div>
+                    )}
 
-                            {selectedTask.drive_link && (
-                                <div className="detail-group">
-                                    <label>Link do Drive</label>
-                                    <a
-                                        href={selectedTask.drive_link}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-primary flex items-center gap-2 hover:underline"
-                                    >
-                                        <ExternalLink size={16} />
-                                        Acessar Arquivos
-                                    </a>
+                    {/* Macro task specific info */}
+                    {isMacro && (
+                        <>
+                            {task.empresa && (
+                                <div className="task-detail-section">
+                                    <div className="task-detail-section-title">Empresa</div>
+                                    <div className="task-detail-section-content">{task.empresa.nome}</div>
                                 </div>
                             )}
 
-                            <div className="detail-group">
-                                <label>Prazos</label>
-                                <p className="text-sm text-muted flex items-center gap-2">
-                                    <CalendarIcon size={14} />
-                                    Criado em: {new Date(selectedTask.created_at || new Date()).toLocaleDateString()}
-                                </p>
-                                <p className="text-sm text-muted flex items-center gap-2">
-                                    <Clock size={14} />
-                                    Vencimento: {new Date(selectedTask.deadline).toLocaleDateString()}
-                                </p>
-                            </div>
-                        </div>
+                            {task.assigned_to && (
+                                <div className="task-detail-section">
+                                    <div className="task-detail-section-title">Responsável Principal</div>
+                                    <div className="task-detail-responsible-list">
+                                        <div className="task-detail-responsible-item">
+                                            <div className="task-detail-avatar">
+                                                {task.assigned_to.nome?.charAt(0) || '?'}
+                                            </div>
+                                            <span>{task.assigned_to.nome}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
 
-                        <div className="modal-footer">
-                            <button
-                                onClick={() => setShowDetailModal(false)}
-                                className="btn btn-secondary w-full"
+                            {typeof task.progress !== 'undefined' && (
+                                <div className="task-detail-section">
+                                    <div className="task-detail-section-title">Progresso</div>
+                                    <div className="task-detail-section-content">
+                                        <div className="progress-bar">
+                                            <div className="progress-fill" style={{ width: `${task.progress}%` }}></div>
+                                        </div>
+                                        <span className="text-sm text-secondary">{task.progress}% completo</span>
+                                    </div>
+                                </div>
+                            )}
+                        </>
+                    )}
+
+                    {/* Micro task specific info */}
+                    {!isMacro && (
+                        <>
+                            <div className="task-detail-section">
+                                <div className="task-detail-section-title">Tarefa Macro</div>
+                                <div className="task-detail-section-content">
+                                    {task.macroTaskTitle || task.tarefa?.titulo || 'N/A'}
+                                </div>
+                            </div>
+
+                            {task.profissional && (
+                                <div className="task-detail-section">
+                                    <div className="task-detail-section-title">Profissional Responsável</div>
+                                    <div className="task-detail-responsible-list">
+                                        <div className="task-detail-responsible-item">
+                                            <div className="task-detail-avatar">
+                                                {task.profissional.nome?.charAt(0) || '?'}
+                                            </div>
+                                            <span>{task.profissional.nome}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {task.peso && (
+                                <div className="task-detail-section">
+                                    <div className="task-detail-section-title">Peso</div>
+                                    <div className="task-detail-section-content">{task.peso}</div>
+                                </div>
+                            )}
+                        </>
+                    )}
+
+                    {/* Drive Link */}
+                    {task.drive_link && (
+                        <div className="task-detail-section">
+                            <div className="task-detail-section-title">Arquivos</div>
+                            <a
+                                href={task.drive_link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-primary flex items-center gap-2 hover:underline"
                             >
-                                Fechar
-                            </button>
+                                <ExternalLink size={16} />
+                                Acessar Arquivos no Drive
+                            </a>
+                        </div>
+                    )}
+
+                    {/* Created At */}
+                    <div className="task-detail-section">
+                        <div className="task-detail-section-title">Criado em</div>
+                        <div className="task-detail-section-content">
+                            {new Date(task.created_at).toLocaleDateString('pt-BR')} às {new Date(task.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                         </div>
                     </div>
                 </div>
-            )}
+
+                <div className="modal-footer task-detail-actions">
+                    <button onClick={onClose} className="btn btn-secondary">
+                        Fechar
+                    </button>
+                </div>
+            </div>
         </div>
     )
 }

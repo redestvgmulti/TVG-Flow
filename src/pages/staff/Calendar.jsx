@@ -1,10 +1,12 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { Calendar as BigCalendar, dateFnsLocalizer } from 'react-big-calendar'
 import { format, parse, startOfWeek, getDay } from 'date-fns'
 import ptBR from 'date-fns/locale/pt-BR'
-import { supabase } from '../../services/supabase'
-import { Calendar as CalendarIcon, Clock, ExternalLink, AlertCircle, CheckCircle, User } from 'lucide-react'
+import { useAuth } from '../../contexts/AuthContext'
+import { fetchStaffCalendarEvents } from '../../services/calendarService'
+import { Calendar as CalendarIcon, Clock, ExternalLink, AlertCircle, CheckCircle } from 'lucide-react'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
+import '../../styles/calendar.css'
 
 const localizer = dateFnsLocalizer({
     format,
@@ -33,82 +35,51 @@ const messages = {
 }
 
 function StaffCalendar() {
-    const [tasks, setTasks] = useState([])
+    const { user } = useAuth()
+    const [events, setEvents] = useState([])
     const [loading, setLoading] = useState(true)
-    const [selectedTask, setSelectedTask] = useState(null)
+    const [selectedEvent, setSelectedEvent] = useState(null)
     const [showDetailModal, setShowDetailModal] = useState(false)
     const [view, setView] = useState('month')
     const [date, setDate] = useState(new Date())
 
     useEffect(() => {
-        fetchData()
-    }, [])
+        if (user?.id) {
+            fetchData()
+        }
+    }, [user?.id])
 
     async function fetchData() {
         try {
             setLoading(true)
-            // RLS automatically filters
-            const { data, error } = await supabase
-                .from('tarefas')
-                .select('id, titulo, deadline, status, priority, drive_link, created_at, descricao')
-                .order('deadline')
-
-            if (error) throw error
-            setTasks(data || [])
+            const calendarEvents = await fetchStaffCalendarEvents(user.id)
+            setEvents(calendarEvents)
         } catch (error) {
-            console.error('Error fetching calendar data:', error)
+            console.error('Error fetching staff calendar data:', error)
         } finally {
             setLoading(false)
         }
     }
 
-    const events = useMemo(() => {
-        return tasks.map(task => {
-            const deadline = new Date(task.deadline)
-            const isOverdue = deadline < new Date() && task.status !== 'completed'
-
-            let color = '#007aff' // blue - default
-            if (task.status === 'completed') {
-                color = '#34c759' // green
-            } else if (isOverdue) {
-                color = '#ff3b30' // red
-            } else if (task.priority === 'urgent') {
-                color = '#ff9500' // orange
-            }
-
-            // Fix for "All Day" issue:
-            // 1. Never assume 00:00:00 is allDay
-            // 2. Default duration is 1 hour for visibility
-            // 3. Only set allDay if explicit property exists (defensive)
-
-            const start = deadline
-            const end = new Date(deadline.getTime() + 60 * 60 * 1000) // +1 hour artificial duration
-
-            // Check for explicit all_day flag (if it exists in future DB updates)
-            const hasExplicitAllDay = task.all_day === true || task.is_all_day === true
-
-            return {
-                id: task.id,
-                title: task.titulo,
-                start: start,
-                end: end,
-                allDay: hasExplicitAllDay,
-                resource: task,
-                style: {
-                    backgroundColor: color,
-                    borderColor: color
-                }
-            }
-        })
-    }, [tasks])
-
     function handleSelectEvent(event) {
-        setSelectedTask(event.resource)
+        setSelectedEvent(event)
         setShowDetailModal(true)
     }
 
     const eventStyleGetter = (event) => {
+        const classes = ['calendar-event', 'calendar-event--micro']
+
+        const status = event.resource.status
+        if (status === 'concluida') {
+            classes.push('calendar-event--completed')
+        } else if (status === 'em_execucao') {
+            classes.push('calendar-event--in-progress')
+        } else if (event.resource.deadline_at && new Date(event.resource.deadline_at) < new Date()) {
+            classes.push('calendar-event--overdue')
+        }
+
         return {
+            className: classes.join(' '),
             style: event.style
         }
     }
@@ -125,7 +96,7 @@ function StaffCalendar() {
         <div className="animation-fade-in pb-12">
             <div className="mb-8">
                 <h1 className="text-3xl font-bold text-primary mb-2">Minha Agenda</h1>
-                <p className="text-secondary">Visualize seus prazos e entregas.</p>
+                <p className="text-secondary">Visualize suas tarefas e prazos em tempo real</p>
             </div>
 
             <div className="card calendar-container bg-white">
@@ -137,7 +108,7 @@ function StaffCalendar() {
                     className="calendar-full-height min-h-[600px]"
                     onSelectEvent={handleSelectEvent}
                     eventPropGetter={eventStyleGetter}
-                    views={['month', 'week', 'agenda']}
+                    views={['month', 'agenda']}
                     view={view}
                     date={date}
                     onView={setView}
@@ -149,83 +120,120 @@ function StaffCalendar() {
             </div>
 
             {/* Task Detail Modal */}
-            {showDetailModal && selectedTask && (
-                <div className="modal-backdrop" onClick={() => setShowDetailModal(false)}>
-                    <div className="modal" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h3>Detalhes da Tarefa</h3>
-                            <button className="modal-close" onClick={() => setShowDetailModal(false)}>×</button>
+            {showDetailModal && selectedEvent && (
+                <StaffTaskDetailModal
+                    event={selectedEvent}
+                    onClose={() => setShowDetailModal(false)}
+                />
+            )}
+        </div>
+    )
+}
+
+/**
+ * Staff Task Detail Modal
+ * Shows detailed information about a micro task
+ * ZERO inline CSS - all styling via calendar.css
+ */
+function StaffTaskDetailModal({ event, onClose }) {
+    const task = event.resource
+    const deadlineDate = new Date(task.deadline_at)
+    const isOverdue = deadlineDate < new Date() && task.status !== 'concluida'
+
+    const getStatusText = (status) => {
+        const statusMap = {
+            'pendente': 'Pendente',
+            'em_execucao': 'Em Execução',
+            'concluida': 'Concluída',
+            'bloqueada': 'Bloqueada',
+            'devolvida': 'Devolvida'
+        }
+        return statusMap[status] || status
+    }
+
+    const getStatusClass = (status) => {
+        if (status === 'concluida') return 'success'
+        if (status === 'em_execucao') return 'primary'
+        if (status === 'bloqueada') return 'warning'
+        if (status === 'devolvida') return 'danger'
+        return 'neutral'
+    }
+
+    return (
+        <div className="modal-backdrop" onClick={onClose}>
+            <div className="modal task-detail-modal" onClick={(e) => e.stopPropagation()}>
+                <div className="modal-header">
+                    <h3>Detalhes da Tarefa</h3>
+                    <button className="modal-close" onClick={onClose}>×</button>
+                </div>
+
+                <div className="modal-body">
+                    <div className="task-detail-header">
+                        <h2 className="task-detail-title">{task.funcao}</h2>
+
+                        <div className="task-detail-metadata">
+                            <span className="task-detail-badge task-detail-badge--micro">
+                                ⚡ Minha Tarefa
+                            </span>
+                            <span className={`badge badge-${getStatusClass(task.status)}`}>
+                                {task.status === 'concluida' && <CheckCircle size={12} />}
+                                {getStatusText(task.status)}
+                            </span>
                         </div>
-                        <div className="modal-body">
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="text-xs font-semibold text-tertiary uppercase tracking-wide">Título</label>
-                                    <p className="text-lg font-medium text-primary mt-1">{selectedTask.titulo}</p>
-                                </div>
+                    </div>
 
-                                <div>
-                                    <label className="text-xs font-semibold text-tertiary uppercase tracking-wide">Descrição</label>
-                                    <p className="text-sm text-secondary mt-1 whitespace-pre-wrap leading-relaxed">
-                                        {selectedTask.descricao || 'Sem descrição'}
-                                    </p>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="text-xs font-semibold text-tertiary uppercase tracking-wide mb-1 block">Status</label>
-                                        <span className={`badge badge-${selectedTask.status === 'completed' ? 'success' : selectedTask.status === 'in_progress' ? 'primary' : 'neutral'} inline-flex items-center gap-1`}>
-                                            {selectedTask.status === 'completed' && <CheckCircle size={12} />}
-                                            {selectedTask.status === 'completed' ? 'Concluída' : selectedTask.status === 'in_progress' ? 'Em Andamento' : 'Pendente'}
-                                        </span>
-                                    </div>
-
-                                    <div>
-                                        <label className="text-xs font-semibold text-tertiary uppercase tracking-wide mb-1 block">Prioridade</label>
-                                        <span className={`badge badge-${selectedTask.priority === 'urgent' ? 'danger' : selectedTask.priority === 'high' ? 'warning' : 'neutral'} inline-flex items-center gap-1`}>
-                                            {selectedTask.priority === 'urgent' && <AlertCircle size={12} />}
-                                            {selectedTask.priority === 'urgent' ? 'Urgente' : selectedTask.priority === 'high' ? 'Alta' : 'Normal'}
-                                        </span>
-                                    </div>
-                                </div>
-
-                                {selectedTask.drive_link && (
-                                    <div className="pt-2">
-                                        <a
-                                            href={selectedTask.drive_link}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-brand flex items-center gap-2 hover:underline font-medium text-sm"
-                                        >
-                                            <ExternalLink size={16} />
-                                            Acessar Arquivos
-                                        </a>
-                                    </div>
-                                )}
-
-                                <div className="bg-subtle p-3 rounded-lg flex flex-col gap-2 mt-2">
-                                    <div className="flex items-center gap-2 text-sm text-secondary">
-                                        <CalendarIcon size={14} className="text-tertiary" />
-                                        <span>Criado em: <strong>{new Date(selectedTask.created_at || new Date()).toLocaleDateString()}</strong></span>
-                                    </div>
-                                    <div className="flex items-center gap-2 text-sm text-secondary">
-                                        <Clock size={14} className="text-tertiary" />
-                                        <span>Vencimento: <strong className="text-brand">{new Date(selectedTask.deadline).toLocaleDateString()}</strong></span>
-                                    </div>
-                                </div>
+                    {/* Deadline Section */}
+                    <div className={`task-detail-deadline ${isOverdue ? 'task-detail-deadline--overdue' : ''}`}>
+                        <Clock size={20} className="task-detail-deadline-icon" />
+                        <div>
+                            <div className="task-detail-deadline-text">
+                                {isOverdue ? '🔴 ATRASADA - ' : ''}
+                                Prazo: {deadlineDate.toLocaleDateString('pt-BR')} às {deadlineDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                             </div>
+                            {task.started_at && (
+                                <div className="text-sm text-secondary mt-1">
+                                    ✓ Iniciada em: {new Date(task.started_at).toLocaleDateString('pt-BR')} às {new Date(task.started_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                </div>
+                            )}
+                            {task.finished_at && (
+                                <div className="text-sm text-success mt-1">
+                                    ✓ Concluída em: {new Date(task.finished_at).toLocaleDateString('pt-BR')} às {new Date(task.finished_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                </div>
+                            )}
                         </div>
+                    </div>
 
-                        <div className="modal-footer">
-                            <button
-                                onClick={() => setShowDetailModal(false)}
-                                className="btn btn-secondary w-full"
-                            >
-                                Fechar
-                            </button>
+                    {/* Macro Task Reference */}
+                    <div className="task-detail-section">
+                        <div className="task-detail-section-title">Ordem de Serviço</div>
+                        <div className="task-detail-section-content">
+                            📋 {task.macroTaskTitle || task.tarefa?.titulo || 'N/A'}
+                        </div>
+                    </div>
+
+                    {/* Weight */}
+                    {task.peso && (
+                        <div className="task-detail-section">
+                            <div className="task-detail-section-title">Peso da Tarefa</div>
+                            <div className="task-detail-section-content">{task.peso} pontos</div>
+                        </div>
+                    )}
+
+                    {/* Created At */}
+                    <div className="task-detail-section">
+                        <div className="task-detail-section-title">Criado em</div>
+                        <div className="task-detail-section-content">
+                            {new Date(task.created_at).toLocaleDateString('pt-BR')} às {new Date(task.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                         </div>
                     </div>
                 </div>
-            )}
+
+                <div className="modal-footer task-detail-actions">
+                    <button onClick={onClose} className="btn btn-secondary">
+                        Fechar
+                    </button>
+                </div>
+            </div>
         </div>
     )
 }

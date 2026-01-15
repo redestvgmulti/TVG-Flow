@@ -1,0 +1,267 @@
+import { supabase } from './supabase'
+
+/**
+ * Calendar Event Service - PHASE 1 SAFE MODE
+ * 
+ * CRITICAL FIXES APPLIED:
+ * - Removed ALL ambiguous embeds to eliminate PGRST201 errors
+ * - Implemented robust date fallbacks (never discard events)
+ * - Clear eventType differentiation (macro vs micro)
+ * 
+ * STATUS: SAFE MODE - queries guaranteed to work
+ */
+
+/**
+ * Fetch calendar events for Admin view
+ * Returns both macro tasks AND micro tasks
+ * 
+ * PHASE 1 - SAFE MODE: No embeds to avoid PGRST201
+ */
+export async function fetchAdminCalendarEvents() {
+  try {
+    console.log('[Calendar] Fetching admin calendar events...')
+
+    // PHASE 1: Simple query, no embeds (avoid PGRST201)
+    const { data: macroTasks, error: macroError } = await supabase
+      .from('tarefas')
+      .select('*')
+      .order('deadline')
+
+    if (macroError) {
+      console.error('[Calendar] ❌ Error fetching macro tasks:', macroError)
+      throw macroError
+    }
+
+    console.log('[Calendar] ✓ Fetched macro tasks:', macroTasks?.length || 0)
+
+    // PHASE 1: Simple query, no embeds (avoid PGRST201)
+    const { data: microTasks, error: microError } = await supabase
+      .from('tarefas_micro')
+      .select('*')
+      .order('deadline_at')
+
+    if (microError) {
+      console.error('[Calendar] ❌ Error fetching micro tasks:', microError)
+      throw microError
+    }
+
+    console.log('[Calendar] ✓ Fetched micro tasks:', microTasks?.length || 0)
+
+    // Transform to calendar events
+    const macroEvents = transformMacroTasks(macroTasks || [])
+    const microEvents = transformMicroTasks(microTasks || [])
+
+    const allEvents = [...macroEvents, ...microEvents]
+    console.log('[Calendar] ✓ Total events mapped:', allEvents.length, {
+      macro: macroEvents.length,
+      micro: microEvents.length
+    })
+
+    return allEvents
+  } catch (error) {
+    console.error('[Calendar] ❌ Fatal error fetching calendar events:', error)
+    throw error
+  }
+}
+
+/**
+ * Fetch calendar events for Staff view
+ * Returns ONLY assigned micro tasks (NO macro tasks)
+ * 
+ * PHASE 1 - SAFE MODE: No embeds to avoid PGRST201
+ */
+export async function fetchStaffCalendarEvents(professionalId) {
+  try {
+    console.log('[Calendar] Fetching staff calendar events for:', professionalId)
+
+    // PHASE 1: Simple query, no embeds (avoid PGRST201)
+    const { data: microTasks, error } = await supabase
+      .from('tarefas_micro')
+      .select('*')
+      .eq('profissional_id', professionalId)
+      .order('deadline_at')
+
+    if (error) {
+      console.error('[Calendar] ❌ Error fetching staff micro tasks:', error)
+      throw error
+    }
+
+    console.log('[Calendar] ✓ Fetched staff micro tasks:', microTasks?.length || 0)
+
+    const events = transformMicroTasks(microTasks || [])
+    console.log('[Calendar] ✓ Staff events mapped:', events.length)
+
+    return events
+  } catch (error) {
+    console.error('[Calendar] ❌ Fatal error fetching staff calendar events:', error)
+    throw error
+  }
+}
+
+/**
+ * Transform macro tasks to calendar events
+ * PHASE 2: ROBUST FALLBACKS - never discard events
+ * STATUS-BASED STYLING (not type-based)
+ */
+function transformMacroTasks(tasks) {
+  console.log('[Calendar] Transforming macro tasks:', tasks.length)
+
+  return tasks.map(task => {
+    // PHASE 2: ROBUST DATE FALLBACK CHAIN
+    // deadline → created_at → NOW (never null)
+    let deadlineValue = task.deadline || task.created_at || new Date().toISOString()
+    let deadline = new Date(deadlineValue)
+
+    // Validate date
+    if (isNaN(deadline.getTime())) {
+      console.warn('[Calendar] ⚠️ Invalid date for macro task, using NOW:', task.id)
+      deadlineValue = new Date().toISOString()
+      deadline = new Date(deadlineValue)
+    }
+
+    // PHASE 2: ALL-DAY DETECTION (midnight check)
+    const hours = deadline.getHours()
+    const minutes = deadline.getMinutes()
+    const seconds = deadline.getSeconds()
+    const isAllDay = hours === 0 && minutes === 0 && seconds === 0
+
+    // Calculate start/end
+    let start, end
+    if (isAllDay) {
+      // All-day event: full day block
+      start = new Date(deadline)
+      start.setHours(0, 0, 0, 0)
+      end = new Date(deadline)
+      end.setHours(23, 59, 59, 999)
+    } else {
+      // Timed event: 1h visual block
+      start = deadline
+      end = new Date(deadline.getTime() + 60 * 60 * 1000)
+    }
+
+    return {
+      id: `macro-${task.id}`,
+      title: `📋 ${task.titulo || 'Sem título'}`,
+      start,
+      end,
+      allDay: isAllDay,
+      eventType: 'macro', // PHASE 3: Clear type (but not used for color)
+      resource: {
+        ...task,
+        type: 'macro'
+      }
+    }
+  })
+}
+
+/**
+ * Transform micro tasks to calendar events
+ * PHASE 2: ROBUST FALLBACKS - never discard events
+ * STATUS-BASED STYLING (not type-based)
+ */
+function transformMicroTasks(tasks) {
+  console.log('[Calendar] Transforming micro tasks:', tasks.length)
+
+  // PHASE 2: Process ALL tasks, use fallbacks
+  return tasks.map(task => {
+    // PHASE 2: ROBUST DATE FALLBACK CHAIN
+    // deadline_at → created_at → NOW (never null)
+    const deadlineValue = task.deadline_at || task.created_at || new Date().toISOString()
+    let deadline = new Date(deadlineValue)
+
+    // Validate date
+    if (isNaN(deadline.getTime())) {
+      console.warn('[Calendar] ⚠️ Invalid date for micro task, using NOW:', task.id)
+      deadline = new Date()
+    }
+
+    const startedAt = task.started_at ? new Date(task.started_at) : null
+    const finishedAt = task.finished_at ? new Date(task.finished_at) : null
+
+    let start, end, isAllDay = false
+
+    // PHASE 2: INTELLIGENT TIME INFERENCE
+    if (startedAt && finishedAt && !isNaN(startedAt.getTime()) && !isNaN(finishedAt.getTime())) {
+      // Use actual execution time (never all-day)
+      start = startedAt
+      end = finishedAt
+      isAllDay = false
+    } else {
+      // Use deadline with fallback
+      const hours = deadline.getHours()
+      const minutes = deadline.getMinutes()
+      const seconds = deadline.getSeconds()
+
+      if (hours === 0 && minutes === 0 && seconds === 0) {
+        // All-day event
+        isAllDay = true
+        start = new Date(deadline)
+        start.setHours(0, 0, 0, 0)
+        end = new Date(deadline)
+        end.setHours(23, 59, 59, 999)
+      } else {
+        // Timed event: 1h visual block before deadline
+        end = deadline
+        start = new Date(deadline.getTime() - 60 * 60 * 1000)
+      }
+    }
+
+    return {
+      id: `micro-${task.id}`,
+      title: `${task.funcao || 'Tarefa'}`,
+      start,
+      end,
+      allDay: isAllDay,
+      eventType: 'micro', // PHASE 3: Clear type (but not used for color)
+      resource: {
+        ...task,
+        type: 'micro'
+      }
+    }
+  }).filter(event => {
+    // Only filter out truly invalid events (should never happen with fallbacks)
+    const isValid = event.start && event.end && !isNaN(event.start.getTime()) && !isNaN(event.end.getTime())
+    if (!isValid) {
+      console.error('[Calendar] ❌ Discarding invalid event:', event.id)
+    }
+    return isValid
+  })
+}
+
+/**
+ * Get event CSS classes based on TEMPORAL STATUS (not type)
+ * Color indicates: normal, attention, overdue, or completed
+ */
+export function getEventClasses(event) {
+  const classes = ['calendar-event']
+
+  const resource = event.resource
+  const status = resource.status
+  const deadline = resource.deadline_at || resource.deadline
+
+  // STATUS CLASSIFICATION (temporal, not type)
+  if (status === 'concluida' || status === 'completed') {
+    // Completed - gray, low emphasis
+    classes.push('calendar-event--completed')
+  } else if (deadline) {
+    const deadlineDate = new Date(deadline)
+    const now = new Date()
+    const hoursUntil = (deadlineDate - now) / (1000 * 60 * 60)
+
+    if (deadlineDate < now) {
+      // Overdue - light pink background, red border
+      classes.push('calendar-event--overdue')
+    } else if (hoursUntil <= 24) {
+      // Attention - approaching deadline (within 24h)
+      classes.push('calendar-event--attention')
+    } else {
+      // Normal - future event
+      classes.push('calendar-event--normal')
+    }
+  } else {
+    // Default to normal if no deadline
+    classes.push('calendar-event--normal')
+  }
+
+  return classes.join(' ')
+}
