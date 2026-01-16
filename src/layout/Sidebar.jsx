@@ -20,14 +20,16 @@ function Sidebar({ mobileMenuOpen, onClose }) {
     const [adminPanelOpen, setAdminPanelOpen] = useState(true)
     const [profileOpen, setProfileOpen] = useState(false)
     const [incompleteTaskCount, setIncompleteTaskCount] = useState(0)
+    const [upcomingMeetingsCount, setUpcomingMeetingsCount] = useState(0)
 
-    // Fetch incomplete task count for staff
+    // Fetch incomplete task count and meetings count for staff
     useEffect(() => {
         if (role === 'staff' || role === 'profissional') {
             fetchIncompleteTaskCount()
+            fetchUpcomingMeetingsCount()
 
-            // Subscribe to real-time updates
-            const subscription = supabase
+            // Subscribe to real-time updates for tasks
+            const taskSubscription = supabase
                 .channel('task_changes')
                 .on('postgres_changes', {
                     event: '*',
@@ -38,8 +40,16 @@ function Sidebar({ mobileMenuOpen, onClose }) {
                 })
                 .subscribe()
 
+            // Subscribe to real-time updates for meetings
+            const meetingSubscription = supabase
+                .channel('meeting_changes')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'reunioes' }, () => fetchUpcomingMeetingsCount())
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'reunioes_participantes' }, () => fetchUpcomingMeetingsCount())
+                .subscribe()
+
             return () => {
-                subscription.unsubscribe()
+                taskSubscription.unsubscribe()
+                meetingSubscription.unsubscribe()
             }
         }
     }, [role])
@@ -65,6 +75,32 @@ function Sidebar({ mobileMenuOpen, onClose }) {
             console.error('Error fetching task count:', error)
             // Ensure state is valid
             setIncompleteTaskCount(0)
+        }
+    }
+
+    async function fetchUpcomingMeetingsCount() {
+        try {
+            if (!user) return
+
+            // RLS automatically filters by participant
+            const { count, error } = await supabase
+                .from('reunioes')
+                .select('*', { count: 'exact', head: true })
+                .eq('status', 'scheduled')
+            // Optional: Filter only future meetings?
+            // .gte('data_inicio', new Date().toISOString())
+            // Requirement: "mesmo comportamento que tarefas" (Tasks counts all pending).
+            // So we count all 'scheduled' meetings.
+
+            if (error) {
+                console.warn('Silent error fetching meeting count:', error)
+                return
+            }
+
+            setUpcomingMeetingsCount(count || 0)
+        } catch (error) {
+            console.error('Error fetching meeting count:', error)
+            setUpcomingMeetingsCount(0)
         }
     }
 
@@ -176,6 +212,11 @@ function Sidebar({ mobileMenuOpen, onClose }) {
                                     {item.key === 'tasks' && incompleteTaskCount > 0 && (
                                         <span className="nav-task-badge">
                                             {incompleteTaskCount}
+                                        </span>
+                                    )}
+                                    {item.key === 'staff-meetings' && upcomingMeetingsCount > 0 && (
+                                        <span className="nav-task-badge">
+                                            {upcomingMeetingsCount}
                                         </span>
                                     )}
                                 </NavLink>

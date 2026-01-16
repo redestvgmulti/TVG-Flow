@@ -4,6 +4,8 @@ import { normalizeRole } from '../utils/roles'
 
 const AuthContext = createContext({})
 
+export { AuthContext } // Export the context
+
 export function useAuth() {
     return useContext(AuthContext)
 }

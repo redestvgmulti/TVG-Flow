@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../services/supabase'
 import { Building2, Activity, Ban, TrendingUp, AlertTriangle } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import LoadingScreen from '../../components/LoadingScreen'
 import '../../styles/super-admin-dashboard.css'
 
 export default function SuperAdminDashboard() {
@@ -39,13 +40,8 @@ export default function SuperAdminDashboard() {
     if (loading) {
         return (
             <div className="super-admin-container">
-                <div className="dashboard-header">
-                    <h1>Painel Super Admin</h1>
-                    <p className="dashboard-subtitle">Visão Executiva do FlowOS</p>
-                </div>
-                <div className="card loading-card">
-                    <p className="loading-text">Carregando métricas executivas...</p>
-                    <div className="spinner"></div>
+                <div style={{ height: '70vh', display: 'flex', alignItems: 'center' }}>
+                    <LoadingScreen message="Carregando métricas executivas..." />
                 </div>
             </div>
         )

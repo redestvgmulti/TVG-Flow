@@ -30,86 +30,171 @@
 /* 
  * KPI GRID - Exact Figma Make Layout
  */
+/* 
+ * KPI GRID - Exact Figma Make Layout
+ */
 .dashboard-grid-metrics {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
+    gap: 10px;
     margin-bottom: 24px;
 }
 
+/* Metric Cards */
 .metric-card {
-    background: #ffffff;
+    padding: 24px;
+    border-radius: 12px;
     border: 1px solid #e5e7eb;
-    border-radius: 8px;
-    padding: 20px;
-    transition: box-shadow 150ms ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    background: white;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 4px;
+    height: 100%;
+    transition: transform 0.2s, box-shadow 0.2s;
 }
 
 .metric-card:hover {
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
 
+/* Specific Card Backgrounds */
+.metric-card-neutral-bg {
+    background: white;
+}
+
+.metric-card-primary-bg {
+    background: #eff6ff !important;
+    /* blue-50 */
+    border-color: #dbeafe;
+    box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.15);
+    /* Blue glow */
+}
+
+.metric-card-success-bg {
+    background: #f0fdf4 !important;
+    /* green-50 */
+    border-color: #dcfce7;
+    box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.15);
+    /* Green glow */
+}
+
+.metric-card-critical-bg {
+    background: #ef4444 !important;
+    /* red-500 */
+    border-color: #f87171;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
+    /* Glow effect */
+}
+
+/* Shine effect */
+.metric-card-critical-bg::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 50%;
+    height: 100%;
+    background: linear-gradient(to right,
+            rgba(255, 255, 255, 0) 0%,
+            rgba(255, 255, 255, 0.2) 50%,
+            rgba(255, 255, 255, 0) 100%);
+    transform: skewX(-25deg);
+    animation: shine 3s infinite;
+}
+
+@keyframes shine {
+    0% {
+        left: -100%;
+    }
+
+    20% {
+        left: 200%;
+    }
+
+    100% {
+        left: 200%;
+    }
+}
+
+.metric-card-critical-bg:hover {
+    background: #dc2626 !important;
+    /* darker red on hover */
+    box-shadow: 0 6px 20px rgba(239, 68, 68, 0.5);
+}
+
+/* Labels */
 .metric-label {
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 600;
     color: #6b7280;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
-    margin: 0 0 12px 0;
+    letter-spacing: 0.05em;
+    margin-bottom: 0;
 }
 
+.metric-label-critical {
+    color: #ffffff !important;
+    margin-bottom: 0;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* Values */
 .metric-value {
-    font-size: 28px;
+    font-size: 32px;
     font-weight: 700;
     color: #111827;
-    margin: 0;
-    line-height: 1;
-    letter-spacing: -0.03em;
+    line-height: 1.2;
+    margin-bottom: 0;
 }
 
-.metric-value-primary {
-    color: #3b82f6;
+.metric-value-critical {
+    color: #ffffff !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
-.metric-value-success {
-    color: #10b981;
+/* Percentages and Footer Info */
+.metric-percentage {
+    font-size: 13px;
+    font-weight: 500;
+    color: #6b7280;
 }
 
-.metric-value-danger {
-    color: #ef4444;
+.metric-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0;
 }
 
-/* 
- * CHARTS ROW - Figma Make Grid
- */
-.dashboard-grid-charts {
-    display: grid;
-    grid-template-columns: 2fr 1fr;
-    gap: 16px;
-    margin-bottom: 24px;
+.metric-footer-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
 }
 
-/* 
- * CARDS - Figma Make Style
- */
-.card {
-    background: #ffffff;
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
-    padding: 20px;
-}
-
-.card-header {
-    padding: 0 0 16px 0;
-    border-bottom: 1px solid #f3f4f6;
-    margin-bottom: 16px;
-}
-
-.card-title {
-    font-size: 14px;
+.metric-badge-critical {
+    font-size: 12px;
     font-weight: 600;
-    color: #111827;
-    margin: 0;
+    line-height: 1;
+    /* Fix vertical alignment */
+    color: #ffffff !important;
+    opacity: 0.9;
+    padding-top: 1px;
+    /* Optical adjustment */
+}
+
+.metric-icon-critical,
+.metric-icon-critical-small {
+    color: #ffffff;
+    display: block;
+    /* Ensure it behaves as a block for flex alignment */
 }
 
 /* 
@@ -205,25 +290,9 @@
 }
 
 /* 
- * LOADING STATE
+ * LOADING STATE - Premium 3D Flip 
  */
-.loading-card {
-    padding: 48px 24px;
-    text-align: center;
-}
-
-.loading-text-primary {
-    font-size: 14px;
-    font-weight: 500;
-    color: #374151;
-    margin: 0 0 8px 0;
-}
-
-.loading-text-secondary {
-    font-size: 13px;
-    color: #9ca3af;
-    margin: 0;
-}
+/* Loaded globally in components.css */
 
 /* 
  * UTILITY CLASSES
@@ -335,4 +404,522 @@
     .dashboard-grid-metrics {
         grid-template-columns: 1fr;
     }
+}
+
+/* 
+ * SPECIAL METRIC CARDS
+ */
+.metric-card-overdue {
+    background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.3),
+        0 4px 6px rgba(0, 0, 0, 0.1);
+    border: 1px solid #fca5a5;
+}
+
+.metric-card-overdue .metric-label,
+.metric-card-overdue .metric-value {
+    color: #ffffff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.metric-card-small {
+    flex: 1 1 220px;
+    min-width: 200px;
+    padding: 1.5rem;
+}
+
+.metric-card-small .metric-value {
+    font-size: 2.5rem;
+}
+
+.metric-card-small .metric-label {
+    font-size: 0.75rem;
+}
+
+/* Fundos coloridos leves para cada tipo de métrica */
+.dashboard-grid-metrics {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 24px;
+    margin-bottom: 24px;
+}
+
+/* Metric Cards */
+
+
+.metric-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+/* Specific Card Backgrounds */
+.metric-card-neutral-bg {
+    background: white;
+}
+
+.metric-card-primary-bg {
+    background: #eff6ff;
+    /* blue-50 */
+    border-color: #dbeafe;
+}
+
+.metric-card-success-bg {
+    background: #f0fdf4;
+    /* green-50 */
+    border-color: #dcfce7;
+}
+
+.metric-card-critical-bg {
+    background: #fef2f2;
+    border-color: #fecaca;
+    cursor: pointer;
+}
+
+.metric-card-critical-bg:hover {
+    background: #fee2e2;
+}
+
+/* Labels */
+.metric-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0;
+}
+
+.metric-label-critical {
+    color: #991b1b;
+    margin-bottom: 0;
+}
+
+/* Values */
+.metric-value {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1.2;
+    margin-bottom: 0;
+}
+
+.metric-value-critical {
+    color: #b91c1c;
+}
+
+/* Percentages and Footer Info */
+.metric-percentage {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.metric-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0;
+}
+
+.metric-footer-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.metric-badge-critical {
+    font-size: 12px;
+    font-weight: 600;
+    color: #b91c1c;
+}
+
+.metric-icon-critical {
+    color: #dc2626;
+}
+
+.metric-icon-critical-small {
+    color: #dc2626;
+}
+
+
+
+.metric-card-critical-alert:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15),
+        0 8px 20px rgba(239, 68, 68, 0.25);
+    border-color: #f87171;
+}
+
+.metric-critical-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.metric-critical-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.metric-critical-icon {
+    color: #dc2626;
+    flex-shrink: 0;
+}
+
+.metric-critical-label {
+    margin: 0;
+    color: #991b1b;
+}
+
+.metric-critical-value {
+    font-size: 48px;
+    color: #dc2626;
+    margin: 0;
+    line-height: 1;
+    font-weight: 800;
+}
+
+.metric-critical-description {
+    font-size: 13px;
+    color: #991b1b;
+    margin: 12px 0;
+    font-weight: 500;
+}
+
+.metric-critical-action {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #dc2626;
+    font-weight: 600;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(220, 38, 38, 0.2);
+}
+
+.metric-critical-action svg {
+    flex-shrink: 0;
+}
+
+/* Overlay Metric Card (Secondary Indicator Styling) */
+.metric-card-overlay {
+    max-width: 400px;
+    position: relative;
+}
+
+.metric-header-with-badge {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.metric-badge-overlay {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.3);
+    padding: 4px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    cursor: help;
+}
+
+
+/* 
+ * FEED OPERACIONAL - Restored Scrollable Style
+ */
+.feed-container {
+    height: 320px;
+    overflow-y: auto;
+    padding-right: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* Custom Scrollbar for Feed */
+.feed-container::-webkit-scrollbar {
+    width: 6px;
+}
+
+.feed-container::-webkit-scrollbar-track {
+    background: #f9fafb;
+    border-radius: 3px;
+}
+
+.feed-container::-webkit-scrollbar-thumb {
+    background: #e5e7eb;
+    border-radius: 3px;
+}
+
+.feed-container::-webkit-scrollbar-thumb:hover {
+    background: #d1d5db;
+}
+
+.feed-item {
+    display: flex;
+    gap: 12px;
+    padding: 12px;
+    background: #ffffff;
+    border: 1px solid #f3f4f6;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+}
+
+.feed-item:hover {
+    background: #fcfcfc;
+    border-color: #e5e7eb;
+    transform: translateX(2px);
+}
+
+.feed-icon-wrapper {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: #4b5563;
+}
+
+.feed-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.feed-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0;
+}
+
+.feed-user {
+    font-size: 12px;
+    font-weight: 600;
+    color: #374151;
+}
+
+.feed-time {
+    font-size: 11px;
+    color: #9ca3af;
+}
+
+.feed-action {
+    font-size: 13px;
+    color: #4b5563;
+    line-height: 1.4;
+    margin: 0 0 4px 0;
+}
+
+.feed-context {
+    font-size: 11px;
+    color: #9ca3af;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0;
+}
+
+/* 
+ * RECENT TASKS - Restored Horizontal Cards
+ */
+/* 
+ * RECENT TASKS - Framer/Linear Polish (Definitive)
+ */
+.recent-tasks-list {
+    display: flex;
+    flex-direction: column;
+    padding-top: 8px;
+    gap: 4px;
+    /* Slight gap for hover areas */
+}
+
+.task-item-minimal {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    background: transparent;
+    transition: all 0.15s ease-out;
+    position: relative;
+    border: 1px solid transparent;
+    /* Prepare for border */
+}
+
+/* Overdue State - Subtle Background */
+.task-item-minimal.overdue {
+    background: rgba(239, 68, 68, 0.04);
+}
+
+.task-item-minimal.overdue:hover {
+    background: rgba(239, 68, 68, 0.08);
+    /* Slightly darker on hover */
+}
+
+/* Hover - "Ghost" Feel for normal items */
+.task-item-minimal:not(.overdue):hover {
+    background-color: rgba(0, 0, 0, 0.025);
+}
+
+/* Hover Elements */
+.task-item-minimal:hover .task-title {
+    color: #111827;
+}
+
+.task-item-minimal:hover .task-action-arrow {
+    opacity: 1;
+    transform: translateX(2px);
+}
+
+.task-content {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    flex: 1;
+    min-width: 0;
+}
+
+.task-title-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Micro-Indicator Dots */
+.task-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 1px;
+    /* Optical optical alignment */
+}
+
+/* Desaturated/Soft Colors */
+.status-dot-pendente {
+    background-color: #fbbf24;
+    /* Soft Yellow */
+}
+
+.status-dot-em_execucao {
+    background-color: #60a5fa;
+    /* Soft Blue */
+}
+
+.status-dot-concluida {
+    background-color: #34d399;
+    /* Soft Green */
+}
+
+.status-dot-atrasada {
+    background-color: #ef4444;
+    /* Soft Red */
+    opacity: 0.8;
+}
+
+
+/* Automatic Hierarchy */
+.task-title {
+    font-size: 14px;
+    color: #374151;
+    transition: color 0.15s ease;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    letter-spacing: -0.01em;
+}
+
+/* First item - Semibold */
+.recent-tasks-list .task-item-minimal:first-child .task-title {
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.task-meta {
+    display: flex;
+    align-items: center;
+    font-size: 12px;
+    color: #9ca3af;
+    font-weight: 400;
+    padding-left: 16px;
+    /* Align with title text */
+    gap: 6px;
+}
+
+.user-text {
+    color: #6b7280;
+    font-weight: 500;
+}
+
+.separator {
+    color: #e5e7eb;
+    /* Very subtle separator */
+    font-size: 10px;
+}
+
+.date-text {
+    font-variant-numeric: tabular-nums;
+}
+
+.task-item-minimal.overdue .date-text {
+    color: #ef4444;
+    /* Red date for overdue */
+    font-weight: 500;
+}
+
+/* Invisible Arrow interaction */
+.task-action-arrow {
+    font-family: system-ui, -apple-system, sans-serif;
+    color: #9ca3af;
+    opacity: 0;
+    /* Hidden by default */
+    transform: translateX(0px);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    font-size: 18px;
+    padding-right: 4px;
+    line-height: 1;
+}
+
+.empty-state-minimal {
+    padding: 32px 0;
+    text-align: center;
+    color: #9ca3af;
+    font-size: 13px;
+    font-style: italic;
+}
+
+/* Subtle Link Button */
+.btn-link-subtle {
+    background: none;
+    border: none;
+    color: #9ca3af;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: color 0.2s;
+    padding: 0;
+}
+
+.btn-link-subtle:hover {
+    color: #6b7280;
+}
+
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 12px;
+    height: 32px;
 }

@@ -615,28 +615,28 @@
 
 /* Large Modal for MacroTaskDetail - FORCE Override */
 .modal.modal-large {
-    max-width: 1200px !important;
-    width: 95vw !important;
-    max-height: 90vh !important;
-    height: 90vh !important;
-    overflow-y: hidden !important;
-    /* Let inner container handle scroll */
+    max-width: 720px !important;
+    width: 90vw !important;
+    max-height: 85vh !important;
+    height: 85vh !important;
+    overflow: hidden !important;
     padding: 0 !important;
     display: flex !important;
     flex-direction: column !important;
+    border-radius: 16px !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12) !important;
 }
 
 /* Remove padding from MacroTaskDetail when inside modal */
 .modal-large .macro-task-container {
-    padding: 32px !important;
-    /* Give it breathing room on desktop too */
+    padding: 24px !important;
     width: 100% !important;
-    min-height: 100% !important;
     height: 100% !important;
     background: transparent !important;
-    overflow-y: auto !important;
-    /* Scroll happens INSIDE the container */
-    border-radius: var(--radius-xl);
+    overflow: hidden !important;
+    /* Managed internally by macro-task.css */
+    display: flex !important;
+    flex-direction: column !important;
 }
 
 /* Mobile Responsiveness for Modal */

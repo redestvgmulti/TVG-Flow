@@ -1,30 +1,87 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { Clock, User, AlertCircle, CheckCircle, ExternalLink, Calendar, Activity, ListTodo } from 'lucide-react'
-import TaskForm from '../../components/forms/TaskForm'
+import { getDashboardMetrics, getRecentTasks } from '../../services/dashboardMetrics'
+import {
+    AreaChart,
+    Area,
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    Tooltip,
+    ResponsiveContainer
+} from 'recharts'
+import {
+    LayoutDashboard,
+    CheckCircle2,
+    Clock,
+    AlertCircle,
+    Activity,
+    LogOut,
+    Menu,
+    X,
+    ChevronRight,
+    Search,
+    Filter,
+    MoreVertical,
+    Calendar,
+    ArrowUpRight,
+    ArrowDownRight,
+    Users,
+    ListTodo,
+    ExternalLink,
+    User,
+    CheckCircle,
+    Play,
+    Plus,
+    ArrowRight
+} from 'lucide-react'
 import OperationalFeed from '../../components/dashboard/OperationalFeed'
+import LoadingScreen from '../../components/LoadingScreen'
+import { useAuth } from '../../contexts/AuthContext'
+import { formatDistanceToNow } from 'date-fns'
+import { ptBR } from 'date-fns/locale'
+import TaskSummaryModal from '../../components/dashboard/TaskSummaryModal'
+import EditTaskModal from '../../components/EditTaskModal'
+import ConfirmDeleteModal from '../../components/ConfirmDeleteModal'
+import { deleteTask } from '../../services/taskService'
+import { toast } from 'sonner'
+import '../../styles/admin-dashboard.css'
+import { AnimatedCounter } from '../../components/ui/AnimatedCounter'
 
-function Painel() {
+export default function Painel() {
     const navigate = useNavigate()
+    const { user, signOut } = useAuth()
+    const [loading, setLoading] = useState(true)
+    const [sidebarOpen, setSidebarOpen] = useState(false)
     const [stats, setStats] = useState({
         totalTasks: 0,
         activeTasks: 0,
         completedTasks: 0,
-        totalProfissionais: 0
+        overdueTasks: 0
     })
     const [recentTasks, setRecentTasks] = useState([])
-    const [tasksOverTime, setTasksOverTime] = useState([])
+    const [selectedTask, setSelectedTask] = useState(null)
+
+    const [chartData, setChartData] = useState([])
+    const [chartView, setChartView] = useState('created') // 'created' | 'completed'
     const [tasksByStatus, setTasksByStatus] = useState([])
     const [tasksByPriority, setTasksByPriority] = useState([])
     const [professionals, setProfissionais] = useState([])
-    const [loading, setLoading] = useState(true)
+
+    // Modal states
+    const [showReatribuirModal, setShowReatribuirModal] = useState(false)
     const [reassigningTask, setReatribuiringTask] = useState(null)
     const [reassignTo, setReatribuirTo] = useState('')
     const [reassigning, setReatribuiring] = useState(false)
+
+    // Edit/Delete states
+    const [showEditModal, setShowEditModal] = useState(false)
+    const [showDeleteModal, setShowDeleteModal] = useState(false)
+    const [isDeleting, setIsDeleting] = useState(false)
+
+    // Feedback state
     const [feedback, setFeedback] = useState({ show: false, type: '', message: '' })
-    const [selectedTask, setSelectedTask] = useState(null)
 
     useEffect(() => {
         fetchPainelData()
@@ -35,7 +92,7 @@ function Painel() {
         if (feedback.show) {
             const timer = setTimeout(() => {
                 setFeedback({ show: false, type: '', message: '' })
-            }, 5000)
+            }, 3000)
             return () => clearTimeout(timer)
         }
     }, [feedback.show])
@@ -60,62 +117,76 @@ function Painel() {
         try {
             setLoading(true)
 
-            // PERFORMANCE: Hard limit to prevent loading entire dataset
-            // KPIs will be calculated from most recent 1000 tasks
-            // For 100% accurate KPIs across 10k+ tasks, use materialized view (future optimization)
-            const { data: allTasks, error: allTasksError } = await supabase
-                .from('tarefas_com_status_real')
-                .select('id, status, titulo, deadline, priority, created_at, assigned_to, drive_link, is_overdue')
-                .order('deadline', { ascending: true })  // Ordenar por prazo (mais urgente primeiro)
-                .limit(1000)
 
-            if (allTasksError) throw allTasksError
+            // 1. Fetch Metrics and Recent Tasks
+            const [metrics, tasks] = await Promise.all([
+                getDashboardMetrics(),
+                getRecentTasks(5)
+            ])
 
-            const { count: profCount, error: profError } = await supabase
-                .from('profissionais')
-                .select('*', { count: 'exact', head: true })
+            // Log para validação (DEV ONLY)
+            console.log('[Dashboard Metrics]', metrics)
+            const checkTotal = metrics.activeTasks + metrics.completedTasks
+            console.log(`[Validation] Ativas + Concluídas = ${checkTotal} | Total = ${metrics.totalTasks}`)
 
-            if (profError) throw profError
-
-            const total = allTasks?.length || 0
-            const active = allTasks?.filter(t => t.status === 'in_progress' || t.status === 'pending').length || 0
-            const completed = allTasks?.filter(t => t.status === 'completed').length || 0
-
+            // Populate stats state
             setStats({
-                totalTasks: total,
-                activeTasks: active,
-                completedTasks: completed,
-                totalProfissionais: profCount || 0
+                totalTasks: metrics.totalTasks,
+                activeTasks: metrics.activeTasks,
+                completedTasks: metrics.completedTasks,
+                overdueTasks: metrics.overdueTasks
             })
 
-            setRecentTasks(allTasks?.slice(0, 5) || [])
+            setRecentTasks(tasks)
 
+            // Fetch tasks for charts (last 30 days timeline)
+            const { data: timelineTasks, error: timelineError } = await supabase
+                .from('tarefas')
+                .select('created_at, completed_at, status')
+                .neq('status', 'cancelada')
+                .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
+                .order('created_at', { ascending: false })
+
+            if (timelineError) throw timelineError
+
+            // Generate 30-day timeline data
             const last30Days = getLast30Days()
             const tasksTimeData = last30Days.map(date => {
-                const count = allTasks?.filter(t => {
-                    const taskDate = new Date(t.created_at).toDateString()
-                    return taskDate === date.toDateString()
-                }).length || 0
+                const dateStr = date.toDateString()
+
+                // Count created on this date
+                const criadas = timelineTasks?.filter(t =>
+                    new Date(t.created_at).toDateString() === dateStr
+                ).length || 0
+
+                // Count completed on this date
+                const concluidas = timelineTasks?.filter(t =>
+                    t.completed_at && new Date(t.completed_at).toDateString() === dateStr
+                ).length || 0
+
                 return {
-                    date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-                    tasks: count
+                    date: date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+                    criadas,
+                    concluidas
                 }
             })
-            setTasksOverTime(tasksTimeData)
+            setChartData(tasksTimeData)
 
+            // Status distribution for charts (Auxiliary - kept for potential future use or verifying consistency)
             const statusData = [
-                { name: 'Pending', value: allTasks?.filter(t => t.status === 'pending').length || 0, color: '#6e6e73' },
-                { name: 'In Progress', value: allTasks?.filter(t => t.status === 'in_progress').length || 0, color: '#007aff' },
-                { name: 'Concluídas', value: allTasks?.filter(t => t.status === 'completed').length || 0, color: '#34c759' },
-                { name: 'Overdue', value: allTasks?.filter(t => t.status === 'overdue').length || 0, color: '#ff3b30' }
+                { name: 'Pendente', value: timelineTasks?.filter(t => t.status === 'pendente').length || 0, color: '#6e6e73' },
+                { name: 'Em Execução', value: timelineTasks?.filter(t => t.status === 'em_execucao').length || 0, color: '#007aff' },
+                { name: 'Concluídas', value: timelineTasks?.filter(t => t.status === 'concluida').length || 0, color: '#34c759' },
+                { name: 'Atrasadas', value: timelineTasks?.filter(t => t.status === 'atrasada').length || 0, color: '#ff3b30' }
             ]
             setTasksByStatus(statusData.filter(s => s.value > 0))
 
+            // Priority logic kept as is...
             const priorityData = [
-                { name: 'Low', value: allTasks?.filter(t => t.priority === 'low').length || 0 },
-                { name: 'Medium', value: allTasks?.filter(t => t.priority === 'medium').length || 0 },
-                { name: 'High', value: allTasks?.filter(t => t.priority === 'high').length || 0 },
-                { name: 'Urgent', value: allTasks?.filter(t => t.priority === 'urgent').length || 0 }
+                { name: 'Baixa', value: timelineTasks?.filter(t => t.priority === 'low')?.length || 0 }, // Added safe access just in case
+                { name: 'Média', value: timelineTasks?.filter(t => t.priority === 'medium')?.length || 0 },
+                { name: 'Alta', value: timelineTasks?.filter(t => t.priority === 'high')?.length || 0 },
+                { name: 'Urgente', value: timelineTasks?.filter(t => t.priority === 'urgent')?.length || 0 }
             ]
             setTasksByPriority(priorityData.filter(p => p.value > 0))
 
@@ -127,6 +198,39 @@ function Painel() {
         }
     }
 
+    // Handlers
+    function handleEditTask(task) {
+        setShowEditModal(true)
+    }
+
+    function handleDeleteTask(task) {
+        setShowDeleteModal(true)
+    }
+
+    async function confirmDeleteTask() {
+        if (!selectedTask) return
+
+        setIsDeleting(true)
+        try {
+            await deleteTask(selectedTask.id)
+            toast.success('Tarefa excluída com sucesso')
+            setShowDeleteModal(false)
+            setSelectedTask(null) // Closes summary modal too
+            fetchPainelData()
+        } catch (error) {
+            console.error('Error deleting task:', error)
+            toast.error('Erro ao excluir tarefa')
+        } finally {
+            setIsDeleting(false)
+        }
+    }
+
+    function onEditSuccess() {
+        fetchPainelData()
+        // Close summary modal to ensure no stale state
+        setSelectedTask(null)
+    }
+
     function showFeedback(type, message) {
         setFeedback({ show: true, type, message })
     }
@@ -134,7 +238,6 @@ function Painel() {
     function handleOpenReatribuirModal(task) {
         setReatribuiringTask(task)
         setReatribuirTo(task.assigned_to || '')
-        // setShowReatribuirModal(true) // This state is removed, so this line should be commented out or removed if it's not used elsewhere.
     }
 
     async function handleReatribuirTask(e) {
@@ -154,7 +257,6 @@ function Painel() {
 
             if (error) throw error
 
-            // setShowReatribuirModal(false) // This state is removed
             setReatribuiringTask(null)
             showFeedback('success', 'Task reassigned successfully!')
             await fetchPainelData()
@@ -166,6 +268,7 @@ function Painel() {
         }
     }
 
+    // handlers for status updates...
     async function handleUpdateStatus(taskId, newStatus, taskTitle) {
         if (!confirm(`Change status of "${taskTitle}" to ${newStatus}?`)) {
             return
@@ -214,6 +317,21 @@ function Painel() {
         }
     }
 
+    function handleCreateTask() {
+        navigate('/admin/tarefas/nova')
+    }
+
+    function getStatusColor(status) {
+        switch (status) {
+            case 'concluida': return 'success'
+            case 'atrasada': return 'danger'
+            case 'em_execucao': return 'primary'
+            case 'pending':
+            case 'pendente': return 'warning'
+            default: return 'secondary'
+        }
+    }
+
     function getLast30Days() {
         const days = []
         for (let i = 29; i >= 0; i--) {
@@ -224,46 +342,21 @@ function Painel() {
         return days
     }
 
-    function getStatusBadgeClass(status) {
-        switch (status) {
-            case 'completed':
-                return 'badge-success'
-            case 'in_progress':
-                return 'badge-primary'
-            case 'overdue':
-                return 'badge-danger'
-            default:
-                return ''
-        }
-    }
-
-    function getPriorityBadgeClass(priority) {
-        switch (priority) {
-            case 'urgent':
-                return 'badge-danger'
-            case 'high':
-                return 'badge-warning'
-            default:
-                return ''
-        }
-    }
-
     function getAssignedToName(assignedToId) {
         const prof = professionals.find(p => p.id === assignedToId)
         return prof ? prof.nome : 'Não atribuída'
     }
 
+    // Safe Chart Data Logic
+    const safeChartData = Array.isArray(chartData)
+        ? chartData.filter(d => d?.date && (typeof d?.criadas === 'number' || typeof d?.concluidas === 'number'))
+        : []
+
     if (loading) {
         return (
             <div>
-                <h2>Painel</h2>
-                <div className="card loading-card">
-                    <p className="loading-text-primary">
-                        Carregando seu painel...
-                    </p>
-                    <p className="loading-text-secondary">
-                        Buscando tarefas, KPIs e gráficos
-                    </p>
+                <div style={{ height: '60vh', display: 'flex', alignItems: 'center' }}>
+                    <LoadingScreen message="Carregando seu painel..." />
                 </div>
             </div>
         )
@@ -271,9 +364,7 @@ function Painel() {
 
     return (
         <div className="dashboard-container animation-fade-in">
-            <div className="dashboard-header">
-                <h2>Painel</h2>
-            </div>
+
 
             {feedback.show && (
                 <div className={`card mb-6 p-4 border-${feedback.type === 'success' ? 'success' : 'danger'} bg-${feedback.type === 'success' ? 'success' : 'danger'}-subtle`}>
@@ -283,256 +374,292 @@ function Painel() {
                 </div>
             )}
 
-            {/* KPI Cards */}
+
+            {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+            {/* BLOCO 1: KPIs PRIMÁRIOS - Torre de Controle      */}
+            {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
             <div className="dashboard-grid-metrics">
-                <div className="card metric-card">
+                <div className="card metric-card metric-card-neutral-bg">
                     <h3 className="metric-label">Total de Tarefas</h3>
-                    <p className="metric-value">{stats.totalTasks}</p>
+                    <p className="metric-value">
+                        <AnimatedCounter value={stats.totalTasks} />
+                    </p>
+                    <p className="metric-percentage">Todas as tarefas criadas</p>
                 </div>
 
-                <div className="card metric-card">
+                <div className="card metric-card metric-card-primary-bg">
                     <h3 className="metric-label">Tarefas Ativas</h3>
-                    <p className="metric-value metric-value-primary">{stats.activeTasks}</p>
+                    <p className="metric-value">
+                        <AnimatedCounter value={stats.activeTasks} />
+                    </p>
+                    <p className="metric-percentage">
+                        {stats.totalTasks > 0 ? Math.round((stats.activeTasks / stats.totalTasks) * 100) : 0}% do total
+                    </p>
                 </div>
 
-                <div className="card metric-card">
+                <div className="card metric-card metric-card-success-bg">
                     <h3 className="metric-label">Concluídas</h3>
-                    <p className="metric-value metric-value-success">{stats.completedTasks}</p>
+                    <p className="metric-value">
+                        <AnimatedCounter value={stats.completedTasks} />
+                    </p>
+                    <p className="metric-percentage">
+                        {stats.totalTasks > 0 ? Math.round((stats.completedTasks / stats.totalTasks) * 100) : 0}% finalizadas
+                    </p>
                 </div>
 
-                <div className="card metric-card">
-                    <h3 className="metric-label">Profissionais</h3>
-                    <p className="metric-value">{stats.totalProfissionais}</p>
+                <div
+                    className="card metric-card metric-card-critical-bg"
+                    onClick={() => navigate('/admin/tasks?status=overdue')}
+                    role="button"
+                    tabIndex={0}
+                    onKeyPress={(e) => e.key === 'Enter' && navigate('/admin/tasks?status=overdue')}
+                >
+                    <h3 className="metric-label metric-label-critical">Atrasadas</h3>
+                    <p className="metric-value metric-value-critical">
+                        <AnimatedCounter value={stats.overdueTasks} />
+                    </p>
+                    <div className="metric-footer-row">
+                        <span className="metric-badge-critical">Ver Lista</span>
+                        <ExternalLink size={14} className="metric-icon-critical-small" />
+                    </div>
                 </div>
             </div>
 
-            {/* Charts Row */}
+
+            {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+            {/* BLOCO 3 & 4: EVOLUÇÃO E FEED OPERACIONAL         */}
+            {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
             <div className="dashboard-grid-charts">
+                {/* Coluna Esquerda: Gráfico de Evolução (Maior) */}
                 <div className="card">
-                    <div className="card-header">
-                        <h3 className="card-title">Tarefas (30 dias)</h3>
+                    <div className="card-header card-header-flex">
+                        <h3 className="card-title">Evolução da Operação (30 dias)</h3>
                     </div>
-                    {tasksOverTime.length > 0 ? (
-                        <ResponsiveContainer width="100%" height={250}>
-                            <LineChart data={tasksOverTime}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
-                                <XAxis
-                                    dataKey="date"
-                                    tick={{ fontSize: 11, fill: '#6B7280' }}
-                                    axisLine={false}
-                                    tickLine={false}
-                                    dy={10}
-                                />
-                                <YAxis
-                                    tick={{ fontSize: 11, fill: '#6B7280' }}
-                                    axisLine={false}
-                                    tickLine={false}
-                                />
-                                <Tooltip
-                                    contentStyle={{
-                                        borderRadius: '8px',
-                                        border: 'none',
-                                        boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-                                    }}
-                                />
-                                <Line
-                                    type="monotone"
-                                    dataKey="tasks"
-                                    stroke="var(--color-primary)"
-                                    strokeWidth={3}
-                                    dot={{ fill: 'var(--color-primary)', strokeWidth: 2, r: 4, stroke: '#fff' }}
-                                    activeDot={{ r: 6 }}
-                                />
-                            </LineChart>
-                        </ResponsiveContainer>
-                    ) : (
-                        <div className="empty-state">
-                            <span className="empty-icon">📉</span>
-                            <p className="empty-text">Sem dados suficientes para exibir o gráfico.</p>
-                        </div>
-                    )}
+                    <div className="chart-container">
+                        {safeChartData.length === 0 ? (
+                            <div className="chart-empty-state">
+                                <span>Sem dados suficientes para exibir o gráfico</span>
+                            </div>
+                        ) : (
+                            <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart data={safeChartData}>
+                                    <defs>
+                                        <linearGradient id="colorCreated" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1} />
+                                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                                        </linearGradient>
+                                        <linearGradient id="colorCompleted" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.1} />
+                                            <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                                        </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                                    <XAxis
+                                        dataKey="date"
+                                        axisLine={false}
+                                        tickLine={false}
+                                        tick={{ fontSize: 12, fill: '#9ca3af' }}
+                                    />
+                                    <YAxis
+                                        axisLine={false}
+                                        tickLine={false}
+                                        tick={{ fontSize: 12, fill: '#9ca3af' }}
+                                    />
+                                    <Tooltip
+                                        contentStyle={{
+                                            backgroundColor: '#fff',
+                                            border: '1px solid #e5e7eb',
+                                            borderRadius: '8px',
+                                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                                        }}
+                                    />
+                                    <Area
+                                        type="monotone"
+                                        dataKey={chartView === 'created' ? 'criadas' : 'concluidas'}
+                                        stroke={chartView === 'created' ? '#3b82f6' : '#10b981'}
+                                        strokeWidth={3}
+                                        fillOpacity={1}
+                                        fill={`url(#color${chartView === 'created' ? 'Created' : 'Completed'})`}
+                                        activeDot={{ r: 6, strokeWidth: 0 }}
+                                    />
+                                </AreaChart>
+                            </ResponsiveContainer>
+                        )}
+                    </div>
                 </div>
 
-                <div className="card">
-                    <div className="card-header">
-                        <h3 className="card-title flex items-center gap-2">
-                            <Activity size={18} className="text-primary" />
-                            Feed Operacional
-                        </h3>
-                    </div>
+                {/* Coluna Direita: Feed Operacional (Decision Instrument) */}
+                <div className="h-full">
                     <OperationalFeed />
                 </div>
             </div>
 
-            {/* Recent Tasks */}
+            {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+            {/* BLOCO 4: TAREFAS RECENTES (Restaurado)           */}
+            {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
             <div className="card">
-                <div className="card-header">
-                    <h3 className="card-title flex items-center gap-2">
-                        <ListTodo size={18} />
-                        Tarefas Recentes
-                    </h3>
-                    <button
-                        onClick={() => navigate('/admin/tarefas/nova')}
-                        className="btn btn-primary shadow-lg shadow-indigo-500/20"
-                    >
-                        + Nova Tarefa
-                    </button>
-                </div>
-
-                {recentTasks.length === 0 ? (
-                    <div className="empty-state">
-                        <span className="empty-icon">📝</span>
-                        <p className="empty-text">Você ainda não tem tarefas criadas. Comece agora!</p>
-                        <button onClick={() => navigate('/admin/tarefas/nova')} className="btn btn-primary">
-                            Criar Primeira Tarefa
+                <div className="card-header flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <ListTodo size={18} className="text-secondary" />
+                        <h3 className="card-title">Tarefas Recentes</h3>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <button
+                            className="btn btn-primary btn-sm flex items-center gap-2"
+                            onClick={handleCreateTask}
+                        >
+                            <Plus size={16} />
+                            Nova Tarefa
+                        </button>
+                        <button
+                            className="btn-link-subtle"
+                            onClick={() => navigate('/admin/tasks')}
+                        >
+                            Ver todas →
                         </button>
                     </div>
-                ) : (
-                    <div className="task-list">
-                        {recentTasks.map(task => {
-                            const isOverdue = task.is_overdue === true && task.status !== 'concluida'
+                </div>
+
+                <div className="recent-tasks-list">
+                    {recentTasks.length === 0 ? (
+                        <div className="empty-state-minimal">
+                            <p>Nenhuma tarefa recente</p>
+                        </div>
+                    ) : (
+                        recentTasks.map(task => {
+                            const isOverdue = task.deadline && new Date(task.deadline) < new Date() && task.status !== 'concluida';
+
+                            // Client-side lookup for professional name (Safety against backend join issues)
+                            const assignedProf = professionals.find(p => p.id === task.assigned_to);
+                            const responsibleName = assignedProf ? assignedProf.nome : 'Não atribuída';
+
+                            // User display logic for list
+                            const displayResponsible = `Executando: ${responsibleName.split(' ')[0]}`;
+
+                            // Date logic: Deadline relative
+                            const dateDisplay = task.deadline
+                                ? (isOverdue
+                                    ? `Venceu ${formatDistanceToNow(new Date(task.deadline), { addSuffix: true, locale: ptBR })}`
+                                    : `Vence ${formatDistanceToNow(new Date(task.deadline), { addSuffix: true, locale: ptBR })}`)
+                                : 'Sem prazo';
 
                             return (
                                 <div
                                     key={task.id}
-                                    className={`task-item card task-card-horizontal ${isOverdue ? 'task-card-overdue task-card-overdue-pulse' : ''}`}
+                                    className={`task-item-minimal ${isOverdue ? 'overdue' : ''}`}
+                                    onClick={() => setSelectedTask({ ...task, responsavel: { nome: responsibleName } })}
                                 >
-                                    {/* ESQUERDA — INFORMAÇÕES */}
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: 0 }}>
-                                        <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                            {task.titulo}
-                                        </h3>
-
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#64748b' }}>
-                                            <svg style={{ width: '14px', height: '14px', color: '#94a3b8', flexShrink: 0 }} viewBox="0 0 24 24" fill="none">
-                                                <path
-                                                    d="M12 12c2.761 0 5-2.239 5-5S14.761 2 12 2 7 4.239 7 7s2.239 5 5 5Zm0 2c-3.33 0-10 1.67-10 5v3h20v-3c0-3.33-6.67-5-10-5Z"
-                                                    fill="currentColor"
-                                                />
-                                            </svg>
-                                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                {getAssignedToName(task.assigned_to)}
-                                            </span>
+                                    <div className="task-content">
+                                        <div className="task-title-row">
+                                            <span className={`task-dot ${isOverdue ? 'status-dot-atrasada' : `status-dot-${task.status.toLowerCase()}`}`}></span>
+                                            <span className="task-title">{task.titulo}</span>
                                         </div>
-
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 500 }}>
-                                            <span style={{ color: isOverdue ? '#b91c1c' : '#475569', textTransform: 'uppercase', fontSize: '11px', fontWeight: 700, letterSpacing: '0.02em' }}>
-                                                {isOverdue ? 'ATRASADA' : task.status}
+                                        <div className="task-meta">
+                                            <span className="user-text">
+                                                {displayResponsible}
                                             </span>
-                                            <span style={{ color: '#cbd5e1' }}>·</span>
-                                            <span style={{ color: isOverdue ? '#dc2626' : '#64748b' }}>
-                                                Prazo {new Date(task.deadline).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                                            <span className="separator">•</span>
+                                            <span className="date-text">
+                                                {dateDisplay}
                                             </span>
                                         </div>
                                     </div>
-
-                                    {/* DIREITA — AÇÕES */}
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '16px' }}>
-                                        <button
-                                            onClick={() => handleOpenReatribuirModal(task)}
-                                            style={{
-                                                width: '36px',
-                                                height: '36px',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                borderRadius: '50%',
-                                                border: '1px solid #e2e8f0',
-                                                background: 'transparent',
-                                                cursor: 'pointer',
-                                                transition: 'all 0.2s'
-                                            }}
-                                            title="Reatribuir"
-                                            onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
-                                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                                        >
-                                            <User size={16} color="#64748b" />
-                                        </button>
-
-                                        {task.status !== 'completed' && (
-                                            <button
-                                                onClick={() => handleCompleteTask(task.id, task.titulo)}
-                                                style={{
-                                                    width: '36px',
-                                                    height: '36px',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    borderRadius: '50%',
-                                                    border: '1px solid #e2e8f0',
-                                                    background: 'transparent',
-                                                    cursor: 'pointer',
-                                                    transition: 'all 0.2s'
-                                                }}
-                                                title="Concluir"
-                                                onMouseEnter={e => e.currentTarget.style.background = '#f0fdf4'}
-                                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                                            >
-                                                <CheckCircle size={16} color="#16a34a" />
-                                            </button>
-                                        )}
+                                    <div className="task-action-arrow">
+                                        →
                                     </div>
                                 </div>
                             )
-                        })}
-                    </div>
-                )}
+                        })
+                    )}
+                </div>
             </div>
 
-            {/* Reatribuir Modal */}
-            {reassigningTask && (
-                <div className="modal-backdrop" onClick={() => setReatribuiringTask(null)}>
-                    <div className="modal" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h3>Reatribuir Tarefa</h3>
-                            <button className="modal-close" onClick={() => setReatribuiringTask(null)}>×</button>
-                        </div>
-                        <form onSubmit={handleReatribuirTask}>
-                            <div className="modal-body">
-                                <p className="text-muted modal-text-muted">
-                                    Tarefa: <strong className="text-primary">{reassigningTask.titulo}</strong>
-                                </p>
-
-                                <div className="input-group">
-                                    <label htmlFor="reassign_to">Novo Responsável</label>
-                                    <select
-                                        id="reassign_to"
-                                        className="input"
-                                        value={reassignTo}
-                                        onChange={(e) => setReatribuirTo(e.target.value)}
-                                        required
-                                    >
-                                        <option value="">-- Selecione --</option>
-                                        {professionals.map(prof => (
-                                            <option key={prof.id} value={prof.id}>{prof.nome}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div className="modal-footer">
-                                <button
-                                    type="button"
-                                    onClick={() => setReatribuiringTask(null)}
-                                    className="btn btn-secondary"
-                                    disabled={reassigning}
-                                >
-                                    Cancelar
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="btn btn-primary"
-                                    disabled={reassigning}
-                                >
-                                    {reassigning ? 'Salvando...' : 'Confirmar'}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
+            {/* Task Summary Modal (Framer Style) */}
+            {selectedTask && (
+                <TaskSummaryModal
+                    task={selectedTask}
+                    onClose={() => setSelectedTask(null)}
+                    onUpdate={fetchPainelData}
+                    onEdit={handleEditTask}
+                    onDelete={handleDeleteTask}
+                />
             )}
-        </div>
+
+            {/* Edit Task Modal */}
+            <EditTaskModal
+                isOpen={showEditModal}
+                onClose={() => setShowEditModal(false)}
+                task={selectedTask}
+                onSuccess={onEditSuccess}
+                currentUserId={user?.id}
+            />
+
+            {/* Confirm Delete Modal */}
+            {showDeleteModal && selectedTask && (
+                <ConfirmDeleteModal
+                    taskTitle={selectedTask.titulo}
+                    onClose={() => setShowDeleteModal(false)}
+                    onConfirm={confirmDeleteTask}
+                    isDeleting={isDeleting}
+                />
+            )}
+
+
+            {/* Reatribuir Modal */}
+            {
+                reassigningTask && (
+                    <div className="modal-backdrop" onClick={() => setReatribuiringTask(null)}>
+                        <div className="modal" onClick={(e) => e.stopPropagation()}>
+                            <div className="modal-header">
+                                <h3>Reatribuir Tarefa</h3>
+                                <button className="modal-close" onClick={() => setReatribuiringTask(null)}>×</button>
+                            </div>
+                            <form onSubmit={handleReatribuirTask}>
+                                <div className="modal-body">
+                                    <p className="text-muted modal-text-muted">
+                                        Tarefa: <strong className="text-primary">{reassigningTask.titulo}</strong>
+                                    </p>
+
+                                    <div className="input-group">
+                                        <label htmlFor="reassign_to">Novo Responsável</label>
+                                        <select
+                                            id="reassign_to"
+                                            className="input"
+                                            value={reassignTo}
+                                            onChange={(e) => setReatribuirTo(e.target.value)}
+                                            required
+                                        >
+                                            <option value="">-- Selecione --</option>
+                                            {professionals.map(prof => (
+                                                <option key={prof.id} value={prof.id}>{prof.nome}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="modal-footer">
+                                    <button
+                                        type="button"
+                                        onClick={() => setReatribuiringTask(null)}
+                                        className="btn btn-secondary"
+                                        disabled={reassigning}
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="btn btn-primary"
+                                        disabled={reassigning}
+                                    >
+                                        {reassigning ? 'Salvando...' : 'Confirmar'}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )
+            }
+        </div >
     )
 }
 
-export default Painel

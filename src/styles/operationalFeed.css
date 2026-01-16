@@ -3,9 +3,8 @@
 .op-feed-container {
     height: 100%;
     min-height: 0;
-    /* Allow shrinking */
     max-height: 270px;
-    /* Show ~3 items then scroll */
+    /* Limit to ~3 items */
     overflow-y: auto;
     padding-right: var(--space-2);
     display: flex;

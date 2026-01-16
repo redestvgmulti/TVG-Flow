@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import { BarChart, Bar, ResponsiveContainer, XAxis, Tooltip, CartesianGrid } from 'recharts'
 import { PageTransition } from '../../components/PageTransition'
+import LoadingScreen from '../../components/LoadingScreen'
 import '../../styles/staff-dashboard.css'
 import '../../styles/staff-tasks.css'
 
@@ -210,11 +211,8 @@ function StaffDashboard() {
     if (authLoading || !professionalId) {
         return (
             <div className="dashboard-container">
-                <div className="card loading-card">
-                    <p className="loading-text-primary">Carregando painel...</p>
-                    <p className="loading-text-secondary">
-                        {authLoading ? 'Autenticando...' : 'Carregando perfil...'}
-                    </p>
+                <div style={{ height: '60vh', display: 'flex', alignItems: 'center' }}>
+                    <LoadingScreen message={authLoading ? 'Autenticando...' : 'Carregando perfil...'} />
                 </div>
             </div>
         )

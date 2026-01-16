@@ -152,6 +152,14 @@ export default function ProfessionalsList() {
 
     return (
         <div className="professionals-page animation-fade-in">
+            {/* Metric Card */}
+            <div style={{ marginBottom: '1.5rem' }}>
+                <div className="card metric-card" style={{ maxWidth: '300px' }}>
+                    <h3 className="metric-label">Profissionais</h3>
+                    <p className="metric-value" style={{ color: '#3b82f6' }}>{professionals.length}</p>
+                </div>
+            </div>
+
             {/* Header */}
             <div className="professionals-header">
                 <div className="professionals-header__content">

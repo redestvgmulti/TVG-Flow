@@ -25,9 +25,11 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useRefresh } from '../../contexts/RefreshContext'
 import { fileService } from '../../services/fileService'
 import ReturnReasonModal from '../../components/ReturnReasonModal'
+import EditTaskModal from '../../components/EditTaskModal'
 import ConfirmDeleteModal from '../../components/ConfirmDeleteModal'
 import Timeline from '../../components/Timeline'
 import ComentarioForm from '../../components/ComentarioForm'
+import { Edit2 } from 'lucide-react'
 import ConversaoWorkflowModal from '../../components/ConversaoWorkflowModal'
 import PermissionGuard from '../../components/PermissionGuard'
 import { normalizeStatus, isValidStatus } from '../../utils/validators'
@@ -626,6 +628,7 @@ function ExecutionView({ task, onBack, onUpdateStatus, onDeleteTask, user, role,
 
     // Delete confirmation modal state
     const [showDeleteModal, setShowDeleteModal] = useState(false)
+    const [showEditModal, setShowEditModal] = useState(false)
     const [isDeleting, setIsDeleting] = useState(false)
 
     // Timeline refresh key (para forçar refresh após adicionar comentário)
@@ -927,6 +930,17 @@ function ExecutionView({ task, onBack, onUpdateStatus, onDeleteTask, user, role,
                             <Trash2 size={20} />
                         </button>
                     )}
+                    {/* Edit (Icon Only) - Creator Only */}
+                    {isCreator && (
+                        <button
+                            className="btn-action secondary"
+                            onClick={() => setShowEditModal(true)}
+                            title="Editar OS"
+                            style={{ padding: '8px' }}
+                        >
+                            <Edit2 size={20} />
+                        </button>
+                    )}
                 </div>
 
                 {/* Primary Group (Right) */}
@@ -1017,6 +1031,19 @@ function ExecutionView({ task, onBack, onUpdateStatus, onDeleteTask, user, role,
                         setSelectedTask(null)
                         onRefresh()
                     }}
+                />
+            )}
+
+            {showEditModal && (
+                <EditTaskModal
+                    task={task}
+                    isOpen={showEditModal}
+                    onClose={() => setShowEditModal(false)}
+                    onSuccess={() => {
+                        setShowEditModal(false)
+                        onRefresh()
+                    }}
+                    currentUserId={user?.id}
                 />
             )}
         </div>

@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { Eye, EyeOff } from 'lucide-react'
 import { PageTransition } from '../components/PageTransition'
 import { normalizeRole } from '../utils/roles'
+import LoadingScreen from '../components/LoadingScreen'
 
 function Login() {
     const [email, setEmail] = useState('')
@@ -32,7 +33,11 @@ function Login() {
 
             const IMMUTABLE_SUPER_ADMIN_EMAIL = 'geovanepanini@icloud.com'
 
-            // Route based on role with EXPLICIT email check for super admin
+            // Artificial delay for premium feel
+            // Keep loading true, but we could add a specific message updates here if we wanted
+            await new Promise(resolve => setTimeout(resolve, 2500))
+
+            // Route based on role
             if (email === IMMUTABLE_SUPER_ADMIN_EMAIL && role === 'super_admin') {
                 navigate('/platform')
             } else if (role === 'admin') {
@@ -40,13 +45,16 @@ function Login() {
             } else if (role === 'staff') {
                 navigate('/staff/dashboard')
             } else {
-                // No permissive fallback - throw error for invalid roles
                 throw new Error('Invalid role or unauthorized access')
             }
         } catch (error) {
             setError(error.message)
             setLoading(false)
         }
+    }
+
+    if (loading && !error) {
+        return <LoadingScreen message="Acessando o sistema..." />
     }
 
 

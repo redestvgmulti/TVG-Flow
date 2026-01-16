@@ -13,7 +13,7 @@ import { supabase } from './supabase'
 
 /**
  * Fetch calendar events for Admin view
- * Returns both macro tasks AND micro tasks
+ * Returns macro tasks, micro tasks, AND meetings
  * 
  * PHASE 1 - SAFE MODE: No embeds to avoid PGRST201
  */
@@ -47,14 +47,30 @@ export async function fetchAdminCalendarEvents() {
 
     console.log('[Calendar] ✓ Fetched micro tasks:', microTasks?.length || 0)
 
+    // Fetch meetings (only scheduled/completed, not cancelled)
+    const { data: meetings, error: meetingError } = await supabase
+      .from('reunioes')
+      .select('*')
+      .in('status', ['agendada', 'realizada'])
+      .order('data_inicio')
+
+    if (meetingError) {
+      console.error('[Calendar] ❌ Error fetching meetings:', meetingError)
+      // Don't throw - meetings are optional, tasks must work
+    }
+
+    console.log('[Calendar] ✓ Fetched meetings:', meetings?.length || 0)
+
     // Transform to calendar events
     const macroEvents = transformMacroTasks(macroTasks || [])
     const microEvents = transformMicroTasks(microTasks || [])
+    const meetingEvents = transformMeetings(meetings || [])
 
-    const allEvents = [...macroEvents, ...microEvents]
+    const allEvents = [...macroEvents, ...microEvents, ...meetingEvents]
     console.log('[Calendar] ✓ Total events mapped:', allEvents.length, {
       macro: macroEvents.length,
-      micro: microEvents.length
+      micro: microEvents.length,
+      meetings: meetingEvents.length
     })
 
     return allEvents
@@ -66,7 +82,7 @@ export async function fetchAdminCalendarEvents() {
 
 /**
  * Fetch calendar events for Staff view
- * Returns ONLY assigned micro tasks (NO macro tasks)
+ * Returns assigned micro tasks AND meetings where staff is participant
  * 
  * PHASE 1 - SAFE MODE: No embeds to avoid PGRST201
  */
@@ -88,10 +104,30 @@ export async function fetchStaffCalendarEvents(professionalId) {
 
     console.log('[Calendar] ✓ Fetched staff micro tasks:', microTasks?.length || 0)
 
-    const events = transformMicroTasks(microTasks || [])
-    console.log('[Calendar] ✓ Staff events mapped:', events.length)
+    // Fetch meetings where staff is participant (RLS handles filtering)
+    const { data: meetings, error: meetingError } = await supabase
+      .from('reunioes')
+      .select('*')
+      .in('status', ['agendada', 'realizada'])
+      .order('data_inicio')
 
-    return events
+    if (meetingError) {
+      console.error('[Calendar] ❌ Error fetching staff meetings:', meetingError)
+      // Don't throw - meetings are optional
+    }
+
+    console.log('[Calendar] ✓ Fetched staff meetings:', meetings?.length || 0)
+
+    const events = transformMicroTasks(microTasks || [])
+    const meetingEvents = transformMeetings(meetings || [])
+
+    const allEvents = [...events, ...meetingEvents]
+    console.log('[Calendar] ✓ Staff events mapped:', allEvents.length, {
+      tasks: events.length,
+      meetings: meetingEvents.length
+    })
+
+    return allEvents
   } catch (error) {
     console.error('[Calendar] ❌ Fatal error fetching staff calendar events:', error)
     throw error
@@ -229,6 +265,47 @@ function transformMicroTasks(tasks) {
 }
 
 /**
+ * Transform meetings to calendar events
+ * Meetings have explicit start/end times
+ * NO EMOJIS - Professional institutional tone
+ */
+function transformMeetings(meetings) {
+  console.log('[Calendar] Transforming meetings:', meetings.length)
+
+  return meetings.map(meeting => {
+    const start = new Date(meeting.data_inicio)
+    const end = new Date(meeting.data_fim)
+
+    // Validate dates
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      console.warn('[Calendar] ⚠️ Invalid date for meeting, skipping:', meeting.id)
+      return null
+    }
+
+    // Determine if all-day (both start and end at midnight)
+    const startHours = start.getHours()
+    const startMinutes = start.getMinutes()
+    const endHours = end.getHours()
+    const endMinutes = end.getMinutes()
+
+    const isAllDay = (startHours === 0 && startMinutes === 0 && endHours === 23 && endMinutes === 59)
+
+    return {
+      id: `meeting-${meeting.id}`,
+      title: meeting.titulo, // NO EMOJI - clean title only
+      start,
+      end,
+      allDay: isAllDay,
+      eventType: 'meeting',
+      resource: {
+        ...meeting,
+        type: 'meeting'
+      }
+    }
+  }).filter(Boolean) // Remove null entries from invalid dates
+}
+
+/**
  * Get event CSS classes based on TEMPORAL STATUS (not type)
  * Color indicates: normal, attention, overdue, or completed
  */
@@ -240,7 +317,7 @@ export function getEventClasses(event) {
   const deadline = resource.deadline_at || resource.deadline
 
   // STATUS CLASSIFICATION (temporal, not type)
-  if (status === 'concluida' || status === 'completed') {
+  if (status === 'concluida' || status === 'completed' || status === 'realizada') {
     // Completed - gray, low emphasis
     classes.push('calendar-event--completed')
   } else if (deadline) {

@@ -1,19 +1,31 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
+import { getDashboardMetrics } from '../../services/dashboardMetrics'
 import { Edit2, Trash2, ClipboardList, AlertTriangle, X, ExternalLink, Folder } from 'lucide-react'
 import { toast } from 'sonner'
 import MacroTaskDetail from '../../components/MacroTaskDetail'
+import EditTaskModal from '../../components/EditTaskModal'
+import { useAuth } from '../../contexts/AuthContext'
 import '../../styles/adminTasks.css'
 
 function Tasks() {
     const navigate = useNavigate()
+    const { user, role } = useAuth()
     const [tasks, setTasks] = useState([])
     const [professionals, setProfessionals] = useState([])
     const [departments, setDepartments] = useState([])
     const [clients, setClients] = useState([])
     const [loading, setLoading] = useState(true)
     const [fetchError, setFetchError] = useState(null)
+
+    // Actionable metrics from centralized service (NOT status-based)
+    const [actionableMetrics, setActionableMetrics] = useState({
+        overdueActive: 0,      // 🔴 Ativas atrasadas
+        dueToday: 0,           // ⏰ Vencem hoje
+        dueIn48h: 0,           // ⚠️ Vencem em 48h
+        unassigned: 0          // 👤 Sem responsável
+    })
 
     // Pagination state
     const PAGE_SIZE = 50
@@ -24,9 +36,10 @@ function Tasks() {
 
     // Filters
     const [searchTerm, setSearchTerm] = useState('')
+    const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('')
     const [statusFilter, setStatusFilter] = useState('pending')  // Padrão: mostrar apenas pendentes
     const [priorityFilter, setPriorityFilter] = useState('all')
-    const [assignedToFilter, setAssignedToFilter] = useState('all')
+    // const [assignedToFilter, setAssignedToFilter] = useState('all') // Removed as per request
     const [deadlineFilter, setDeadlineFilter] = useState('all')
 
     // Modals
@@ -34,19 +47,18 @@ function Tasks() {
     const [showEditModal, setShowEditModal] = useState(false)
     const [showDetailModal, setShowDetailModal] = useState(false)
     const [showDeleteModal, setShowDeleteModal] = useState(false)
+    const [showCancelModal, setShowCancelModal] = useState(false)
     const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false)
     const [selectedTask, setSelectedTask] = useState(null)
 
     // Bulk selection
     const [selectedTasks, setSelectedTasks] = useState([])
 
-    // Workflow Editing State
-    const [editingMicroTasks, setEditingMicroTasks] = useState([])
+    // Workflow Editing State (Legacy removed, keeping for safety if needed internally but EditTaskModal handles it)
     const [workflowReferenceData, setWorkflowReferenceData] = useState({
         professionals: [],
         functions: []
     })
-    const [loadingWorkflowData, setLoadingWorkflowData] = useState(false)
 
     // Form state
     const [formData, setFormData] = useState({
@@ -65,25 +77,82 @@ function Tasks() {
 
     useEffect(() => {
         fetchData()
+        fetchActionableMetrics()
     }, [])
+
+    // Debounce search term
+    useEffect(() => {
+        const handler = setTimeout(() => {
+            setDebouncedSearchTerm(searchTerm)
+        }, 500)
+
+        return () => {
+            clearTimeout(handler)
+        }
+    }, [searchTerm])
+
+    async function fetchActionableMetrics() {
+        try {
+            const data = await getDashboardMetrics()
+            setActionableMetrics({
+                overdueActive: data.overdueActive || 0,
+                dueToday: data.dueToday || 0,
+                dueIn48h: data.dueIn48h || 0,
+                unassigned: data.unassigned || 0
+            })
+        } catch (error) {
+            console.error('Error fetching actionable metrics:', error)
+            // Metrics are non-critical, no need to show error toast
+        }
+    }
 
     // Reset pagination when filters change
     useEffect(() => {
         setCurrentPage(0)
         setTasks([])
         fetchData(true) // true = reset
-    }, [statusFilter, priorityFilter, assignedToFilter, deadlineFilter, searchTerm])
+    }, [statusFilter, priorityFilter, deadlineFilter, debouncedSearchTerm]) // Removed assignedToFilter
+
+    // Helper: Reset all pagination-related state
+    function resetPaginationState() {
+        setCurrentPage(0)
+        setTasks([])
+        setTotalCount(0)
+        setHasMore(false)
+        setFetchError(null)
+    }
+
+    // Helper: Handle range errors with auto-retry logic
+    function handleRangeError(reset, pageToFetch) {
+        if (import.meta.env.DEV) {
+            console.log('[Pagination] Range error detected - resetting to page 0')
+        }
+
+        resetPaginationState()
+        setLoading(false)
+        setIsLoadingMore(false)
+
+        // Auto-retry with reset if this wasn't already a reset attempt
+        if (!reset && pageToFetch !== 0) {
+            if (import.meta.env.DEV) {
+                console.log('[Pagination] Auto-retrying from page 0...')
+            }
+            setTimeout(() => fetchData(true), 100)
+        }
+    }
 
     async function fetchData(reset = false) {
         try {
             const isInitialLoad = reset || currentPage === 0
             if (isInitialLoad) {
                 setLoading(true)
+                setFetchError(null) // Clear previous errors
             } else {
                 setIsLoadingMore(true)
             }
 
-            const pageToFetch = reset ? 0 : currentPage
+            // Defensive: ensure page is never negative
+            const pageToFetch = Math.max(0, reset ? 0 : currentPage)
             const rangeStart = pageToFetch * PAGE_SIZE
             const rangeEnd = rangeStart + PAGE_SIZE - 1
 
@@ -108,8 +177,30 @@ function Tasks() {
                 `, { count: 'exact' })
 
             // Apply filters BEFORE ordering and pagination
-            if (searchTerm) {
-                tasksQuery = tasksQuery.ilike('titulo', `%${searchTerm}%`)
+            // Apply filters BEFORE ordering and pagination
+            if (debouncedSearchTerm) {
+                // 1. Find matching companies
+                const matchingClientIds = clients
+                    .filter(c => c.nome.toLowerCase().includes(debouncedSearchTerm.toLowerCase()))
+                    .map(c => c.id)
+
+                // 2. Find matching professionals
+                const matchingProfIds = professionals
+                    .filter(p => p.nome.toLowerCase().includes(debouncedSearchTerm.toLowerCase()))
+                    .map(p => p.id)
+
+                // 3. Construct OR query
+                const conditions = [`titulo.ilike.%${debouncedSearchTerm}%`]
+
+                if (matchingClientIds.length > 0) {
+                    conditions.push(`cliente_id.in.(${matchingClientIds.join(',')})`)
+                }
+
+                if (matchingProfIds.length > 0) {
+                    conditions.push(`assigned_to.in.(${matchingProfIds.join(',')})`)
+                }
+
+                tasksQuery = tasksQuery.or(conditions.join(','))
             }
 
             if (statusFilter && statusFilter !== 'all') {
@@ -120,7 +211,13 @@ function Tasks() {
                 } else if (statusFilter === 'completed') {
                     tasksQuery = tasksQuery.in('status', ['completed', 'concluída', 'concluida'])
                 } else if (statusFilter === 'overdue') {
-                    tasksQuery = tasksQuery.in('status', ['overdue', 'atrasada'])
+                    // FIX: Overdue is a calculated state (Deadline < Now AND Status != Completed)
+                    // It is NOT a stored status in the DB usually.
+                    tasksQuery = tasksQuery
+                        .lt('deadline', new Date().toISOString())
+                        .not('status', 'in', '("completed","concluída","concluida","cancelada")')
+                } else if (statusFilter === 'cancelada') {
+                    tasksQuery = tasksQuery.eq('status', 'cancelada')
                 } else {
                     tasksQuery = tasksQuery.eq('status', statusFilter)
                 }
@@ -130,9 +227,10 @@ function Tasks() {
                 tasksQuery = tasksQuery.eq('priority', priorityFilter)
             }
 
-            if (assignedToFilter && assignedToFilter !== 'all') {
-                tasksQuery = tasksQuery.eq('assigned_to', assignedToFilter)
-            }
+            // Removed assignedToFilter logic
+            // if (assignedToFilter && assignedToFilter !== 'all') {
+            //    tasksQuery = tasksQuery.eq('assigned_to', assignedToFilter)
+            // }
 
             // Deadline filters
             if (deadlineFilter === 'overdue') {
@@ -187,10 +285,40 @@ function Tasks() {
             const results = await Promise.all(queries)
             const tasksResult = results[0]
 
-            if (tasksResult.error) throw tasksResult.error
+            // Handle 416/418 Range Not Satisfiable error gracefully
+            if (tasksResult.error) {
+                const errorCode = tasksResult.error.code
+                const errorMsg = tasksResult.error.message || ''
+                const errorStatus = tasksResult.error.status
+
+                // Check for range errors (416 or 418 status codes, or PGRST103 code)
+                if (
+                    errorCode === 'PGRST103' ||
+                    errorMsg.includes('416') ||
+                    errorMsg.includes('418') ||
+                    errorStatus === 416 ||
+                    errorStatus === 418 ||
+                    errorMsg.toLowerCase().includes('range not satisfiable')
+                ) {
+                    handleRangeError(reset, pageToFetch)
+                    return
+                }
+
+                // Real error - not a range issue
+                throw tasksResult.error
+            }
 
             const newTasks = tasksResult.data || []
             const count = tasksResult.count || 0
+
+            // Handle empty results gracefully - THIS IS NOT AN ERROR
+            if (count === 0 || newTasks.length === 0) {
+                setTasks([])
+                setTotalCount(0)
+                setHasMore(false)
+                setFetchError(null) // Explicitly clear any error state
+                return
+            }
 
             setTotalCount(count)
             setHasMore(rangeEnd < count - 1)
@@ -223,7 +351,8 @@ function Tasks() {
 
         } catch (error) {
             console.error('Error fetching data:', error)
-            setFetchError(error.message || 'Erro desconhecido ao buscar dados')
+            const errorMessage = error?.message || error?.error_description || 'Erro desconhecido ao buscar dados'
+            setFetchError(errorMessage)
             toast.error('Erro ao carregar dados. Por favor, recarregue a página.')
         } finally {
             setLoading(false)
@@ -302,31 +431,11 @@ function Tasks() {
     }
 
     function handleOpenEditModal(task) {
-        setSelectedTask(task)
-        setFormData({
-            titulo: task.titulo || '',
-            descricao: task.descricao || '',
-            cliente_id: task.cliente_id || '',
-            departamento_id: task.departamento_id || '',
-            assigned_to: task.assigned_to || '',
-            deadline: task.deadline ? new Date(task.deadline).toISOString().slice(0, 16) : '',
-            priority: task.priority || 'medium',
-            status: task.status || 'pending',
-            drive_link: task.drive_link || ''
-        })
-        if (task.micro_tasks && task.micro_tasks.length > 0) {
-            setEditingMicroTasks(task.micro_tasks.map(mt => ({
-                id: mt.id,
-                funcao: mt.funcao,
-                profissional_id: mt.profissionais?.id || '', // Updated to profissionais
-                status: mt.status,
-                original: true
-            })))
-            loadWorkflowReferenceData(task.cliente_id)
-        } else {
-            setEditingMicroTasks([])
-            setWorkflowReferenceData({ professionals: [], functions: [] })
+        if (task.created_by !== user?.id) {
+            toast.error('Apenas o criador da OS pode editá-la')
+            return
         }
+        setSelectedTask(task)
         setShowEditModal(true)
     }
 
@@ -364,39 +473,6 @@ function Tasks() {
         }
     }
 
-    // Workflow Editing Helpers
-    function handleAddMicroTask() {
-        setEditingMicroTasks([...editingMicroTasks, {
-            id: `temp_${Date.now()}`,
-            funcao: '',
-            profissional_id: '',
-            status: 'pendente',
-            original: false
-        }])
-    }
-
-    function handleRemoveMicroTask(index) {
-        const newTasks = [...editingMicroTasks]
-        newTasks.splice(index, 1)
-        setEditingMicroTasks(newTasks)
-    }
-
-    function handleUpdateMicroTask(index, field, value) {
-        const newTasks = [...editingMicroTasks]
-        newTasks[index] = { ...newTasks[index], [field]: value }
-
-        // Auto-select professional if function changes
-        if (field === 'funcao') {
-            const validProfs = workflowReferenceData.professionals.filter(p => p.funcao === value)
-            if (validProfs.length > 0) {
-                newTasks[index].profissional_id = validProfs[0].profissional_id
-            } else {
-                newTasks[index].profissional_id = ''
-            }
-        }
-
-        setEditingMicroTasks(newTasks)
-    }
 
     async function refreshTaskDetails(taskId) {
         if (!taskId) return null
@@ -505,103 +581,6 @@ function Tasks() {
         }
     }
 
-    async function handleUpdateTask(e) {
-        e.preventDefault()
-
-        if (!formData.titulo.trim()) {
-            toast.error('Por favor, insira um título para a tarefa')
-            return
-        }
-
-        setSubmitting(true)
-
-        try {
-            const taskData = {
-                titulo: formData.titulo.trim(),
-                descricao: formData.descricao.trim() || null,
-                cliente_id: formData.cliente_id || null,
-                departamento_id: formData.departamento_id || null,
-                assigned_to: formData.assigned_to || null,
-                deadline: formData.deadline,
-                priority: formData.priority,
-                status: formData.status,
-                drive_link: formData.drive_link.trim() || null,
-                completed_at: formData.status === 'completed' ? new Date().toISOString() : null
-            }
-
-            const { error } = await supabase
-                .from('tarefas')
-                .update(taskData)
-                .eq('id', selectedTask.id)
-
-            if (error) throw error
-
-            // Handle Workflow Updates
-            if (selectedTask.micro_tasks && selectedTask.micro_tasks.length > 0) {
-                // 1. Identify Deletions (IDs in original but not in editing)
-                const editingIds = editingMicroTasks.filter(mt => mt.original).map(mt => mt.id)
-                const toDelete = selectedTask.micro_tasks.filter(mt => !editingIds.includes(mt.id)).map(mt => mt.id)
-
-                if (toDelete.length > 0) {
-                    const { error: deleteError } = await supabase
-                        .from('tarefas_micro')
-                        .delete()
-                        .in('id', toDelete)
-                    if (deleteError) throw deleteError
-                }
-
-                // 2. Identify Updates (Original items with changes)
-                const toUpdate = editingMicroTasks.filter(mt => mt.original)
-                for (const mt of toUpdate) {
-                    const original = selectedTask.micro_tasks.find(o => o.id === mt.id)
-                    if (original && (original.profissional_id !== mt.profissional_id || original.status !== mt.status)) {
-                        const { error: updateError } = await supabase
-                            .from('tarefas_micro')
-                            .update({
-                                profissional_id: mt.profissional_id,
-                                funcao: mt.funcao // Although usually static, why not
-                                // Status is updated by dragging in kanban, but here we might want to respect current or reset? 
-                                // Let's keep status as is unless we add a status picker in edit. 
-                                // Actually user might want to reassign, status should probably preserved or reset if reassigning? 
-                                // For now, we only update profissional_id and guarantee matches.
-                            })
-                            .eq('id', mt.id)
-                        if (updateError) throw updateError
-                    }
-                }
-
-                // 3. Identify Insertions (New items with temp IDs)
-                const toInsert = editingMicroTasks
-                    .filter(mt => !mt.original)
-                    .map(mt => ({
-                        tarefa_id: selectedTask.id,
-                        funcao: mt.funcao,
-                        profissional_id: mt.profissional_id,
-                        status: 'pendente', // Default new steps to pending
-                        peso: 1 // Default weight
-                    }))
-
-                if (toInsert.length > 0) {
-                    const { error: insertError } = await supabase
-                        .from('tarefas_micro')
-                        .insert(toInsert)
-                    if (insertError) throw insertError
-                }
-            }
-
-            toast.success('Tarefa atualizada com sucesso!')
-            setShowEditModal(false)
-            setSelectedTask(null)
-            setEditingMicroTasks([])
-            resetForm()
-            await fetchData()
-        } catch (error) {
-            console.error('Error updating task:', error)
-            toast.error('Erro ao atualizar tarefa. Tente novamente.')
-        } finally {
-            setSubmitting(false)
-        }
-    }
 
     async function handleConfirmDelete() {
         if (!selectedTask) return
@@ -623,6 +602,62 @@ function Tasks() {
         } catch (error) {
             console.error('Error deleting task:', error)
             toast.error('Erro ao excluir tarefa. Tente novamente.')
+        } finally {
+            setSubmitting(false)
+        }
+    }
+
+    function handleCancelRequest() {
+        // Close edit modal and open cancel confirmation modal
+        setShowEditModal(false)
+        setShowCancelModal(true)
+    }
+
+    async function handleConfirmCancel() {
+        if (!selectedTask) return
+
+        setSubmitting(true)
+
+        try {
+            const { error } = await supabase
+                .from('tarefas')
+                .update({ status: 'cancelada' })
+                .eq('id', selectedTask.id)
+
+            if (error) throw error
+
+            toast.success('OS cancelada com sucesso!')
+            setShowCancelModal(false)
+            setSelectedTask(null)
+            await fetchData()
+        } catch (error) {
+            console.error('Error canceling OS:', error)
+            toast.error('Erro ao cancelar OS. Tente novamente.')
+        } finally {
+            setSubmitting(false)
+        }
+    }
+
+    async function handleReopen() {
+        if (!selectedTask) return
+
+        setSubmitting(true)
+
+        try {
+            const { error } = await supabase
+                .from('tarefas')
+                .update({ status: 'pending' })
+                .eq('id', selectedTask.id)
+
+            if (error) throw error
+
+            toast.success('OS reaberta com sucesso!')
+            setShowDetailModal(false)
+            setSelectedTask(null)
+            await fetchData()
+        } catch (error) {
+            console.error('Error reopening OS:', error)
+            toast.error('Erro ao reabrir OS. Tente novamente.')
         } finally {
             setSubmitting(false)
         }
@@ -837,21 +872,39 @@ function Tasks() {
         return deadlineDate < now
     }
 
+    function getFilterLabel() {
+        const filters = []
+
+        if (statusFilter && statusFilter !== 'all') {
+            const statusLabels = {
+                'pending': 'Pendentes',
+                'in_progress': 'Em Progresso',
+                'completed': 'Concluídas',
+                'overdue': 'Atrasadas',
+                'cancelada': 'Canceladas'
+            }
+            filters.push(statusLabels[statusFilter] || statusFilter)
+        }
+
+        if (searchTerm) {
+            filters.push(`Busca: "${searchTerm}"`)
+        }
+
+        if (priorityFilter && priorityFilter !== 'all') {
+            filters.push(`Prioridade: ${priorityFilter}`)
+        }
+
+        if (deadlineFilter && deadlineFilter !== 'all') {
+            filters.push(`Prazo: ${deadlineFilter}`)
+        }
+
+        return filters.length > 0 ? filters.join(' + ') : 'Todas as tarefas'
+    }
+
     // Tasks are already filtered server-side
     const allFilteredSelected = tasks.length > 0 && selectedTasks.length === tasks.length
 
-    if (loading) {
-        return (
-            <div>
-                <div className="dashboard-header">
-                    <h2>Gerenciamento de Tarefas</h2>
-                </div>
-                <div className="card loading-card">
-                    <p className="loading-text-primary">Carregando tarefas...</p>
-                </div>
-            </div>
-        )
-    }
+
 
     if (fetchError) {
         return (
@@ -878,42 +931,31 @@ function Tasks() {
 
     return (
         <div className="animation-fade-in">
-            {/* Header */}
-            <div className="dashboard-header admin-tasks-section-spacing">
-                <h2>Gerenciamento de Tarefas</h2>
-            </div>
 
-            {/* Metrics Cards */}
+
+            {/* Actionable Metrics Cards */}
             <div className="admin-tasks-section-spacing">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="card" style={{ padding: '20px' }}>
-                        <p className="text-sm text-slate-500 mb-1">Total de Tarefas</p>
-                        <p className="text-2xl font-semibold text-slate-900">{totalCount}</p>
+                <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                    <div className="card metric-card metric-card-small metric-card-danger-bg">
+                        <h3 className="metric-label">Ativas Atrasadas</h3>
+                        <p className="metric-value">{actionableMetrics.overdueActive}</p>
                     </div>
-                    <div className="card" style={{ padding: '20px' }}>
-                        <p className="text-sm text-slate-500 mb-1">Em Andamento</p>
-                        <p className="text-2xl font-semibold text-indigo-600">
-                            {tasks.filter(t => t.status === 'in_progress').length}
-                        </p>
+                    <div className="card metric-card metric-card-small" style={{ background: 'linear-gradient(135deg, #fefce8 0%, #fef3c7 100%)', borderColor: '#fde68a' }}>
+                        <h3 className="metric-label">Vencem Hoje</h3>
+                        <p className="metric-value">{actionableMetrics.dueToday}</p>
                     </div>
-                    <div className="card" style={{ padding: '20px' }}>
-                        <p className="text-sm text-slate-500 mb-1">Concluídas</p>
-                        <p className="text-2xl font-semibold text-green-600">
-                            {tasks.filter(t => t.status === 'completed').length}
-                        </p>
+                    <div className="card metric-card metric-card-small" style={{ background: 'linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%)', borderColor: '#fed7aa' }}>
+                        <h3 className="metric-label">Vencem em 48h</h3>
+                        <p className="metric-value">{actionableMetrics.dueIn48h}</p>
                     </div>
-                    <div className="card" style={{ padding: '20px' }}>
-                        <p className="text-sm text-slate-500 mb-1">Atrasadas</p>
-                        <p className="text-2xl font-semibold text-red-600">
-                            {tasks.filter(t => {
-                                const now = new Date()
-                                const deadline = new Date(t.deadline)
-                                return t.status !== 'completed' && deadline < now
-                            }).length}
-                        </p>
+                    <div className="card metric-card metric-card-small metric-card-neutral-bg">
+                        <h3 className="metric-label">Sem Responsável</h3>
+                        <p className="metric-value">{actionableMetrics.unassigned}</p>
                     </div>
                 </div>
             </div>
+
+
 
             {/* Filters */}
             <div className="tool-bar admin-tasks-section-spacing">
@@ -947,6 +989,7 @@ function Tasks() {
                             <option value="in_progress">Em Progresso</option>
                             <option value="completed">Concluída</option>
                             <option value="overdue">Atrasada</option>
+                            <option value="cancelada">Canceladas</option>
                         </select>
                     </div>
 
@@ -966,20 +1009,7 @@ function Tasks() {
                         </select>
                     </div>
 
-                    <div className="input-group admin-tasks-filter-group">
-                        <label htmlFor="assigned">Responsável</label>
-                        <select
-                            id="assigned"
-                            className="input"
-                            value={assignedToFilter}
-                            onChange={(e) => setAssignedToFilter(e.target.value)}
-                        >
-                            <option value="all">Todos</option>
-                            {professionals.map(prof => (
-                                <option key={prof.id} value={prof.id}>{prof.nome}</option>
-                            ))}
-                        </select>
-                    </div>
+                    {/* Assigned To Filter Removed */}
 
                     <div className="input-group admin-tasks-filter-group">
                         <label htmlFor="deadline">Prazo</label>
@@ -1006,13 +1036,18 @@ function Tasks() {
                     </h3>
                 </div>
 
-                {tasks.length === 0 ? (
+                {loading ? (
+                    <div className="p-12 flex flex-col justify-center items-center gap-4">
+                        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600"></div>
+                        <p className="text-slate-500 font-medium animate-pulse">Carregando tarefas...</p>
+                    </div>
+                ) : tasks.length === 0 ? (
                     <div className="empty-state">
                         <span className="admin-tasks-empty-icon">
                             <ClipboardList size={64} className="text-slate-300" strokeWidth={1} />
                         </span>
                         <p className="empty-text">
-                            {searchTerm || statusFilter !== 'all' || priorityFilter !== 'all' || assignedToFilter !== 'all' || deadlineFilter !== 'all'
+                            {searchTerm || statusFilter !== 'all' || priorityFilter !== 'all' || deadlineFilter !== 'all'
                                 ? 'Nenhuma tarefa encontrada com os filtros aplicados.'
                                 : 'Nenhuma tarefa em andamento no momento.'}
                         </p>
@@ -1102,13 +1137,15 @@ function Tasks() {
                                             </td>
                                             <td className="admin-tasks-actions-cell">
                                                 <div className="admin-tasks-actions-container">
-                                                    <button
-                                                        onClick={() => handleOpenEditModal(task)}
-                                                        className="btn-icon"
-                                                        title="Editar"
-                                                    >
-                                                        <Edit2 size={18} />
-                                                    </button>
+                                                    {task.created_by === user?.id && (
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); handleOpenEditModal(task); }}
+                                                            className="btn-icon"
+                                                            title="Editar OS"
+                                                        >
+                                                            <Edit2 size={18} />
+                                                        </button>
+                                                    )}
                                                     <button
                                                         onClick={() => handleOpenDeleteModal(task)}
                                                         className="btn-icon admin-tasks-delete-button"
@@ -1312,224 +1349,19 @@ function Tasks() {
                 </div>
             )}
 
-            {/* Edit Modal */}
+            {/* Edit Modal (New Component) */}
             {showEditModal && selectedTask && (
-                <div className="modal-backdrop" onClick={() => setShowEditModal(false)}>
-                    <div className="modal" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h3>Editar Tarefa</h3>
-                            <button className="modal-close" onClick={() => setShowEditModal(false)}>×</button>
-                        </div>
-                        <form onSubmit={handleUpdateTask}>
-                            <div className="modal-body">
-                                <div className="input-group">
-                                    <label htmlFor="edit-titulo">Título *</label>
-                                    <input
-                                        id="edit-titulo"
-                                        type="text"
-                                        className="input"
-                                        value={formData.titulo}
-                                        onChange={(e) => setFormData({ ...formData, titulo: e.target.value })}
-                                        required
-                                    />
-                                </div>
-
-                                <div className="input-group">
-                                    <label htmlFor="edit-descricao">Descrição</label>
-                                    <textarea
-                                        id="edit-descricao"
-                                        className="input"
-                                        value={formData.descricao}
-                                        onChange={(e) => setFormData({ ...formData, descricao: e.target.value })}
-                                        rows="3"
-                                    />
-                                </div>
-
-                                <div className="input-group">
-                                    <label htmlFor="edit-cliente">Cliente</label>
-                                    <select
-                                        id="edit-cliente"
-                                        className="input"
-                                        value={formData.cliente_id}
-                                        onChange={(e) => setFormData({ ...formData, cliente_id: e.target.value })}
-                                    >
-                                        <option value="">-- Selecione --</option>
-                                        {clients.map(client => (
-                                            <option key={client.id} value={client.id}>{client.nome}</option>
-                                        ))}
-                                    </select>
-                                </div>
-
-
-
-                                {editingMicroTasks.length > 0 ? (
-                                    <div className="input-group">
-                                        <label>Etapas do Workflow</label>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px' }}>
-                                            {editingMicroTasks.map((mt, idx) => (
-                                                <div key={mt.id} style={{
-                                                    display: 'flex',
-                                                    flexDirection: 'column',
-                                                    gap: '8px',
-                                                    padding: '12px',
-                                                    border: '1px solid #e2e8f0',
-                                                    borderRadius: '8px',
-                                                    background: '#f8fafc'
-                                                }}>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                        <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>Etapa {idx + 1}</span>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleRemoveMicroTask(idx)}
-                                                            style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer' }}
-                                                            title="Remover etapa"
-                                                        >
-                                                            <Trash2 size={16} />
-                                                        </button>
-                                                    </div>
-
-                                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                                                        <div>
-                                                            <label style={{ fontSize: '0.75rem', color: '#64748b' }}>Função</label>
-                                                            <select
-                                                                className="input"
-                                                                value={mt.funcao}
-                                                                onChange={(e) => handleUpdateMicroTask(idx, 'funcao', e.target.value)}
-                                                                style={{ fontSize: '0.85rem', padding: '6px' }}
-                                                            >
-                                                                <option value="">Selecione...</option>
-                                                                {workflowReferenceData.functions.map(fn => (
-                                                                    <option key={fn} value={fn}>{fn}</option>
-                                                                ))}
-                                                            </select>
-                                                        </div>
-                                                        <div>
-                                                            <label style={{ fontSize: '0.75rem', color: '#64748b' }}>Profissional</label>
-                                                            <select
-                                                                className="input"
-                                                                value={mt.profissional_id}
-                                                                onChange={(e) => handleUpdateMicroTask(idx, 'profissional_id', e.target.value)}
-                                                                style={{ fontSize: '0.85rem', padding: '6px' }}
-                                                            >
-                                                                <option value="">
-                                                                    {workflowReferenceData.professionals.filter(p => p.funcao === mt.funcao).length === 0
-                                                                        ? 'Nenhum encontrado'
-                                                                        : 'Selecione...'}
-                                                                </option>
-                                                                {workflowReferenceData.professionals
-                                                                    .filter(p => p.funcao === mt.funcao)
-                                                                    .map(p => (
-                                                                        <option key={p.profissional_id} value={p.profissional_id}>
-                                                                            {p.profissionais.nome}
-                                                                        </option>
-                                                                    ))}
-                                                            </select>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                            <button
-                                                type="button"
-                                                onClick={handleAddMicroTask}
-                                                className="btn btn-secondary"
-                                                style={{ width: '100%', marginTop: '8px', fontSize: '0.85rem' }}
-                                            >
-                                                + Adicionar Etapa
-                                            </button>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="input-group">
-                                        <label htmlFor="edit-assigned_to">Atribuir a</label>
-                                        <select
-                                            id="edit-assigned_to"
-                                            className="input"
-                                            value={formData.assigned_to}
-                                            onChange={(e) => setFormData({ ...formData, assigned_to: e.target.value })}
-                                        >
-                                            <option value="">-- Selecione --</option>
-                                            {professionals.map(prof => (
-                                                <option key={prof.id} value={prof.id}>{prof.nome}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                )}
-
-                                <div className="input-group">
-                                    <label htmlFor="edit-deadline">Prazo *</label>
-                                    <input
-                                        id="edit-deadline"
-                                        type="datetime-local"
-                                        className="input"
-                                        value={formData.deadline}
-                                        onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
-                                        required
-                                    />
-                                </div>
-
-                                <div className="input-group">
-                                    <label htmlFor="edit-status">Status</label>
-                                    <select
-                                        id="edit-status"
-                                        className="input"
-                                        value={formData.status}
-                                        onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                                    >
-                                        <option value="pending">Pendente</option>
-                                        <option value="in_progress">Em Progresso</option>
-                                        <option value="completed">Concluída</option>
-                                        <option value="overdue">Atrasada</option>
-                                    </select>
-                                </div>
-
-                                <div className="input-group">
-                                    <label htmlFor="edit-priority">Prioridade</label>
-                                    <select
-                                        id="edit-priority"
-                                        className="input"
-                                        value={formData.priority}
-                                        onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-                                    >
-                                        <option value="low">Baixa</option>
-                                        <option value="medium">Média</option>
-                                        <option value="high">Alta</option>
-                                        <option value="urgent">Urgente</option>
-                                    </select>
-                                </div>
-
-                                <div className="input-group">
-                                    <label htmlFor="edit-drive_link">Link do Drive</label>
-                                    <input
-                                        id="edit-drive_link"
-                                        type="url"
-                                        className="input"
-                                        value={formData.drive_link}
-                                        onChange={(e) => setFormData({ ...formData, drive_link: e.target.value })}
-                                        placeholder="https://drive.google.com/..."
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="modal-footer">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowEditModal(false)}
-                                    className="btn btn-secondary"
-                                    disabled={submitting}
-                                >
-                                    Cancelar
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="btn btn-primary"
-                                    disabled={submitting}
-                                >
-                                    {submitting ? 'Salvando...' : 'Salvar Alterações'}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
+                <EditTaskModal
+                    task={selectedTask}
+                    isOpen={showEditModal}
+                    onClose={() => setShowEditModal(false)}
+                    onSuccess={() => {
+                        setShowEditModal(false)
+                        fetchData()
+                    }}
+                    currentUserId={user?.id}
+                    onCancelRequest={handleCancelRequest}
+                />
             )}
 
             {/* Detail Modal - Using MacroTaskDetail Component */}
@@ -1548,6 +1380,36 @@ function Tasks() {
                                 setSelectedTask(null)
                                 fetchData() // Refresh to show any changes
                             }}
+                            onEdit={
+                                (user?.id === selectedTask.created_by || role === 'admin' || role === 'super_admin')
+                                    ? () => {
+                                        setShowDetailModal(false)
+                                        setShowEditModal(true)
+                                    }
+                                    : undefined
+                            }
+                            onDelete={
+                                (user?.id === selectedTask.created_by || role === 'admin' || role === 'super_admin')
+                                    ? () => {
+                                        setShowDetailModal(false)
+                                        setShowDeleteModal(true)
+                                    }
+                                    : undefined
+                            }
+                            onReopen={
+                                (role === 'admin' || role === 'super_admin')
+                                    ? async () => {
+                                        try {
+                                            await handleReopenTask(selectedTask)
+                                            setShowDetailModal(false)
+                                            setSelectedTask(null)
+                                            fetchData()
+                                        } catch (error) {
+                                            console.error('Error reopening task:', error)
+                                        }
+                                    }
+                                    : undefined
+                            }
                         />
                     </div>
                 </div>
@@ -1584,6 +1446,43 @@ function Tasks() {
                                 disabled={submitting}
                             >
                                 {submitting ? 'Excluindo...' : 'Excluir'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Cancel OS Confirmation Modal */}
+            {showCancelModal && selectedTask && (
+                <div className="modal-backdrop" onClick={() => setShowCancelModal(false)}>
+                    <div className="modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-body">
+                            <div className="admin-tasks-delete-modal-icon">
+                                <AlertTriangle size={24} />
+                            </div>
+                            <h3 className="admin-tasks-delete-modal-title">Cancelar Ordem de Serviço</h3>
+                            <p className="admin-tasks-delete-modal-message">
+                                Tem certeza que deseja cancelar a OS{' '}
+                                <span className="admin-tasks-delete-modal-task-name">"{selectedTask.titulo}"</span>?
+                            </p>
+                            <p className="admin-tasks-delete-modal-warning">
+                                ⚠️ Esta ação não pode ser desfeita. A OS será movida para "Canceladas".
+                            </p>
+                        </div>
+                        <div className="modal-footer">
+                            <button
+                                onClick={() => setShowCancelModal(false)}
+                                className="btn btn-secondary"
+                                disabled={submitting}
+                            >
+                                Voltar
+                            </button>
+                            <button
+                                onClick={handleConfirmCancel}
+                                className="btn btn-primary"
+                                disabled={submitting}
+                            >
+                                {submitting ? 'Cancelando...' : 'Confirmar Cancelamento'}
                             </button>
                         </div>
                     </div>

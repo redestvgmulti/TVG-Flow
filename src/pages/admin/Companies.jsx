@@ -192,6 +192,22 @@ function Companies() {
     return (
         <>
             <div className="animation-fade-in">
+                {/* Metric Cards */}
+                <div style={{ marginBottom: '1.5rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                    <div className="card metric-card" style={{ flex: '1 1 200px', minWidth: '180px' }}>
+                        <h3 className="metric-label">Ativas</h3>
+                        <p className="metric-value" style={{ color: '#10b981' }}>
+                            {companies.filter(c => c.ativo).length}
+                        </p>
+                    </div>
+                    <div className="card metric-card" style={{ flex: '1 1 200px', minWidth: '180px' }}>
+                        <h3 className="metric-label">Suspensas</h3>
+                        <p className="metric-value" style={{ color: '#6b7280' }}>
+                            {companies.filter(c => !c.ativo).length}
+                        </p>
+                    </div>
+                </div>
+
                 {/* Header */}
                 <div className="companies-header">
                     <h2 className="companies-title">Empresas</h2>

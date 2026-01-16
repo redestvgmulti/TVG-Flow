@@ -153,29 +153,38 @@ export default function OperationalFeed() {
     }
 
     return (
-        <div className="op-feed-container" ref={listRef}>
-            {events.map(event => (
-                <div key={event.id} className="op-event-item">
-                    <div className={`op-event-icon ${event.type}`}>
-                        {getIcon(event.type)}
-                    </div>
-                    <div className="op-event-content">
-                        <div className="op-event-header">
-                            <span className="op-event-user">{event.user}</span>
-                            <span className="op-event-time">
-                                {formatDistanceToNow(event.timestamp, { addSuffix: true, locale: ptBR })
-                                    .replace('cerca de ', '')}
-                            </span>
-                        </div>
-                        <div className="op-event-action">
-                            {event.action}
-                        </div>
-                        <div className="op-event-task">
-                            {event.task}
-                        </div>
-                    </div>
+        <div className="card h-full flex flex-col">
+            <div className="card-header flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <Activity size={20} className="text-secondary" />
+                    <h3 className="card-title">Feed Operacional</h3>
                 </div>
-            ))}
+            </div>
+
+            <div className="op-feed-container flex-1" ref={listRef}>
+                {events.map(event => (
+                    <div key={event.id} className="op-event-item">
+                        <div className={`op-event-icon ${event.type}`}>
+                            {getIcon(event.type)}
+                        </div>
+                        <div className="op-event-content">
+                            <div className="op-event-header">
+                                <span className="op-event-user">{event.user}</span>
+                                <span className="op-event-time">
+                                    {formatDistanceToNow(event.timestamp, { addSuffix: true, locale: ptBR })
+                                        .replace('cerca de ', '')}
+                                </span>
+                            </div>
+                            <div className="op-event-action">
+                                {event.action}
+                            </div>
+                            <div className="op-event-task">
+                                {event.task}
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
         </div>
     )
 }

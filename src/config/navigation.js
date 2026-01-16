@@ -46,6 +46,14 @@ export const NAV_ITEMS = [
         showOnMobileBottom: true
     },
     {
+        key: 'staff-meetings',
+        label: 'Reuniões',
+        path: '/staff/meetings',
+        icon: Calendar,
+        roles: ['staff'],
+        showOnMobileBottom: true
+    },
+    {
         key: 'request',
         label: 'Solicitar',
         path: '/staff/requests/new',
@@ -103,6 +111,14 @@ export const NAV_ITEMS = [
         icon: Calendar,
         roles: ['admin', 'super_admin'],
         showOnMobileBottom: true
+    },
+    {
+        key: 'admin-meetings',
+        label: 'Reuniões',
+        path: '/admin/meetings',
+        icon: Users,
+        roles: ['admin', 'super_admin'],
+        showOnMobileBottom: false
     },
     {
         key: 'admin-team',

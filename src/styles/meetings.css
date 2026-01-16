@@ -1,0 +1,304 @@
+/* Meetings Page Specific Styles */
+
+/* Header Polish */
+.meetings-page-header {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 32px;
+}
+
+@media (min-width: 768px) {
+    .meetings-page-header {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+    }
+}
+
+.meetings-page-header .btn {
+    width: 100%;
+    justify-content: center;
+}
+
+@media (min-width: 768px) {
+    .meetings-page-header .btn {
+        width: auto;
+    }
+}
+
+.meetings-title h1 {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    margin: 0 0 4px 0;
+    line-height: 1.2;
+}
+
+.meetings-title p {
+    font-size: 14px;
+    color: var(--color-text-secondary);
+    margin: 0;
+}
+
+/* Card/List refinements (extending task-item) */
+.meeting-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+    font-size: 13px;
+    color: var(--color-text-secondary);
+}
+
+.meeting-meta-separator {
+    color: var(--color-border);
+    font-size: 10px;
+}
+
+.meeting-time {
+    font-variant-numeric: tabular-nums;
+}
+
+/* Modal Polish - Institutional Premium */
+.modal {
+    border-radius: 12px;
+    box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.05);
+    max-width: 480px;
+    padding: 0;
+    overflow: hidden;
+}
+
+.modal-content {
+    padding: 24px;
+}
+
+/* Header Refinement */
+.modal-header {
+    border-bottom: 1px solid var(--color-border-subtle, #e5e7eb);
+    padding: 20px 24px;
+    margin: 0;
+    /* Remove default margin */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #ffffff;
+}
+
+.modal-title {
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--color-text-primary, #111827);
+    line-height: 1.4;
+}
+
+.modal-header .btn-icon {
+    margin-right: -8px;
+    color: var(--color-text-tertiary, #9ca3af);
+}
+
+.modal-header .btn-icon:hover {
+    color: var(--color-text-primary);
+    background: transparent;
+}
+
+/* Form Groups & Typography */
+.form-group {
+    margin-bottom: 24px;
+}
+
+.form-group:last-child {
+    margin-bottom: 0;
+}
+
+.form-group label {
+    display: block;
+    font-size: 11px;
+    text-transform: uppercase;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--color-text-tertiary, #6b7280);
+    margin-bottom: 6px;
+}
+
+/* Override utility classes on values for clean look */
+.form-group>div[class*="bg-base-200"] {
+    background-color: transparent !important;
+    padding: 0 !important;
+    border: none !important;
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--color-text-primary, #374151);
+    font-weight: 500;
+}
+
+/* Grid Layout for Date/Time */
+.form-row-group {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    column-gap: 24px;
+    row-gap: 0;
+    margin-top: 8px;
+    margin-bottom: 8px;
+    padding-top: 20px;
+    border-top: 1px solid var(--color-border-subtle, #f3f4f6);
+}
+
+.form-row-group .form-group {
+    margin-bottom: 0;
+}
+
+.form-row-group>div>div[class*="bg-base-200"] {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+    font-size: 16px;
+    color: var(--color-text-primary, #111827);
+    letter-spacing: -0.02em;
+}
+
+/* Status Badge - Refined Pill */
+.modal .badge {
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    border-radius: 6px;
+    text-transform: uppercase;
+    border: 1px solid transparent;
+}
+
+/* Map specific colors if vars exist, else hardcode premium fallbacks */
+.badge-primary {
+    /* Agendada */
+    background-color: #f0f9ff;
+    color: #0369a1;
+    border-color: rgba(3, 105, 161, 0.1);
+}
+
+.badge-success {
+    /* Concluída */
+    background-color: #f0fdf4;
+    color: #15803d;
+    border-color: rgba(21, 128, 61, 0.1);
+}
+
+.badge-neutral {
+    /* Cancelada */
+    background-color: #f9fafb;
+    color: #4b5563;
+    border-color: rgba(75, 85, 99, 0.1);
+}
+
+/* Actions Footer */
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    padding: 24px;
+    /* Move padding inside footer for visual weight */
+    margin-top: 0;
+    gap: 12px;
+}
+
+.modal-footer .btn {
+    font-size: 13px;
+    font-weight: 500;
+    height: 36px;
+    border-radius: 6px;
+    padding: 0 16px;
+}
+
+.modal-footer .btn-secondary {
+    background-color: #ffffff;
+    border: 1px solid var(--color-border, #e5e7eb);
+    color: var(--color-text-secondary, #374151);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.modal-footer .btn-secondary:hover {
+    background-color: #f9fafb;
+    border-color: #d1d5db;
+    color: #111827;
+}
+
+@media (max-width: 640px) {
+    .form-row-group {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+}
+
+/* Participant List (Admin) - Restored & Polished */
+.participants-list-container {
+    border: 1px solid var(--color-border-subtle, #e5e7eb);
+    border-radius: 8px;
+    padding: 8px;
+    max-height: 200px;
+    overflow-y: auto;
+    background-color: #f9fafb;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 8px;
+}
+
+.participant-option {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: background-color 0.15s ease;
+    user-select: none;
+    font-size: 14px;
+    color: var(--color-text-primary, #374151);
+}
+
+.participant-option:hover {
+    background-color: #ffffff;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.participant-checkbox {
+    margin-right: 12px;
+    width: 16px;
+    height: 16px;
+    accent-color: var(--color-primary);
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+/* Empty State Adjustments */
+.meetings-empty-state {
+    padding: 64px 24px;
+    text-align: center;
+    background: var(--color-bg-surface);
+    border: 1px dashed var(--color-border);
+    border-radius: var(--radius-lg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.meetings-empty-icon {
+    color: var(--color-text-tertiary);
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+
+.meetings-empty-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin: 0 0 8px 0;
+}
+
+.meetings-empty-desc {
+    font-size: 14px;
+    color: var(--color-text-secondary);
+    max-width: 300px;
+    margin: 0 auto 24px auto;
+    line-height: 1.5;
+}

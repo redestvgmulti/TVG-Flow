@@ -271,3 +271,33 @@ export const validateStatusChange = (currentStatus, newStatus) => {
 
     return { isValid: true };
 };
+
+// ==================== RPC Methods for OS Edit/Cancel ====================
+
+/**
+ * Atualizar OS (RPC Seguro - Creator Only)
+ * @param {string} osId 
+ * @param {object} payload 
+ */
+export const updateOS = async (osId, payload) => {
+    const { data, error } = await supabase.rpc('update_os', {
+        p_os_id: osId,
+        p_payload: payload
+    });
+
+    if (error) throw error;
+    return data;
+};
+
+/**
+ * Cancelar OS (RPC Seguro - Creator Only)
+ * @param {string} osId 
+ */
+export const cancelOS = async (osId) => {
+    const { data, error } = await supabase.rpc('cancel_os', {
+        os_id: osId
+    });
+
+    if (error) throw error;
+    return data;
+};
