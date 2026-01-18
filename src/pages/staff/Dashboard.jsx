@@ -229,7 +229,7 @@ function StaffDashboard() {
         <PageTransition>
             <div className="dashboard-container staff-dashboard-container">
                 {/* Header */}
-                <div className="dashboard-header">
+                <div className="dashboard-header staff-greeting-header">
                     <h2>Olá, {firstName}.</h2>
                     <p className="text-secondary">Aqui está o panorama das suas atividades.</p>
                 </div>

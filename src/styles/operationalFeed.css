@@ -1,8 +1,8 @@
 /* Realtime Operational Feed - CityOS */
 
 .op-feed-container {
-    height: 100%;
-    min-height: 0;
+    height: auto;
+    min-height: 0px;
     max-height: 270px;
     /* Limit to ~3 items */
     overflow-y: auto;
@@ -155,4 +155,38 @@
 .op-feed-empty-icon {
     opacity: 0.5;
     margin-bottom: var(--space-2);
+}
+
+/* Mobile Overflow Protection */
+@media (max-width: 768px) {
+    .op-event-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--space-2);
+    }
+
+    .op-event-header {
+        width: 100%;
+        flex-wrap: wrap;
+        gap: var(--space-2);
+    }
+
+    .op-event-user,
+    .op-event-action,
+    .op-event-task {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        word-wrap: break-word;
+        white-space: normal;
+        max-width: 100%;
+    }
+
+    .op-event-time {
+        white-space: normal;
+    }
+
+    .op-event-content {
+        width: 100%;
+        max-width: 100%;
+    }
 }

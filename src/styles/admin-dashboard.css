@@ -33,10 +33,12 @@
 /* 
  * KPI GRID - Exact Figma Make Layout
  */
-.dashboard-grid-metrics {
+.dashboard-grid-charts {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 10px;
+    grid-template-columns: 2fr 1fr;
+    gap: 24px;
+    align-items: start;
+    /* Decouple heights */
     margin-bottom: 24px;
 }
 
@@ -373,6 +375,37 @@
 }
 
 /* 
+ * CHARTS
+ */
+.chart-container {
+    width: 100%;
+    height: 250px;
+    /* Desktop default */
+    min-height: 250px;
+    position: relative;
+    /* Required for ResponsiveContainer */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.chart-empty-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--color-text-tertiary);
+    font-size: 14px;
+}
+
+.chart-tooltip {
+    background-color: #fff !important;
+    border: 1px solid #e5e7eb !important;
+    border-radius: 8px !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* 
  * RESPONSIVE - Mobile First
  */
 @media (max-width: 1024px) {
@@ -382,8 +415,12 @@
 }
 
 @media (max-width: 768px) {
+
+    /* Mobile Container Fixes */
     .dashboard-container {
         padding: 16px;
+        padding-bottom: calc(env(safe-area-inset-bottom) + 100px);
+        /* Bottom nav + safe area */
     }
 
     .dashboard-grid-metrics {
@@ -398,11 +435,95 @@
     .metric-value {
         font-size: 24px;
     }
+
+    /* Chart Height Limiting */
+    .chart-container {
+        height: 180px !important;
+        min-height: 180px !important;
+        position: relative !important;
+        overflow-x: hidden !important;
+        /* Remove horizontal scroll on mobile */
+    }
+
+    /* Feed Operational - Better Rhythm */
+    .feed-container {
+        max-height: 400px;
+        /* Limit to reasonable mobile height */
+    }
+
+    .feed-item {
+        padding: 14px;
+        margin-bottom: 8px;
+        /* Better vertical rhythm */
+    }
+
+    .feed-item:last-child {
+        margin-bottom: 0;
+    }
+
+    /* Charts Grid - Mobile Spacing */
+    .dashboard-grid-charts {
+        gap: 20px;
+        /* More breathing room */
+        margin-bottom: 20px;
+    }
+
+    /* Long Cards - Bottom Spacing */
+    .card {
+        margin-bottom: 20px;
+        /* Prevent "colado" feeling */
+    }
+
+    .card:last-child {
+        margin-bottom: 24px;
+        /* Extra space before safe area */
+    }
+
+    /* Recent Tasks Mobile Improvements */
+    .recent-tasks-list {
+        gap: 8px;
+        /* Better vertical rhythm */
+    }
+
+    .task-item-minimal {
+        padding: 12px 14px;
+        /* Comfortable touch target */
+    }
 }
 
 @media (max-width: 480px) {
     .dashboard-grid-metrics {
         grid-template-columns: 1fr;
+    }
+
+    /* Even more constrained on very small screens */
+    .chart-container {
+        max-height: 240px !important;
+    }
+
+    .dashboard-container {
+        padding: 12px;
+        padding-bottom: calc(env(safe-area-inset-bottom) + 100px);
+    }
+
+    /* Global Mobile Overflow Protection */
+    .dashboard-container,
+    .dashboard-grid-metrics,
+    .dashboard-grid-charts,
+    .card,
+    .chart-container,
+    .feed-container,
+    .op-feed-container,
+    .recent-tasks-list {
+        max-width: 100%;
+        overflow-x: hidden;
+        box-sizing: border-box;
+    }
+
+    /* Ensure no element can force horizontal scroll */
+    * {
+        max-width: 100%;
+        box-sizing: border-box;
     }
 }
 

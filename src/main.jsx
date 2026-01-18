@@ -14,7 +14,6 @@ import './styles/reload-prompt.css'
 
 // Apply security hardening BEFORE React renders
 hardenConsole()
-disableReactDevTools()
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

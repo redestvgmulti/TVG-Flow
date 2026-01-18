@@ -20,14 +20,7 @@ export const NAV_ITEMS = [
         path: '/staff/dashboard',
         icon: LayoutGrid,
         roles: ['staff', 'profissional'],
-        mobilePriority: false, // Less important on mobile bottom nav? Check user requirement.
-        // User said: Mobile = Tarefas, Agenda, Solicitar, Conteúdo, Perfil. 
-        // Dashboard is NOT in the user's list for Mobile BottomNav preference.
-        // User list: "Mobile / PWA (BottomNav): Tarefas, Agenda, Solicitar (CTA central), Conteúdo, Perfil"
-        // We will keep Dashboard accessible but maybe not in the primary 5 slots if space is tight, OR we strictly follow the user's specific list for Mobile.
-        // User explicit list for Mobile BottomNav: Tarefas, Agenda, Solicitar, Conteúdo, Perfil.
-        // Dashboard is NOT in that list. We will strictly follow.
-        showOnMobileBottom: false,
+        showOnMobileBottom: true, // Mental entry point for app
     },
     {
         key: 'tasks',
@@ -51,7 +44,7 @@ export const NAV_ITEMS = [
         path: '/staff/meetings',
         icon: Calendar,
         roles: ['staff'],
-        showOnMobileBottom: true
+        showOnMobileBottom: false // Accessible via Agenda tab/filter
     },
     {
         key: 'request',
@@ -60,7 +53,7 @@ export const NAV_ITEMS = [
         icon: PlusSquare,
         roles: ['staff', 'profissional'],
         isCTA: true,
-        showOnMobileBottom: true
+        showOnMobileBottom: false // Converted to FAB on mobile
     },
     {
         key: 'content',

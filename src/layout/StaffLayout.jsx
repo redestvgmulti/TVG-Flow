@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Header from './Header'
 import BottomNav from './BottomNav'
+import FloatingActionButton from './FloatingActionButton'
 import PullToRefresh from '../components/PullToRefresh'
 import ErrorBoundary from '../components/ErrorBoundary'
 
@@ -40,6 +41,9 @@ function StaffLayout() {
                     </ErrorBoundary>
                 </PullToRefresh>
             </div>
+
+            {/* FAB for primary action (mobile only) */}
+            <FloatingActionButton />
 
             {/* BottomNav for mobile task navigation */}
             <BottomNav />

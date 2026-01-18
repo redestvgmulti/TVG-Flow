@@ -435,7 +435,6 @@ textarea:focus {
  */
 .notification-panel {
     position: absolute;
-    top: calc(100% + 12px);
     right: 0;
     width: 360px;
     background: rgba(255, 255, 255, 0.95);
@@ -614,6 +613,14 @@ textarea:focus {
     -webkit-box-orient: vertical;
 }
 
+/* UX POLISH: Improve contrast on mobile */
+@media (max-width: 480px) {
+    .notification-message {
+        color: var(--color-text-primary);
+        font-size: 13.5px;
+    }
+}
+
 .notification-time {
     display: block;
     font-size: 11px;
@@ -638,9 +645,29 @@ textarea:focus {
     opacity: 1;
 }
 
+/* UX POLISH: Secure Mobile Positioning */
+@media (max-width: 480px) {
+    .notification-panel {
+        position: fixed;
+        top: 70px;
+        right: 16px;
+        width: calc(100vw - 32px);
+        max-width: 360px;
+        max-height: 80vh;
+    }
+}
+
 .btn-close-notification:hover {
     background-color: rgba(0, 0, 0, 0.05);
     color: var(--color-danger);
+}
+
+/* UX POLISH: Make close button visible on touch devices */
+@media (pointer: coarse) {
+    .btn-close-notification {
+        opacity: 1;
+        visibility: visible;
+    }
 }
 
 .notification-empty {

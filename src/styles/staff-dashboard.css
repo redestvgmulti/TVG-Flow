@@ -189,6 +189,14 @@
     text-align: center;
 }
 
+/* 5. MOBILE-ONLY OPTIMIZATIONS */
+/* Hide greeting header on mobile for better vertical density */
+@media (max-width: 767px) {
+    .staff-greeting-header {
+        display: none;
+    }
+}
+
 @media (min-width: 768px) {
     .staff-dashboard-container {
         padding-bottom: 32px;

@@ -87,42 +87,56 @@ serve(async (req) => {
                     continue
                 }
 
-                // Process each task
-                for (const task of tasks as DeadlineNotification[]) {
-                    try {
-                        console.log(
-                            `[${interval}min] Creating notification for ${task.profissional_nome} - "${task.funcao}"`
-                        )
+                // STAGE 2 FIX: Prepare bulk payload
+                // Move message generation logic here (from SQL) to support generic bulk insert
+                const payloads = (tasks as DeadlineNotification[]).map(task => {
+                    let icon = '⏰'
+                    let message = ''
+                    let urgency = 'low'
 
-                        // Create notification using the helper function
-                        const { data: notificationId, error: createError } = await supabase
-                            .rpc('create_deadline_notification', {
-                                p_micro_task_id: task.micro_task_id,
-                                p_profissional_id: task.profissional_id,
-                                p_funcao: task.funcao,
-                                p_macro_task_titulo: task.macro_task_titulo,
-                                p_deadline_at: task.deadline_at,
-                                p_interval_minutes: interval
-                            })
-
-                        if (createError) {
-                            console.error(`[${interval}min] Error creating notification:`, createError)
-                            result.errors++
-                            continue
-                        }
-
-                        console.log(`[${interval}min] ✓ Notification created: ${notificationId}`)
-                        result.notifications_sent++
-
-                        // TODO: Trigger push notification here
-                        // This would integrate with the existing push notification system
-                        // For now, the notification is stored in the database and will be
-                        // picked up by the frontend notification center
-
-                    } catch (taskError) {
-                        console.error(`[${interval}min] Error processing task:`, taskError)
-                        result.errors++
+                    if (interval === 60) {
+                        icon = '⏰'
+                        message = `${icon} Sua tarefa "${task.funcao}" vence em 1 hora`
+                        urgency = 'low'
+                    } else if (interval === 30) {
+                        icon = '⚠️'
+                        message = `${icon} Sua tarefa "${task.funcao}" vence em 30 minutos`
+                        urgency = 'medium'
+                    } else if (interval === 15) {
+                        icon = '🔴'
+                        message = `${icon} URGENTE: Sua tarefa "${task.funcao}" vence em 15 minutos!`
+                        urgency = 'high'
+                    } else {
+                        message = `Lembrete: Sua tarefa "${task.funcao}" está próxima do prazo`
                     }
+
+                    return {
+                        profissional_id: task.profissional_id,
+                        message: message,
+                        metadata: {
+                            micro_task_id: task.micro_task_id,
+                            funcao: task.funcao,
+                            macro_task_titulo: task.macro_task_titulo,
+                            deadline_at: task.deadline_at,
+                            interval_minutes: interval,
+                            urgency: urgency
+                        }
+                    }
+                })
+
+                // Execute Bulk Insert (RPC)
+                console.log(`[${interval}min] Sending bulk payload of ${payloads.length} notifications...`)
+
+                const { data: bulkResult, error: bulkError } = await supabase
+                    .rpc('bulk_create_deadline_notifications', { payloads })
+
+                if (bulkError) {
+                    console.error(`[${interval}min] Bulk insert error:`, bulkError)
+                    result.errors += payloads.length
+                } else {
+                    const inserted = (bulkResult as any)?.inserted || 0
+                    console.log(`[${interval}min] ✓ Bulk success: ${inserted} notifications created`)
+                    result.notifications_sent += inserted
                 }
 
             } catch (intervalError) {

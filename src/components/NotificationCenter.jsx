@@ -286,23 +286,24 @@ function NotificationCenter() {
 
     async function markAllAsRead() {
         try {
-            const unreadIds = notifications.filter(n => !n.read_at).map(n => n.id)
-
-            if (unreadIds.length === 0) return
-
-            const { error } = await supabase
-                .from('notifications')
-                .update({ read_at: new Date().toISOString() })
-                .in('id', unreadIds)
+            // STAGE 1 FIX: Use RPC for backend-driven atomic update
+            // Previously: only updated loaded notifications (inconsistency risk)
+            // Now: updates ALL unread notifications for this user in the database
+            const { error } = await supabase.rpc('mark_all_notifications_as_read', {
+                p_profissional_id: professionalId
+            })
 
             if (error) throw error
 
+            // Optimistic update: mark local state as read
             setNotifications(prev =>
                 prev.map(n => ({ ...n, read_at: n.read_at || new Date().toISOString() }))
             )
             setUnreadCount(0)
+            toast.success('Todas as notificações foram marcadas como lidas')
         } catch (error) {
             console.error('Erro ao marcar todas como lidas:', error)
+            toast.error('Erro ao atualizar notificações')
         }
     }
 

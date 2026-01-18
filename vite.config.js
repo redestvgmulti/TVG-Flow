@@ -31,7 +31,7 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         cleanupOutdatedCaches: true,
         clientsClaim: false, // Prevent auto-takeover to avoid auth race conditions
-        skipWaiting: false, // Prevent silent takeover - user must confirm update
+        skipWaiting: true, // Force new SW to take control immediately (fixes hidden alerts)
         navigateFallback: '/index.html', // Offline fallback for navigation requests
         navigateFallbackDenylist: [
           /^\/api\//,  // Never fallback for API routes
