@@ -95,7 +95,7 @@ export const NAV_ITEMS = [
         path: '/admin/content',
         icon: FolderOpen,
         roles: ['admin', 'super_admin'],
-        showOnMobileBottom: true // Adding Content to Admin Mobile as per Rule: "Todas as funcionalidades acessíveis em todos os dispositivos"
+        showOnMobileBottom: false // Hidden per User Request (Jan 2026)
     },
     {
         key: 'admin-calendar',
@@ -103,7 +103,7 @@ export const NAV_ITEMS = [
         path: '/admin/calendar',
         icon: Calendar,
         roles: ['admin', 'super_admin'],
-        showOnMobileBottom: true
+        showOnMobileBottom: false
     },
     {
         key: 'admin-meetings',
@@ -111,7 +111,7 @@ export const NAV_ITEMS = [
         path: '/admin/meetings',
         icon: Users,
         roles: ['admin', 'super_admin'],
-        showOnMobileBottom: false
+        showOnMobileBottom: true
     },
     {
         key: 'admin-team',
@@ -119,7 +119,7 @@ export const NAV_ITEMS = [
         path: '/admin/professionals',
         icon: Users,
         roles: ['admin', 'super_admin'],
-        showOnMobileBottom: true
+        showOnMobileBottom: false
     },
     {
         key: 'admin-reports',
