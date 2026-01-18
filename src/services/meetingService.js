@@ -368,16 +368,6 @@ export const cancelMeeting = async (meetingId) => {
         const meeting = await getMeetingById(meetingId);
         const participantIds = meeting.reunioes_participantes?.map(p => p.profissional_id) || [];
 
-        // ✅ OBSERVABILITY: Log cancellation start (non-blocking)
-        console.log(JSON.stringify({
-            event: 'meeting_cancellation_start',
-            reuniao_id: meetingId,
-            empresa_id: meeting.empresa_id,
-            cancelled_by: user.id,
-            participants_count: participantIds.length,
-            timestamp: new Date().toISOString()
-        }));
-
         // Cancel the meeting
         const result = await updateMeeting(meetingId, {
             status: 'cancelada',
@@ -385,36 +375,16 @@ export const cancelMeeting = async (meetingId) => {
             cancelled_by: user.id
         });
 
-        // ✅ OBSERVABILITY: Log cancellation success (non-blocking)
-        console.log(JSON.stringify({
-            event: 'meeting_cancelled',
-            reuniao_id: meetingId,
-            empresa_id: meeting.empresa_id,
-            timestamp: new Date().toISOString()
-        }));
-
         // ✅ NEW: Send cancellation notification to participants (non-blocking)
         if (participantIds.length > 0) {
             notifyMeetingCancellation(meeting, participantIds).catch(err => {
-                // ✅ OBSERVABILITY: Log notification error (non-blocking, doesn't break flow)
-                console.error(JSON.stringify({
-                    event: 'meeting_cancellation_notification_error',
-                    reuniao_id: meetingId,
-                    error: err.message,
-                    timestamp: new Date().toISOString()
-                }));
+                console.error('[meetingService] Error sending cancellation notifications:', err);
             });
         }
 
         return result;
     } catch (error) {
-        // ✅ OBSERVABILITY: Log cancellation error (non-blocking)
-        console.error(JSON.stringify({
-            event: 'meeting_cancellation_error',
-            reuniao_id: meetingId,
-            error: error.message,
-            timestamp: new Date().toISOString()
-        }));
+        console.error('[meetingService] Error canceling meeting:', error);
         throw error; // Re-throw to maintain existing error handling
     }
 };
