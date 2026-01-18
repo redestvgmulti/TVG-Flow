@@ -171,7 +171,7 @@ export const getQuickStats = async (startDate, endDate) => {
  * Atualiza status de uma tarefa
  */
 export const updateTaskStatus = async (taskId, newStatus) => {
-    console.log(`[MOCK] Task ${taskId} updated to ${newStatus}`);
+
     return { id: taskId, status: newStatus };
 };
 
@@ -179,6 +179,6 @@ export const updateTaskStatus = async (taskId, newStatus) => {
  * Reatribui uma tarefa para outro profissional
  */
 export const reassignTask = async (taskId, newAssigneeId) => {
-    console.log(`[MOCK] Task ${taskId} reassigned to ${newAssigneeId}`);
+
     return { id: taskId, assigned_to: newAssigneeId };
 };

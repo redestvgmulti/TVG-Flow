@@ -48,7 +48,7 @@ export async function registerServiceWorker() {
 export async function requestNotificationPermission() {
     // GUARD: Never request permission on login screen
     if (window.location.pathname === '/login') {
-        console.log('[Push] Blocked permission request on login screen')
+
         return 'denied'
     }
 
@@ -129,7 +129,7 @@ export async function subscribeToPush(professionalId) {
             throw error
         }
 
-        console.log('[Push] Subscription saved successfully')
+
         return subscription
     } catch (error) {
         console.error('[Push] Subscribe failed:', error)
@@ -160,7 +160,7 @@ export async function unsubscribeFromPush() {
                 .delete()
                 .eq('endpoint', subscriptionData.endpoint)
 
-            console.log('[Push] Unsubscribed successfully')
+
         }
     } catch (error) {
         console.error('[Push] Unsubscribe failed:', error)

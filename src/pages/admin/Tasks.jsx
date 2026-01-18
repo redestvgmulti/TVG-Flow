@@ -125,7 +125,7 @@ function Tasks() {
     // Helper: Handle range errors with auto-retry logic
     function handleRangeError(reset, pageToFetch) {
         if (import.meta.env.DEV) {
-            console.log('[Pagination] Range error detected - resetting to page 0')
+
         }
 
         resetPaginationState()
@@ -135,7 +135,7 @@ function Tasks() {
         // Auto-retry with reset if this wasn't already a reset attempt
         if (!reset && pageToFetch !== 0) {
             if (import.meta.env.DEV) {
-                console.log('[Pagination] Auto-retrying from page 0...')
+
             }
             setTimeout(() => fetchData(true), 100)
         }

@@ -8,7 +8,7 @@ export const runSystemChecks = async () => {
         console.time('System Check Duration');
 
         // 1. Check System Integrity (Edge Function)
-        console.log('📡 Contactando Edge Function: system-check...');
+
         const { data, error } = await supabase.functions.invoke('system-check');
 
         if (error) {
@@ -16,7 +16,7 @@ export const runSystemChecks = async () => {
             throw error;
         }
 
-        console.log('✅ Resultado da Verificação:', data);
+
 
         // 2. Client-Side Checks (Manifest, SW, etc)
         const clientChecks = {
@@ -24,7 +24,7 @@ export const runSystemChecks = async () => {
             onLine: navigator.onLine,
             userAgent: navigator.userAgent
         };
-        console.log('📱 Status do Cliente:', clientChecks);
+
 
         console.timeEnd('System Check Duration');
         console.groupEnd();
@@ -47,7 +47,7 @@ export const runSystemChecks = async () => {
 
 export const checkDataIntegrity = async () => {
     // Placeholder for data specific checks if needed separately
-    console.log('🔍 Checking Data Integrity...');
+
     // Real implementation would go here or be part of system-check
     return true;
 };

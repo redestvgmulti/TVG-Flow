@@ -36,7 +36,7 @@ export default function EditTaskModal({ task, isOpen, onClose, onSuccess, curren
     }, [isOpen, task])
 
     async function loadInitialData() {
-        console.log('EditTaskModal: Loading initial data for task', task.id)
+
         setLoading(true)
         try {
             const [profsData, freshTaskData] = await Promise.all([

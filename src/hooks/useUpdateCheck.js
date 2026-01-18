@@ -30,7 +30,7 @@ export function useUpdateCheck() {
             if (!hasCheckedInitial.current) {
                 setTimeout(() => {
                     if (navigator.onLine) {
-                        console.log('[PWA] Initial update check after 5 minutes')
+
                         registration.update()
                     }
                     hasCheckedInitial.current = true
@@ -41,7 +41,7 @@ export function useUpdateCheck() {
             const PERIODIC_CHECK_INTERVAL = 6 * 60 * 60 * 1000 // 6 hours
             const intervalId = setInterval(() => {
                 if (navigator.onLine) {
-                    console.log('[PWA] Periodic update check (6h interval)')
+
                     registration.update()
                 }
             }, PERIODIC_CHECK_INTERVAL)

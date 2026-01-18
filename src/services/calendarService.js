@@ -19,7 +19,7 @@ import { supabase } from './supabase'
  */
 export async function fetchAdminCalendarEvents() {
   try {
-    console.log('[Calendar] Fetching admin calendar events...')
+
 
     // PHASE 1: Simple query, no embeds (avoid PGRST201)
     const { data: macroTasks, error: macroError } = await supabase
@@ -32,7 +32,7 @@ export async function fetchAdminCalendarEvents() {
       throw macroError
     }
 
-    console.log('[Calendar] ✓ Fetched macro tasks:', macroTasks?.length || 0)
+
 
     // PHASE 1: Simple query, no embeds (avoid PGRST201)
     const { data: microTasks, error: microError } = await supabase
@@ -45,7 +45,7 @@ export async function fetchAdminCalendarEvents() {
       throw microError
     }
 
-    console.log('[Calendar] ✓ Fetched micro tasks:', microTasks?.length || 0)
+
 
     // Fetch meetings (only scheduled/completed, not cancelled)
     const { data: meetings, error: meetingError } = await supabase
@@ -59,7 +59,7 @@ export async function fetchAdminCalendarEvents() {
       // Don't throw - meetings are optional, tasks must work
     }
 
-    console.log('[Calendar] ✓ Fetched meetings:', meetings?.length || 0)
+
 
     // Transform to calendar events
     const macroEvents = transformMacroTasks(macroTasks || [])
@@ -67,15 +67,10 @@ export async function fetchAdminCalendarEvents() {
     const meetingEvents = transformMeetings(meetings || [])
 
     const allEvents = [...macroEvents, ...microEvents, ...meetingEvents]
-    console.log('[Calendar] ✓ Total events mapped:', allEvents.length, {
-      macro: macroEvents.length,
-      micro: microEvents.length,
-      meetings: meetingEvents.length
-    })
+
 
     return allEvents
   } catch (error) {
-    console.error('[Calendar] ❌ Fatal error fetching calendar events:', error)
     throw error
   }
 }
@@ -88,7 +83,7 @@ export async function fetchAdminCalendarEvents() {
  */
 export async function fetchStaffCalendarEvents(professionalId) {
   try {
-    console.log('[Calendar] Fetching staff calendar events for:', professionalId)
+
 
     // PHASE 1: Simple query, no embeds (avoid PGRST201)
     const { data: microTasks, error } = await supabase
@@ -98,11 +93,10 @@ export async function fetchStaffCalendarEvents(professionalId) {
       .order('deadline_at')
 
     if (error) {
-      console.error('[Calendar] ❌ Error fetching staff micro tasks:', error)
       throw error
     }
 
-    console.log('[Calendar] ✓ Fetched staff micro tasks:', microTasks?.length || 0)
+
 
     // Fetch meetings where staff is participant (RLS handles filtering)
     const { data: meetings, error: meetingError } = await supabase
@@ -112,24 +106,19 @@ export async function fetchStaffCalendarEvents(professionalId) {
       .order('data_inicio')
 
     if (meetingError) {
-      console.error('[Calendar] ❌ Error fetching staff meetings:', meetingError)
       // Don't throw - meetings are optional
     }
 
-    console.log('[Calendar] ✓ Fetched staff meetings:', meetings?.length || 0)
+
 
     const events = transformMicroTasks(microTasks || [])
     const meetingEvents = transformMeetings(meetings || [])
 
     const allEvents = [...events, ...meetingEvents]
-    console.log('[Calendar] ✓ Staff events mapped:', allEvents.length, {
-      tasks: events.length,
-      meetings: meetingEvents.length
-    })
+
 
     return allEvents
   } catch (error) {
-    console.error('[Calendar] ❌ Fatal error fetching staff calendar events:', error)
     throw error
   }
 }
@@ -140,7 +129,7 @@ export async function fetchStaffCalendarEvents(professionalId) {
  * STATUS-BASED STYLING (not type-based)
  */
 function transformMacroTasks(tasks) {
-  console.log('[Calendar] Transforming macro tasks:', tasks.length)
+
 
   return tasks.map(task => {
     // PHASE 2: ROBUST DATE FALLBACK CHAIN
@@ -196,7 +185,7 @@ function transformMacroTasks(tasks) {
  * STATUS-BASED STYLING (not type-based)
  */
 function transformMicroTasks(tasks) {
-  console.log('[Calendar] Transforming micro tasks:', tasks.length)
+
 
   // PHASE 2: Process ALL tasks, use fallbacks
   return tasks.map(task => {
@@ -270,7 +259,7 @@ function transformMicroTasks(tasks) {
  * NO EMOJIS - Professional institutional tone
  */
 function transformMeetings(meetings) {
-  console.log('[Calendar] Transforming meetings:', meetings.length)
+
 
   return meetings.map(meeting => {
     const start = new Date(meeting.data_inicio)

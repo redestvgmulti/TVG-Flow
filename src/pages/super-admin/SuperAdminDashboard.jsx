@@ -27,7 +27,7 @@ export default function SuperAdminDashboard() {
                 throw rpcError
             }
 
-            console.log('Dashboard data:', response)
+
             setData(response)
         } catch (error) {
             console.error('Error fetching dashboard data:', error)
