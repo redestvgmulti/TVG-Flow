@@ -81,13 +81,52 @@ function NotificationCenter() {
     }
 
     async function handleOptInAccept() {
-        // ... previous implementation ...
-        // (Keeping existing Push Logic as is, assuming it handles 'notifications' table but let's focus on in-app first)
-        // For brevity, skipping full push logic rewrite here, assuming function bodies below are unchanged unless listed.
-        // Actually, I need to keep the full body if I replace a large chunk.
-        // Let's use the REPLACE tool correctly.
+        setShowOptInPrompt(false)
+        setPushLoading(true)
+        try {
+            const permission = await requestNotificationPermission()
+            if (permission === 'granted') {
+                await registerServiceWorker()
+                const subscription = await subscribeToPush(professionalId)
+                if (subscription) {
+                    setPushEnabled(true)
+                    toast.success('Notificações ativadas!')
+                } else {
+                    toast.error('Erro ao ativar notificações')
+                }
+            } else {
+                toast.error('Permissão para notificações negada')
+            }
+        } catch (err) {
+            console.error('Opt-in error:', err)
+            toast.error('Erro ao ativar notificações')
+        } finally {
+            setPushLoading(false)
+        }
     }
-    // ... skipping strictly internal unchanged functions ...
+
+    function handleOptInDecline() {
+        setShowOptInPrompt(false)
+        sessionStorage.setItem('push-opt-in-declined', 'true')
+    }
+
+    async function handleTogglePush() {
+        if (pushEnabled) {
+            setPushLoading(true)
+            try {
+                await unsubscribeFromPush()
+                setPushEnabled(false)
+                toast.success('Notificações push desativadas')
+            } catch (error) {
+                console.error('Error disabling push:', error)
+                toast.error('Erro ao desativar notificações')
+            } finally {
+                setPushLoading(false)
+            }
+        } else {
+            await handleOptInAccept()
+        }
+    }
 
     async function fetchNotifications() {
         try {
