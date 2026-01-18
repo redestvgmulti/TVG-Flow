@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Users, Plus, Edit2, Trash2, X, Calendar as CalendarIcon, Clock } from 'lucide-react'
+import { Users, Plus, Edit2, Trash2, X, Calendar as CalendarIcon, Clock, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import {
     createMeeting,
@@ -22,6 +22,7 @@ function Meetings() {
     // Modals
     const [showCreateModal, setShowCreateModal] = useState(false)
     const [showEditModal, setShowEditModal] = useState(false)
+    const [showCancelConfirmation, setShowCancelConfirmation] = useState(false) // ✅ NEW
     const [selectedMeeting, setSelectedMeeting] = useState(null)
     const [submitting, setSubmitting] = useState(false)
 
@@ -168,19 +169,25 @@ function Meetings() {
     }
 
 
-
-    async function handleCancelMeeting() {
+    // ✅ TRIGGER MODAL
+    function handleCancelClick() {
         if (!selectedMeeting) return
+        setShowCancelConfirmation(true)
+    }
 
-        if (!window.confirm('Tem certeza que deseja cancelar esta reunião? Os participantes serão notificados.')) {
-            return
-        }
+    // ✅ EXECUTE CANCELLATION
+    async function handleConfirmCancel() {
+        if (!selectedMeeting) return
 
         setSubmitting(true)
         try {
             await cancelMeeting(selectedMeeting.id)
             toast.success('Reunião cancelada com sucesso')
+
+            // Close all modals
+            setShowCancelConfirmation(false)
             setShowEditModal(false)
+
             setSelectedMeeting(null)
             await fetchData()
         } catch (error) {
@@ -226,7 +233,7 @@ function Meetings() {
             case 'realizada':
                 return <span className="badge badge-success">Realizada</span>
             case 'cancelada':
-                return <span className="badge badge-neutral">Cancelada</span>
+                return <span className="badge badge-danger">Cancelada</span>
             default:
                 return <span className="badge badge-neutral">{status}</span>
         }
@@ -323,7 +330,7 @@ function Meetings() {
             {/* Create/Edit Modal */}
             {(showCreateModal || showEditModal) && (
                 <div className="modal-backdrop" onClick={() => {
-                    if (!submitting) {
+                    if (!submitting && !showCancelConfirmation) {
                         setShowCreateModal(false)
                         setShowEditModal(false)
                         setSelectedMeeting(null)
@@ -458,8 +465,9 @@ function Meetings() {
                                     {selectedMeeting && selectedMeeting.criada_por === user?.id && (selectedMeeting.status === 'agendada' || selectedMeeting.status === 'em_andamento') && (
                                         <button
                                             type="button"
-                                            className="btn btn-ghost text-red-600 hover:bg-red-50"
-                                            onClick={handleCancelMeeting}
+                                            className="btn btn-ghost"
+                                            style={{ color: '#dc2626' }}
+                                            onClick={handleCancelClick}
                                             disabled={submitting}
                                         >
                                             Cancelar Reunião
@@ -492,7 +500,55 @@ function Meetings() {
                 </div>
             )}
 
-
+            {/* ✅ CONFIRMATION MODAL */}
+            {showCancelConfirmation && (
+                <div className="modal-backdrop" style={{ zIndex: 1100 }}>
+                    <div className="modal" style={{ maxWidth: '400px', height: 'auto' }} onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-body" style={{ textAlign: 'center', padding: '24px' }}>
+                            <div style={{
+                                width: '48px',
+                                height: '48px',
+                                background: '#FEE2E2',
+                                borderRadius: '50%',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                margin: '0 auto 16px',
+                                color: '#DC2626'
+                            }}>
+                                <AlertTriangle size={24} />
+                            </div>
+                            <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '8px' }}>
+                                Cancelar Reunião
+                            </h3>
+                            <p style={{ color: 'var(--color-text-secondary)', marginBottom: '24px', lineHeight: '1.5' }}>
+                                Tem certeza que deseja cancelar esta reunião? Os participantes serão notificados automaticamente.
+                            </p>
+                            <div className="flex gap-3 justify-center">
+                                <button
+                                    className="btn btn-secondary"
+                                    onClick={() => setShowCancelConfirmation(false)}
+                                    disabled={submitting}
+                                >
+                                    Voltar
+                                </button>
+                                <button
+                                    className="btn"
+                                    style={{
+                                        backgroundColor: '#DC2626',
+                                        color: 'white',
+                                        border: 'none'
+                                    }}
+                                    onClick={handleConfirmCancel}
+                                    disabled={submitting}
+                                >
+                                    {submitting ? 'Cancelando...' : 'Cancelar Reunião'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
