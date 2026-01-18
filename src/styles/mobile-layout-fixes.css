@@ -121,7 +121,7 @@
         transform: translateX(0) !important;
     }
 
-    /* 7️⃣ OVERLAY — NÃO COBRE BOTTOM */
+    /* 7️⃣ OVERLAY — NÃO COBRE BOTTOM, BLOQUEIA CLIQUES */
     .sidebar-overlay,
     .mobile-menu-overlay {
         position: fixed !important;
@@ -137,7 +137,15 @@
         -webkit-backdrop-filter: blur(4px) !important;
 
         z-index: 999 !important;
+
+        /* GARANTE QUE OVERLAY BLOQUEIA CLIQUES */
         pointer-events: auto !important;
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+
+        /* Transição suave */
+        transition: opacity 0.3s ease !important;
     }
 
     /* 8️⃣ TRAVAR FUNDO SEM ZOOM */
