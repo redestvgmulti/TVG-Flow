@@ -55,6 +55,9 @@ export const createMeeting = async (payload) => {
         empresa_id = empresaData.empresa_id;
     }
 
+    // ✅ PRODUCTION-SAFE: Auto-detect timezone (optional field, backward-compatible)
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Sao_Paulo'
+
     // Step 1: Create the meeting
     const { data: meeting, error: meetingError } = await supabase
         .from('reunioes')
@@ -65,7 +68,8 @@ export const createMeeting = async (payload) => {
             data_inicio,
             data_fim,
             criada_por: user.id,
-            status: 'agendada'
+            status: 'agendada',
+            timezone  // ✅ NEW: Optional timezone field
         })
         .select(`
       *,
@@ -351,17 +355,68 @@ export const updateMeeting = async (meetingId, updates) => {
 /**
  * Cancel meeting (soft delete - sets status to cancelled)
  * Cancelled meetings won't appear in calendar or trigger notifications
+ * ✅ UPDATED: Now sends cancellation notification to participants
+ * ✅ OBSERVABILITY: Structured logging added
  * @param {string} meetingId - Meeting UUID
  */
 export const cancelMeeting = async (meetingId) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Usuario não autenticado');
 
-    return await updateMeeting(meetingId, {
-        status: 'cancelada',
-        cancelled_at: new Date().toISOString(),
-        cancelled_by: user.id
-    });
+    try {
+        // ✅ NEW: Fetch meeting details before cancelling (for notification)
+        const meeting = await getMeetingById(meetingId);
+        const participantIds = meeting.reunioes_participantes?.map(p => p.profissional_id) || [];
+
+        // ✅ OBSERVABILITY: Log cancellation start (non-blocking)
+        console.log(JSON.stringify({
+            event: 'meeting_cancellation_start',
+            reuniao_id: meetingId,
+            empresa_id: meeting.empresa_id,
+            cancelled_by: user.id,
+            participants_count: participantIds.length,
+            timestamp: new Date().toISOString()
+        }));
+
+        // Cancel the meeting
+        const result = await updateMeeting(meetingId, {
+            status: 'cancelada',
+            cancelled_at: new Date().toISOString(),
+            cancelled_by: user.id
+        });
+
+        // ✅ OBSERVABILITY: Log cancellation success (non-blocking)
+        console.log(JSON.stringify({
+            event: 'meeting_cancelled',
+            reuniao_id: meetingId,
+            empresa_id: meeting.empresa_id,
+            timestamp: new Date().toISOString()
+        }));
+
+        // ✅ NEW: Send cancellation notification to participants (non-blocking)
+        if (participantIds.length > 0) {
+            notifyMeetingCancellation(meeting, participantIds).catch(err => {
+                // ✅ OBSERVABILITY: Log notification error (non-blocking, doesn't break flow)
+                console.error(JSON.stringify({
+                    event: 'meeting_cancellation_notification_error',
+                    reuniao_id: meetingId,
+                    error: err.message,
+                    timestamp: new Date().toISOString()
+                }));
+            });
+        }
+
+        return result;
+    } catch (error) {
+        // ✅ OBSERVABILITY: Log cancellation error (non-blocking)
+        console.error(JSON.stringify({
+            event: 'meeting_cancellation_error',
+            reuniao_id: meetingId,
+            error: error.message,
+            timestamp: new Date().toISOString()
+        }));
+        throw error; // Re-throw to maintain existing error handling
+    }
 };
 
 /**
@@ -529,4 +584,28 @@ const notifyMeetingUpdate = async (meeting, participantIds) => {
     );
 
     await Promise.all(promises);
+};
+
+/**
+ * Send meeting cancellation notification (Interval -2)
+ * ✅ NEW: Notify participants when meeting is cancelled
+ */
+const notifyMeetingCancellation = async (meeting, participantIds) => {
+    if (!participantIds?.length) return;
+
+    const promises = participantIds.map(pid =>
+        supabase.rpc('create_meeting_notification', {
+            p_reuniao_id: meeting.id,
+            p_profissional_id: pid,
+            p_titulo: meeting.titulo,
+            p_data_inicio: meeting.data_inicio,
+            p_interval_minutes: -2  // ✅ Cancellation interval
+        })
+    );
+
+    try {
+        await Promise.all(promises);
+    } catch (err) {
+        console.error('[meetingService] Error sending cancellation notifications:', err);
+    }
 };
