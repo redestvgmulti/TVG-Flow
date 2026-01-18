@@ -187,16 +187,7 @@ export async function getDashboardMetrics() {
             professionalsCount: professionalsCount || 0
         }
 
-        // Dev-only logging com validação matemática
-        if (import.meta.env.DEV) {
-            console.log('[Dashboard Metrics]', metrics)
-            console.log('[Validation] Ativas + Concluídas =', metrics.activeTasks + metrics.completedTasks, '| Total =', metrics.totalTasks)
-
-            // Validação: Ativas + Concluídas deve ser igual ao Total
-            if (metrics.activeTasks + metrics.completedTasks !== metrics.totalTasks) {
-                console.warn('⚠️ [Validation] Inconsistência detectada na soma de métricas!')
-            }
-        }
+        // Dev-only logging removed on production request
 
         return metrics
 

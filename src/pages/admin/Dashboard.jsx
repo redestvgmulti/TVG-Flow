@@ -133,11 +133,6 @@ export default function Painel() {
                 getRecentTasks(5)
             ])
 
-            // Log para validação (DEV ONLY)
-            console.log('[Dashboard Metrics]', metrics)
-            const checkTotal = metrics.activeTasks + metrics.completedTasks
-            console.log(`[Validation] Ativas + Concluídas = ${checkTotal} | Total = ${metrics.totalTasks}`)
-
             // Populate stats state
             setStats({
                 totalTasks: metrics.totalTasks,
