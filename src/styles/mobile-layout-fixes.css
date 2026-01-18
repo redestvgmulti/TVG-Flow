@@ -7,6 +7,13 @@
  */
 
 /* ========================================
+   VARIÁVEIS MOBILE
+   ======================================== */
+:root {
+    --mobile-bottom-nav-height: 64px;
+}
+
+/* ========================================
    1️⃣ HEADER — RESPIRO + SAFE AREA
    ======================================== */
 @media (max-width: 768px) {
@@ -39,13 +46,18 @@
     .staff-content,
     main,
     .dashboard-container {
-        padding-bottom: calc(80px + env(safe-area-inset-bottom)) !important;
+        padding-bottom: calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom) + 16px) !important;
     }
 
     /* 4️⃣ BOTTOM NAVIGATION — ALTURA E CENTRALIZAÇÃO */
     .bottom-nav,
     .mobile-bottom-nav {
-        height: calc(64px + env(safe-area-inset-bottom)) !important;
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+
+        height: calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom)) !important;
         padding-bottom: env(safe-area-inset-bottom) !important;
 
         display: flex !important;
@@ -56,7 +68,8 @@
         backdrop-filter: blur(20px) !important;
         -webkit-backdrop-filter: blur(20px) !important;
 
-        z-index: 1000 !important;
+        z-index: 1100 !important;
+        /* ACIMA DO OVERLAY */
     }
 
     .bottom-nav-link,
@@ -81,11 +94,12 @@
     .sidebar,
     .mobile-sidebar {
         position: fixed !important;
-        inset: 0 auto 0 0 !important;
+        top: 0 !important;
+        bottom: 0 !important;
+        left: 0 !important;
 
         width: 85vw !important;
         max-width: 85vw !important;
-        height: 100vh !important;
 
         padding-top: env(safe-area-inset-top) !important;
         padding-bottom: env(safe-area-inset-bottom) !important;
@@ -107,17 +121,23 @@
         transform: translateX(0) !important;
     }
 
-    /* 7️⃣ OVERLAY — COBERTURA TOTAL */
+    /* 7️⃣ OVERLAY — NÃO COBRE BOTTOM */
     .sidebar-overlay,
     .mobile-menu-overlay {
         position: fixed !important;
-        inset: 0 !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+
+        /* CRÍTICO: NÃO COBRE O BOTTOM NAV */
+        bottom: calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom)) !important;
 
         background: rgba(0, 0, 0, 0.35) !important;
         backdrop-filter: blur(4px) !important;
         -webkit-backdrop-filter: blur(4px) !important;
 
-        z-index: 1100 !important;
+        z-index: 999 !important;
+        pointer-events: auto !important;
     }
 
     /* 8️⃣ TRAVAR FUNDO SEM ZOOM */
