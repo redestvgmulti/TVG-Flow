@@ -72,8 +72,14 @@
         overflow-y: auto !important;
         overflow-x: hidden !important;
 
-        /* CRÍTICO: Sem transform na sidebar */
-        transform: none !important;
+        /* CRÍTICO: Escondida por padrão */
+        transform: translateX(-100%) !important;
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+
+    /* Sidebar visível quando menu aberto */
+    .sidebar.mobile-open {
+        transform: translateX(0) !important;
     }
 
     /* PARTE 5: OVERLAY COBRINDO TODA VIEWPORT */
