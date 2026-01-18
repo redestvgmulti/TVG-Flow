@@ -17,7 +17,19 @@ export function UpdateBanner() {
         const lastAckVersion = localStorage.getItem(ACK_KEY)
         const showBanner = needRefresh && CURRENT_VERSION !== lastAckVersion
         setShouldShowBanner(showBanner)
-    }, [needRefresh])
+
+        // Auto-reload after 24h if update is still pending
+        if (needRefresh) {
+            const UPDATE_TIMEOUT_MS = 24 * 60 * 60 * 1000 // 24 hours
+            const timer = setTimeout(() => {
+                console.log('[PWA] Auto-updating after 24h with pending update')
+                localStorage.setItem(ACK_KEY, CURRENT_VERSION)
+                updateServiceWorker(true)
+            }, UPDATE_TIMEOUT_MS)
+
+            return () => clearTimeout(timer)
+        }
+    }, [needRefresh, updateServiceWorker])
 
     const handleUpdate = () => {
         setIsUpdating(true)

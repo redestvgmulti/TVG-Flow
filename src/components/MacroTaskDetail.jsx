@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { ArrowLeft, Clock, CheckCircle2, AlertCircle, Lock, RotateCcw, User, Play, X, Paperclip, Download, FileText, Trash2, ExternalLink, Edit, MoreVertical, RefreshCw } from 'lucide-react'
 import { supabase } from '../services/supabase'
 import { toast } from 'sonner'
@@ -6,10 +6,12 @@ import { useAuth } from '../contexts/AuthContext'
 import { fileService } from '../services/fileService'
 import { completeMicroTask, updateMicroTaskStatus, loadWorkflowProfessionals, returnMicroTask } from '../utils/taskExecution'
 import ReturnReasonModal from './ReturnReasonModal'
+import { useFocusTrap } from '../hooks/useFocusTrap'
 import '../styles/macro-task.css'
 
 export default function MacroTaskDetail({ taskId, onBack, isModal = false, onEdit, onDelete, onReopen }) {
     const { user } = useAuth()
+    const detailRef = useRef(null)
     const [task, setTask] = useState(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
@@ -23,6 +25,9 @@ export default function MacroTaskDetail({ taskId, onBack, isModal = false, onEdi
     // Attachments State
     const [attachments, setAttachments] = useState([])
     const [loadingAttachments, setLoadingAttachments] = useState(false)
+
+    // Focus trap for accessibility when in modal mode
+    useFocusTrap(isModal, detailRef)
 
     useEffect(() => {
         if (taskId) {

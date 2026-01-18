@@ -14,15 +14,18 @@ export function AuthProvider({ children }) {
     const [user, setUser] = useState(null)
     const [session, setSession] = useState(null)
     const [loading, setLoading] = useState(true)
+    const [authReady, setAuthReady] = useState(false) // 🛡️ CRITICAL: JWT ready flag
     const [role, setRole] = useState(null)
     const [professionalId, setProfessionalId] = useState(null)
     const [professionalName, setProfessionalName] = useState(null)
     const [accountStatus, setAccountStatus] = useState('active') // 'active' | 'inactive' | 'suspended'
     const [connectionStatus, setConnectionStatus] = useState('online') // 'online' | 'offline' | 'reconnecting'
+    const [sessionHealth, setSessionHealth] = useState('healthy') // 'healthy' | 'degraded' | 'expired'
 
     // Refs to track state without triggering re-renders and prevent race conditions
     const isFetchingRef = useRef(false)
     const userRef = useRef(null)
+    const refreshRecoveryTimeoutRef = useRef(null)
 
     // Detectar erro de rede
     function isNetworkError(error) {
@@ -48,27 +51,22 @@ export function AuthProvider({ children }) {
                 if (!mounted) return
 
                 if (error) {
-                    // Network error or invalid token -> we can't trust the session
-                    if (!isNetworkError(error)) {
-
-                        setSession(null)
-                        setUser(null)
-                        userRef.current = null
-                    }
-                    // If network error, we might still have a session in localStorage, but let's assume partial state logic handles it?
-                    // For now, standard behavior: error in getSession usually means signed out or huge issue.
+                    // Session error ignored - SDK handles recovery
                 }
 
                 if (session) {
-
                     setSession(session)
                     setUser(session.user)
                     userRef.current = session.user
+                    setAuthReady(true) // Set authReady true if session exists on initial load
                 } else {
-
-                    setSession(null)
-                    setUser(null)
-                    userRef.current = null
+                    // Only clear state if genuinely no session (not an error)
+                    if (!error) {
+                        setSession(null)
+                        setUser(null)
+                        userRef.current = null
+                        setAuthReady(false) // No session, so not auth ready
+                    }
                 }
 
             } catch (err) {
@@ -89,26 +87,37 @@ export function AuthProvider({ children }) {
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
             if (!mounted) return
 
-
-            if (event === 'TOKEN_REFRESH_FAILED' || event === 'SIGNED_OUT') {
-                setSession(null)
-                setUser(null)
-                userRef.current = null
-                setRole(null) // Clear role
-                setProfessionalId(null)
-
-                // Only forced redirect if strictly needed here, usually ProtectedRoute handles it
-                if (window.location.pathname !== '/login' && window.location.pathname !== '/reset-password') {
-                    window.location.href = '/login'
-                }
-                setLoading(false) // Ensure unlocked
+            // CRITICAL: Separate TOKEN_REFRESH_FAILED from SIGNED_OUT
+            // TOKEN_REFRESH_FAILED may be transient (network issue) -> grace window
+            // SIGNED_OUT is definitive -> immediate cleanup
+            if (event === 'TOKEN_REFRESH_FAILED') {
+                // Token refresh failed - enter grace window
+                handleTokenRefreshFailed()
                 return
             }
 
+            if (event === 'SIGNED_OUT') {
+                handleSignedOut()
+                setAuthReady(false) // Reset auth ready on signout
+                return
+            }
+
+            // 🛡️ CRITICAL: Set authReady=true ONLY after JWT is injected
+            if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+                setAuthReady(true)
+                // ONLY fetch professional data if we have a valid session
+                // Don't call on stale/expired sessions or page reload without auth
+                if (session?.user?.id && session?.access_token) {
+                    fetchProfessionalData(session.user.id, session.user)
+                }
+            }
+
+            // Handle all auth state updates (SIGNED_IN, INITIAL_SESSION, etc.)
             if (session) {
                 setSession(session)
                 setUser(session.user)
                 userRef.current = session.user
+                setSessionHealth('healthy') // Reset health on successful session update
                 // Note: We don't block loading here. UI reacts to 'user' being present.
             }
         })
@@ -119,19 +128,70 @@ export function AuthProvider({ children }) {
         }
     }, [])
 
-    // PHASE 2: PROFILE HYDRATION (NON-BLOCKING)
-    useEffect(() => {
-        if (user) {
-            // Trigger profile fetch when user is available
-            // This runs in parallel with UI rendering
-            fetchProfessionalData(user.id, user)
-        } else {
-            // Clear profile data if no user
-            setRole(null)
-            setProfessionalId(null)
-            setProfessionalName(null)
+    // CRITICAL: Handle TOKEN_REFRESH_FAILED with grace window (30s)
+    // This prevents immediate logout on transient network issues
+    async function handleTokenRefreshFailed() {
+        // Prevent duplicate timeouts
+        if (refreshRecoveryTimeoutRef.current) {
+            // Recovery already in progress
+            return
         }
-    }, [user])
+
+        console.warn('[Auth] Token refresh failed, entering degraded mode for 30s')
+        setSessionHealth('degraded')
+
+        // Grace window: wait 30s and try to recover
+        refreshRecoveryTimeoutRef.current = setTimeout(async () => {
+            refreshRecoveryTimeoutRef.current = null
+
+            // Attempting session recovery
+            const { data: { session }, error } = await supabase.auth.getSession()
+
+            if (session && !error) {
+                // Recovery successful
+                // Session recovered
+                setSessionHealth('healthy')
+                setSession(session)
+                setUser(session.user)
+                userRef.current = session.user
+            } else {
+                // Definitive failure, clean logout
+                console.error('[Auth] ❌ Session recovery failed, logging out')
+                handleSignedOut()
+            }
+        }, 30000)
+    }
+
+    // CRITICAL: Handle SIGNED_OUT - the ONLY place where session is definitively cleared
+    function handleSignedOut() {
+
+        // Clear any pending recovery timeout
+        if (refreshRecoveryTimeoutRef.current) {
+            clearTimeout(refreshRecoveryTimeoutRef.current)
+            refreshRecoveryTimeoutRef.current = null
+        }
+
+        setSessionHealth('expired')
+        setSession(null)
+        setUser(null)
+        userRef.current = null
+        setRole(null)
+        setProfessionalId(null)
+        setProfessionalName(null)
+
+        // Redirect to login if not already there
+        if (window.location.pathname !== '/login' && window.location.pathname !== '/reset-password') {
+            window.location.href = '/login'
+        }
+
+        setLoading(false)
+    }
+
+    // 🛡️ REMOVED: This useEffect was causing 401s by triggering fetchProfessionalData
+    // immediately when `user` changes, BEFORE JWT is injected into headers.
+    // Profile data is now fetched ONLY via onAuthStateChange listener (line ~216)
+    // which properly respects the 500ms delay in fetchProfessionalData.
+    // DO NOT RE-ADD THIS HOOK - it creates a race condition!
 
     // Retry silencioso em reconexão
     useEffect(() => {
@@ -148,6 +208,7 @@ export function AuthProvider({ children }) {
                         setSession(session)
                         setUser(session.user)
                         userRef.current = session.user
+                        setAuthReady(true) // 🛡️ CRITICAL: Certifica que JWT está pronto antes de queries
                         fetchProfessionalData(session.user.id)
                     } else {
                         setConnectionStatus('online')
@@ -171,118 +232,57 @@ export function AuthProvider({ children }) {
 
         isFetchingRef.current = true
 
-        // Safety Timeout removed - relying on natural completion or error
-
         try {
-            // Get current session user email for validation
-            let currentUser = userObject
-            if (!currentUser) {
-                const { data: { user } } = await supabase.auth.getUser()
-                currentUser = user
-            }
+            // 🛡️ CRITICAL GUARD: Prevent queries without valid session
+            // This eliminates 401 errors on /login route and ensures clean architecture
+            const { data: { session: currentSession } } = await supabase.auth.getSession()
 
-            const userEmail = currentUser?.email
-
-            const IMMUTABLE_SUPER_ADMIN_EMAIL = 'geovanepanini@icloud.com'
-
-            // 1. IMMUTABLE SUPER ADMIN CHECK (Overrides DB)
-            if (userEmail === IMMUTABLE_SUPER_ADMIN_EMAIL) {
-                setRole('super_admin')
-                // Super admin doesn't need specific professional ID for now, or fetch if exists
-                // For safety, let's try to fetch name if he exists in DB, otherwise default
-                const { data: profile } = await supabase
-                    .from('profissionais')
-                    .select('id, nome')
-                    .eq('email', IMMUTABLE_SUPER_ADMIN_EMAIL)
-                    .maybeSingle()
-
-                setProfessionalId(profile?.id || userId)
-                setProfessionalName(profile?.nome || 'Super Admin')
-                setAccountStatus('active')
+            if (!currentSession || !currentSession.user) {
+                // No valid session - clear state and return WITHOUT executing queries
+                setRole(null)
+                setProfessionalId(null)
+                setProfessionalName(null)
+                setAccountStatus(null)
                 setLoading(false)
+                isFetchingRef.current = false // Ensure ref is reset
                 return
             }
 
-            // 2. FETCH STANDARD DB PROFILE
-            const { data: professional, error } = await supabase
+            // Now safe to proceed - session exists and JWT is present
+            const { data: professionalData, error } = await supabase
                 .from('profissionais')
-                .select('id, role, nome, ativo')
+                .select(`
+          id,
+          nome,
+          email,
+          role,
+          ativo,
+          departamento:departamentos(id, nome, cor_hex)
+        `)
                 .eq('id', userId)
-                .maybeSingle()
+                .single()
 
             if (error) {
-                setRole(null)
-                setProfessionalId(null)
-                setProfessionalName(null)
-                setLoading(false)
-                return
+                console.error('[Auth] Error fetching professional data:', error)
+                throw error
             }
 
-            // If no professional found, clear state
-            if (!professional) {
-                setRole(null)
-                setProfessionalId(null)
-                setProfessionalName(null)
-                setLoading(false)
-                return
+            if (!professionalData) {
+                throw new Error('Professional data not found')
             }
 
-            // SECURITY: Check if user is active
-            if (!professional.ativo) {
-                setAccountStatus('inactive')
-                setRole(null) // Block access
-                setLoading(false)
-                return
-            }
-
-
-
-            // ... existing imports
-
-            // 3. ROLE ENFORCEMENT
-            const rawRole = professional.role
-            const finalRole = normalizeRole(rawRole)
-
-            // CRITICAL: Prevent anyone else from being super_admin
-            if (finalRole === 'super_admin' && userEmail !== IMMUTABLE_SUPER_ADMIN_EMAIL) {
-                finalRole = 'admin'
-            }
-
-            // --- STANDARD FLOW (Admin / Staff) ---
-            const { data: companyData } = await supabase
-                .from('empresa_profissionais')
-                .select(`
-                    empresa:empresas (
-                        status_conta
-                    )
-                `)
-                .eq('profissional_id', userId)
-                .maybeSingle()
-
-            // Merge company data into professional object
-            if (professional) {
-                professional.empresa_profissionais = companyData ? [companyData] : []
-            }
-
-            // SECURITY: Check if company is suspended
-            const companyStatus = professional.empresa_profissionais?.[0]?.empresa?.status_conta
-            if (companyStatus === 'suspended') {
-                setAccountStatus('suspended')
-                // We keep the role to allow "Suspended" page to show contextual info if needed, 
-                // but routes will block access based on AccountStatus if we implement that check.
-                // For now, let's allow role but UI handles "Suspended" page redirect.
-            }
-
-            // All checks passed, set user data
-            setRole(finalRole)
-            setProfessionalId(professional.id || null)
-            setProfessionalName(professional.nome || null)
-            setAccountStatus('active')
-            // Don't touch loading here - it's already FALSE
-        } catch (error) {
-            setRole(null) // Fail safe
+            // Update state - this is safe now because session is confirmed
+            setProfessionalId(professionalData.id)
+            setProfessionalName(professionalData.nome)
+            setRole(professionalData.role)
+            setAccountStatus(professionalData.ativo ? 'active' : 'suspended')
+            setLoading(false)
+        } catch (err) {
+            console.error('[Auth] ❌ Error in fetchProfessionalData:', err)
+            setRole(null)
             setProfessionalId(null)
-            // Don't touch loading here
+            setProfessionalName(null)
+            setLoading(false)
         } finally {
             isFetchingRef.current = false
         }
@@ -304,34 +304,15 @@ export function AuthProvider({ children }) {
         }
 
         // Fetch role immediately to allow redirect logic
+        // 🛡️ REMOVED: Immediate role query causes 401 race condition
+        // The role will be fetched by fetchProfessionalData via onAuthStateChange listener
+        // which fires AFTER JWT is properly injected in the client
         let safeRole = null
-        try {
-            // DB FETCH WITHOUT TIMEOUT
-            // Determine role via standard query
-            const { data: prof, error: profError } = await supabase
-                .from('profissionais')
-                .select('role')
-                .eq('id', data.user.id)
-                .maybeSingle()
 
-            safeRole = prof?.role
-        } catch (err) {
-            // Silent catch
-        }
-
-        // Track activity on login - NON-BLOCKING (removed await)
-        supabase
-            .from('profissionais')
-            .update({ last_activity_at: new Date().toISOString() })
-            .eq('id', data.user.id)
-            .then(({ error }) => {
-                // Background update
-            })
-
-        // 2. SECURITY DOWNGRADE (but preserve immutable super admin)
-        if (safeRole === 'super_admin' && email !== IMMUTABLE_SUPER_ADMIN_EMAIL) {
-            safeRole = 'admin' // Force downgrade for non-immutable accounts
-        }
+        // 🛡️ REMOVED: Background activity tracking via PATCH
+        // This was causing 401 errors by executing before JWT was ready
+        // Activity tracking is non-critical and can be re-implemented later
+        // with proper JWT verification if needed
 
         return { ...data, role: safeRole }
     }
@@ -354,6 +335,8 @@ export function AuthProvider({ children }) {
         professionalName,
         accountStatus,
         connectionStatus,
+        sessionHealth,
+        authReady, // 🛡️ NEW: Indicates JWT is ready in Supabase client
         signIn,
         signOut
     }

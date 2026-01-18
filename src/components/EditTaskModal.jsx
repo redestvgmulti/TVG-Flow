@@ -1,13 +1,15 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { X, Trash2, AlertTriangle, Plus, FileText, Link as LinkIcon, Calendar } from 'lucide-react'
 import { toast } from 'sonner'
 import { updateOS, cancelOS, getActiveProfessionals } from '../services/taskService'
 import { supabase } from '../services/supabase'
+import { useFocusTrap } from '../hooks/useFocusTrap'
 
 export default function EditTaskModal({ task, isOpen, onClose, onSuccess, currentUserId, onCancelRequest }) {
     if (!isOpen || !task) return null
 
+    const modalRef = useRef(null)
     const [loading, setLoading] = useState(false)
     const [professionals, setProfessionals] = useState([])
     const [formData, setFormData] = useState({
@@ -202,6 +204,9 @@ export default function EditTaskModal({ task, isOpen, onClose, onSuccess, curren
         ...addedMicroTasks
     ]
 
+    // Focus trap for accessibility
+    useFocusTrap(isOpen, modalRef)
+
     // Close on escape key
     useEffect(() => {
         const handleEsc = (e) => {
@@ -220,7 +225,7 @@ export default function EditTaskModal({ task, isOpen, onClose, onSuccess, curren
 
     return createPortal(
         <div className="modal-backdrop" onClick={onClose}>
-            <div className="modal" onClick={e => e.stopPropagation()}>
+            <div ref={modalRef} className="modal" onClick={e => e.stopPropagation()}>
 
                 {/* Header */}
                 <div className="modal-header">

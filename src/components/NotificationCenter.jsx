@@ -98,11 +98,10 @@ function NotificationCenter() {
         if (!session) {
             toast.error('Sessão expirada. Por favor, faça login novamente.')
             setShowOptInPrompt(false)
-            // Redirect to login instead of reloading to prevent loops
-            setTimeout(() => {
-                localStorage.removeItem('tvg-flow-auth')
-                window.location.href = '/login'
-            }, 1500)
+            // CRITICAL: NEVER manually clear localStorage
+            // The Supabase Auth SDK manages 'tvg-flow-auth' automatically
+            // Manual removal causes race conditions and involuntary logouts
+            window.location.href = '/login'
             return
         }
 

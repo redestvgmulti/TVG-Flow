@@ -47,7 +47,8 @@
     align-items: center;
     justify-content: center;
     gap: var(--space-2);
-    padding: 10px 20px;
+    min-height: 44px;
+    padding: 12px 20px;
     border-radius: var(--radius-md);
     font-size: var(--text-sm);
     font-weight: 500;
@@ -234,17 +235,22 @@ textarea:focus {
 .modal-backdrop {
     position: fixed;
     inset: 0;
-    background-color: rgba(30, 40, 50, 0.4);
-    /* Darker overlay */
-    backdrop-filter: blur(8px);
-    /* Strong blur */
-    -webkit-backdrop-filter: blur(8px);
+    background-color: rgba(30, 40, 50, 0.6);
+    /* Darker overlay - compensates reduced blur */
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 2000;
     padding: var(--space-4);
     animation: fadeIn 0.2s ease-out;
+}
+
+/* Performance: Only apply blur on desktop (GPU intensive on mobile) */
+@media (min-width: 768px) {
+    .modal-backdrop {
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+    }
 }
 
 .modal {
@@ -256,7 +262,7 @@ textarea:focus {
     box-shadow: var(--shadow-xl);
     width: 100%;
     max-width: 540px;
-    max-height: 85vh;
+    max-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 32px);
     display: flex;
     flex-direction: column;
     animation: scaleUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
@@ -303,6 +309,8 @@ textarea:focus {
 .modal-body {
     padding: 24px;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    /* Smooth scrolling on iOS */
 }
 
 .modal-footer {

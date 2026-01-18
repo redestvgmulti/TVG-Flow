@@ -640,10 +640,6 @@ function ExecutionView({ task, onBack, onUpdateStatus, onDeleteTask, user, role,
 
     async function loadProfessionalsForReturn() {
         if (!task.is_micro_task || !task.tarefa_id) {
-            console.log('⚠️ Cannot load professionals - not a micro task or no tarefa_id', {
-                is_micro_task: task.is_micro_task,
-                tarefa_id: task.tarefa_id
-            })
             return
         }
 
@@ -664,15 +660,6 @@ function ExecutionView({ task, onBack, onUpdateStatus, onDeleteTask, user, role,
             `)
                 .eq('tarefa_id', task.tarefa_id)
                 .neq('profissional_id', user.id) // Exclude current user
-
-            console.log('🔍 DEBUG - All workflow professionals loaded:', {
-                macroTaskId: task.tarefa_id,
-                currentUserId: user.id,
-                currentUserFunction: task.funcao,
-                data,
-                count: data?.length || 0,
-                error
-            })
 
             if (error) throw error
             setProfessionals(data || [])

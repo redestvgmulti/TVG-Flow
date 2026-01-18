@@ -108,10 +108,10 @@ function Today() {
                 <div className="space-y-4">
                     {tasks.map(task => {
                         const isOverdue = new Date(task.deadline) < new Date() && task.status !== 'completed'
-                        
+
                         return (
-                            <div 
-                                key={task.id} 
+                            <div
+                                key={task.id}
                                 className={`
                                     relative overflow-hidden bg-white rounded-xl border p-4 transition-all active:scale-[0.98]
                                     ${isOverdue ? 'border-red-200 bg-red-50/30' : 'border-gray-200 shadow-sm'}
@@ -146,9 +146,9 @@ function Today() {
                                             </span>
                                         </div>
                                         {task.drive_link && (
-                                            <a 
-                                                href={task.drive_link} 
-                                                target="_blank" 
+                                            <a
+                                                href={task.drive_link}
+                                                target="_blank"
                                                 rel="noopener noreferrer"
                                                 className="flex items-center gap-1 text-blue-600 hover:text-blue-800 font-medium"
                                                 onClick={(e) => e.stopPropagation()}

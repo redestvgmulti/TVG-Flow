@@ -4,6 +4,7 @@ import { format, parse, startOfWeek, getDay } from 'date-fns'
 import ptBR from 'date-fns/locale/pt-BR'
 import { fetchAdminCalendarEvents, getEventClasses } from '../../services/calendarService'
 import { Calendar as CalendarIcon, Clock, User, ExternalLink, AlertCircle, CheckCircle } from 'lucide-react'
+import { SkeletonTable } from '../../components/Skeleton'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 import '../../styles/calendar.css'
 
@@ -75,8 +76,8 @@ function Calendar() {
                 <div className="dashboard-header">
                     <h2>Calendário de Tarefas</h2>
                 </div>
-                <div className="card loading-card">
-                    <p className="loading-text-primary">Carregando calendário...</p>
+                <div className="card">
+                    <SkeletonTable />
                 </div>
             </div>
         )

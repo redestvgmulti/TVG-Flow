@@ -30,7 +30,8 @@ function StaffLayout() {
             <div className="admin-main">
                 <Header
                     hideMobileMenu={false}
-                    onMenuClick={() => setMobileMenuOpen(true)}
+                    onMobileMenuToggle={() => setMobileMenuOpen(!mobileMenuOpen)}
+                    mobileMenuOpen={mobileMenuOpen}
                 />
 
                 <PullToRefresh className="admin-content">

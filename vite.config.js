@@ -32,7 +32,12 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         clientsClaim: false, // Prevent auto-takeover to avoid auth race conditions
         skipWaiting: false, // Prevent silent takeover - user must confirm update
-        // navigateFallback: 'index.html', // Ensure SPA routing works offline if needed
+        navigateFallback: '/index.html', // Offline fallback for navigation requests
+        navigateFallbackDenylist: [
+          /^\/api\//,  // Never fallback for API routes
+          /^\/__\//,   // Vite internal routes
+          /\.(?:png|jpg|jpeg|svg|gif|webp|ico|css|js|woff2)$/  // Static assets
+        ],
         runtimeCaching: [
           // 🔐 AUTH ROUTES — NEVER CACHE (CRITICAL FIX FOR MOBILE LOGOUT)
           // iOS/Android clear SW cache in background, but NOT localStorage.
@@ -96,17 +101,18 @@ export default defineConfig({
         ]
       },
       devOptions: {
-        enabled: false, // DISABLED: Service Worker breaks auth in dev mode
+        enabled: process.env.VITE_SW_DEV === 'true', // Enable with: VITE_SW_DEV=true npm run dev
         type: 'module'
       }
     })
   ],
   build: {
-    // Remove all console statements in production for security
+    // Remove console.log/debug but keep error/warn for debugging
     minify: 'esbuild',
     target: 'esnext',
     esbuild: {
-      drop: ['console', 'debugger']
+      drop: ['debugger'],
+      pure: ['console.log', 'console.debug']
     }
   }
 })

@@ -83,8 +83,7 @@ function CompanyDetails() {
     async function handleAssignProfessionals() {
         try {
             const assignmentsToCreate = []
-            console.log('Selected:', selectedProfessionals)
-            console.log('Functions:', functions)
+            // Professional assignment updated
 
             for (const [profId, isSelected] of Object.entries(selectedProfessionals)) {
                 if (isSelected) {

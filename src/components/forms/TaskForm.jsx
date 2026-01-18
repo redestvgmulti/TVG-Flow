@@ -117,7 +117,6 @@ export default function TaskForm({ onSuccess, onCancel }) {
 
             if (error) throw error
 
-            console.log('DEBUG - Professionals loaded:', data) // DEBUG
             setProfessionals(data || [])
         } catch (error) {
             console.error(error)
@@ -239,8 +238,6 @@ export default function TaskForm({ onSuccess, onCancel }) {
             const { data, error } = await supabase.functions.invoke('create-os-by-function', {
                 body: payload
             })
-
-            console.log('Edge Function Response:', { data, error, payload })
 
             if (error) {
                 console.error('Edge Function error:', error)

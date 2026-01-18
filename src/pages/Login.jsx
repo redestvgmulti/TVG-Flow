@@ -33,10 +33,6 @@ function Login() {
 
             const IMMUTABLE_SUPER_ADMIN_EMAIL = 'geovanepanini@icloud.com'
 
-            // Artificial delay for premium feel
-            // Keep loading true, but we could add a specific message updates here if we wanted
-            await new Promise(resolve => setTimeout(resolve, 2500))
-
             // Route based on role
             if (email === IMMUTABLE_SUPER_ADMIN_EMAIL && role === 'super_admin') {
                 navigate('/platform')
@@ -72,7 +68,10 @@ function Login() {
                             <label htmlFor="email">Email</label>
                             <input
                                 id="email"
+                                name="email"
                                 type="email"
+                                inputMode="email"
+                                autoComplete="email"
                                 className="form-input"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
@@ -86,7 +85,9 @@ function Login() {
                             <div className="password-input-wrapper">
                                 <input
                                     id="password"
+                                    name="password"
                                     type={showPassword ? 'text' : 'password'}
+                                    autoComplete="current-password"
                                     className="form-input"
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}

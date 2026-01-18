@@ -24,7 +24,7 @@ import '../../styles/staff-tasks.css'
 
 function StaffDashboard() {
     const navigate = useNavigate()
-    const { professionalName, professionalId, loading: authLoading, user } = useAuth()
+    const { professionalName, professionalId, loading: authLoading, authReady, user } = useAuth()
     const { registerRefresh, unregisterRefresh } = useRefresh()
     const [stats, setStats] = useState({
         pending: 0,
@@ -36,9 +36,23 @@ function StaffDashboard() {
     const [productivityData, setProductivityData] = useState([])
     const [dataLoading, setDataLoading] = useState(true)
 
+    // 🛡️ CRITICAL GUARD: Prevent rendering and queries if auth is not ready
+    // This eliminates 401 errors from JWT race condition
+    if (authLoading) {
+        return <LoadingScreen />
+    }
+
+    if (!authReady) {
+        return <LoadingScreen />  // Wait for JWT to be injected in Supabase client
+    }
+
+    if (!professionalId) {
+        return <LoadingScreen />  // Wait for AuthContext to load professionalId
+    }
+
     useEffect(() => {
-        // Only fetch if we have professionalId
-        if (!professionalId) {
+        // Only fetch if we have professionalId AND auth is ready
+        if (!professionalId || !authReady) {
             return
         }
 
@@ -56,14 +70,11 @@ function StaffDashboard() {
             if (!silent) setDataLoading(true)
 
             if (!professionalId) {
-                console.warn('[Staff Dashboard] NO professionalId - skipping data fetch. User object:', user)
                 setDataLoading(false)
                 return
             }
 
-            console.group('[Staff Dashboard] Data Fetch')
-            console.log('Fetching data for professionalId:', professionalId)
-            console.log('Current Auth User:', user)
+
 
             // 1. Fetch Micro Tasks (Workflow)
             const { data: microTasks, error: microError } = await supabase
@@ -82,10 +93,8 @@ function StaffDashboard() {
             // Client-side sort happens after merge (line 191)
 
             if (microError) {
-                console.error('[Staff Dashboard] Error fetching micro tasks:', microError)
                 throw microError
             }
-            console.log('[Staff Dashboard] Micro Tasks found:', microTasks?.length, microTasks)
 
             // Fetch Macro tasks
             const { data: legacyTasks, error: legacyError } = await supabase
@@ -95,15 +104,8 @@ function StaffDashboard() {
                 .order('deadline', { ascending: true })  // Ordenar por prazo (mais urgente primeiro)
 
             if (legacyError) {
-                console.error('[Staff Dashboard] Error fetching legacy tasks:', legacyError)
                 throw legacyError
             }
-            console.log('[Staff Dashboard] Legacy Tasks found:', legacyTasks?.length, legacyTasks)
-
-            console.log('[Staff Dashboard] Query results summary:', {
-                microTasksCount: microTasks?.length || 0,
-                legacyTasksCount: legacyTasks?.length || 0
-            })
 
             // Normalize and Merge
             const allTasks = []
@@ -201,9 +203,8 @@ function StaffDashboard() {
             setRecentTasks(sortedTasks.slice(0, 5))
 
         } catch (error) {
-            console.error('Error fetching dashboard data:', error)
+            // Error handled silently
         } finally {
-            console.groupEnd()
             setDataLoading(false)
         }
     }
@@ -219,12 +220,6 @@ function StaffDashboard() {
     }
 
     const firstName = professionalName?.split(' ')[0] || 'Colaborador'
-
-    console.log('[StaffDashboard] Render reached', {
-        tasksCount: recentTasks?.length,
-        productivityCount: productivityData?.length,
-        stats
-    })
 
     // Safety check for critical data structures
     const safeRecentTasks = Array.isArray(recentTasks) ? recentTasks : []

@@ -1,4 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
+// ❌ REMOVED: withRetry wrapper was stripping auth headers from Supabase requests
+// The Supabase client handles retries internally and MUST NOT have fetch intercepted
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -10,6 +12,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
+//CRITICAL: Export raw Supabase client WITHOUT any fetch interceptors
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     storage: window.localStorage, // CRITICAL: Explicit localStorage for iOS PWA persistence
@@ -39,6 +42,10 @@ export const getCurrentUser = async () => {
 
 // Helper para obter o perfil completo do usuário
 export const getUserProfile = async () => {
+  // 🛡️ CRITICAL GUARD: Check session before querying
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return null;
+
   const user = await getCurrentUser();
   if (!user) return null;
 

@@ -38,6 +38,7 @@ import {
 } from 'lucide-react'
 import OperationalFeed from '../../components/dashboard/OperationalFeed'
 import LoadingScreen from '../../components/LoadingScreen'
+import { SkeletonCard } from '../../components/Skeleton'
 import { useAuth } from '../../contexts/AuthContext'
 import { formatDistanceToNow } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -354,9 +355,12 @@ export default function Painel() {
 
     if (loading) {
         return (
-            <div>
-                <div style={{ height: '60vh', display: 'flex', alignItems: 'center' }}>
-                    <LoadingScreen message="Carregando seu painel..." />
+            <div className="dashboard-container animation-fade-in">
+                <div className="dashboard-grid-metrics">
+                    <SkeletonCard />
+                    <SkeletonCard />
+                    <SkeletonCard />
+                    <SkeletonCard />
                 </div>
             </div>
         )

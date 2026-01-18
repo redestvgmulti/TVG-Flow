@@ -377,7 +377,7 @@
  */
 .status-bar {
   height: var(--header-height);
-  padding: 0 var(--space-8);
+  padding: env(safe-area-inset-top) var(--space-8) 0 var(--space-8);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -572,7 +572,7 @@
   min-height: 100vh;
   width: 100%;
   background: radial-gradient(circle at 50% 50%, #E0E7FF 0%, #F5F7FA 100%);
-  padding: var(--space-4);
+  padding: max(var(--space-4), env(safe-area-inset-top)) max(var(--space-4), env(safe-area-inset-right)) max(var(--space-4), env(safe-area-inset-bottom)) max(var(--space-4), env(safe-area-inset-left));
 }
 
 .form-container {
