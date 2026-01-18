@@ -11,6 +11,7 @@ import './styles/layout.css'
 import './styles/components.css'
 import './styles/utilities.css'
 import './styles/reload-prompt.css'
+import './styles/mobile-fixes.css'
 
 // Apply security hardening BEFORE React renders
 hardenConsole()

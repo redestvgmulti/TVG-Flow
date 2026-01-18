@@ -1,0 +1,96 @@
+/*
+ * MOBILE FIXES - FlowOS (FINAL VERSION)
+ * 
+ * Correções exclusivas para mobile (<= 768px):
+ * 1. Remove relógio redundante do header
+ * 2. Elimina overflow horizontal
+ * 3. Corrige uso de 100vw
+ * 4. Ajusta sidebar mobile
+ * 5. Bloqueia transforms problemáticos (quando sidebar aberta)
+ * 
+ * NÃO afeta desktop ou tablet (> 768px)
+ */
+
+/* ========================================
+   GLOBAL: BOX-SIZING DEFENSIVO
+   ======================================== */
+* {
+    box-sizing: border-box;
+    /* Garantir cálculo correto de dimensões */
+}
+
+/* ========================================
+   MOBILE ONLY (<= 768px)
+   ======================================== */
+@media (max-width: 768px) {
+
+    /* PARTE 1: OVERFLOW HORIZONTAL (MOBILE ONLY) */
+    html,
+    body {
+        width: 100%;
+        max-width: 100%;
+        overflow-x: hidden;
+        /* Nunca permitir scroll horizontal */
+    }
+
+    /* PARTE 2: REMOVER RELÓGIO DO HEADER (MOBILE ONLY) */
+    .status-clock {
+        display: none !important;
+        /* iOS/Android já mostram hora */
+    }
+
+    /* PARTE 3: CORRIGIR CONTAINERS COM 100vw */
+    .app-container,
+    .page-container,
+    .layout-container,
+    .admin-layout,
+    .admin-content {
+        width: 100% !important;
+        /* NUNCA usar 100vw em mobile */
+        max-width: 100% !important;
+        overflow-x: hidden !important;
+    }
+
+    /* PARTE 4: SIDEBAR MOBILE FLEXÍVEL E SEGURA */
+    .sidebar,
+    .mobile-sidebar,
+    .sidebar.mobile-open {
+        max-width: 85vw !important;
+        /* Máximo 85% da tela */
+        overflow-x: hidden !important;
+    }
+
+    /* PARTE 5: BLOQUEAR TRANSFORM APENAS QUANDO SIDEBAR ABERTA */
+    body.sidebar-open,
+    body.mobile-menu-open {
+        transform: none !important;
+        /* Prevenir zoom quando sidebar abre */
+    }
+
+    /* PARTE 6: GARANTIR VIEWPORT CORRETO */
+    .status-bar,
+    header,
+    .app-header {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    /* PARTE 7: OVERLAY NÃO DEVE CAUSAR SCROLL */
+    .mobile-menu-overlay,
+    .backdrop-invisible {
+        width: 100% !important;
+        max-width: 100% !important;
+        overflow: hidden !important;
+    }
+}
+
+/* ========================================
+   PARTE 8: FIX ESPECÍFICO PARA iOS
+   ======================================== */
+@supports (-webkit-touch-callout: none) {
+
+    /* iPhone/iPad safe-area já é tratado */
+    body {
+        -webkit-overflow-scrolling: touch;
+    }
+}

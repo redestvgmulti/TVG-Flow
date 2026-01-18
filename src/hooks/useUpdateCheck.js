@@ -20,7 +20,7 @@ export function useUpdateCheck() {
     const hasCheckedInitial = useRef(false)
 
     const {
-        needRefresh: [needRefresh],
+        needRefresh,
         updateServiceWorker
     } = useRegisterSW({
         onRegistered(registration) {

@@ -33,8 +33,17 @@ export function UpdateBanner() {
     const [isUpdating, setIsUpdating] = useState(false)
     const [shouldShowBanner, setShouldShowBanner] = useState(false)
 
+    // 🧪 TEST MODE - Force banner to always show (REMOVE IN PRODUCTION)
+    const TEST_MODE = false // Set to false when done testing
+
     // Determine if banner should be visible
     useEffect(() => {
+        if (TEST_MODE) {
+            // Force banner to show during testing
+            setShouldShowBanner(true)
+            return
+        }
+
         const lastAckVersion = localStorage.getItem(ACK_KEY)
         const showBanner = hasUpdate && CURRENT_VERSION !== lastAckVersion
         setShouldShowBanner(showBanner)
