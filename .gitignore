@@ -28,3 +28,5 @@ scripts/
 supabase/CRON_JOB_CONFIG.sql
 supabase/CREATE_CRON_JOB.sql
 FIX_USER_ROLE.sql
+.vercel
+.env*.local
