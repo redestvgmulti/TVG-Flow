@@ -441,6 +441,17 @@ export const confirmPresence = async (meetingId) => {
         throw error;
     }
 
+    // ✅ NEW: Notify organizer about presence confirmation
+    try {
+        await supabase.rpc('notify_meeting_presence', {
+            p_reuniao_id: meetingId,
+            p_participante_id: user.id
+        });
+    } catch (notifyError) {
+        console.error('[meetingService] Error notifying presence:', notifyError);
+        // Don't block flow if notification fails
+    }
+
     return true;
 };
 
