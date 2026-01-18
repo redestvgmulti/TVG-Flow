@@ -99,4 +99,3 @@ Arquivos que cresceram demais e precisam de refatoração futura (quebra em sub-
 ---
 
 *Documento gerado para orientação estratégica da equipe de desenvolvimento.*
-só para nao esquecer.
