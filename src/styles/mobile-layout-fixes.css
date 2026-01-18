@@ -1,0 +1,169 @@
+/*
+ * MOBILE LAYOUT FIXES - FlowOS
+ * App nativo iOS-like behavior
+ * 
+ * Aplicado APENAS em mobile (≤ 768px)
+ * Desktop (> 768px) NÃO é afetado
+ */
+
+/* ========================================
+   1️⃣ HEADER — RESPIRO + SAFE AREA
+   ======================================== */
+@media (max-width: 768px) {
+
+    .status-bar,
+    .app-header,
+    header {
+        position: sticky !important;
+        top: 0;
+        z-index: 1100;
+
+        padding-top: env(safe-area-inset-top) !important;
+        padding-bottom: 12px !important;
+
+        min-height: calc(44px + env(safe-area-inset-top)) !important;
+
+        background: var(--color-bg-app, rgba(255, 255, 255, 0.7)) !important;
+        backdrop-filter: blur(20px) !important;
+        -webkit-backdrop-filter: blur(20px) !important;
+    }
+
+    /* 2️⃣ REMOVER RELÓGIO DUPLICADO */
+    .status-clock {
+        display: none !important;
+    }
+
+    /* 3️⃣ CONTEÚDO COM RESPIRO DO BOTTOM BAR */
+    .page-content,
+    .admin-content,
+    .staff-content,
+    main,
+    .dashboard-container {
+        padding-bottom: calc(80px + env(safe-area-inset-bottom)) !important;
+    }
+
+    /* 4️⃣ BOTTOM NAVIGATION — ALTURA E CENTRALIZAÇÃO */
+    .bottom-nav,
+    .mobile-bottom-nav {
+        height: calc(64px + env(safe-area-inset-bottom)) !important;
+        padding-bottom: env(safe-area-inset-bottom) !important;
+
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-around !important;
+
+        background: var(--color-bg-surface, rgba(255, 255, 255, 0.85)) !important;
+        backdrop-filter: blur(20px) !important;
+        -webkit-backdrop-filter: blur(20px) !important;
+
+        z-index: 1000 !important;
+    }
+
+    .bottom-nav-link,
+    .bottom-nav-item {
+        padding: 8px 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 4px !important;
+    }
+
+    /* 5️⃣ ELIMINAR OVERFLOW HORIZONTAL */
+    html,
+    body {
+        width: 100% !important;
+        max-width: 100% !important;
+        overflow-x: hidden !important;
+    }
+
+    /* 6️⃣ SIDEBAR — SEMPRE POR CIMA */
+    .sidebar,
+    .mobile-sidebar {
+        position: fixed !important;
+        inset: 0 auto 0 0 !important;
+
+        width: 85vw !important;
+        max-width: 85vw !important;
+        height: 100vh !important;
+
+        padding-top: env(safe-area-inset-top) !important;
+        padding-bottom: env(safe-area-inset-bottom) !important;
+        padding-left: max(16px, env(safe-area-inset-left)) !important;
+        padding-right: max(16px, env(safe-area-inset-right)) !important;
+
+        background: var(--color-bg-surface, #fff) !important;
+        z-index: 1200 !important;
+
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+
+        /* Animação suave */
+        transform: translateX(-100%) !important;
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+
+    .sidebar.mobile-open {
+        transform: translateX(0) !important;
+    }
+
+    /* 7️⃣ OVERLAY — COBERTURA TOTAL */
+    .sidebar-overlay,
+    .mobile-menu-overlay {
+        position: fixed !important;
+        inset: 0 !important;
+
+        background: rgba(0, 0, 0, 0.35) !important;
+        backdrop-filter: blur(4px) !important;
+        -webkit-backdrop-filter: blur(4px) !important;
+
+        z-index: 1100 !important;
+    }
+
+    /* 8️⃣ TRAVAR FUNDO SEM ZOOM */
+    body.sidebar-open,
+    body.mobile-menu-open {
+        position: fixed !important;
+        width: 100% !important;
+        overflow: hidden !important;
+    }
+
+    /* 9️⃣ SIDEBAR — ESPAÇAMENTO NATIVO */
+    .sidebar nav a,
+    .sidebar-item,
+    .nav-item {
+        padding: 10px 16px !important;
+        margin-bottom: 4px !important;
+    }
+
+    .sidebar-nav {
+        gap: 8px !important;
+    }
+
+    /* 🔟 CONTAINERS SEM 100VW */
+    .app-container,
+    .page-container,
+    .layout-container {
+        width: 100% !important;
+        max-width: 100% !important;
+        overflow-x: hidden !important;
+    }
+
+    /* Cards dashboard sem scroll interno */
+    .metric-card,
+    .dashboard-card,
+    .kpi-card {
+        overflow: visible !important;
+        height: auto !important;
+        max-height: none !important;
+    }
+}
+
+/* ========================================
+   iOS ESPECÍFICO
+   ======================================== */
+@supports (-webkit-touch-callout: none) {
+    body {
+        -webkit-overflow-scrolling: touch;
+    }
+}

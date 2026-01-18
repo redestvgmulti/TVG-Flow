@@ -12,6 +12,7 @@ import './styles/components.css'
 import './styles/utilities.css'
 import './styles/reload-prompt.css'
 import './styles/mobile-fixes.css'
+import './styles/mobile-layout-fixes.css' // ÚLTIMO - sobrescreve tudo
 
 // Apply security hardening BEFORE React renders
 hardenConsole()
