@@ -49,7 +49,7 @@
         padding-bottom: calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom) + 16px) !important;
     }
 
-    /* 4️⃣ BOTTOM NAVIGATION — ALTURA E CENTRALIZAÇÃO */
+    /* 4️⃣ BOTTOM NAVIGATION — SEM FAIXA CINZA */
     .bottom-nav,
     .mobile-bottom-nav {
         position: fixed !important;
@@ -57,7 +57,9 @@
         left: 0 !important;
         right: 0 !important;
 
-        height: calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom)) !important;
+        /* Altura fixa SEM safe-area extra */
+        height: var(--mobile-bottom-nav-height) !important;
+        /* Padding apenas interno para ícones */
         padding-bottom: env(safe-area-inset-bottom) !important;
 
         display: flex !important;
@@ -69,7 +71,9 @@
         -webkit-backdrop-filter: blur(20px) !important;
 
         z-index: 1100 !important;
-        /* ACIMA DO OVERLAY */
+
+        /* ELIMINAR FAIXA CINZA */
+        margin-bottom: 0 !important;
     }
 
     .bottom-nav-link,
@@ -82,12 +86,16 @@
         gap: 4px !important;
     }
 
-    /* 5️⃣ ELIMINAR OVERFLOW HORIZONTAL */
+    /* 5️⃣ ELIMINAR OVERFLOW E FAIXA CINZA DO BODY */
     html,
     body {
         width: 100% !important;
         max-width: 100% !important;
         overflow-x: hidden !important;
+
+        /* ELIMINAR FAIXA CINZA DE FUNDO */
+        padding-bottom: 0 !important;
+        margin-bottom: 0 !important;
     }
 
     /* 6️⃣ SIDEBAR — SEMPRE POR CIMA */
