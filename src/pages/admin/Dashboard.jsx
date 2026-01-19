@@ -356,24 +356,6 @@ export default function Painel() {
 
     return (
         <div className="dashboard-container animation-fade-in">
-            {/* Desktop Refresh Button */}
-            <div className="dashboard-refresh-action">
-                <button
-                    onClick={handleManualRefresh}
-                    disabled={isRefreshing}
-                    className="btn-refresh"
-                    title="Atualizar dados"
-                    aria-label="Atualizar dashboard"
-                >
-                    <RefreshCw
-                        size={18}
-                        className={isRefreshing ? 'spinning' : ''}
-                    />
-                    <span className="btn-refresh-text">Atualizar</span>
-                </button>
-            </div>
-
-
             {feedback.show && (
                 <div className={`card mb-6 p-4 border-${feedback.type === 'success' ? 'success' : 'danger'} bg-${feedback.type === 'success' ? 'success' : 'danger'}-subtle`}>
                     <p className={`text-${feedback.type === 'success' ? 'success' : 'danger'} font-medium m-0`}>
