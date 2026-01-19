@@ -254,7 +254,7 @@ function Tasks() {
             }
 
             tasksQuery = tasksQuery
-                .order('deadline', { ascending: true })  // Ordenar por prazo (mais urgente primeiro)
+                .order('deadline', { ascending: true, nullsLast: true })  // C1: nullsLast ensures tasks without deadline appear at end
                 .range(rangeStart, rangeEnd)
 
             // Reference data (professionals, departments, clients) - load once
@@ -366,51 +366,7 @@ function Tasks() {
         }
     }
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // SMART SORTING: Prioritize current tasks over very old ones
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    function smartSortTasks(tasksToSort) {
-        const now = new Date()
-        const sixtyDaysAgo = new Date()
-        sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60)
 
-        // Separate into 3 buckets
-        const urgentAndCurrent = [] // Not completed, deadline within next 60 days or recent overdue
-        const veryOverdue = []       // Not completed, deadline > 60 days ago
-        const completed = []         // All completed tasks
-
-        tasksToSort.forEach(task => {
-            const isCompleted = ['completed', 'concluída', 'concluida'].includes(task.status?.toLowerCase())
-
-            if (isCompleted) {
-                completed.push(task)
-            } else if (task.deadline) {
-                const taskDeadline = new Date(task.deadline)
-                if (taskDeadline < sixtyDaysAgo) {
-                    veryOverdue.push(task)
-                } else {
-                    urgentAndCurrent.push(task)
-                }
-            } else {
-                // No deadline = urgent (needs attention)
-                urgentAndCurrent.push(task)
-            }
-        })
-
-        // Sort each bucket by deadline ASC (closest first)
-        const sortByDeadline = (a, b) => {
-            if (!a.deadline) return 1
-            if (!b.deadline) return -1
-            return new Date(a.deadline) - new Date(b.deadline)
-        }
-
-        urgentAndCurrent.sort(sortByDeadline)
-        veryOverdue.sort(sortByDeadline)
-        completed.sort(sortByDeadline)
-
-        // Concatenate: urgent → very overdue → completed
-        return [...urgentAndCurrent, ...veryOverdue, ...completed]
-    }
 
     function resetForm() {
         setFormData({
@@ -1076,7 +1032,7 @@ function Tasks() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {smartSortTasks(tasks).map(task => {
+                                {tasks.map(task => {
                                     const progress = calculateProgress(task)
                                     const overdue = isOverdue(task)
                                     const isCritical = overdue && (progress === null || progress < 30)
