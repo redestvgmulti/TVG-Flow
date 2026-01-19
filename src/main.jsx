@@ -15,7 +15,7 @@ import './styles/mobile-fixes.css'
 import './styles/mobile-layout-fixes.css' // ÚLTIMO - sobrescreve tudo
 
 // Apply security hardening BEFORE React renders
-// hardenConsole() // TEMPORARILY DISABLED FOR DEBUGGING
+hardenConsole()
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
