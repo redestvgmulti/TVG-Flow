@@ -339,7 +339,8 @@ export default function Painel() {
         ? chartData.filter(d => d?.date && (typeof d?.criadas === 'number' || typeof d?.concluidas === 'number'))
         : []
 
-    if (loading) {
+    // M2: Show skeleton during refresh, not just initial load
+    if (loading || isRefreshing) {
         return (
             <div className="dashboard-container animation-fade-in">
                 <div className="dashboard-grid-metrics">
