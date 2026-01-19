@@ -16,7 +16,7 @@ import {
     AlertCircle,
     RefreshCw
 } from 'lucide-react'
-import { BarChart, Bar, ResponsiveContainer, XAxis, Tooltip, CartesianGrid } from 'recharts'
+import { AreaChart, Area, ResponsiveContainer, XAxis, Tooltip, CartesianGrid } from 'recharts'
 import { PageTransition } from '../../components/PageTransition'
 import LoadingScreen from '../../components/LoadingScreen'
 import '../../styles/staff-dashboard.css'
