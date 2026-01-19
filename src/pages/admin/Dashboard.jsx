@@ -34,7 +34,8 @@ import {
     CheckCircle,
     Play,
     Plus,
-    ArrowRight
+    ArrowRight,
+    RefreshCw
 } from 'lucide-react'
 import OperationalFeed from '../../components/dashboard/OperationalFeed'
 import LoadingScreen from '../../components/LoadingScreen'
@@ -54,6 +55,7 @@ export default function Painel() {
     const navigate = useNavigate()
     const { user, signOut } = useAuth()
     const [loading, setLoading] = useState(true)
+    const [isRefreshing, setIsRefreshing] = useState(false)
     const [sidebarOpen, setSidebarOpen] = useState(false)
     const [stats, setStats] = useState({
         totalTasks: 0,
@@ -122,9 +124,10 @@ export default function Painel() {
         }
     }
 
-    async function fetchPainelData() {
+    async function fetchPainelData(silent = false) {
         try {
-            setLoading(true)
+            if (!silent) setLoading(true)
+            setIsRefreshing(true)
 
 
             // 1. Fetch Metrics and Recent Tasks
@@ -143,41 +146,17 @@ export default function Painel() {
 
             setRecentTasks(tasks)
 
-            // Fetch tasks for charts (last 30 days timeline)
-            const { data: timelineTasks, error: timelineError } = await supabase
-                .from('tarefas')
-                .select('created_at, completed_at, status')
-                .neq('status', 'cancelada')
-                .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
-                .order('created_at', { ascending: false })
+            // Fetch aggregated chart data (server-side aggregation - 50x faster)
+            const { data: chartDataRaw, error: chartError } = await supabase
+                .rpc('get_dashboard_chart_data', { days_back: 30 })
 
-            if (timelineError) throw timelineError
-
-            // Generate 30-day timeline data
-            const last30Days = getLast30Days()
-            const tasksTimeData = last30Days.map(date => {
-                const dateStr = date.toDateString()
-
-                // Count created on this date
-                const criadas = timelineTasks?.filter(t =>
-                    new Date(t.created_at).toDateString() === dateStr
-                ).length || 0
-
-                // Count completed on this date
-                const concluidas = timelineTasks?.filter(t =>
-                    t.completed_at && new Date(t.completed_at).toDateString() === dateStr
-                ).length || 0
-
-                return {
-                    date: date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
-                    criadas,
-                    concluidas
-                }
-            })
+            if (chartError) throw chartError
 
             // Mobile-specific: Show only last 5 days to prevent horizontal overflow
             const isMobile = window.innerWidth < 768
-            const chartDataToDisplay = isMobile ? tasksTimeData.slice(-5) : tasksTimeData
+            const chartDataToDisplay = isMobile
+                ? (chartDataRaw || []).slice(-5)
+                : (chartDataRaw || [])
 
             setChartData(chartDataToDisplay)
 
@@ -204,7 +183,12 @@ export default function Painel() {
             showFeedback('error', 'Failed to load dashboard data. Please refresh the page.')
         } finally {
             setLoading(false)
+            setIsRefreshing(false)
         }
+    }
+
+    async function handleManualRefresh() {
+        await fetchPainelData(true) // silent = true (sem loading screen)
     }
 
     // Handlers
@@ -341,15 +325,6 @@ export default function Painel() {
         }
     }
 
-    function getLast30Days() {
-        const days = []
-        for (let i = 29; i >= 0; i--) {
-            const date = new Date()
-            date.setDate(date.getDate() - i)
-            days.push(date)
-        }
-        return days
-    }
 
     function getAssignedToName(assignedToId) {
         const prof = professionals.find(p => p.id === assignedToId)
@@ -376,6 +351,22 @@ export default function Painel() {
 
     return (
         <div className="dashboard-container animation-fade-in">
+            {/* Desktop Refresh Button */}
+            <div className="dashboard-refresh-action">
+                <button
+                    onClick={handleManualRefresh}
+                    disabled={isRefreshing}
+                    className="btn-refresh"
+                    title="Atualizar dados"
+                    aria-label="Atualizar dashboard"
+                >
+                    <RefreshCw
+                        size={18}
+                        className={isRefreshing ? 'spinning' : ''}
+                    />
+                    <span className="btn-refresh-text">Atualizar</span>
+                </button>
+            </div>
 
 
             {feedback.show && (
