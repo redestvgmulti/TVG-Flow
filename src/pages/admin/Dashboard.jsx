@@ -54,6 +54,7 @@ import { AnimatedCounter } from '../../components/ui/AnimatedCounter'
 export default function Painel() {
     const navigate = useNavigate()
     const { user, signOut } = useAuth()
+    const { setMutating } = useRefresh() // I3: Mutex control
     const [loading, setLoading] = useState(true)
     const [isRefreshing, setIsRefreshing] = useState(false)
     const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -203,6 +204,7 @@ export default function Painel() {
     async function confirmDeleteTask() {
         if (!selectedTask) return
 
+        setMutating(true) // I3: Block refresh during delete
         setIsDeleting(true)
         try {
             await deleteTask(selectedTask.id)
@@ -215,6 +217,7 @@ export default function Painel() {
             toast.error('Erro ao excluir tarefa')
         } finally {
             setIsDeleting(false)
+            setMutating(false) // I3: Unlock refresh
         }
     }
 

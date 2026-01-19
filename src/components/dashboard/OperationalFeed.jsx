@@ -92,6 +92,16 @@ export default function OperationalFeed() {
         if (rawEvent.status === 'pendente') return
 
         setEvents(prev => {
+            // I1: Deduplicate by ID (prevent realtime + refresh race)
+            const eventId = newEvent.id
+            const exists = prev.find(e => e.id === eventId)
+
+            if (exists) {
+                // Update existing event instead of duplicating
+                return prev.map(e => e.id === eventId ? newEvent : e)
+            }
+
+            // Prepend new event
             const updated = [newEvent, ...prev]
             return updated.slice(0, 50) // Keep max 50 for scrolling
         })
