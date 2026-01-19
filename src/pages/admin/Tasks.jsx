@@ -895,15 +895,6 @@ function Tasks() {
 
     return (
         <div className="animation-fade-in">
-            {/* C3: Desktop Refresh Button */}
-            <div className="dashboard-refresh-action">
-                <button onClick={handleManualRefresh} disabled={isRefreshing} className="btn-refresh" title="Atualizar tarefas">
-                    <RefreshCw size={18} className={isRefreshing ? 'spinning' : ''} />
-                    <span className="btn-refresh-text">Atualizar</span>
-                </button>
-            </div>
-
-
             {/* Actionable Metrics Cards */}
             <div className="admin-tasks-section-spacing">
                 <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>

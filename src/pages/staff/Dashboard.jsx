@@ -238,14 +238,6 @@ function StaffDashboard() {
 
     return (
         <PageTransition>
-            {/* C3: Desktop Refresh Button */}
-            <div className="dashboard-refresh-action">
-                <button onClick={handleManualRefresh} disabled={isRefreshing} className="btn-refresh" title="Atualizar dashboard">
-                    <RefreshCw size={18} className={isRefreshing ? 'spinning' : ''} />
-                    <span className="btn-refresh-text">Atualizar</span>
-                </button>
-            </div>
-
             <div className="dashboard-container staff-dashboard-container">
                 {/* Header */}
                 <div className="dashboard-header staff-greeting-header">
