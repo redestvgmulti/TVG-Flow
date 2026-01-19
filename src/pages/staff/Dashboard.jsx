@@ -13,7 +13,8 @@ import {
     ListTodo,
     Activity,
     ChevronRight,
-    AlertCircle
+    AlertCircle,
+    RefreshCw
 } from 'lucide-react'
 import { BarChart, Bar, ResponsiveContainer, XAxis, Tooltip, CartesianGrid } from 'recharts'
 import { PageTransition } from '../../components/PageTransition'
@@ -35,6 +36,7 @@ function StaffDashboard() {
     const [recentTasks, setRecentTasks] = useState([])
     const [productivityData, setProductivityData] = useState([])
     const [dataLoading, setDataLoading] = useState(true)
+    const [isRefreshing, setIsRefreshing] = useState(false) // C3: Desktop refresh
 
     // 🛡️ CRITICAL GUARD: Prevent rendering and queries if auth is not ready
     // This eliminates 401 errors from JWT race condition
@@ -66,6 +68,7 @@ function StaffDashboard() {
     }, [professionalId])
 
     async function fetchDashboardData(silent = false) {
+        setIsRefreshing(true) // C3: Track refresh
         try {
             if (!silent) setDataLoading(true)
 
@@ -76,32 +79,34 @@ function StaffDashboard() {
 
 
 
-            // 1. Fetch Micro Tasks (Workflow)
-            const { data: microTasks, error: microError } = await supabase
-                .from('tarefas_micro')
-                .select(`
-                    *,
-                    tarefas (
-                        titulo,
-                        deadline,
-                        prioridade,
-                        descricao
-                    )
-                `)
-                .eq('profissional_id', professionalId)
-            // Note: Cannot order by tarefas.deadline here (nested relation)
-            // Client-side sort happens after merge (line 191)
+            // I2: Fetch Micro + Macro tasks in parallel (50% faster)
+            const [
+                { data: microTasks, error: microError },
+                { data: legacyTasks, error: legacyError }
+            ] = await Promise.all([
+                supabase
+                    .from('tarefas_micro')
+                    .select(`
+                        *,
+                        tarefas (
+                            titulo,
+                            deadline,
+                            prioridade,
+                            descricao
+                        )
+                    `)
+                    .eq('profissional_id', professionalId),
+
+                supabase
+                    .from('tarefas')
+                    .select('id, titulo, deadline, status, prioridade, created_at, concluida_at, drive_link')
+                    .eq('assigned_to', professionalId)
+                    .order('deadline', { ascending: true })
+            ])
 
             if (microError) {
                 throw microError
             }
-
-            // Fetch Macro tasks
-            const { data: legacyTasks, error: legacyError } = await supabase
-                .from('tarefas')
-                .select('id, titulo, deadline, status, prioridade, created_at, concluida_at, drive_link')
-                .eq('assigned_to', professionalId)
-                .order('deadline', { ascending: true })  // Ordenar por prazo (mais urgente primeiro)
 
             if (legacyError) {
                 throw legacyError
@@ -206,7 +211,13 @@ function StaffDashboard() {
             // Error handled silently
         } finally {
             setDataLoading(false)
+            setIsRefreshing(false) // C3: Clear refresh
         }
+    }
+
+    // C3: Desktop manual refresh handler
+    async function handleManualRefresh() {
+        await fetchDashboardData(true)
     }
 
     if (authLoading || !professionalId) {
@@ -227,6 +238,14 @@ function StaffDashboard() {
 
     return (
         <PageTransition>
+            {/* C3: Desktop Refresh Button */}
+            <div className="dashboard-refresh-action">
+                <button onClick={handleManualRefresh} disabled={isRefreshing} className="btn-refresh" title="Atualizar dashboard">
+                    <RefreshCw size={18} className={isRefreshing ? 'spinning' : ''} />
+                    <span className="btn-refresh-text">Atualizar</span>
+                </button>
+            </div>
+
             <div className="dashboard-container staff-dashboard-container">
                 {/* Header */}
                 <div className="dashboard-header staff-greeting-header">

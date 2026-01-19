@@ -5,6 +5,7 @@ const RefreshContext = createContext({})
 export function RefreshProvider({ children }) {
     const [isRefreshing, setIsRefreshing] = useState(false)
     const refreshFnRef = useRef(null)
+    const isMutating = useRef(false) // I3: Mutex for mutation + refresh
 
     const registerRefresh = useCallback((fn) => {
         refreshFnRef.current = fn
@@ -17,6 +18,12 @@ export function RefreshProvider({ children }) {
     const triggerRefresh = useCallback(async () => {
         if (isRefreshing) return
         if (!refreshFnRef.current) return
+
+        // I3: Block refresh if mutation is active
+        if (isMutating.current) {
+            console.warn('[RefreshContext] Mutation in progress, skipping refresh')
+            return
+        }
 
         try {
             setIsRefreshing(true)
@@ -36,12 +43,18 @@ export function RefreshProvider({ children }) {
         }
     }, [isRefreshing])
 
+    // I3: Expose setMutating for mutation handlers
+    const setMutating = useCallback((value) => {
+        isMutating.current = value
+    }, [])
+
     return (
         <RefreshContext.Provider value={{
             isRefreshing,
             registerRefresh,
             unregisterRefresh,
-            triggerRefresh
+            triggerRefresh,
+            setMutating // I3: Export mutex control
         }}>
             {children}
         </RefreshContext.Provider>

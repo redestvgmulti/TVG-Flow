@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
 import { getDashboardMetrics } from '../../services/dashboardMetrics'
-import { Edit2, Trash2, ClipboardList, AlertTriangle, X, ExternalLink, Folder } from 'lucide-react'
+import { Edit2, Trash2, ClipboardList, AlertTriangle, X, ExternalLink, Folder, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import MacroTaskDetail from '../../components/MacroTaskDetail'
 import EditTaskModal from '../../components/EditTaskModal'
@@ -32,6 +32,7 @@ function Tasks() {
     const [currentPage, setCurrentPage] = useState(0)
     const [hasMore, setHasMore] = useState(true)
     const [isLoadingMore, setIsLoadingMore] = useState(false)
+    const [isRefreshing, setIsRefreshing] = useState(false) // C3: Desktop refresh state
     const [totalCount, setTotalCount] = useState(0)
 
     // Filters
@@ -143,6 +144,7 @@ function Tasks() {
 
     async function fetchData(reset = false) {
         try {
+            setIsRefreshing(true) // C3: Track refresh state
             const isInitialLoad = reset || currentPage === 0
             if (isInitialLoad) {
                 setLoading(true)
@@ -254,7 +256,7 @@ function Tasks() {
             }
 
             tasksQuery = tasksQuery
-                .order('deadline', { ascending: true })  // Ordenar por prazo (mais urgente primeiro)
+                .order('deadline', { ascending: true, nullsLast: true })  // C1: nullsLast ensures tasks without deadline appear at end
                 .range(rangeStart, rangeEnd)
 
             // Reference data (professionals, departments, clients) - load once
@@ -357,7 +359,13 @@ function Tasks() {
         } finally {
             setLoading(false)
             setIsLoadingMore(false)
+            setIsRefreshing(false) // C3: Clear refresh state
         }
+    }
+
+    // C3: Desktop manual refresh handler
+    async function handleManualRefresh() {
+        await fetchData(true) // reset=true to start from page 1
     }
 
     function loadMore() {
@@ -366,51 +374,7 @@ function Tasks() {
         }
     }
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // SMART SORTING: Prioritize current tasks over very old ones
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    function smartSortTasks(tasksToSort) {
-        const now = new Date()
-        const sixtyDaysAgo = new Date()
-        sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60)
 
-        // Separate into 3 buckets
-        const urgentAndCurrent = [] // Not completed, deadline within next 60 days or recent overdue
-        const veryOverdue = []       // Not completed, deadline > 60 days ago
-        const completed = []         // All completed tasks
-
-        tasksToSort.forEach(task => {
-            const isCompleted = ['completed', 'concluída', 'concluida'].includes(task.status?.toLowerCase())
-
-            if (isCompleted) {
-                completed.push(task)
-            } else if (task.deadline) {
-                const taskDeadline = new Date(task.deadline)
-                if (taskDeadline < sixtyDaysAgo) {
-                    veryOverdue.push(task)
-                } else {
-                    urgentAndCurrent.push(task)
-                }
-            } else {
-                // No deadline = urgent (needs attention)
-                urgentAndCurrent.push(task)
-            }
-        })
-
-        // Sort each bucket by deadline ASC (closest first)
-        const sortByDeadline = (a, b) => {
-            if (!a.deadline) return 1
-            if (!b.deadline) return -1
-            return new Date(a.deadline) - new Date(b.deadline)
-        }
-
-        urgentAndCurrent.sort(sortByDeadline)
-        veryOverdue.sort(sortByDeadline)
-        completed.sort(sortByDeadline)
-
-        // Concatenate: urgent → very overdue → completed
-        return [...urgentAndCurrent, ...veryOverdue, ...completed]
-    }
 
     function resetForm() {
         setFormData({
@@ -931,6 +895,13 @@ function Tasks() {
 
     return (
         <div className="animation-fade-in">
+            {/* C3: Desktop Refresh Button */}
+            <div className="dashboard-refresh-action">
+                <button onClick={handleManualRefresh} disabled={isRefreshing} className="btn-refresh" title="Atualizar tarefas">
+                    <RefreshCw size={18} className={isRefreshing ? 'spinning' : ''} />
+                    <span className="btn-refresh-text">Atualizar</span>
+                </button>
+            </div>
 
 
             {/* Actionable Metrics Cards */}
@@ -1076,7 +1047,7 @@ function Tasks() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {smartSortTasks(tasks).map(task => {
+                                {tasks.map(task => {
                                     const progress = calculateProgress(task)
                                     const overdue = isOverdue(task)
                                     const isCritical = overdue && (progress === null || progress < 30)
