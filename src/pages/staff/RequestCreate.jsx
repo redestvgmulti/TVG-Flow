@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { toast } from 'sonner'
 import { Save, User, Calendar, AlertTriangle, FileText, ArrowLeft } from 'lucide-react'
 
-import '../../styles/request-create.css'
+import '../../styles/admin-forms.css'
 
 function StaffRequestCreate() {
     const navigate = useNavigate()
@@ -13,7 +13,7 @@ function StaffRequestCreate() {
 
     const [loading, setLoading] = useState(false)
     const [loadingCompany, setLoadingCompany] = useState(true)
-    const [userCompanies, setUserCompanies] = useState([]) // All companies user is linked to
+    const [userCompanies, setUserCompanies] = useState([])
     const [selectedEmpresaId, setSelectedEmpresaId] = useState(null)
     const [professionals, setProfessionals] = useState([])
 
@@ -51,7 +51,6 @@ function StaffRequestCreate() {
 
                 setUserCompanies(data)
 
-                // If only 1 company, auto-select it silently
                 if (data.length === 1) {
                     setSelectedEmpresaId(data[0].empresa_id)
                 }
@@ -68,7 +67,7 @@ function StaffRequestCreate() {
         fetchUserCompanies()
     }, [user, navigate])
 
-    // Fetch professionals after company is selected
+    // Fetch professionals
     useEffect(() => {
         if (selectedEmpresaId) {
             fetchProfessionals()
@@ -149,88 +148,87 @@ function StaffRequestCreate() {
     }
 
     return (
-        <div className="request-create-container">
+        <div className="admin-page-container py-4">
             {loadingCompany ? (
                 <div className="flex items-center justify-center h-64">
                     <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
                 </div>
             ) : (
                 <>
-                    <div className="request-header">
+                    {/* Header: Back Button Only (Title Removed for UX Focus) */}
+                    <div className="flex items-center mb-4">
                         <button
                             onClick={() => navigate(-1)}
-                            className="request-back-btn"
+                            className="admin-back-btn"
                         >
                             <ArrowLeft size={18} />
-                            Voltar
                         </button>
-                        <h1 className="request-title">Nova Solicitação</h1>
-                        <p className="request-subtitle">Crie uma tarefa para outro colaborador.</p>
                     </div>
 
-                    <div className="request-card">
-                        <form onSubmit={handleSubmit} className="request-form">
+                    {/* Main Content Card */}
+                    <div className="card">
+                        <form onSubmit={handleSubmit} className="admin-form">
 
-                            {/* Empresa Selector - Only show if user has multiple companies */}
-                            {userCompanies.length > 1 && (
-                                <div className="form-group">
-                                    <label className="form-label">
-                                        Empresa (Solicitante) <span className="form-required">*</span>
+                            {/* Section 1: Core Information */}
+                            <div className="flex flex-col gap-4">
+                                {userCompanies.length > 1 && (
+                                    <div className="admin-form-group">
+                                        <label className="admin-form-label">
+                                            Empresa (Solicitante) <span className="text-danger">*</span>
+                                        </label>
+                                        <select
+                                            className="admin-form-select"
+                                            value={selectedEmpresaId || ''}
+                                            onChange={(e) => setSelectedEmpresaId(e.target.value)}
+                                            required
+                                        >
+                                            <option value="">Selecione a empresa...</option>
+                                            {userCompanies.map((company) => (
+                                                <option key={company.empresa_id} value={company.empresa_id}>
+                                                    {company.empresas.nome}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
+
+                                <div className="admin-form-group">
+                                    <label className="admin-form-label">
+                                        <FileText size={18} className="admin-form-label-icon" />
+                                        Título da Solicitação <span className="text-danger">*</span>
                                     </label>
-                                    <select
-                                        className="form-select"
-                                        value={selectedEmpresaId || ''}
-                                        onChange={(e) => setSelectedEmpresaId(e.target.value)}
+                                    <input
+                                        type="text"
+                                        className="admin-form-input"
+                                        placeholder="Ex: Atualizar relatório de vendas"
+                                        value={formData.titulo}
+                                        onChange={e => setFormData({ ...formData, titulo: e.target.value })}
                                         required
-                                    >
-                                        <option value="">Selecione a empresa...</option>
-                                        {userCompanies.map((company) => (
-                                            <option key={company.empresa_id} value={company.empresa_id}>
-                                                {company.empresas.nome}
-                                            </option>
-                                        ))}
-                                    </select>
+                                    />
                                 </div>
-                            )}
 
-                            {/* Title */}
-                            <div className="form-group">
-                                <label className="form-label">
-                                    <FileText size={18} className="form-label-icon" />
-                                    Título da Solicitação <span className="form-required">*</span>
-                                </label>
-                                <input
-                                    type="text"
-                                    className="form-input"
-                                    placeholder="Ex: Atualizar relatório de vendas"
-                                    value={formData.titulo}
-                                    onChange={e => setFormData({ ...formData, titulo: e.target.value })}
-                                    required
-                                />
+                                <div className="admin-form-group">
+                                    <label className="admin-form-label">
+                                        Descrição Detalhada
+                                    </label>
+                                    <textarea
+                                        className="admin-form-textarea"
+                                        placeholder="Descreva o que precisa ser feito..."
+                                        value={formData.descricao}
+                                        onChange={e => setFormData({ ...formData, descricao: e.target.value })}
+                                    />
+                                </div>
                             </div>
 
-                            {/* Description */}
-                            <div className="form-group">
-                                <label className="form-label">
-                                    Descrição Detalhada
-                                </label>
-                                <textarea
-                                    className="form-textarea"
-                                    placeholder="Descreva o que precisa ser feito..."
-                                    value={formData.descricao}
-                                    onChange={e => setFormData({ ...formData, descricao: e.target.value })}
-                                />
-                            </div>
-
-                            <div className="form-grid">
-                                {/* Assign To */}
-                                <div className="form-group">
-                                    <label className="form-label">
-                                        <User size={18} className="form-label-icon" />
-                                        Para Quem? <span className="form-required">*</span>
+                            {/* Section 2: Logistics & execution details */}
+                            <div className="flex flex-col gap-4">
+                                <div className="admin-form-group">
+                                    <label className="admin-form-label">
+                                        <User size={18} className="admin-form-label-icon" />
+                                        Para Quem? <span className="text-danger">*</span>
                                     </label>
                                     <select
-                                        className="form-select"
+                                        className="admin-form-select"
                                         value={formData.assigned_to}
                                         onChange={e => setFormData({ ...formData, assigned_to: e.target.value })}
                                         required
@@ -244,14 +242,13 @@ function StaffRequestCreate() {
                                     </select>
                                 </div>
 
-                                {/* Priority */}
-                                <div className="form-group">
-                                    <label className="form-label">
-                                        <AlertTriangle size={18} className="form-label-icon" />
+                                <div className="admin-form-group">
+                                    <label className="admin-form-label">
+                                        <AlertTriangle size={18} className="admin-form-label-icon" />
                                         Prioridade
                                     </label>
                                     <select
-                                        className="form-select"
+                                        className="admin-form-select"
                                         value={formData.priority}
                                         onChange={e => setFormData({ ...formData, priority: e.target.value })}
                                     >
@@ -261,32 +258,28 @@ function StaffRequestCreate() {
                                         <option value="urgente">Urgente</option>
                                     </select>
                                 </div>
-                            </div>
 
-                            <div className="form-grid">
-                                {/* Deadline */}
-                                <div className="form-group">
-                                    <label className="form-label">
-                                        <Calendar size={18} className="form-label-icon" />
-                                        Prazo Final <span className="form-required">*</span>
+                                <div className="admin-form-group">
+                                    <label className="admin-form-label">
+                                        <Calendar size={18} className="admin-form-label-icon" />
+                                        Prazo Final <span className="text-danger">*</span>
                                     </label>
                                     <input
                                         type="datetime-local"
-                                        className="form-input"
+                                        className="admin-form-input"
                                         value={formData.deadline}
                                         onChange={e => setFormData({ ...formData, deadline: e.target.value })}
                                         required
                                     />
                                 </div>
 
-                                {/* Drive Link */}
-                                <div className="form-group">
-                                    <label className="form-label">
-                                        Link de Arquivos (opcional)
+                                <div className="admin-form-group">
+                                    <label className="admin-form-label">
+                                        Link de Arquivos
                                     </label>
                                     <input
                                         type="url"
-                                        className="form-input"
+                                        className="admin-form-input"
                                         placeholder="https://drive.google.com/..."
                                         value={formData.drive_link}
                                         onChange={e => setFormData({ ...formData, drive_link: e.target.value })}
@@ -294,11 +287,12 @@ function StaffRequestCreate() {
                                 </div>
                             </div>
 
-                            <div className="form-footer">
+                            {/* Actions */}
+                            <div className="admin-form-actions">
                                 <button
                                     type="submit"
                                     disabled={loading}
-                                    className="btn-submit"
+                                    className="btn btn-primary w-full justify-center"
                                 >
                                     {loading ? 'Criando...' : 'Enviar Solicitação'}
                                     <Save size={20} />
