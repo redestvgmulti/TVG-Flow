@@ -336,12 +336,7 @@ function StaffDashboard() {
                                     </AreaChart>
                                 </ResponsiveContainer>
                             </div>
-                            <div className="staff-empty-state">
-                                <TrendingUp size={48} className="text-tertiary mb-4" />
-                                <p className="title">Sem dados recentes</p>
-                                <p className="subtitle">Complete tarefas para visualizar sua produtividade.</p>
-                            </div>
-                            )}
+
                         </div>
                     </div>
 
