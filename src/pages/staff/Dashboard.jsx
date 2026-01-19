@@ -296,7 +296,7 @@ function StaffDashboard() {
 
                         <div className="chart-wrapper">
                             <div className="chart-container" style={{ width: '100%', height: 220, minHeight: 220 }}>
-                                <ResponsiveContainer width="100%" height="100%">
+                                <ResponsiveContainer width="100%" height={220}>
                                     <AreaChart
                                         data={safeProductivityData}
                                         margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
