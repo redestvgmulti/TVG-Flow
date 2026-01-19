@@ -3,17 +3,9 @@ import { useAuth } from '../contexts/AuthContext'
 import AccountBlockedScreen from '../components/AccountBlockedScreen'
 
 function ProtectedRoute({ children }) {
-    const { user, loading, accountStatus, connectionStatus } = useAuth()
+    const { user, loading, accountStatus, connectionStatus, authStatus } = useAuth()
 
-
-
-    // NUCLEAR OPTION: NO MORE LOADING SCREEN
-    // Let the dashboard render immediately and handle its own loading states
-    // This prevents the infinite "Carregando Sistema..." issue
-
-    // RESTORED: Loading check is required for persistence
-    // Without this, refresh redirects to login immediately (before auth init)
-    // Wait for session check to complete (Phase 1 only)
+    // PHASE 1: Wait for initial session bootstrap
     if (loading) {
         return (
             <div className="flex items-center justify-center h-screen bg-gray-50 flex-col gap-4">
@@ -23,8 +15,19 @@ function ProtectedRoute({ children }) {
         )
     }
 
-    if (!user) {
-        console.warn('[ProtectedRoute] No user found, redirecting to login')
+    // 🔐 CRITICAL FIX: Wait for auth decision to complete
+    // Don't redirect during boot - only redirect when definitively unauthenticated
+    if (authStatus === 'booting') {
+        return (
+            <div className="flex items-center justify-center h-screen bg-gray-50 flex-col gap-4">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                <div className="text-gray-500 font-medium">Recuperando sessão...</div>
+            </div>
+        )
+    }
+
+    // 🔐 ONLY redirect when definitively unauthenticated
+    if (authStatus === 'unauthenticated' || !user) {
         return <Navigate to="/login" replace />
     }
 
@@ -42,4 +45,3 @@ function ProtectedRoute({ children }) {
 }
 
 export default ProtectedRoute
-

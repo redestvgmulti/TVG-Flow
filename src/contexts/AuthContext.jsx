@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react'
 import { supabase } from '../services/supabase'
 import { normalizeRole } from '../utils/roles'
+import { authMonitor, AUTH_EVENTS } from '../utils/authMonitor'
 
 const AuthContext = createContext({})
 
@@ -15,12 +16,14 @@ export function AuthProvider({ children }) {
     const [session, setSession] = useState(null)
     const [loading, setLoading] = useState(true)
     const [authReady, setAuthReady] = useState(false) // 🛡️ CRITICAL: JWT ready flag
+    const [authStatus, setAuthStatus] = useState('booting') // 🔐 NEW: 'booting' | 'authenticated' | 'unauthenticated'
     const [role, setRole] = useState(null)
     const [professionalId, setProfessionalId] = useState(null)
     const [professionalName, setProfessionalName] = useState(null)
     const [accountStatus, setAccountStatus] = useState('active') // 'active' | 'inactive' | 'suspended'
     const [connectionStatus, setConnectionStatus] = useState('online') // 'online' | 'offline' | 'reconnecting'
     const [sessionHealth, setSessionHealth] = useState('healthy') // 'healthy' | 'degraded' | 'expired'
+
 
     // Refs to track state without triggering re-renders and prevent race conditions
     const isFetchingRef = useRef(false)
@@ -42,8 +45,6 @@ export function AuthProvider({ children }) {
 
         const initSession = async () => {
             try {
-
-
                 // PHASE 1: SESSION BOOTSTRAP (BLOCKING)
                 // We only wait for Supabase to tell us if a session exists.
                 const { data: { session }, error } = await supabase.auth.getSession()
@@ -51,32 +52,44 @@ export function AuthProvider({ children }) {
                 if (!mounted) return
 
                 if (error) {
+                    console.error('[Auth] Session recovery error:', error)
                     // Session error ignored - SDK handles recovery
+                    // ⚠️ NÃO limpar estado - pode ser erro transitório
                 }
 
                 if (session) {
+                    authMonitor.logEvent(AUTH_EVENTS.SESSION_RECOVERED, { hasSession: true })
                     setSession(session)
                     setUser(session.user)
                     userRef.current = session.user
-                    setAuthReady(true) // Set authReady true if session exists on initial load
+                    setAuthReady(true)
+                    setAuthStatus('authenticated') // 🔐 AUTHENTICATED
                 } else {
-                    // Only clear state if genuinely no session (not an error)
-                    if (!error) {
+                    // 🔐 CRITICAL FIX: Boot state ≠ Unauthenticated
+                    // Don't clear user during boot - wait for SIGNED_OUT event
+                    if (error) {
+                        authMonitor.logEvent(AUTH_EVENTS.SESSION_FAILED, { reason: 'transient_error' })
+                        setAuthStatus('booting')
+                    } else {
+                        authMonitor.logEvent(AUTH_EVENTS.BOOT_TO_UNAUTH, { reason: 'no_session_in_storage' })
+                        setAuthStatus('unauthenticated')
+                        // Only NOW we clear state (no session found in storage)
                         setSession(null)
                         setUser(null)
                         userRef.current = null
-                        setAuthReady(false) // No session, so not auth ready
+                        setAuthReady(false)
                     }
                 }
 
             } catch (err) {
-
+                console.error('[Auth] Exception during session init:', err)
+                // 🔐 Exception during boot ≠ Logout
+                setAuthStatus('booting')
             } finally {
                 // END OF PHASE 1
                 // We MUST unlock the app now. Profile fetching happens next but doesn't block UI.
                 if (mounted) {
                     setLoading(false)
-
                 }
             }
         }
@@ -91,20 +104,25 @@ export function AuthProvider({ children }) {
             // TOKEN_REFRESH_FAILED may be transient (network issue) -> grace window
             // SIGNED_OUT is definitive -> immediate cleanup
             if (event === 'TOKEN_REFRESH_FAILED') {
+                authMonitor.logEvent(AUTH_EVENTS.TOKEN_REFRESH_FAILED)
                 // Token refresh failed - enter grace window
                 handleTokenRefreshFailed()
                 return
             }
 
             if (event === 'SIGNED_OUT') {
+                authMonitor.logEvent(AUTH_EVENTS.SIGNED_OUT)
                 handleSignedOut()
                 setAuthReady(false) // Reset auth ready on signout
+                setAuthStatus('unauthenticated') // 🔐 UNAUTHENTICATED
                 return
             }
 
             // 🛡️ CRITICAL: Set authReady=true ONLY after JWT is injected
             if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+                authMonitor.logEvent(event === 'SIGNED_IN' ? AUTH_EVENTS.SIGNED_IN : AUTH_EVENTS.TOKEN_REFRESHED)
                 setAuthReady(true)
+                setAuthStatus('authenticated') // 🔐 AUTHENTICATED
                 // ONLY fetch professional data if we have a valid session
                 // Don't call on stale/expired sessions or page reload without auth
                 if (session?.user?.id && session?.access_token) {
@@ -127,6 +145,7 @@ export function AuthProvider({ children }) {
             subscription.unsubscribe()
         }
     }, [])
+
 
     // CRITICAL: Handle TOKEN_REFRESH_FAILED with grace window (30s)
     // This prevents immediate logout on transient network issues
@@ -235,16 +254,13 @@ export function AuthProvider({ children }) {
         try {
             // 🛡️ CRITICAL GUARD: Prevent queries without valid session
             // This eliminates 401 errors on /login route and ensures clean architecture
-            const { data: { session: currentSession } } = await supabase.auth.getSession()
+            const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession()
 
             if (!currentSession || !currentSession.user) {
-                // No valid session - clear state and return WITHOUT executing queries
-                setRole(null)
-                setProfessionalId(null)
-                setProfessionalName(null)
-                setAccountStatus(null)
+                // 🔐 CRITICAL FIX: Session temporarily unavailable ≠ Logout
+                // Don't clear authentication state - just skip professional data fetch
                 setLoading(false)
-                isFetchingRef.current = false // Ensure ref is reset
+                isFetchingRef.current = false
                 return
             }
 
@@ -337,6 +353,7 @@ export function AuthProvider({ children }) {
         connectionStatus,
         sessionHealth,
         authReady, // 🛡️ NEW: Indicates JWT is ready in Supabase client
+        authStatus, // 🔐 NEW: 'booting' | 'authenticated' | 'unauthenticated'
         signIn,
         signOut
     }
