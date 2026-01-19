@@ -295,9 +295,15 @@ function StaffDashboard() {
                         </div>
 
                         <div className="chart-wrapper">
-                            {safeProductivityData.some(d => d.value > 0) ? (
-                                <ResponsiveContainer width="100%" height={300}>
-                                    <BarChart data={safeProductivityData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                            <div className="chart-container" style={{ width: '100%', height: 220, minHeight: 220 }}>
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <AreaChart data={safeProductivityData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                        <defs>
+                                            <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.8} />
+                                                <stop offset="95%" stopColor="var(--color-primary)" stopOpacity={0} />
+                                            </linearGradient>
+                                        </defs>
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
                                         <XAxis
                                             dataKey="name"
@@ -307,7 +313,7 @@ function StaffDashboard() {
                                             dy={10}
                                         />
                                         <Tooltip
-                                            cursor={{ fill: 'var(--color-bg-subtle)' }}
+                                            cursor={{ stroke: 'var(--color-primary)', strokeWidth: 1, strokeDasharray: '5 5' }}
                                             contentStyle={{
                                                 borderRadius: '12px',
                                                 border: 'none',
@@ -315,22 +321,26 @@ function StaffDashboard() {
                                                 background: 'var(--color-bg-primary)',
                                                 color: 'var(--color-text-primary)'
                                             }}
+                                            formatter={(value) => [`${value} tarefas`, 'Concluídas']}
                                         />
-                                        <Bar
+                                        <Area
+                                            type="monotone"
                                             dataKey="value"
-                                            fill="var(--color-primary)"
-                                            radius={[6, 6, 0, 0]}
-                                            barSize={32}
+                                            stroke="var(--color-primary)"
+                                            strokeWidth={2}
+                                            fillOpacity={1}
+                                            fill="url(#colorValue)"
+                                            activeDot={{ r: 4, fill: 'var(--color-primary)', stroke: '#fff', strokeWidth: 2 }}
                                             animationDuration={1000}
                                         />
-                                    </BarChart>
+                                    </AreaChart>
                                 </ResponsiveContainer>
-                            ) : (
-                                <div className="staff-empty-state">
-                                    <TrendingUp size={48} className="text-tertiary mb-4" />
-                                    <p className="title">Sem dados recentes</p>
-                                    <p className="subtitle">Complete tarefas para visualizar sua produtividade.</p>
-                                </div>
+                            </div>
+                            <div className="staff-empty-state">
+                                <TrendingUp size={48} className="text-tertiary mb-4" />
+                                <p className="title">Sem dados recentes</p>
+                                <p className="subtitle">Complete tarefas para visualizar sua produtividade.</p>
+                            </div>
                             )}
                         </div>
                     </div>
