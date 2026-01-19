@@ -48,7 +48,7 @@ class AuthMonitor {
 
         // Log to console in development only
         if (import.meta.env.DEV) {
-            console.log(`[AuthMonitor] ${eventType}`, metadata)
+            // console.log(`[AuthMonitor] ${eventType}`, metadata)
         }
 
         // In production, you could send critical events to your monitoring service
