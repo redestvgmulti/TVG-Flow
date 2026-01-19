@@ -162,23 +162,8 @@ export default function Painel() {
 
             setChartData(chartDataToDisplay)
 
-            // Status distribution for charts (Auxiliary - kept for potential future use or verifying consistency)
-            const statusData = [
-                { name: 'Pendente', value: timelineTasks?.filter(t => t.status === 'pendente').length || 0, color: '#6e6e73' },
-                { name: 'Em Execução', value: timelineTasks?.filter(t => t.status === 'em_execucao').length || 0, color: '#007aff' },
-                { name: 'Concluídas', value: timelineTasks?.filter(t => t.status === 'concluida').length || 0, color: '#34c759' },
-                { name: 'Atrasadas', value: timelineTasks?.filter(t => t.status === 'atrasada').length || 0, color: '#ff3b30' }
-            ]
-            setTasksByStatus(statusData.filter(s => s.value > 0))
-
-            // Priority logic kept as is...
-            const priorityData = [
-                { name: 'Baixa', value: timelineTasks?.filter(t => t.priority === 'low')?.length || 0 }, // Added safe access just in case
-                { name: 'Média', value: timelineTasks?.filter(t => t.priority === 'medium')?.length || 0 },
-                { name: 'Alta', value: timelineTasks?.filter(t => t.priority === 'high')?.length || 0 },
-                { name: 'Urgente', value: timelineTasks?.filter(t => t.priority === 'urgent')?.length || 0 }
-            ]
-            setTasksByPriority(priorityData.filter(p => p.value > 0))
+            // Status and Priority distributions removed - orphaned after RPC refactor
+            // Chart data now comes exclusively from get_dashboard_chart_data RPC
 
         } catch (error) {
             console.error('Error fetching dashboard data:', error)
