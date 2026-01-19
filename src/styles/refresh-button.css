@@ -1,0 +1,67 @@
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * DESKTOP REFRESH BUTTON (C3 - Feed Refresh Fix)
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.dashboard-refresh-action {
+    position: fixed;
+    top: 80px;
+    right: 24px;
+    z-index: 100;
+}
+
+.btn-refresh {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    color: #6b7280;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.btn-refresh:hover:not(:disabled) {
+    background: #f9fafb;
+    border-color: #3b82f6;
+    color: #3b82f6;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.btn-refresh:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-refresh .spinning {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Hide text on tablet for compact button */
+@media (max-width: 1024px) {
+    .btn-refresh-text {
+        display: none;
+    }
+    
+    .btn-refresh {
+        padding: 10px;
+    }
+}
+
+/* Hide entirely on mobile - use pull-to-refresh */
+@media (max-width: 768px) {
+    .dashboard-refresh-action {
+        display: none;
+    }
+}

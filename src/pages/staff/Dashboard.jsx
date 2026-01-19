@@ -13,7 +13,8 @@ import {
     ListTodo,
     Activity,
     ChevronRight,
-    AlertCircle
+    AlertCircle,
+    RefreshCw
 } from 'lucide-react'
 import { BarChart, Bar, ResponsiveContainer, XAxis, Tooltip, CartesianGrid } from 'recharts'
 import { PageTransition } from '../../components/PageTransition'
@@ -35,6 +36,7 @@ function StaffDashboard() {
     const [recentTasks, setRecentTasks] = useState([])
     const [productivityData, setProductivityData] = useState([])
     const [dataLoading, setDataLoading] = useState(true)
+    const [isRefreshing, setIsRefreshing] = useState(false) // C3: Desktop refresh
 
     // 🛡️ CRITICAL GUARD: Prevent rendering and queries if auth is not ready
     // This eliminates 401 errors from JWT race condition
@@ -66,6 +68,7 @@ function StaffDashboard() {
     }, [professionalId])
 
     async function fetchDashboardData(silent = false) {
+        setIsRefreshing(true) // C3: Track refresh
         try {
             if (!silent) setDataLoading(true)
 
@@ -206,7 +209,13 @@ function StaffDashboard() {
             // Error handled silently
         } finally {
             setDataLoading(false)
+            setIsRefreshing(false) // C3: Clear refresh
         }
+    }
+
+    // C3: Desktop manual refresh handler
+    async function handleManualRefresh() {
+        await fetchDashboardData(true)
     }
 
     if (authLoading || !professionalId) {
@@ -227,6 +236,14 @@ function StaffDashboard() {
 
     return (
         <PageTransition>
+            {/* C3: Desktop Refresh Button */}
+            <div className="dashboard-refresh-action">
+                <button onClick={handleManualRefresh} disabled={isRefreshing} className="btn-refresh" title="Atualizar dashboard">
+                    <RefreshCw size={18} className={isRefreshing ? 'spinning' : ''} />
+                    <span className="btn-refresh-text">Atualizar</span>
+                </button>
+            </div>
+
             <div className="dashboard-container staff-dashboard-container">
                 {/* Header */}
                 <div className="dashboard-header staff-greeting-header">

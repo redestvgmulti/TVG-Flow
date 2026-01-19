@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
 import { getDashboardMetrics } from '../../services/dashboardMetrics'
-import { Edit2, Trash2, ClipboardList, AlertTriangle, X, ExternalLink, Folder } from 'lucide-react'
+import { Edit2, Trash2, ClipboardList, AlertTriangle, X, ExternalLink, Folder, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import MacroTaskDetail from '../../components/MacroTaskDetail'
 import EditTaskModal from '../../components/EditTaskModal'
@@ -32,6 +32,7 @@ function Tasks() {
     const [currentPage, setCurrentPage] = useState(0)
     const [hasMore, setHasMore] = useState(true)
     const [isLoadingMore, setIsLoadingMore] = useState(false)
+    const [isRefreshing, setIsRefreshing] = useState(false) // C3: Desktop refresh state
     const [totalCount, setTotalCount] = useState(0)
 
     // Filters
@@ -143,6 +144,7 @@ function Tasks() {
 
     async function fetchData(reset = false) {
         try {
+            setIsRefreshing(true) // C3: Track refresh state
             const isInitialLoad = reset || currentPage === 0
             if (isInitialLoad) {
                 setLoading(true)
@@ -357,7 +359,13 @@ function Tasks() {
         } finally {
             setLoading(false)
             setIsLoadingMore(false)
+            setIsRefreshing(false) // C3: Clear refresh state
         }
+    }
+
+    // C3: Desktop manual refresh handler
+    async function handleManualRefresh() {
+        await fetchData(true) // reset=true to start from page 1
     }
 
     function loadMore() {
@@ -887,6 +895,13 @@ function Tasks() {
 
     return (
         <div className="animation-fade-in">
+            {/* C3: Desktop Refresh Button */}
+            <div className="dashboard-refresh-action">
+                <button onClick={handleManualRefresh} disabled={isRefreshing} className="btn-refresh" title="Atualizar tarefas">
+                    <RefreshCw size={18} className={isRefreshing ? 'spinning' : ''} />
+                    <span className="btn-refresh-text">Atualizar</span>
+                </button>
+            </div>
 
 
             {/* Actionable Metrics Cards */}
