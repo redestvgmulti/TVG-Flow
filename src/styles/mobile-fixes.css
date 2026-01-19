@@ -23,7 +23,7 @@
    MOBILE ONLY (<= 768px)
    ======================================== */
 @media (max-width: 768px) {
-  
+
   /* PARTE 1: OVERFLOW HORIZONTAL (MOBILE ONLY) */
   html,
   body {
@@ -31,12 +31,12 @@
     max-width: 100%;
     overflow-x: hidden;
   }
-  
+
   /* PARTE 2: REMOVER RELÓGIO DO HEADER (MOBILE ONLY) */
   .status-clock {
     display: none !important;
   }
-  
+
   /* PARTE 3: CORRIGIR CONTAINERS COM 100vw */
   .app-container,
   .page-container,
@@ -47,20 +47,20 @@
     max-width: 100% !important;
     overflow-x: hidden !important;
   }
-  
+
   /* PARTE 4: SIDEBAR MOBILE FLEXÍVEL E SEGURA */
   .sidebar,
   .mobile-sidebar {
     max-width: 85vw !important;
     overflow-x: hidden !important;
   }
-  
+
   /* PARTE 5: BLOQUEAR TRANSFORM APENAS QUANDO SIDEBAR ABERTA */
   body.sidebar-open,
   body.mobile-menu-open {
     transform: none !important;
   }
-  
+
   /* PARTE 6: GARANTIR VIEWPORT CORRETO */
   .status-bar,
   header,
@@ -68,7 +68,7 @@
     width: 100% !important;
     max-width: 100% !important;
   }
-  
+
   /* PARTE 7: OVERLAY NÃO DEVE CAUSAR SCROLL */
   .mobile-menu-overlay,
   .backdrop-invisible {
@@ -76,7 +76,7 @@
     max-width: 100% !important;
     overflow: hidden !important;
   }
-  
+
   /* PARTE 8: CONTEÚDO NÃO VAZA */
   .app-container,
   .layout-container,
@@ -84,7 +84,7 @@
     overflow-x: hidden !important;
     max-width: 100% !important;
   }
-  
+
   /* PARTE 9: CARDS DO DASHBOARD SEM SCROLL INTERNO */
   .metric-card,
   .dashboard-card,
@@ -99,21 +99,36 @@
     height: auto !important;
     max-height: none !important;
   }
-  
-  /* PARTE 10: CHART — ALTURA FIXA PARA RENDERIZAÇÃO */
+
+  /* PARTE 10: CHART — ALTURA CORRETA PARA RENDERIZAÇÃO */
   .chart-container,
-  .dashboard-chart,
-  .recharts-wrapper,
-  .recharts-responsive-container {
+  .dashboard-chart {
     width: 100% !important;
     min-height: 220px !important;
     height: 220px !important;
-    
-    /* Evitar flex com height 0 */
-    display: block !important;
-    flex: none !important;
+    position: relative !important;
+
+    /* Manter flex mas com dimensões definidas */
+    display: flex !important;
+    flex-direction: column !important;
   }
-  
+
+  /* Recharts precisa de espaço para calcular */
+  .recharts-wrapper,
+  .recharts-responsive-container {
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 220px !important;
+  }
+
+  /* Garantir que o SVG renderize */
+  .recharts-wrapper svg,
+  .recharts-surface {
+    width: 100% !important;
+    height: auto !important;
+    min-height: 200px !important;
+  }
+
   /* PARTE 11: PRÓXIMAS TAREFAS — SEM SCROLL INTERNO */
   .next-tasks-list,
   .tasks-list,
@@ -123,7 +138,7 @@
     overflow: visible !important;
     overflow-y: visible !important;
   }
-  
+
   /* PARTE 12: DASHBOARD PAGE — SCROLL ÚNICO */
   .dashboard-page,
   .dashboard-content,
@@ -139,7 +154,7 @@
   body {
     -webkit-overflow-scrolling: touch;
   }
-  
+
   @media (max-width: 768px) {
     .sidebar {
       padding-left: max(16px, env(safe-area-inset-left)) !important;
