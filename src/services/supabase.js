@@ -1,6 +1,4 @@
 import { createClient } from '@supabase/supabase-js';
-// ❌ REMOVED: withRetry wrapper was stripping auth headers from Supabase requests
-// The Supabase client handles retries internally and MUST NOT have fetch intercepted
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -12,21 +10,14 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-//CRITICAL: Export raw Supabase client WITHOUT any fetch interceptors
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    storage: window.localStorage, // CRITICAL: Explicit localStorage for iOS PWA persistence
-    storageKey: 'tvg-flow-auth', // Custom key to avoid conflicts
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true // CRITICAL: Must be true for recovery/invite links to work
-  },
-  realtime: {
-    params: {
-      eventsPerSecond: 10
-    }
-  }
-});
+// ✅ CRITICAL FIX: Minimal config replicating CityOS (which works perfectly on iOS)
+// The Supabase SDK has optimized defaults for iOS PWA persistence.
+// Custom storageKey and explicit config were causing iOS to clear localStorage on app close.
+// By using SDK defaults, we let it handle iOS-specific storage optimizations.
+// 
+// IMPACT: One-time logout for existing users (accepted in production approval).
+// BENEFIT: Session will persist correctly on iOS after re-login.
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // Helper para verificar se o usuário está autenticado
 export const isAuthenticated = async () => {
