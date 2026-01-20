@@ -48,11 +48,12 @@ function NotificationCenter() {
         fetchNotifications()
         checkPushStatus()
 
-        // Subscribe to real-time notifications with unique channel name
-        const channelName = `notificacoes:${professionalId}`
+        // Subscribe to real-time notifications from BOTH tables
+        // notificacoes = meetings (Portuguese schema)
+        // notifications = tasks (English schema)
 
-        const channel = supabase
-            .channel(channelName)
+        const notificacoesChannel = supabase
+            .channel(`notificacoes:${professionalId}`)
             .on('postgres_changes', {
                 event: 'INSERT',
                 schema: 'public',
@@ -63,15 +64,35 @@ function NotificationCenter() {
             })
             .subscribe((status, err) => {
                 if (err) {
-                    console.error('[NotificationCenter] Realtime subscription error:', err)
+                    console.error('[NotificationCenter] notificacoes subscription error:', err)
                 }
                 if (status === 'CHANNEL_ERROR') {
-                    console.error('[NotificationCenter] ❌ Channel error - realtime may not be enabled')
+                    console.error('[NotificationCenter] ❌ notificacoes channel error')
+                }
+            })
+
+        const notificationsChannel = supabase
+            .channel(`notifications:${professionalId}`)
+            .on('postgres_changes', {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'notifications',
+                filter: `profissional_id=eq.${professionalId}`
+            }, (payload) => {
+                handleNewTaskNotification(payload)
+            })
+            .subscribe((status, err) => {
+                if (err) {
+                    console.error('[NotificationCenter] notifications subscription error:', err)
+                }
+                if (status === 'CHANNEL_ERROR') {
+                    console.error('[NotificationCenter] ❌ notifications channel error')
                 }
             })
 
         return () => {
-            supabase.removeChannel(channel)
+            supabase.removeChannel(notificacoesChannel)
+            supabase.removeChannel(notificationsChannel)
         }
     }, [professionalId])
 
@@ -132,22 +153,67 @@ function NotificationCenter() {
         try {
             setLoading(true)
 
-            const { data, error } = await supabase
-                .from('notificacoes')
-                .select('*')
-                .eq('profissional_id', professionalId)
-                .order('created_at', { ascending: false })
-                .limit(50)
+            // Fetch from BOTH tables in parallel
+            const [notificacoesRes, notificationsRes] = await Promise.all([
+                supabase
+                    .from('notificacoes')
+                    .select('*')
+                    .eq('profissional_id', professionalId)
+                    .order('created_at', { ascending: false })
+                    .limit(50),
 
-            if (error) throw error
+                supabase
+                    .from('notifications')
+                    .select('*')
+                    .eq('profissional_id', professionalId)
+                    .order('created_at', { ascending: false })
+                    .limit(50)
+            ])
 
-            setNotifications(data || [])
-            setUnreadCount(data?.filter(n => !n.lida).length || 0)
+            if (notificacoesRes.error) throw notificacoesRes.error
+            if (notificationsRes.error) throw notificationsRes.error
+
+            // Normalize notifications (English) to notificacoes (Portuguese) schema
+            const normalizedTasks = (notificationsRes.data || []).map(n => ({
+                id: n.id,
+                profissional_id: n.profissional_id,
+                tipo: n.type,
+                titulo: n.title,
+                mensagem: n.message,
+                metadata: n.metadata || {},
+                lida: n.read_at !== null,
+                created_at: n.created_at
+            }))
+
+            // Merge both arrays and sort by created_at
+            const allNotifications = [...(notificacoesRes.data || []), ...normalizedTasks]
+            allNotifications.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+
+            setNotifications(allNotifications)
+            setUnreadCount(allNotifications.filter(n => !n.lida).length)
         } catch (error) {
             console.error('Erro ao buscar notificações:', error)
         } finally {
             setLoading(false)
         }
+    }
+
+    function handleNewTaskNotification(payload) {
+        // Adapter: Normalize notifications (English) schema to notificacoes (Portuguese)
+        const task = payload.new
+        const normalized = {
+            id: task.id,
+            profissional_id: task.profissional_id,
+            tipo: task.type,
+            titulo: task.title,
+            mensagem: task.message,
+            metadata: task.metadata || {},
+            lida: task.read_at !== null,
+            created_at: task.created_at
+        }
+
+        // Reuse existing handler with normalized payload
+        handleNewNotification({ new: normalized })
     }
 
     function handleNewNotification(payload) {
