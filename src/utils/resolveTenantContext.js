@@ -67,13 +67,15 @@ export async function resolveTenantContext() {
     // ========================================
     // STEP 3: Super Admin Validation
     // ========================================
-    const IMMUTABLE_SUPER_ADMIN_EMAIL = 'geovanepanini@icloud.com';
-    let effectiveRole = professional.role;
+    // Security: Ask backend if user is super_admin
+    const { data: isSuperAdmin, error: rpcError } = await supabase.rpc('is_super_admin');
 
-    // Security: Only specific email can be super_admin
-    if (effectiveRole === 'super_admin' && user.email !== IMMUTABLE_SUPER_ADMIN_EMAIL) {
+    if (!rpcError && isSuperAdmin) {
+        effectiveRole = 'super_admin';
+    } else if (effectiveRole === 'super_admin') {
+        // If DB says super_admin but RPC says no -> Downgrade (Safety)
         if (import.meta.env.DEV) {
-            console.warn('[TenantContext] SECURITY: Unauthorized super_admin detected, downgrading');
+            console.warn('[TenantContext] SECURITY: DB role is super_admin but RPC denied. Downgrading.');
         }
         effectiveRole = 'admin';
     }

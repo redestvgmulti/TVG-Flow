@@ -288,9 +288,17 @@ export function AuthProvider({ children }) {
             }
 
             // Update state - this is safe now because session is confirmed
+            // Security: Check Super Admin Status via RPC
+            const { data: isSuperAdmin } = await supabase.rpc('is_super_admin')
+
+            // Update state - prioritizando a resposta do backend RPC
             setProfessionalId(professionalData.id)
             setProfessionalName(professionalData.nome)
-            setRole(professionalData.role)
+
+            // Se o backend diz que é super admin, é super admin.
+            // Caso contrário, usa o role do banco de dados.
+            setRole(isSuperAdmin ? 'super_admin' : professionalData.role)
+
             setAccountStatus(professionalData.ativo ? 'active' : 'suspended')
             setLoading(false)
         } catch (err) {
@@ -312,10 +320,10 @@ export function AuthProvider({ children }) {
 
         if (error) throw error
 
-        const IMMUTABLE_SUPER_ADMIN_EMAIL = 'geovanepanini@icloud.com'
+        // 1. SECURE BACKEND CHECK
+        const { data: isSuperAdmin, error: rpcError } = await supabase.rpc('is_super_admin')
 
-        // 1. IMMUTABLE CHECK
-        if (email === IMMUTABLE_SUPER_ADMIN_EMAIL) {
+        if (!rpcError && isSuperAdmin) {
             return { ...data, role: 'super_admin' }
         }
 

@@ -17,7 +17,17 @@ if (!supabaseUrl || !supabaseAnonKey) {
 // 
 // IMPACT: One-time logout for existing users (accepted in production approval).
 // BENEFIT: Session will persist correctly on iOS after re-login.
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// ⚠️ 2026-01-20: Configuração explícita para estabilizar conexão Realtime pós-rotação
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true
+  },
+  realtime: {
+    timeout: 20000
+  }
+});
 
 // Helper para verificar se o usuário está autenticado
 export const isAuthenticated = async () => {

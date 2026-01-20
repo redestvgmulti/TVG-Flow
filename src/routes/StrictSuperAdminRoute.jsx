@@ -23,13 +23,8 @@ export default function StrictSuperAdminRoute({ children }) {
         )
     }
 
-    const IMMUTABLE_SUPER_ADMIN_EMAIL = 'geovanepanini@icloud.com'
-
-    // CRITICAL: Dual check - both conditions must be true
-    if (
-        user?.email !== IMMUTABLE_SUPER_ADMIN_EMAIL ||
-        role !== 'super_admin'
-    ) {
+    // CRITICAL: Role check (validated by backend RPC in AuthContext)
+    if (role !== 'super_admin') {
         // Security: Redirect to root, not to their dashboard
         // This prevents leaking information about user's actual role
         return <Navigate to="/" replace />

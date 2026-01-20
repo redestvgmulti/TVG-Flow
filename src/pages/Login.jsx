@@ -31,10 +31,8 @@ function Login() {
             const { role: rawRole } = await signIn(email, password)
             const role = normalizeRole(rawRole)
 
-            const IMMUTABLE_SUPER_ADMIN_EMAIL = 'geovanepanini@icloud.com'
-
             // Route based on role
-            if (email === IMMUTABLE_SUPER_ADMIN_EMAIL && role === 'super_admin') {
+            if (role === 'super_admin') {
                 navigate('/platform')
             } else if (role === 'admin') {
                 navigate('/admin')
