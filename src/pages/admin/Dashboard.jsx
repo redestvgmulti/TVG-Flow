@@ -193,14 +193,21 @@ export default function Painel() {
         setMutating(true) // I3: Block refresh during delete
         setIsDeleting(true)
         try {
+            // Optimistic update: Remove task from UI immediately
+            setRecentTasks(prev => prev.filter(t => t.id !== selectedTask.id))
+
             await deleteTask(selectedTask.id)
             toast.success('Tarefa excluída com sucesso')
             setShowDeleteModal(false)
             setSelectedTask(null) // Closes summary modal too
+
+            // Refresh data to ensure consistency
             fetchPainelData()
         } catch (error) {
             console.error('Error deleting task:', error)
             toast.error('Erro ao excluir tarefa')
+            // Rollback: Refresh to restore state
+            fetchPainelData()
         } finally {
             setIsDeleting(false)
             setMutating(false) // I3: Unlock refresh
