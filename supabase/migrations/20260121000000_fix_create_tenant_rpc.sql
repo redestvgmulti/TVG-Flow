@@ -1,5 +1,6 @@
 -- Migration: Fix Create Tenant RPC Order of Operations
 -- Description: Updates safe_create_tenant_db to prevent TENANT_LINK_REQUIRED error by ensuring tenant link exists before admin promotion.
+-- Fixes NULL role constraint by initializing as 'staff'.
 
 CREATE OR REPLACE FUNCTION create_tenant_db(
     p_company_name TEXT,
@@ -17,13 +18,14 @@ BEGIN
     RETURNING id INTO new_company_id;
 
     -- 2. Ensure Professional Profile Exists
-    -- CRITICAL FIX: Do NOT set 'admin' role yet. Insert with safe default if new.
-    -- If they exist, keep their current role.
-    INSERT INTO profissionais (id, nome, email, ativo)
-    VALUES (p_admin_id, p_admin_name, p_admin_email, true)
+    -- CRITICAL FIX: Do NOT set 'admin' role yet. Insert with safe default 'staff'.
+    -- The role column is NOT NULL, so we must provide a value. 'staff' is safe.
+    INSERT INTO profissionais (id, nome, email, ativo, role)
+    VALUES (p_admin_id, p_admin_name, p_admin_email, true, 'staff')
     ON CONFLICT (id) DO UPDATE
     SET nome = p_admin_name, ativo = true;
-    -- Note: We intentionally do NOT update or set 'role' here to avoid triggering constraints.
+    -- Note: We intentionally do NOT update role on conflict to avoid demoting existing admins if any 
+    -- (though this flow is for new tenants, handling conflict is good practice).
 
     -- 3. Link Admin to Company
     INSERT INTO empresa_profissionais (empresa_id, profissional_id)
