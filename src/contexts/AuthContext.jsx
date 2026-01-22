@@ -288,16 +288,12 @@ export function AuthProvider({ children }) {
             }
 
             // Update state - this is safe now because session is confirmed
-            // Security: Check Super Admin Status via RPC
-            const { data: isSuperAdmin } = await supabase.rpc('is_super_admin')
-
             // Update state - prioritizando a resposta do backend RPC
             setProfessionalId(professionalData.id)
             setProfessionalName(professionalData.nome)
 
-            // Se o backend diz que é super admin, é super admin.
-            // Caso contrário, usa o role do banco de dados.
-            setRole(isSuperAdmin ? 'super_admin' : professionalData.role)
+            // RBAC CANONICAL FIX: Única fonte da verdade é public.profissionais.role
+            setRole(professionalData.role)
 
             setAccountStatus(professionalData.ativo ? 'active' : 'suspended')
             setLoading(false)
@@ -320,23 +316,10 @@ export function AuthProvider({ children }) {
 
         if (error) throw error
 
-        // 1. SECURE BACKEND CHECK
-        const { data: isSuperAdmin, error: rpcError } = await supabase.rpc('is_super_admin')
+        // 1. SECURE BACKEND CHECK - REMOVED (RBAC Canonical Fix)
+        // Super Admin status is now exclusively determined by professionals.role
 
-        if (!rpcError && isSuperAdmin) {
-            return { ...data, role: 'super_admin' }
-        }
-
-        // Fetch role immediately to allow redirect logic
-        // 🛡️ REMOVED: Immediate role query causes 401 race condition
-        // The role will be fetched by fetchProfessionalData via onAuthStateChange listener
-        // which fires AFTER JWT is properly injected in the client
         let safeRole = null
-
-        // 🛡️ REMOVED: Background activity tracking via PATCH
-        // This was causing 401 errors by executing before JWT was ready
-        // Activity tracking is non-critical and can be re-implemented later
-        // with proper JWT verification if needed
 
         return { ...data, role: safeRole }
     }

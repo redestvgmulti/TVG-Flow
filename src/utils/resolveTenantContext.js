@@ -67,22 +67,12 @@ export async function resolveTenantContext() {
     // ========================================
     // STEP 3: Super Admin Validation
     // ========================================
-    // Security: Ask backend if user is super_admin
-    const { data: isSuperAdmin, error: rpcError } = await supabase.rpc('is_super_admin');
-
-    if (!rpcError && isSuperAdmin) {
-        effectiveRole = 'super_admin';
-    } else if (effectiveRole === 'super_admin') {
-        // If DB says super_admin but RPC says no -> Downgrade (Safety)
-        if (import.meta.env.DEV) {
-            console.warn('[TenantContext] SECURITY: DB role is super_admin but RPC denied. Downgrading.');
-        }
-        effectiveRole = 'admin';
-    }
+    // RBAC CANONICAL FIX: Role comes ONLY from professional record
+    let effectiveRole = professional.role;
 
     if (effectiveRole === 'super_admin') {
         if (import.meta.env.DEV) {
-            console.info(`[TenantContext] Super admin access granted`);
+            console.info(`[TenantContext] Super admin access granted (Source: DB)`);
         }
         return {
             mode: 'super_admin',
