@@ -51,10 +51,20 @@ export default function EditTaskModal({ task, isOpen, onClose, onSuccess, curren
                 setIsWorkflow(hasMicroTasks)
 
                 // Set Form Data
+                // Helper to format date for datetime-local input (YYYY-MM-DDTHH:MM) in LOCAL time
+                let formattedDeadline = ''
+                if (freshTaskData.deadline) {
+                    const date = new Date(freshTaskData.deadline)
+                    // Adjust to local timezone for display
+                    const offset = date.getTimezoneOffset() * 60000
+                    const localDate = new Date(date.getTime() - offset)
+                    formattedDeadline = localDate.toISOString().slice(0, 16)
+                }
+
                 setFormData({
                     titulo: freshTaskData.titulo,
                     descricao: freshTaskData.descricao || '',
-                    deadline: freshTaskData.deadline ? new Date(freshTaskData.deadline).toISOString().slice(0, 16) : '',
+                    deadline: formattedDeadline,
                     drive_link: freshTaskData.drive_link || ''
                 })
 
@@ -107,8 +117,13 @@ export default function EditTaskModal({ task, isOpen, onClose, onSuccess, curren
             const payload = {
                 titulo: formData.titulo,
                 descricao: formData.descricao,
-                deadline: formData.deadline,
+                // deadline is handled below
                 drive_link: formData.drive_link
+            }
+
+            // Validar e formatar deadline
+            if (formData.deadline) {
+                payload.deadline = new Date(formData.deadline).toISOString()
             }
 
             // Auto-update status if deadline is moved to future
