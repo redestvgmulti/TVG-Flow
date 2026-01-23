@@ -282,7 +282,7 @@ export const validateStatusChange = (currentStatus, newStatus) => {
  * @param {object} payload 
  */
 export const updateOS = async (osId, payload) => {
-    const { data, error } = await supabase.rpc('update_os', {
+    const { data, error } = await supabase.rpc('update_os_v2', {
         p_os_id: osId,
         p_payload: payload
     });

@@ -395,10 +395,6 @@ function Tasks() {
     }
 
     function handleOpenEditModal(task) {
-        if (task.created_by !== user?.id) {
-            toast.error('Apenas o criador da OS pode editá-la')
-            return
-        }
         setSelectedTask(task)
         setShowEditModal(true)
     }

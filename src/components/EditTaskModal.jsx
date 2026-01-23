@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { updateOS, cancelOS, getActiveProfessionals } from '../services/taskService'
 import { supabase } from '../services/supabase'
 import { useFocusTrap } from '../hooks/useFocusTrap'
+import { usePermission } from '../hooks/usePermission'
 
 export default function EditTaskModal({ task, isOpen, onClose, onSuccess, currentUserId, onCancelRequest }) {
     if (!isOpen || !task) return null
@@ -29,6 +30,11 @@ export default function EditTaskModal({ task, isOpen, onClose, onSuccess, curren
     const [addedMicroTasks, setAddedMicroTasks] = useState([]) // New ones
     const [removedMicroTaskIds, setRemovedMicroTaskIds] = useState([]) // Deleted ones
 
+    // Permissions
+    const { canUpdateOS } = usePermission()
+    const [canEdit, setCanEdit] = useState(false)
+    const [checkingPermissions, setCheckingPermissions] = useState(true)
+
     useEffect(() => {
         if (isOpen) {
             loadInitialData()
@@ -39,11 +45,19 @@ export default function EditTaskModal({ task, isOpen, onClose, onSuccess, curren
 
         setLoading(true)
         try {
-            const [profsData, freshTaskData] = await Promise.all([
+            const [profsData, freshTaskData, permissionResult] = await Promise.all([
                 getActiveProfessionals(),
-                fetchFreshTask(task.id)
+                fetchFreshTask(task.id),
+                canUpdateOS(task.id)
             ])
             setProfessionals(profsData || [])
+            setCanEdit(permissionResult)
+            setCheckingPermissions(false)
+
+            if (!permissionResult) {
+                // Optional: Toast warning
+                // toast.error('Você tem permissão apenas para leitura.')
+            }
 
             if (freshTaskData) {
                 // Determine Type
@@ -269,6 +283,7 @@ export default function EditTaskModal({ task, isOpen, onClose, onSuccess, curren
                             onChange={(e) => setFormData({ ...formData, titulo: e.target.value })}
                             className="input"
                             placeholder="Título da tarefa"
+                            disabled={!canEdit}
                         />
                     </div>
 
@@ -282,6 +297,7 @@ export default function EditTaskModal({ task, isOpen, onClose, onSuccess, curren
                                 value={formData.deadline}
                                 onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
                                 className="input"
+                                disabled={!canEdit}
                             />
 
                         </div>
@@ -296,6 +312,7 @@ export default function EditTaskModal({ task, isOpen, onClose, onSuccess, curren
                             onChange={(e) => setFormData({ ...formData, descricao: e.target.value })}
                             className="input min-h-[120px]"
                             placeholder="Descreva os detalhes da tarefa..."
+                            disabled={!canEdit}
                         />
                     </div>
 
@@ -312,6 +329,7 @@ export default function EditTaskModal({ task, isOpen, onClose, onSuccess, curren
                             onChange={(e) => setFormData({ ...formData, drive_link: e.target.value })}
                             className="input"
                             placeholder="https://drive.google.com/..."
+                            disabled={!canEdit}
                         />
                     </div>
 
@@ -322,13 +340,15 @@ export default function EditTaskModal({ task, isOpen, onClose, onSuccess, curren
                                 <h3 className="text-md font-semibold text-gray-800 flex items-center gap-2">
                                     <FileText size={16} /> Micro Tarefas
                                 </h3>
-                                <button
-                                    type="button"
-                                    onClick={handleAddMicroTask}
-                                    className="text-sm text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1"
-                                >
-                                    <Plus size={16} /> Adicionar Etapa
-                                </button>
+                                {canEdit && (
+                                    <button
+                                        type="button"
+                                        onClick={handleAddMicroTask}
+                                        className="text-sm text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1"
+                                    >
+                                        <Plus size={16} /> Adicionar Etapa
+                                    </button>
+                                )}
                             </div>
 
                             <div className="space-y-3">
@@ -424,7 +444,8 @@ export default function EditTaskModal({ task, isOpen, onClose, onSuccess, curren
                             <button
                                 type="button"
                                 onClick={handleCancelOS}
-                                className="px-4 py-2 bg-white text-red-600 border border-red-200 rounded-md hover:bg-red-50 hover:border-red-300 text-sm font-medium transition-colors shadow-sm"
+                                className={`px-4 py-2 bg-white text-red-600 border border-red-200 rounded-md hover:bg-red-50 hover:border-red-300 text-sm font-medium transition-colors shadow-sm ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                disabled={!canEdit}
                             >
                                 Cancelar OS
                             </button>
@@ -446,10 +467,15 @@ export default function EditTaskModal({ task, isOpen, onClose, onSuccess, curren
                     <button
                         onClick={handleSave}
                         className="btn btn-primary"
-                        disabled={loading}
+                        disabled={loading || !canEdit}
                     >
                         {loading ? 'Salvando...' : 'Salvar Alterações'}
                     </button>
+                    {!checkingPermissions && !canEdit && (
+                        <div className="absolute left-6 text-xs text-red-500 font-medium">
+                            Modo Leitura (Sem Permissão)
+                        </div>
+                    )}
                 </div>
             </div>
         </div>,

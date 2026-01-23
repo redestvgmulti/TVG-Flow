@@ -44,6 +44,14 @@ export function usePermission() {
         return data === true
     }
 
+    const canUpdateOS = async (osId) => {
+        const { data, error } = await supabase.rpc('can_update_os', {
+            p_os_id: osId
+        })
+        if (error) return false
+        return data === true
+    }
+
     return {
         role,
         isSuperAdmin,
@@ -52,6 +60,7 @@ export function usePermission() {
         canCreateOS,
         canCreateWorkflowOS,
         canAssignProfessional,
-        canViewCliente
+        canViewCliente,
+        canUpdateOS
     }
 }
