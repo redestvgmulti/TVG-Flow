@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { usePermission } from '../hooks/usePermission' // NEW: Use permission hook
 import { supabase } from '../services/supabase'
 import {
     CheckSquare,
@@ -16,7 +17,13 @@ import {
 import { NAV_ITEMS, MANAGEMENT_ITEMS } from '../config/navigation'
 
 function Sidebar({ mobileMenuOpen, onClose }) {
-    const { user, role, professionalName, signOut } = useAuth()
+    const { user, professionalName, signOut } = useAuth()
+    const { isSuperAdmin, isAdmin, isStaff } = usePermission() // NEW: Centralized permissions
+
+    // Derived roles just for rendering logic (simplifies JSX conditions)
+    const canSeeAdminMenu = isAdmin() || isSuperAdmin()
+    const canSeeStaffMenu = isStaff()
+
     const [adminPanelOpen, setAdminPanelOpen] = useState(true)
     const [profileOpen, setProfileOpen] = useState(false)
     const [incompleteTaskCount, setIncompleteTaskCount] = useState(0)
@@ -24,7 +31,7 @@ function Sidebar({ mobileMenuOpen, onClose }) {
 
     // Fetch incomplete task count and meetings count for staff
     useEffect(() => {
-        if (role === 'staff' || role === 'profissional') {
+        if (canSeeStaffMenu) {
             fetchIncompleteTaskCount()
             fetchUpcomingMeetingsCount()
 
@@ -52,7 +59,7 @@ function Sidebar({ mobileMenuOpen, onClose }) {
                 meetingSubscription.unsubscribe()
             }
         }
-    }, [role])
+    }, [canSeeStaffMenu])
 
     async function fetchIncompleteTaskCount() {
         try {
@@ -87,10 +94,6 @@ function Sidebar({ mobileMenuOpen, onClose }) {
                 .from('reunioes')
                 .select('*', { count: 'exact', head: true })
                 .eq('status', 'scheduled')
-            // Optional: Filter only future meetings?
-            // .gte('data_inicio', new Date().toISOString())
-            // Requirement: "mesmo comportamento que tarefas" (Tasks counts all pending).
-            // So we count all 'scheduled' meetings.
 
             if (error) {
                 console.warn('Silent error fetching meeting count:', error)
@@ -137,7 +140,7 @@ function Sidebar({ mobileMenuOpen, onClose }) {
                 {/* Navigation */}
                 <nav className="sidebar-nav">
                     {/* ADMIN MENU */}
-                    {(role === 'admin' || role === 'super_admin') && (
+                    {canSeeAdminMenu && (
                         <>
                             <div className="nav-section">
                                 <p className="nav-label">MENU PRINCIPAL</p>
@@ -190,14 +193,9 @@ function Sidebar({ mobileMenuOpen, onClose }) {
                     )}
 
                     {/* STAFF MENU */}
-                    {(role === 'staff' || role === 'profissional') && (
+                    {canSeeStaffMenu && (
                         <div className="nav-section">
                             <p className="nav-label">MEU ESPAÇO</p>
-
-                            {/* Render "Solicitar" specially if we want it at the top or emphasized, 
-                                BUT User asked for strict hierarchy: Dashboard -> Tasks -> Calendar -> Content -> Request.
-                                Let's map them in order of definition (which we can control via filter).
-                            */}
 
                             {NAV_ITEMS.filter(item => (item.roles.includes('staff') || item.roles.includes('profissional')) && item.key !== 'profile').map(item => (
                                 <NavLink

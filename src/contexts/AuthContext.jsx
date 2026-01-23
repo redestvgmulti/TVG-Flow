@@ -253,49 +253,35 @@ export function AuthProvider({ children }) {
 
         try {
             // 🛡️ CRITICAL GUARD: Prevent queries without valid session
-            // This eliminates 401 errors on /login route and ensures clean architecture
             const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession()
 
             if (!currentSession || !currentSession.user) {
-                // 🔐 CRITICAL FIX: Session temporarily unavailable ≠ Logout
-                // Don't clear authentication state - just skip professional data fetch
                 setLoading(false)
                 isFetchingRef.current = false
                 return
             }
 
-            // Now safe to proceed - session exists and JWT is present
-            const { data: professionalData, error } = await supabase
-                .from('profissionais')
-                .select(`
-          id,
-          nome,
-          email,
-          role,
-          ativo,
-          departamento:departamentos(id, nome, cor_hex)
-        `)
-                .eq('id', userId)
-                .single()
+            // 🔐 SOURCE OF TRUTH: Call RPC instead of raw table select
+            const { data: identity, error } = await supabase.rpc('get_current_identity')
 
             if (error) {
-                console.error('[Auth] Error fetching professional data:', error)
+                console.error('[Auth] Error fetching identity:', error)
                 throw error
             }
 
-            if (!professionalData) {
-                throw new Error('Professional data not found')
+            if (!identity || !identity.has_profile) {
+                console.error('[Auth] Profile not found via RPC')
+                throw new Error('Professional profile not found')
             }
 
-            // Update state - this is safe now because session is confirmed
-            // Update state - prioritizando a resposta do backend RPC
-            setProfessionalId(professionalData.id)
-            setProfessionalName(professionalData.nome)
+            // Update state - prioritizando a resposta RPC
+            setProfessionalId(identity.id)
+            setProfessionalName(identity.nome)
 
-            // RBAC CANONICAL FIX: Única fonte da verdade é public.profissionais.role
-            setRole(professionalData.role)
+            // RBAC CANONICAL FIX: Role is strictly from RPC
+            setRole(identity.role)
 
-            setAccountStatus(professionalData.ativo ? 'active' : 'suspended')
+            setAccountStatus(identity.ativo ? 'active' : 'suspended')
             setLoading(false)
         } catch (err) {
             console.error('[Auth] ❌ Error in fetchProfessionalData:', err)

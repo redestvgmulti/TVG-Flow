@@ -1,22 +1,74 @@
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, ShieldAlert } from 'lucide-react'
 import TaskForm from '../../../components/forms/TaskForm'
 import { useAuth } from '../../../contexts/AuthContext'
+import { usePermission } from '../../../hooks/usePermission'
 import '../../../styles/admin-forms.css'
 
 export default function NewOS() {
     const navigate = useNavigate()
-    const { role, loading } = useAuth()
+    const { role, loading: authLoading } = useAuth()
+    const { isSuperAdmin, isStaff, isAdmin, checkCreateOS } = usePermission()
+    const [permissionChecked, setPermissionChecked] = useState(false)
+    const [canPerformAction, setCanPerformAction] = useState(false)
+    const [checkError, setCheckError] = useState(null)
 
-    if (loading) {
+    useEffect(() => {
+        // Run permission check once auth is ready
+        if (!authLoading && role) {
+            async function validateAccess() {
+                console.log('--- DEBUG PERMISSION CHECK ---')
+                console.log('Role:', role)
+                console.log('isSuperAdmin:', isSuperAdmin())
+                console.log('isAdmin:', isAdmin())
+
+                // If implicit role check fails, block immediately
+                if (isSuperAdmin()) {
+                    console.log('BLOCKED: Super Admin')
+                    setCanPerformAction(false) // Super admin never creates OS
+                    setPermissionChecked(true)
+                    return
+                }
+
+                if (isStaff()) {
+                    // Start simple: Staff logic - usually simple OS only.
+                    // But here we block general access and force them to specific route if needed.
+                    // For now, based on user request: "Execution Plane Only"
+                    setCanPerformAction(false)
+                    setPermissionChecked(true)
+                    return
+                }
+
+                // For Admin, we must validate via Backend RPC too (defensive)
+                // However, without a selected Tenant/Client at this stage (this is just the page load),
+                // we rely on the Role for PAGE ACCESS, and the Form will validate specific Tenant/Client later.
+                // UNLESS we want to pre-validate if they have ANY active tenant link? 
+
+                // User instruction: "NewOS.jsx ... Remove client-side validation... Use canCreateOS..."
+                // Since this is the initial page load, we allow access if Admin, 
+                // but the form submission will be strictly gated by checkCreateOS(tenant, client).
+
+                if (isAdmin()) {
+                    setCanPerformAction(true)
+                } else {
+                    setCanPerformAction(false)
+                }
+                setPermissionChecked(true)
+            }
+            validateAccess()
+        }
+    }, [authLoading, role, isSuperAdmin, isStaff, isAdmin])
+
+    if (authLoading || !permissionChecked) {
         return <div className="p-8 text-center text-secondary">Verificando permissões...</div>
     }
 
     // 🔒 RBAC CANONICAL CHECK
-    // Source: public.profissionais.role
+    // Source: public.profissionais.role via usePermission hook
 
     // 1. Super Admin: CONTROL PLANE ONLY (Never creates OS)
-    if (role === 'super_admin') {
+    if (isSuperAdmin()) {
         return (
             <div className="admin-page-container">
                 <div className="flex flex-col items-center justify-center h-[50vh] text-center p-8">
@@ -36,14 +88,14 @@ export default function NewOS() {
     }
 
     // 2. Staff: EXECUTION PLANE ONLY (Never creates OS directly via this route)
-    if (role === 'staff' || role === 'profissional') {
+    if (isStaff()) {
         return (
             <div className="admin-page-container">
                 <div className="flex flex-col items-center justify-center h-[50vh] text-center p-8">
                     <ShieldAlert size={48} className="text-orange-500 mb-4" />
                     <h2 className="text-xl font-bold text-primary mb-2">Acesso Negado</h2>
                     <p className="text-secondary">
-                        Seu perfil ({role}) não tem permissão para criar novas Ordens de Serviço.
+                        Seu perfil ({role}) não tem permissão para criar novas Ordens de Serviço nesta interface.
                     </p>
                     <button onClick={() => navigate('/admin')} className="mt-6 admin-back-btn w-auto px-6">
                         Voltar
@@ -53,15 +105,15 @@ export default function NewOS() {
         )
     }
 
-    // 3. Unknown Rule
-    if (role !== 'admin') {
+    // 3. Fallback for unknown states or implicit denials
+    if (!isAdmin()) {
         return (
             <div className="admin-page-container">
                 <div className="flex flex-col items-center justify-center h-[50vh] text-center p-8">
                     <ShieldAlert size={48} className="text-red-500 mb-4" />
                     <h2 className="text-xl font-bold text-primary mb-2">Erro de Permissão</h2>
                     <p className="text-secondary">
-                        Papel não definido ou inválido: <strong>{role || 'NULO'}</strong>.
+                        Não foi possível validar suas credenciais para esta operação.
                     </p>
                 </div>
             </div>

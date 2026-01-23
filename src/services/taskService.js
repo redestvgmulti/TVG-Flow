@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { resolveTenantContext } from '../utils/resolveTenantContext';
+
 
 // ==================== CRUD de Tarefas ====================
 
@@ -162,23 +162,25 @@ export const getActiveProfessionals = async () => {
  * CRITICAL: Must respect tenant isolation
  */
 export const getClients = async (searchQuery = '') => {
-    const { mode, tenantId, role } = await resolveTenantContext();
+    // 🔒 RBAC: Rely on RLS + Backend Identity
+    const { data: identity, error: idError } = await supabase.rpc('get_current_identity');
+    if (idError || !identity) throw new Error('Falha ao identificar usuário');
 
-    // Super admins don't see operational companies
-    if (mode === 'super_admin') {
+    // Super admins don't see operational companies (or handle them differently)
+    if (identity.role === 'super_admin') {
         return [];
     }
 
     // Staff cannot list companies
-    if (role === 'staff') {
+    if (identity.role === 'staff') {
         throw new Error('Operation not allowed for staff');
     }
 
+    // RLS filters by tenant automatically
     let query = supabase
         .from('empresas')
         .select('id, nome')
         .eq('empresa_tipo', 'operacional')
-        .eq('tenant_id', tenantId)
         .order('nome');
 
     if (searchQuery) {

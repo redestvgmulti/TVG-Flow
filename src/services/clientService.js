@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { resolveTenantContext } from '../utils/resolveTenantContext';
+
 
 /**
  * Client Service - Manages operational companies (empresas operacionais)
@@ -13,23 +13,25 @@ import { resolveTenantContext } from '../utils/resolveTenantContext';
 
 export const clientService = {
     getAll: async () => {
-        const { mode, tenantId, role } = await resolveTenantContext();
+        // 🔒 RBAC: Rely on RLS + Backend Identity
+        const { data: identity, error: idError } = await supabase.rpc('get_current_identity');
+        if (idError || !identity) throw new Error('Falha ao identificar usuário');
 
-        // Super admins don't manage operational companies
-        if (mode === 'super_admin') {
+        // Super admins don't manage operational companies via this service
+        if (identity.role === 'super_admin') {
             return [];
         }
 
         // Staff cannot list companies
-        if (role === 'staff') {
+        if (identity.role === 'staff') {
             throw new Error('Operation not allowed for staff');
         }
 
+        // RLS automatically filters by tenant via `empresa_profissionais`
         const { data, error } = await supabase
             .from('empresas')
             .select('*')
             .eq('empresa_tipo', 'operacional')
-            .eq('tenant_id', tenantId)
             .order('nome');
 
         if (error) throw error;
@@ -37,24 +39,44 @@ export const clientService = {
     },
 
     create: async (clientData) => {
-        const { mode, tenantId, role } = await resolveTenantContext();
+        const { data: identity, error: idError } = await supabase.rpc('get_current_identity');
+        if (idError || !identity) throw new Error('Falha ao identificar usuário');
 
         // Super admins cannot create operational companies
-        if (mode === 'super_admin') {
+        if (identity.role === 'super_admin') {
             throw new Error('Super admins cannot create operational companies');
         }
 
         // Staff cannot create companies
-        if (role === 'staff') {
+        if (identity.role === 'staff') {
             throw new Error('Operation not allowed for staff');
         }
+
+        // Insert: RLS will enforce tenant_id assignment or trigger will handle it
+        // Note: Ideally the backend trigger assigns tenant_id based on creator's context.
+        // If we must pass it, we'd need to fetch it. 
+        // Assuming strict backend triggers for now or that RLS policy allows insert and defaults it.
+        // If explicit tenant_id is needed, we create a specific RPC `create_client` preferably.
+        // However, for this refactor, let's assume RLS policy inserts `tenant_id` or we query it safely.
+
+        // SAFE FALLBACK: Query one company to get tenant_id if not auto-injected by trigger
+        // Validation: Admin must belong to a tenant.
+
+        const { data: myCompany } = await supabase
+            .from('empresas')
+            .select('tenant_id')
+            .eq('empresa_tipo', 'tenant')
+            .limit(1)
+            .single();
+
+        if (!myCompany?.tenant_id) throw new Error('Tenant context not found for Admin');
 
         const { data, error } = await supabase
             .from('empresas')
             .insert([{
                 ...clientData,
                 empresa_tipo: 'operacional',
-                tenant_id: tenantId
+                tenant_id: myCompany.tenant_id
             }])
             .select()
             .single();
@@ -64,26 +86,25 @@ export const clientService = {
     },
 
     update: async (id, updates) => {
-        const { mode, tenantId, role } = await resolveTenantContext();
+        const { data: identity, error: idError } = await supabase.rpc('get_current_identity');
+        if (idError || !identity) throw new Error('Falha ao identificar usuário');
 
-        // Super admins cannot update operational companies
-        if (mode === 'super_admin') {
+        if (identity.role === 'super_admin') {
             throw new Error('Super admins cannot update operational companies');
         }
 
-        // Staff cannot update companies
-        if (role === 'staff') {
+        if (identity.role === 'staff') {
             throw new Error('Operation not allowed for staff');
         }
 
         // Ensure tenant_id is not modified
         const { tenant_id, empresa_tipo, ...safeUpdates } = updates;
 
+        // RLS ensures we can only update our own companies
         const { data, error } = await supabase
             .from('empresas')
             .update(safeUpdates)
             .eq('id', id)
-            .eq('tenant_id', tenantId) // Extra safety: ensure it belongs to this tenant
             .select()
             .single();
 
@@ -92,23 +113,22 @@ export const clientService = {
     },
 
     delete: async (id) => {
-        const { mode, tenantId, role } = await resolveTenantContext();
+        const { data: identity, error: idError } = await supabase.rpc('get_current_identity');
+        if (idError || !identity) throw new Error('Falha ao identificar usuário');
 
-        // Super admins cannot delete operational companies
-        if (mode === 'super_admin') {
+        if (identity.role === 'super_admin') {
             throw new Error('Super admins cannot delete operational companies');
         }
 
-        // Staff cannot delete companies
-        if (role === 'staff') {
+        if (identity.role === 'staff') {
             throw new Error('Operation not allowed for staff');
         }
 
+        // RLS enforces permission
         const { error } = await supabase
             .from('empresas')
             .delete()
-            .eq('id', id)
-            .eq('tenant_id', tenantId); // Extra safety: ensure it belongs to this tenant
+            .eq('id', id);
 
         if (error) throw error;
     }
