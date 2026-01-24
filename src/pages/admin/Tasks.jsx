@@ -288,10 +288,12 @@ function Tasks() {
             const tasksResult = results[0]
 
             // Handle 416/418 Range Not Satisfiable error gracefully
+            // Handle 416/418 Range Not Satisfiable error gracefully
             if (tasksResult.error) {
                 const errorCode = tasksResult.error.code
                 const errorMsg = tasksResult.error.message || ''
-                const errorStatus = tasksResult.error.status
+                // FIX: Check status on the response object first (tasksResult.status), as tasksResult.error.status might be undefined
+                const errorStatus = tasksResult.status || tasksResult.error.status
 
                 // Check for range errors (416 or 418 status codes, or PGRST103 code)
                 if (
@@ -302,7 +304,13 @@ function Tasks() {
                     errorStatus === 418 ||
                     errorMsg.toLowerCase().includes('range not satisfiable')
                 ) {
-                    handleRangeError(reset, pageToFetch)
+                    console.warn(`[Tasks] Range error (416/PGRST103) at page ${pageToFetch}. Auto-correcting to page 0.`)
+                    // CRITICAL FIX: Reset explicitly to page 0 to recover from "Range Not Satisfiable"
+                    resetPaginationState()
+                    // Re-fetch immediately at page 0 to restore UI
+                    if (!reset && pageToFetch !== 0) {
+                        setTimeout(() => fetchData(true), 50)
+                    }
                     return
                 }
 
