@@ -14,6 +14,40 @@ function Tasks() {
     const { user, role } = useAuth()
     const [tasks, setTasks] = useState([])
     const [professionals, setProfessionals] = useState([])
+
+    // ------------------------------------------------------------------
+    // 🛡️ HARDENING: CANONICAL STATUS MAP & CONSTANTS
+    // ------------------------------------------------------------------
+    const TASK_STATUS = {
+        PENDENTE: 'pendente',
+        EM_EXECUCAO: 'em_execucao',
+        CONCLUIDA: 'concluida',
+        ATRASADA: 'atrasada',
+        CANCELADA: 'cancelada'
+    }
+
+    // Single source of truth for "In Progress" filters (Remote & Local)
+    const IN_PROGRESS_STATUSES = [
+        TASK_STATUS.EM_EXECUCAO,
+        'in_progress',   // Legacy fallback
+        'em_progresso',  // Legacy fallback
+        'em progresso'   // Legacy fallback
+    ]
+
+    // Single source of truth for "Completed" filters
+    const COMPLETED_STATUSES = [
+        TASK_STATUS.CONCLUIDA,
+        'completed',     // Legacy fallback
+        'concluída',     // Legacy fallback
+        'concluida'      // Legacy fallback
+    ]
+
+    // Single source of truth for "Pending" filters
+    const PENDING_STATUSES = [
+        TASK_STATUS.PENDENTE,
+        'pending'        // Legacy fallback
+    ]
+
     const [departments, setDepartments] = useState([])
     const [clients, setClients] = useState([])
     const [loading, setLoading] = useState(true)
@@ -207,17 +241,17 @@ function Tasks() {
 
             if (statusFilter && statusFilter !== 'all') {
                 if (statusFilter === 'pending') {
-                    tasksQuery = tasksQuery.in('status', ['pending', 'pendente'])
+                    tasksQuery = tasksQuery.in('status', PENDING_STATUSES)
                 } else if (statusFilter === 'in_progress') {
-                    tasksQuery = tasksQuery.in('status', ['in_progress', 'em_progresso', 'em progresso'])
+                    tasksQuery = tasksQuery.in('status', IN_PROGRESS_STATUSES)
                 } else if (statusFilter === 'completed') {
-                    tasksQuery = tasksQuery.in('status', ['completed', 'concluída', 'concluida'])
+                    tasksQuery = tasksQuery.in('status', COMPLETED_STATUSES)
                 } else if (statusFilter === 'overdue') {
                     // FIX: Overdue is a calculated state (Deadline < Now AND Status != Completed)
                     // It is NOT a stored status in the DB usually.
                     tasksQuery = tasksQuery
                         .lt('deadline', new Date().toISOString())
-                        .not('status', 'in', '("completed","concluída","concluida","cancelada")')
+                        .not('status', 'in', `("${COMPLETED_STATUSES.join('","')}","cancelada")`)
                 } else if (statusFilter === 'cancelada') {
                     tasksQuery = tasksQuery.eq('status', 'cancelada')
                 } else {
@@ -765,21 +799,28 @@ function Tasks() {
         // Normalize status to lowercase
         const normalized = status ? status.toLowerCase() : ''
 
-        if (normalized === 'completed' || normalized === 'concluida' || normalized === 'concluída') return 'badge-success'
-        if (normalized === 'in_progress' || normalized === 'em_progresso' || normalized === 'em progresso') return 'badge-primary'
+        if (COMPLETED_STATUSES.includes(normalized)) return 'badge-success'
+        if (IN_PROGRESS_STATUSES.includes(normalized)) return 'badge-primary'
         if (normalized === 'overdue' || normalized === 'atrasada') return 'badge-danger'
         // Use subtle badge for pending
-        if (normalized === 'pending' || normalized === 'pendente') return 'badge-pending-subtle'
+        if (PENDING_STATUSES.includes(normalized)) return 'badge-pending-subtle'
+        if (normalized === 'cancelada') return 'badge-neutral' // Add explicit canceled style if needed, reuse neutral for now
 
         return 'badge-neutral'
     }
 
     function getStatusLabel(status) {
-        switch (status) {
-            case 'completed': return 'Concluída'
-            case 'in_progress': return 'Em Progresso'
-            case 'overdue': return 'Atrasada'
-            case 'pending': return 'Pendente'
+        const normalized = status ? status.toLowerCase() : ''
+
+        // Check canonical lists first
+        if (COMPLETED_STATUSES.includes(normalized)) return 'Concluída'
+        if (IN_PROGRESS_STATUSES.includes(normalized)) return 'Em Execução' // Or "Em Progresso"
+        if (PENDING_STATUSES.includes(normalized)) return 'Pendente'
+
+        switch (normalized) {
+            case 'overdue':
+            case 'atrasada': return 'Atrasada'
+            case 'cancelada': return 'Cancelada'
             default: return status
         }
     }
@@ -846,7 +887,7 @@ function Tasks() {
         if (statusFilter && statusFilter !== 'all') {
             const statusLabels = {
                 'pending': 'Pendentes',
-                'in_progress': 'Em Progresso',
+                'in_progress': 'Em Execução', // Updated label
                 'completed': 'Concluídas',
                 'overdue': 'Atrasadas',
                 'cancelada': 'Canceladas'
