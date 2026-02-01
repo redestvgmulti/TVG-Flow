@@ -33,8 +33,7 @@ USING (
                         JOIN public.empresa_profissionais ep ON t.empresa_id = ep.empresa_id
                         WHERE t.id = logs_tarefas.tarefa_id
                         AND ep.profissional_id = auth.uid()
-                        AND ep.ativo = true
-                    )
+)
                 )
             ELSE 
                 TRUE
@@ -69,8 +68,7 @@ USING (
                         JOIN public.empresa_profissionais ep ON t.empresa_id = ep.empresa_id
                         WHERE t.id = arquivos_tarefas.tarefa_id
                         AND ep.profissional_id = auth.uid()
-                        AND ep.ativo = true
-                    )
+)
                 )
             ELSE 
                 TRUE

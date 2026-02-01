@@ -9,6 +9,9 @@
 -- 
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+-- Ensure pg_cron extension is enabled
+CREATE EXTENSION IF NOT EXISTS pg_cron WITH SCHEMA extensions;
+
 -- Schedule cron job to call meeting-reminders Edge Function
 SELECT cron.schedule(
     'meeting-reminders-cron',                        -- Job name

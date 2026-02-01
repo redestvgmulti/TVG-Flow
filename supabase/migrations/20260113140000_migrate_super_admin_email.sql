@@ -6,10 +6,19 @@
 -- Data: 2026-01-13
 -- =====================================================
 
--- PASSO 1: Remover usuário antigo do auth.users (se existir)
-DELETE FROM auth.users WHERE email = 'geovanepanini@agencyflow.com';
+-- 🔐 EXTENSÕES NECESSÁRIAS
+-- Necessário para crypt() e gen_salt()
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
--- PASSO 2: Criar/atualizar usuário correto no auth.users
+-- =====================================================
+-- PASSO 1: Remover usuário antigo do auth.users (se existir)
+-- =====================================================
+DELETE FROM auth.users 
+WHERE email = 'geovanepanini@agencyflow.com';
+
+-- =====================================================
+-- PASSO 2: Criar usuário correto no auth.users (se não existir)
+-- =====================================================
 INSERT INTO auth.users (
     id,
     email,
@@ -36,22 +45,37 @@ SELECT
     'authenticated',
     'authenticated'
 WHERE NOT EXISTS (
-    SELECT 1 FROM auth.users WHERE email = 'geovanepanini@icloud.com'
+    SELECT 1 
+    FROM auth.users 
+    WHERE email = 'geovanepanini@icloud.com'
 );
 
--- PASSO 3: Atualizar tabela profissionais
--- Primeiro, obter o ID do novo usuário
+-- =====================================================
+-- PASSO 3: Sincronizar com tabela profissionais
+-- =====================================================
 DO $$
 DECLARE
     new_user_id UUID;
 BEGIN
-    -- Buscar ID do usuário do auth
-    SELECT id INTO new_user_id
+    -- Buscar ID do usuário no auth
+    SELECT id 
+    INTO new_user_id
     FROM auth.users
     WHERE email = 'geovanepanini@icloud.com';
 
-    -- Se não existe na tabela profissionais, criar
-    INSERT INTO public.profissionais (id, email, nome, role, ativo, created_at)
+    IF new_user_id IS NULL THEN
+        RAISE EXCEPTION 'Usuário geovanepanini@icloud.com não encontrado em auth.users';
+    END IF;
+
+    -- Criar ou atualizar profissional como SUPER ADMIN
+    INSERT INTO public.profissionais (
+        id,
+        email,
+        nome,
+        role,
+        ativo,
+        created_at
+    )
     VALUES (
         new_user_id,
         'geovanepanini@icloud.com',
@@ -62,20 +86,22 @@ BEGIN
     )
     ON CONFLICT (id) DO UPDATE
     SET 
-        email = 'geovanepanini@icloud.com',
-        role = 'super_admin',
-        ativo = true,
-        nome = 'Geovane Panini';
+        email = EXCLUDED.email,
+        nome  = EXCLUDED.nome,
+        role  = 'super_admin',
+        ativo = true;
 
-    -- Remover profissional antigo (se existir)
-    DELETE FROM public.profissionais 
+    -- Remover profissional antigo (dummy), se existir
+    DELETE FROM public.profissionais
     WHERE email = 'geovanepanini@agencyflow.com'
-    AND id != new_user_id;
-    
-    RAISE NOTICE 'Super admin migrado com sucesso. ID: %', new_user_id;
+      AND id <> new_user_id;
+
+    RAISE NOTICE '✅ Super admin migrado com sucesso. ID: %', new_user_id;
 END $$;
 
--- PASSO 4: Verificação
+-- =====================================================
+-- PASSO 4: Verificação final
+-- =====================================================
 SELECT 
     u.id,
     u.email,

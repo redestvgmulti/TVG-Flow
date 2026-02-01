@@ -41,8 +41,7 @@ BEGIN
         FROM empresa_profissionais ep
         WHERE ep.profissional_id = admin_id
           AND ep.empresa_id = tenant_id
-          AND ep.ativo = true
-    ) INTO has_link;
+) INTO has_link;
 
     IF has_link THEN
         RAISE NOTICE 'Link already exists and is active. No fix needed.';
@@ -88,7 +87,8 @@ WHERE email = 'evandro@tvgflow.com'
 SELECT 
     p.email,
     p.role,
-    COUNT(ep.id) FILTER (WHERE e.empresa_tipo = 'tenant' AND ep.ativo = true) as tenant_links
+    COUNT(ep.id) FILTER (WHERE e.empresa_tipo = 'tenant'
+) as tenant_links
 FROM profissionais p
 LEFT JOIN empresa_profissionais ep ON ep.profissional_id = p.id
 LEFT JOIN empresas e ON e.id = ep.empresa_id

@@ -42,8 +42,7 @@ BEGIN
         JOIN empresas e ON e.id = ep.empresa_id 
         WHERE ep.profissional_id = p.id 
           AND e.empresa_tipo = 'tenant'
-          AND ep.ativo = true
-    );
+);
 
     GET DIAGNOSTICS orphan_count = ROW_COUNT;
 
@@ -75,8 +74,7 @@ BEGIN
             JOIN empresas e ON e.id = ep.empresa_id 
             WHERE ep.profissional_id = NEW.id 
               AND e.empresa_tipo = 'tenant'
-              AND ep.ativo = true
-        ) THEN
+) THEN
             -- Find default tenant
             SELECT id INTO default_tenant_id
             FROM empresas

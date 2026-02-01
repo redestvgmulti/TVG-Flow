@@ -42,8 +42,7 @@ BEGIN
               FROM empresa_profissionais ep
               JOIN empresas e ON e.id = ep.empresa_id
               WHERE ep.profissional_id = p.id
-                AND ep.ativo = true
-                AND e.empresa_tipo = 'tenant'
+AND e.empresa_tipo = 'tenant'
                 AND e.ativo = true
           )
     LOOP

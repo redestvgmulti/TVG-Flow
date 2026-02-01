@@ -14,15 +14,15 @@ ALTER TABLE tarefas_itens
 
 -- 2. Create indexes CONCURRENTLY (no table locks)
 -- Only index rows where deadline_at is set (new micro tasks only)
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tarefas_itens_deadline
+CREATE INDEX IF NOT EXISTS idx_tarefas_itens_deadline
 ON tarefas_itens(deadline_at)
 WHERE deadline_at IS NOT NULL;
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tarefas_itens_started
+CREATE INDEX IF NOT EXISTS idx_tarefas_itens_started
 ON tarefas_itens(started_at)
 WHERE started_at IS NOT NULL;
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tarefas_itens_finished
+CREATE INDEX IF NOT EXISTS idx_tarefas_itens_finished
 ON tarefas_itens(finished_at)
 WHERE finished_at IS NOT NULL;
 

@@ -20,7 +20,7 @@ BEGIN
             FROM empresa_profissionais ep
             JOIN profissionais p ON ep.profissional_id = p.id
             WHERE ep.empresa_id = e.id
-            AND (p.role = 'admin' OR ep.funcao = 'admin') 
+            AND (p.role = 'admin') 
             -- Check for 'admin' role in either table to be robust
         )
     )

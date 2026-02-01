@@ -87,8 +87,7 @@ BEGIN
         WHERE ep.empresa_id = empresa_uuid
             AND p.id = auth.uid()
             AND p.role IN ('admin', 'super_admin')
-            AND ep.ativo = TRUE
-    );
+);
 END;
 $$ LANGUAGE plpgsql STABLE SECURITY DEFINER;
 

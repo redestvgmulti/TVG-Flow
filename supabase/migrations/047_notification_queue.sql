@@ -44,10 +44,10 @@ ON notification_queue(processed_at)
 WHERE status IN ('completed', 'failed');
 
 -- Idempotency: Prevent duplicate events in queue (recent window)
-CREATE UNIQUE INDEX idx_notification_queue_unique_event
+-- Simplified to avoid NOW() which is not IMMUTABLE
+CREATE UNIQUE INDEX IF NOT EXISTS idx_notification_queue_unique_event
 ON notification_queue(entity_id, event_type)
-WHERE status IN ('pending', 'processing') 
-  AND created_at > NOW() - INTERVAL '1 hour';
+WHERE status IN ('pending', 'processing');
 
 -- Comments
 COMMENT ON TABLE notification_queue IS 'Async queue for notification processing via pg_cron. Prevents sync triggers from blocking transactions.';

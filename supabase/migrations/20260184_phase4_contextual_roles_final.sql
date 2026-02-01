@@ -24,6 +24,11 @@ ALTER TABLE public.cliente_profissionais ENABLE ROW LEVEL SECURITY;
 
 -- 3. RLS Policies
 -- Super Admin: Full Access
+DROP POLICY IF EXISTS "Super Admin: Full Access Link" ON public.cliente_profissionais;
+DROP POLICY IF EXISTS "Admin: Manage Client Links" ON public.cliente_profissionais;
+DROP POLICY IF EXISTS "Staff: View Own Links" ON public.cliente_profissionais;
+
+-- Super Admin: Full Access Link
 CREATE POLICY "Super Admin: Full Access Link"
     ON public.cliente_profissionais FOR ALL TO authenticated
     USING (public.is_super_admin())
@@ -68,6 +73,8 @@ ON public.cliente_profissionais(cliente_id, profissional_id, funcao);
 -- 5. UPDATE RPC (V4.1) - Enforce Contextual Validation + Admin Bypass
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+-- Add explicit drop to avoid "cannot change return type" error
+DROP FUNCTION IF EXISTS create_os_with_micro_tasks(UUID, TEXT, TEXT, TIMESTAMPTZ, JSONB, TEXT, UUID, TEXT, UUID);
 CREATE OR REPLACE FUNCTION create_os_with_micro_tasks(
     p_empresa_id UUID,
     p_titulo TEXT,

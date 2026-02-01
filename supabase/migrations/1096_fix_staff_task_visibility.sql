@@ -30,7 +30,7 @@ USING (
   OR
   -- Professional sees only if they have a micro-task for this task
   EXISTS (
-    SELECT 1 FROM tarefas_itens ti
+    SELECT 1 FROM tarefas_micro ti
     WHERE ti.tarefa_id = tarefas.id
       AND ti.profissional_id = auth.uid()
   )
@@ -51,7 +51,7 @@ USING (
   OR
   -- Professional can update if they have a micro-task
   EXISTS (
-    SELECT 1 FROM tarefas_itens ti
+    SELECT 1 FROM tarefas_micro ti
     WHERE ti.tarefa_id = tarefas.id
       AND ti.profissional_id = auth.uid()
   )
@@ -66,7 +66,7 @@ WITH CHECK (
   )
   OR
   EXISTS (
-    SELECT 1 FROM tarefas_itens ti
+    SELECT 1 FROM tarefas_micro ti
     WHERE ti.tarefa_id = tarefas.id
       AND ti.profissional_id = auth.uid()
   )
@@ -110,10 +110,10 @@ DO $$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_policies 
-    WHERE tablename = 'tarefas_itens' 
-    AND policyname = 'Professionals can view their micro-tasks'
+    WHERE tablename = 'tarefas_micro' 
+    AND policyname = 'Professionals view own micro tasks'
   ) THEN
-    RAISE WARNING 'Policy "Professionals can view their micro-tasks" not found on tarefas_itens';
+    RAISE WARNING 'Policy "Professionals view own micro tasks" not found on tarefas_micro';
   END IF;
 END $$;
 

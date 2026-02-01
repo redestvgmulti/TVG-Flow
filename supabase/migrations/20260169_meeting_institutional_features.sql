@@ -17,7 +17,7 @@ ADD COLUMN IF NOT EXISTS checked_at TIMESTAMPTZ;
 DROP POLICY IF EXISTS "Admin can update own meetings" ON reunioes;
 CREATE POLICY "Admin can update own meetings"
     ON reunioes FOR UPDATE
-    USING (created_by = auth.uid()); -- or is_admin_in_empresa logic if broader
+    USING (criada_por = auth.uid()); -- or is_admin_in_empresa logic if broader
 
 -- Policy: Staff can update their own participation (Check-in)
 DROP POLICY IF EXISTS "Staff can confirm presence" ON reunioes_participantes;

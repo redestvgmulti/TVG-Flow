@@ -75,8 +75,7 @@ CREATE POLICY "Users can view functions within their tenant"
       FROM empresas e
       JOIN empresa_profissionais ep ON ep.empresa_id = e.id
       WHERE ep.profissional_id = auth.uid()
-        AND ep.ativo = true
-        AND e.ativo = true
+AND e.ativo = true
     )
   );
 

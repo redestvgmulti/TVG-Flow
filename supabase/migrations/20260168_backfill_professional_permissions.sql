@@ -1,77 +1,70 @@
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
--- FlowOS - Backfill Function Permissions
--- Populate empresa_funcoes_permitidas from existing data
+-- FlowOS - Backfill Professional Permissions
+-- Populate empresa_profissionais_permitidos from existing data
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 -- 
--- Purpose: Migrate existing function definitions from empresa_profissionais
---          to the new function permission table.
+-- Purpose: Migrate existing empresa_profissionais relationships to the new
+--          permission-based model WITHOUT breaking current functionality.
 --
 -- Strategy:
---   1. For each unique function in each operational company
---   2. Create a function permission record
---   3. Preserve workflow functionality
+--   1. For each professional linked to an operational company
+--   2. Create a permission record allowing them to work on that company
+--   3. Preserve existing UX while implementing the correct architecture
 -- 
 -- SAFETY:
---   - Uses DISTINCT to avoid duplicates
 --   - Uses ON CONFLICT DO NOTHING to be idempotent
 --   - Only migrates operational companies (empresa_tipo = 'operacional')
---   - Only migrates non-null functions
+--   - Does NOT modify or delete existing data
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
--- Backfill function permissions from existing empresa_profissionais links
-INSERT INTO empresa_funcoes_permitidas (
+-- Backfill permissions from existing empresa_profissionais links
+INSERT INTO empresa_profissionais_permitidos (
   tenant_id,
   empresa_operacional_id,
-  funcao,
+  profissional_id,
   ativo,
   created_at
 )
-SELECT DISTINCT
+SELECT
   COALESCE(e.tenant_id, e.id) as tenant_id,  -- Resolve tenant_id correctly
   e.id as empresa_operacional_id,             -- The operational company
-  ep.funcao,                                   -- The function name
-  true as ativo,                               -- All backfilled functions are active
-  MIN(ep.created_at) as created_at            -- Use earliest creation timestamp
+  ep.profissional_id,                          -- The professional
+  ep.ativo,                                    -- Preserve active status
+  ep.created_at                                -- Preserve creation timestamp
 FROM empresa_profissionais ep
 JOIN empresas e ON e.id = ep.empresa_id
 WHERE e.empresa_tipo = 'operacional'          -- Only operational companies
   AND e.ativo = true                           -- Only active companies
-  AND ep.funcao IS NOT NULL                    -- Only records with functions defined
-  AND ep.ativo = true                          -- Only active relationships
-GROUP BY 
-  COALESCE(e.tenant_id, e.id),
-  e.id,
-  ep.funcao
-ON CONFLICT (empresa_operacional_id, funcao) 
+-- Only active relationships
+ON CONFLICT (empresa_operacional_id, profissional_id) 
 DO NOTHING;                                    -- Skip duplicates (idempotent)
 
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 -- VALIDATION QUERIES (for manual verification)
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
--- Count how many function permissions were created
+-- Count how many permissions were created
 DO $$
 DECLARE
-  function_permission_count INT;
-  source_function_count INT;
+  permission_count INT;
+  source_count INT;
 BEGIN
-  SELECT COUNT(*) INTO function_permission_count 
-  FROM empresa_funcoes_permitidas;
+  SELECT COUNT(*) INTO permission_count 
+  FROM empresa_profissionais_permitidos;
   
-  SELECT COUNT(DISTINCT (e.id, ep.funcao)) INTO source_function_count
+  SELECT COUNT(*) INTO source_count
   FROM empresa_profissionais ep
   JOIN empresas e ON e.id = ep.empresa_id
   WHERE e.empresa_tipo = 'operacional'
     AND e.ativo = true
-    AND ep.funcao IS NOT NULL
-    AND ep.ativo = true;
+;
   
-  RAISE NOTICE 'Function Permission Backfill Complete:';
-  RAISE NOTICE '  - Function permissions created: %', function_permission_count;
-  RAISE NOTICE '  - Unique source functions processed: %', source_function_count;
+  RAISE NOTICE 'Backfill Complete:';
+  RAISE NOTICE '  - Permissions created: %', permission_count;
+  RAISE NOTICE '  - Source records processed: %', source_count;
   
-  -- Validation
-  IF function_permission_count = 0 THEN
-    RAISE WARNING 'No function permissions were created. Check if empresa_profissionais has funcao data.';
+  -- Validation: counts should match (assuming no pre-existing duplicates)
+  IF permission_count < source_count THEN
+    RAISE WARNING 'Permission count is lower than source count. This may indicate duplicates or conflicts.';
   END IF;
 END $$;

@@ -44,7 +44,6 @@ USING (
             WHERE p.id = auth.uid()
             AND p.role = 'admin'
             AND ep.empresa_id::text = (storage.foldername(name))[1]
-            AND ep.ativo = true
         )
         OR
         -- Staff: validar participação na tarefa específica
@@ -86,7 +85,6 @@ WITH CHECK (
             WHERE p.id = auth.uid()
             AND p.role = 'admin'
             AND ep.empresa_id::text = (storage.foldername(name))[1]
-            AND ep.ativo = true
         )
         OR
         -- Staff: validar participação na tarefa
@@ -130,26 +128,15 @@ USING (
         WHERE p.id = auth.uid()
         AND p.role = 'admin'
         AND ep.empresa_id::text = (storage.foldername(name))[1]
-        AND ep.ativo = true
     )
 );
 
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
--- 5. COMMENTS & DOCUMENTATION
--- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-COMMENT ON POLICY "Task participants can view attachments" ON storage.objects IS 
-'Hardening: Valida participação na tarefa específica antes de permitir acesso.
-Admin bypassa (vê toda empresa), staff só vê tarefas onde está envolvido.';
-
-COMMENT ON POLICY "Task participants can upload attachments" ON storage.objects IS 
-'Hardening: Valida participação na tarefa antes de permitir upload.
-Estrutura de path: {empresa_id}/{tarefa_id}/{filename}';
 
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
--- 6. ROLLBACK INSTRUCTIONS (if needed)
+-- 5. ROLLBACK INSTRUCTIONS (if needed)
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 --
 -- Restaurar policies originais executando:
 -- /Users/geovanepanini/Dev/FlowOS/supabase/migrations/034_storage_bucket.sql
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+

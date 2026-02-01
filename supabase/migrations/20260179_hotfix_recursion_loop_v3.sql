@@ -4,8 +4,14 @@
 -- CHANGE: Inlines 'is_admin' check to avoid 'function does not exist' errors.
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
--- 1. Helper Function: Check if Admin has access to the Micro Task's Company
--- Defined as SECURITY DEFINER to bypass RLS on 'tarefas'.
+-- 1. Update the Restrictive Policy on 'tarefas_micro'
+-- Drop the recursive version FIRST to release dependency on the function
+DROP POLICY IF EXISTS "Global Constraint: Tenant Isolation for Admins" ON tarefas_micro;
+
+-- 2. Helper Function: Check if Admin has access to the Micro Task's Company
+-- Defined as SECURITY DEFINER to bypass RLS on 'tarefas' when reading it.
+-- Add explicit drop to avoid return type conflict
+DROP FUNCTION IF EXISTS check_admin_micro_task_access(UUID);
 CREATE OR REPLACE FUNCTION check_admin_micro_task_access(p_micro_task_id UUID)
 RETURNS BOOLEAN
 SECURITY DEFINER
@@ -26,8 +32,7 @@ BEGIN
         JOIN empresa_profissionais ep ON t.empresa_id = ep.empresa_id
         WHERE tm.id = p_micro_task_id
         AND ep.profissional_id = auth.uid()
-        AND ep.ativo = true
-        AND EXISTS (SELECT 1 FROM profissionais WHERE id = auth.uid() AND role = 'admin')
+AND EXISTS (SELECT 1 FROM profissionais WHERE id = auth.uid() AND role = 'admin')
     );
 END;
 $$ LANGUAGE plpgsql;

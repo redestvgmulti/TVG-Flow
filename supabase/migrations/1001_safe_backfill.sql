@@ -15,7 +15,6 @@ SET empresa_id = (
     SELECT ep.empresa_id
     FROM empresa_profissionais ep
     WHERE ep.profissional_id = t.assigned_to
-    AND ep.ativo = true
     ORDER BY ep.created_at ASC  -- Pega a mais antiga (presumivelmente a principal)
     LIMIT 1
 )

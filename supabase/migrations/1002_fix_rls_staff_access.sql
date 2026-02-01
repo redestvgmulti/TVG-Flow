@@ -22,8 +22,7 @@ USING (
     SELECT ep.empresa_id 
     FROM empresa_profissionais ep 
     WHERE ep.profissional_id = auth.uid()
-    AND ep.ativo = true
-  )
+)
 );
 
 -- 3. Política: Ver detalhes de profissionais da minha empresa
@@ -42,7 +41,7 @@ USING (
         SELECT ep_me.empresa_id 
         FROM empresa_profissionais ep_me 
         WHERE ep_me.profissional_id = auth.uid() 
-        AND ep_me.ativo = true
+
     )
   )
 );

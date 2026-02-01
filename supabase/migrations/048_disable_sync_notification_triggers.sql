@@ -6,14 +6,29 @@
 -- ⚠️ MUST EXECUTE BEFORE MIGRATION 050 (queue activation)
 -- Prevents DUPLICATION (sync + async running simultaneously)
 
--- 1. Disable Macro Task Completion Trigger
-ALTER TABLE tarefas DISABLE TRIGGER IF EXISTS trg_notify_macro_completion;
+-- 1. Disable-- Macro task completion notification trigger
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_notify_macro_completion') THEN
+    ALTER TABLE tarefas DISABLE TRIGGER trg_notify_macro_completion;
+  END IF;
+END$$;
 
--- 2. Disable Micro Task Completion Trigger  
-ALTER TABLE tarefas_micro DISABLE TRIGGER IF EXISTS trg_notify_micro_completion_admin;
+-- Micro task completion notification trigger  
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_notify_micro_completion_admin') THEN
+    ALTER TABLE tarefas_micro DISABLE TRIGGER trg_notify_micro_completion_admin;
+  END IF;
+END$$;
 
--- 3. Disable Micro Task Devolution Trigger
-ALTER TABLE tarefas_micro DISABLE TRIGGER IF EXISTS trg_notify_micro_devolution_admin;
+-- Micro task devolution notification trigger
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_notify_micro_devolution_admin') THEN
+    ALTER TABLE tarefas_micro DISABLE TRIGGER trg_notify_micro_devolution_admin;
+  END IF;
+END$$;
 
 -- 4. Keep task assignment trigger active for now (not critical for lock contention)
 -- We'll migrate this in Phase 2 if needed

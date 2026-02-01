@@ -8,6 +8,8 @@
 -- 4. [ISOLATION] Garante coerência Tenant x Cliente x Staff.
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+-- Add explicit drop to avoid "cannot change return type" error
+DROP FUNCTION IF EXISTS create_os_with_micro_tasks(UUID, TEXT, TEXT, TIMESTAMPTZ, JSONB, TEXT, UUID, TEXT, UUID);
 CREATE OR REPLACE FUNCTION create_os_with_micro_tasks(
     p_empresa_id UUID,
     p_titulo TEXT,

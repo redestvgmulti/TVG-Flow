@@ -8,6 +8,8 @@
 
 -- 1. Helper Function: Check if Admin has access to the Micro Task's Company
 -- Defined as SECURITY DEFINER to bypass RLS on 'tarefas' when reading it.
+-- Add explicit drop to avoid return type conflict
+DROP FUNCTION IF EXISTS check_admin_micro_task_access(UUID);
 CREATE OR REPLACE FUNCTION check_admin_micro_task_access(p_micro_task_id UUID)
 RETURNS BOOLEAN
 SECURITY DEFINER
@@ -27,8 +29,7 @@ BEGIN
         JOIN empresa_profissionais ep ON t.empresa_id = ep.empresa_id
         WHERE t.id = p_micro_task_id
         AND ep.profissional_id = auth.uid()
-        AND ep.ativo = true
-        AND EXISTS (SELECT 1 FROM profissionais WHERE id = auth.uid() AND role = 'admin')
+AND EXISTS (SELECT 1 FROM profissionais WHERE id = auth.uid() AND role = 'admin')
     );
 END;
 $$ LANGUAGE plpgsql;

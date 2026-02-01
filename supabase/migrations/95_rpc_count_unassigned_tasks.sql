@@ -11,6 +11,8 @@
 -- 
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+-- Add explicit drop to avoid return type conflict
+DROP FUNCTION IF EXISTS count_unassigned_tasks(UUID);
 CREATE OR REPLACE FUNCTION count_unassigned_tasks()
 RETURNS INTEGER
 LANGUAGE sql

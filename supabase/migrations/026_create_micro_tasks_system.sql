@@ -10,7 +10,7 @@
 -- Micro Tasks Table
 -- Stores individual workflow stages with dependencies and weights
 CREATE TABLE IF NOT EXISTS tarefas_micro (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tarefa_id UUID NOT NULL REFERENCES tarefas(id) ON DELETE CASCADE,
     profissional_id UUID NOT NULL REFERENCES profissionais(id),
     funcao TEXT NOT NULL,
@@ -25,11 +25,12 @@ CREATE TABLE IF NOT EXISTS tarefas_micro (
 -- Micro Tasks Audit Log
 -- Complete audit trail for all micro task actions
 CREATE TABLE IF NOT EXISTS tarefas_micro_logs (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tarefa_micro_id UUID NOT NULL REFERENCES tarefas_micro(id) ON DELETE CASCADE,
     from_profissional_id UUID REFERENCES profissionais(id),
     to_profissional_id UUID REFERENCES profissionais(id),
-    acao TEXT NOT NULL CHECK (acao IN ('created', 'started', 'completed', 'returned', 'blocked', 'unblocked')),
+    acao TEXT NOT NULL 
+        CHECK (acao IN ('created', 'started', 'completed', 'returned', 'blocked', 'unblocked')),
     motivo TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -38,12 +39,12 @@ CREATE TABLE IF NOT EXISTS tarefas_micro_logs (
 -- 2. CREATE INDEXES
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-CREATE INDEX idx_tarefas_micro_tarefa_id ON tarefas_micro(tarefa_id);
-CREATE INDEX idx_tarefas_micro_profissional_id ON tarefas_micro(profissional_id);
-CREATE INDEX idx_tarefas_micro_status ON tarefas_micro(status);
-CREATE INDEX idx_tarefas_micro_depends_on ON tarefas_micro(depends_on);
-CREATE INDEX idx_tarefas_micro_logs_tarefa_micro_id ON tarefas_micro_logs(tarefa_micro_id);
-CREATE INDEX idx_tarefas_micro_logs_created_at ON tarefas_micro_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tarefas_micro_tarefa_id ON tarefas_micro(tarefa_id);
+CREATE INDEX IF NOT EXISTS idx_tarefas_micro_profissional_id ON tarefas_micro(profissional_id);
+CREATE INDEX IF NOT EXISTS idx_tarefas_micro_status ON tarefas_micro(status);
+CREATE INDEX IF NOT EXISTS idx_tarefas_micro_depends_on ON tarefas_micro(depends_on);
+CREATE INDEX IF NOT EXISTS idx_tarefas_micro_logs_tarefa_micro_id ON tarefas_micro_logs(tarefa_micro_id);
+CREATE INDEX IF NOT EXISTS idx_tarefas_micro_logs_created_at ON tarefas_micro_logs(created_at DESC);
 
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 -- 3. CREATE TRIGGERS
@@ -58,35 +59,30 @@ DECLARE
     new_progress INTEGER;
     macro_task_id UUID;
 BEGIN
-    -- Get the macro task ID
     macro_task_id := COALESCE(NEW.tarefa_id, OLD.tarefa_id);
-    
-    -- Calculate total and completed weights
+
     SELECT 
         COALESCE(SUM(peso), 0),
         COALESCE(SUM(CASE WHEN status = 'concluida' THEN peso ELSE 0 END), 0)
     INTO total_weight, completed_weight
     FROM tarefas_micro
     WHERE tarefa_id = macro_task_id;
-    
-    -- Calculate progress percentage
+
     IF total_weight > 0 THEN
         new_progress := (completed_weight * 100) / total_weight;
     ELSE
         new_progress := 0;
     END IF;
-    
-    -- Update macro task
+
     UPDATE tarefas 
     SET progress = new_progress,
         updated_at = NOW()
     WHERE id = macro_task_id;
-    
+
     RETURN COALESCE(NEW, OLD);
 END;
 $$ LANGUAGE plpgsql;
 
--- Apply trigger on INSERT, UPDATE, DELETE
 DROP TRIGGER IF EXISTS trigger_update_macro_progress ON tarefas_micro;
 CREATE TRIGGER trigger_update_macro_progress
     AFTER INSERT OR UPDATE OR DELETE ON tarefas_micro
@@ -99,32 +95,24 @@ RETURNS TRIGGER AS $$
 DECLARE
     incomplete_count INTEGER;
 BEGIN
-    -- Only check if the micro task was just completed
     IF NEW.status = 'concluida' AND (OLD IS NULL OR OLD.status != 'concluida') THEN
-        -- Count incomplete micro tasks
         SELECT COUNT(*) INTO incomplete_count
         FROM tarefas_micro
         WHERE tarefa_id = NEW.tarefa_id
         AND status != 'concluida';
-        
-        -- If all micro tasks are complete, mark macro task as complete
+
         IF incomplete_count = 0 THEN
-            -- Update macro task status
             UPDATE tarefas
             SET status = 'concluida',
                 updated_at = NOW()
             WHERE id = NEW.tarefa_id;
-            
-            -- Note: Notifications will be handled by Edge Function
-            -- to avoid dependency on usuarios table structure
         END IF;
     END IF;
-    
+
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- Apply trigger on UPDATE only
 DROP TRIGGER IF EXISTS trigger_check_macro_completion ON tarefas_micro;
 CREATE TRIGGER trigger_check_macro_completion
     AFTER UPDATE ON tarefas_micro
@@ -135,43 +123,38 @@ CREATE TRIGGER trigger_check_macro_completion
 CREATE OR REPLACE FUNCTION update_dependent_tasks()
 RETURNS TRIGGER AS $$
 BEGIN
-    -- If a micro task is completed, unblock dependent tasks
     IF NEW.status = 'concluida' AND (OLD IS NULL OR OLD.status != 'concluida') THEN
         UPDATE tarefas_micro
         SET status = 'pendente',
             updated_at = NOW()
         WHERE depends_on = NEW.id
         AND status = 'bloqueada';
-        
-        -- Log unblock action
+
         INSERT INTO tarefas_micro_logs (tarefa_micro_id, acao, from_profissional_id)
         SELECT id, 'unblocked', NEW.profissional_id
         FROM tarefas_micro
         WHERE depends_on = NEW.id
         AND status = 'pendente';
     END IF;
-    
-    -- If a completed micro task is reopened, block dependent tasks
+
     IF OLD IS NOT NULL AND OLD.status = 'concluida' AND NEW.status != 'concluida' THEN
         UPDATE tarefas_micro
         SET status = 'bloqueada',
             updated_at = NOW()
         WHERE depends_on = NEW.id
         AND status IN ('pendente', 'em_execucao');
-        
-        -- Log block action
+
         INSERT INTO tarefas_micro_logs (tarefa_micro_id, acao, from_profissional_id)
         SELECT id, 'blocked', NEW.profissional_id
         FROM tarefas_micro
         WHERE depends_on = NEW.id
         AND status = 'bloqueada';
     END IF;
-    
+
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- Apply trigger on UPDATE only
 DROP TRIGGER IF EXISTS trigger_update_dependent_tasks ON tarefas_micro;
 CREATE TRIGGER trigger_update_dependent_tasks
     AFTER UPDATE ON tarefas_micro
@@ -203,7 +186,9 @@ BEGIN
         SELECT 1 FROM information_schema.columns 
         WHERE table_name = 'tarefas' AND column_name = 'progress'
     ) THEN
-        ALTER TABLE tarefas ADD COLUMN progress INTEGER DEFAULT 0 CHECK (progress >= 0 AND progress <= 100);
+        ALTER TABLE tarefas 
+        ADD COLUMN progress INTEGER DEFAULT 0 
+        CHECK (progress >= 0 AND progress <= 100);
     END IF;
 END $$;
 
@@ -214,26 +199,18 @@ END $$;
 ALTER TABLE tarefas_micro ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tarefas_micro_logs ENABLE ROW LEVEL SECURITY;
 
--- Policy: Professionals can view their own micro tasks
 CREATE POLICY "Professionals view own micro tasks"
     ON tarefas_micro FOR SELECT
-    USING (
-        profissional_id = auth.uid()
-    );
+    USING (profissional_id = auth.uid());
 
--- Policy: Professionals can update their own micro tasks
 CREATE POLICY "Professionals update own micro tasks"
     ON tarefas_micro FOR UPDATE
-    USING (
-        profissional_id = auth.uid()
-    );
+    USING (profissional_id = auth.uid());
 
--- Policy: Service role can insert micro tasks (via Edge Functions)
 CREATE POLICY "Service role creates micro tasks"
     ON tarefas_micro FOR INSERT
     WITH CHECK (true);
 
--- Policy: Professionals can view logs for their micro tasks
 CREATE POLICY "Professionals view own micro task logs"
     ON tarefas_micro_logs FOR SELECT
     USING (
@@ -242,7 +219,6 @@ CREATE POLICY "Professionals view own micro task logs"
         )
     );
 
--- Policy: Service role can insert logs
 CREATE POLICY "Service role creates logs"
     ON tarefas_micro_logs FOR INSERT
     WITH CHECK (true);

@@ -18,8 +18,8 @@ BEGIN
   RETURN QUERY 
   SELECT ep.empresa_id 
   FROM empresa_profissionais ep 
-  WHERE ep.profissional_id = auth.uid() 
-  AND ep.ativo = true;
+  WHERE ep.profissional_id = auth.uid()
+;
 END;
 $$ LANGUAGE plpgsql;
 

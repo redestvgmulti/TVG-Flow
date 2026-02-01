@@ -30,3 +30,14 @@ supabase/CREATE_CRON_JOB.sql
 FIX_USER_ROLE.sql
 .vercel
 .env*.local
+
+# Supabase local
+supabase/.temp/
+supabase/.branches/
+
+# Logs
+*.log
+start_log.txt
+
+# Scripts locais
+detect_conflicts.py

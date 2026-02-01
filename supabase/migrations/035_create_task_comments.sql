@@ -1,27 +1,28 @@
 -- Create task_comments table for activity timeline
 -- This allows professionals to add notes and comments to tasks
 
--- Drop existing policies if they exist
-DROP POLICY IF EXISTS "Professionals view comments on accessible tasks" ON task_comments;
-DROP POLICY IF EXISTS "Professionals insert comments on accessible tasks" ON task_comments;
-DROP POLICY IF EXISTS "Admins manage all comments" ON task_comments;
-DROP POLICY IF EXISTS "Service role manages all comments" ON task_comments;
-
--- Create table if not exists
+-- Create table first
 CREATE TABLE IF NOT EXISTS task_comments (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     task_id UUID NOT NULL REFERENCES tarefas(id) ON DELETE CASCADE,
-    author_id UUID NOT NULL REFERENCES profissionais(id),
+    author_id UUID NOT NULL REFERENCES profissionais(id) ON DELETE CASCADE,
     content TEXT NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
--- Create indexes if not exist
+-- Create indexes
 CREATE INDEX IF NOT EXISTS idx_task_comments_task_id ON task_comments(task_id);
+CREATE INDEX IF NOT EXISTS idx_task_comments_author ON task_comments(author_id);
 CREATE INDEX IF NOT EXISTS idx_task_comments_created_at ON task_comments(created_at DESC);
 
 -- Enable RLS
 ALTER TABLE task_comments ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies if they exist (now that table exists)
+DROP POLICY IF EXISTS "Professionals view comments on accessible tasks" ON task_comments;
+DROP POLICY IF EXISTS "Professionals insert comments on accessible tasks" ON task_comments;
+DROP POLICY IF EXISTS "Admins manage all comments" ON task_comments;
+DROP POLICY IF EXISTS "Service role manages all comments" ON task_comments;
 
 -- Policy: Professionals can view comments on tasks they have access to
 CREATE POLICY "Professionals view comments on accessible tasks"

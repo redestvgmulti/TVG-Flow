@@ -42,8 +42,7 @@ CREATE POLICY "Multi-tenant validated micro task insert"
                 ON ep.empresa_id = t.empresa_id
             WHERE t.id = tarefa_id
             AND ep.profissional_id = profissional_id
-            AND ep.ativo = true
-        )
+)
     );
 
 COMMENT ON POLICY "Multi-tenant validated micro task insert" ON tarefas_micro IS 
@@ -72,8 +71,7 @@ CREATE POLICY "Validated micro task log insert"
                 -- Ou é log de sistema (ambos NULL)
                 OR (from_profissional_id IS NULL AND to_profissional_id IS NULL)
             )
-            AND ep.ativo = true
-        )
+)
     );
 
 COMMENT ON POLICY "Validated micro task log insert" ON tarefas_micro_logs IS 

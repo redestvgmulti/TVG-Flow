@@ -19,8 +19,7 @@ BEGIN
   FROM empresa_profissionais ep
   JOIN empresas e ON e.id = ep.empresa_id
   WHERE ep.funcao IS NOT NULL
-    AND ep.ativo = true
-    AND e.ativo = true;
+AND e.ativo = true;
   
   -- Count operational companies
   SELECT COUNT(*) INTO operational_company_count
@@ -48,8 +47,7 @@ SELECT DISTINCT ON (e.id, ep.funcao)
 FROM empresa_profissionais ep
 JOIN empresas e ON e.id = ep.empresa_id
 WHERE ep.funcao IS NOT NULL
-  AND ep.ativo = true
-  AND e.ativo = true
+AND e.ativo = true
 ORDER BY e.id, ep.funcao, ep.created_at
 ON CONFLICT (empresa_operacional_id, funcao) 
 DO NOTHING;

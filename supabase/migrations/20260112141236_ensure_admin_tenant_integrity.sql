@@ -19,8 +19,8 @@ BEGIN
             p.email,
             p.role
         FROM profissionais p
-        LEFT JOIN empresa_profissionais ep ON ep.profissional_id = p.id AND ep.ativo = true
-        LEFT JOIN empresas e ON e.id = ep.empresa_id AND e.ativo = true
+        LEFT JOIN empresa_profissionais ep ON ep.profissional_id = p.id
+LEFT JOIN empresas e ON e.id = ep.empresa_id AND e.ativo = true
         WHERE p.role = 'admin'
           AND p.ativo = true
         GROUP BY p.id, p.email, p.role
@@ -50,8 +50,7 @@ RETURNS BOOLEAN AS $$
         FROM empresa_profissionais ep
         JOIN empresas e ON e.id = ep.empresa_id
         WHERE ep.profissional_id = prof_id
-          AND ep.ativo = true
-          AND e.empresa_tipo = 'tenant'
+AND e.empresa_tipo = 'tenant'
           AND e.ativo = true
     );
 $$ LANGUAGE SQL STABLE;
@@ -86,8 +85,7 @@ BEGIN
             FROM empresa_profissionais ep
             JOIN empresas e ON e.id = ep.empresa_id
             WHERE ep.profissional_id = OLD.profissional_id
-              AND ep.ativo = true
-              AND e.empresa_tipo = 'tenant'
+AND e.empresa_tipo = 'tenant'
               AND e.ativo = true
               AND ep.id != OLD.id  -- Exclude the row being deleted/deactivated
         ) INTO has_tenant;
@@ -162,20 +160,17 @@ SELECT
     p.role,
     p.ativo as profissional_ativo,
     COUNT(ep.empresa_id) FILTER (
-        WHERE e.empresa_tipo = 'tenant' 
-        AND ep.ativo = true 
-        AND e.ativo = true
+        WHERE e.empresa_tipo = 'tenant'
+AND e.ativo = true
     ) as tenant_link_count,
     CASE 
         WHEN p.role = 'admin' AND COUNT(ep.empresa_id) FILTER (
-            WHERE e.empresa_tipo = 'tenant' 
-            AND ep.ativo = true 
-            AND e.ativo = true
+            WHERE e.empresa_tipo = 'tenant'
+AND e.ativo = true
         ) = 0 THEN 'INVALID'
         WHEN p.role = 'admin' AND COUNT(ep.empresa_id) FILTER (
-            WHERE e.empresa_tipo = 'tenant' 
-            AND ep.ativo = true 
-            AND e.ativo = true
+            WHERE e.empresa_tipo = 'tenant'
+AND e.ativo = true
         ) > 0 THEN 'VALID'
         ELSE 'N/A'
     END as compliance_status

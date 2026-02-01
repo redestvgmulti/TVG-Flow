@@ -21,8 +21,7 @@ BEGIN
         INNER JOIN empresa_profissionais ep 
             ON ep.empresa_id = r.empresa_id 
             AND ep.profissional_id = NEW.profissional_id
-            AND ep.ativo = TRUE
-        WHERE r.id = NEW.reuniao_id
+WHERE r.id = NEW.reuniao_id
     ) THEN
         RAISE EXCEPTION 'Participante não pertence à empresa da reunião (cross-tenant violation)';
     END IF;

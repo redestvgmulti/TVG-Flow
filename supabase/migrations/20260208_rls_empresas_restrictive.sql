@@ -51,8 +51,7 @@ USING (
             FROM empresa_profissionais ep
             WHERE ep.empresa_id = empresas.id
             AND ep.profissional_id = auth.uid()
-            AND ep.ativo = true
-        )
+)
     )
     
     -- 3. Staff: Implicitly excluded (Result is FALSE for them)

@@ -31,8 +31,7 @@ USING (
                         FROM public.empresa_profissionais ep
                         WHERE ep.profissional_id = auth.uid()
                         AND ep.empresa_id = tarefas.empresa_id
-                        AND ep.ativo = true
-                    )
+)
                     OR 
                     (created_by = auth.uid()) 
                 )
@@ -69,8 +68,7 @@ USING (
                         JOIN public.empresa_profissionais ep ON t.empresa_id = ep.empresa_id
                         WHERE t.id = tarefas_micro.tarefa_id
                         AND ep.profissional_id = auth.uid()
-                        AND ep.ativo = true
-                    )
+)
                 )
             ELSE 
                 TRUE

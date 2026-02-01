@@ -12,6 +12,8 @@
 --   - Super Admin: FALSE immediately.
 --   - Tenant x Cliente: Cliente DEVE pertencer ao Tenant da OS.
 --   - Usuário x Tenant: Usuário DEVE ter vínculo ativo com o Tenant da OS.
+-- Add explicit drop to avoid return type conflict
+DROP FUNCTION IF EXISTS public.can_create_os(UUID, UUID);
 CREATE OR REPLACE FUNCTION public.can_create_os(p_empresa_id UUID, p_cliente_id UUID)
 RETURNS BOOLEAN
 LANGUAGE plpgsql
@@ -57,6 +59,8 @@ $$;
 -- Regras: 
 --   - Mesmas validações de 'can_create_os'
 --   - ADICIONAL: Usuário deve ser 'admin'.
+-- Add explicit drop to avoid return type conflict
+DROP FUNCTION IF EXISTS public.can_create_workflow_os(UUID, UUID);
 CREATE OR REPLACE FUNCTION public.can_create_workflow_os(p_empresa_id UUID, p_cliente_id UUID)
 RETURNS BOOLEAN
 LANGUAGE plpgsql
@@ -100,6 +104,8 @@ $$;
 -- Regras (Espelho create_os_with_micro_tasks V4.1):
 --   A) TRUE se existir vínculo explícito em cliente_profissionais.
 --   B) TRUE se (Admin Logado + Auto-Atribuição).
+-- Add explicit drop to avoid return type conflict
+DROP FUNCTION IF EXISTS public.can_assign_professional(UUID, UUID, TEXT);
 CREATE OR REPLACE FUNCTION public.can_assign_professional(p_cliente_id UUID, p_profissional_id UUID, p_funcao TEXT)
 RETURNS BOOLEAN
 LANGUAGE plpgsql
@@ -133,8 +139,7 @@ BEGIN
             JOIN public.empresa_profissionais ep ON ep.empresa_id = c.empresa_id
             WHERE c.id = p_cliente_id
               AND ep.profissional_id = auth.uid()
-              AND ep.ativo = true
-        ) THEN
+) THEN
             RETURN TRUE;
         END IF;
     END IF;
@@ -146,6 +151,8 @@ $$;
 -- 4. Helper: can_view_cliente
 -- Semântica: Visibilidade estrutural do cliente.
 -- Regras: Super Admin (Sim), Admin (Seu Tenant), Staff (Não).
+-- Add explicit drop to avoid return type conflict
+DROP FUNCTION IF EXISTS public.can_view_cliente(UUID);
 CREATE OR REPLACE FUNCTION public.can_view_cliente(p_cliente_id UUID)
 RETURNS BOOLEAN
 LANGUAGE plpgsql
@@ -175,8 +182,7 @@ BEGIN
             JOIN public.empresa_profissionais ep ON ep.empresa_id = c.empresa_id
             WHERE c.id = p_cliente_id
               AND ep.profissional_id = auth.uid()
-              AND ep.ativo = true
-        );
+);
     END IF;
 
     RETURN FALSE;

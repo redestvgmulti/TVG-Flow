@@ -21,6 +21,8 @@
 -- 1. CREATE CYCLE DETECTION FUNCTION
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+-- Add explicit drop to avoid return type conflict
+DROP FUNCTION IF EXISTS prevent_dependency_cycle();
 CREATE OR REPLACE FUNCTION prevent_dependency_cycle()
 RETURNS TRIGGER AS $$
 DECLARE

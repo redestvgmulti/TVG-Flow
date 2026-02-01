@@ -10,12 +10,12 @@
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 -- Step 1: Add UNIQUE constraint to notifications for idempotency
--- Prevents duplicate notifications for same event within 24h window
+-- Simplified to avoid NOW() which is not IMMUTABLE
+-- Using task_id to match the actual notifications table schema
 CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_unique_event
-ON notifications(entity_id, type, profissional_id)
-WHERE created_at > NOW() - INTERVAL '24 hours';
+ON notifications(task_id, profissional_id);
 
-COMMENT ON INDEX idx_notifications_unique_event IS 'Prevents duplicate notifications for same event within 24h (idempotency guarantee)';
+COMMENT ON INDEX idx_notifications_unique_event IS 'Prevents duplicate notifications for same task and professional (idempotency guarantee)';
 
 -- Step 2: Queue Processor Function
 CREATE OR REPLACE FUNCTION process_notification_queue()
@@ -81,7 +81,6 @@ BEGIN
                     v_queue_record.entity_type,
                     false
                 ON CONFLICT (entity_id, type, profissional_id) 
-                WHERE created_at > NOW() - INTERVAL '24 hours'
                 DO NOTHING;  -- MUST-2: Idempotency guarantee
 
             ELSIF v_queue_record.event_type = 'micro_completed' THEN
@@ -105,7 +104,6 @@ BEGIN
                     v_queue_record.entity_type,
                     false
                 ON CONFLICT (entity_id, type, profissional_id) 
-                WHERE created_at > NOW() - INTERVAL '24 hours'
                 DO NOTHING;
 
             ELSIF v_queue_record.event_type = 'micro_returned' THEN
@@ -129,7 +127,6 @@ BEGIN
                     v_queue_record.entity_type,
                     false
                 ON CONFLICT (entity_id, type, profissional_id) 
-                WHERE created_at > NOW() - INTERVAL '24 hours'
                 DO NOTHING;
 
             ELSIF v_queue_record.event_type = 'task_assigned' THEN
@@ -155,7 +152,6 @@ BEGIN
                     false
                 )
                 ON CONFLICT (entity_id, type, profissional_id) 
-                WHERE created_at > NOW() - INTERVAL '24 hours'
                 DO NOTHING;
             END IF;
 

@@ -43,13 +43,14 @@ CREATE POLICY "Admin can manage all company-professional associations"
     );
 
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
--- 3. FIX TAREFAS_ITENS POLICIES (If affected)
+-- 3. FIX TAREFAS_MICRO POLICIES (formerly tarefas_itens)
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-DROP POLICY IF EXISTS "Admin can manage all micro-tasks" ON tarefas_itens;
+-- Ensure we clean up any old policies if they exist (on the new table)
+DROP POLICY IF EXISTS "Admin can manage all micro-tasks" ON tarefas_micro;
 
 CREATE POLICY "Admin can manage all micro-tasks"
-    ON tarefas_itens
+    ON tarefas_micro
     FOR ALL
     TO authenticated
     USING (
@@ -61,14 +62,14 @@ CREATE POLICY "Admin can manage all micro-tasks"
     );
 
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
--- 4. FIX TAREFAS_ITENS_HISTORICO (If affected)
+-- 4. FIX TAREFAS_MICRO_LOGS (formerly tarefas_itens_historico)
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 -- Check manually if needed, but safe to recreate if exists
-DROP POLICY IF EXISTS "Admin can view all history" ON tarefas_itens_historico;
+DROP POLICY IF EXISTS "Admin can view all logs" ON tarefas_micro_logs;
 
-CREATE POLICY "Admin can view all history"
-    ON tarefas_itens_historico
+CREATE POLICY "Admin can view all logs"
+    ON tarefas_micro_logs
     FOR SELECT
     TO authenticated
     USING (

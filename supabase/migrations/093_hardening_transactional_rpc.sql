@@ -21,6 +21,9 @@
 -- 1. CREATE TRANSACTIONAL RPC FUNCTION
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+-- Add explicit drop to avoid "cannot change return type" error
+DROP FUNCTION IF EXISTS create_os_with_micro_tasks(UUID, TEXT, TEXT, TIMESTAMPTZ, JSONB, TEXT, UUID, TEXT);
+
 CREATE OR REPLACE FUNCTION create_os_with_micro_tasks(
     p_empresa_id UUID,
     p_titulo TEXT,

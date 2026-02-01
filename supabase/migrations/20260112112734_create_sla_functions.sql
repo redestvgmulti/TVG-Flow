@@ -2,6 +2,8 @@
 -- RPC: Calcular SLA de uma micro tarefa
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+-- Add explicit drop to avoid return type conflict
+DROP FUNCTION IF EXISTS calcular_sla_micro_tarefa(UUID) CASCADE;
 CREATE OR REPLACE FUNCTION calcular_sla_micro_tarefa(p_micro_task_id UUID)
 RETURNS TABLE (
     atrasada BOOLEAN,
@@ -13,7 +15,7 @@ DECLARE
 BEGIN
     -- Buscar micro tarefa
     SELECT * INTO v_micro_task
-    FROM tarefas_itens
+    FROM tarefas_micro
     WHERE id = p_micro_task_id;
     
     IF NOT FOUND THEN
@@ -58,6 +60,8 @@ $$ LANGUAGE plpgsql STABLE;
 -- RPC: Identificar gargalo de uma tarefa macro
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+-- Add explicit drop to avoid return type conflict
+DROP FUNCTION IF EXISTS identificar_gargalo(UUID) CASCADE;
 CREATE OR REPLACE FUNCTION identificar_gargalo(p_tarefa_id UUID)
 RETURNS TABLE (
     micro_task_id UUID,
@@ -79,7 +83,7 @@ BEGIN
             ti.deadline_at,
             ti.created_at,
             EXTRACT(EPOCH FROM (now() - ti.deadline_at)) / 60 AS atraso_minutos
-        FROM tarefas_itens ti
+        FROM tarefas_micro ti
         JOIN profissionais p ON p.id = ti.profissional_id
         WHERE ti.tarefa_id = p_tarefa_id
         AND ti.deadline_at IS NOT NULL  -- 🔒 CRITICAL: Só micro tarefas com SLA

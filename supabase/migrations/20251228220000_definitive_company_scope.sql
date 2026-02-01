@@ -116,7 +116,7 @@ USING (
     FROM empresa_profissionais ep
     JOIN profissionais p ON p.id = ep.profissional_id
     WHERE ep.profissional_id = auth.uid()
-    AND (p.role = 'admin' OR ep.funcao = 'admin' OR ep.role = 'admin') -- robust check
+    AND (p.role = 'admin') -- robust check
     -- We assume the company linked IS the Tenant. 
     -- If we need to be sure the linked company IS a tenant, we join empresas again.
     -- But for performance, if an Admin is linked to it, and it's used as tenant_id, it implicitly works.

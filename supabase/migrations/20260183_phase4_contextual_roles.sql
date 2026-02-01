@@ -67,6 +67,8 @@ ON public.cliente_profissionais(cliente_id, profissional_id, funcao);
 -- 5. UPDATE RPC (V4) - Enforce Contextual Validation
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+-- Add explicit drop to avoid "cannot change return type" error
+DROP FUNCTION IF EXISTS create_os_with_micro_tasks(UUID, TEXT, TEXT, TIMESTAMPTZ, JSONB, TEXT, UUID, TEXT, UUID);
 CREATE OR REPLACE FUNCTION create_os_with_micro_tasks(
     p_empresa_id UUID,
     p_titulo TEXT,

@@ -15,11 +15,9 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 INSERT INTO schema_migrations (migration_name) VALUES
     ('021_create_empresas'),
     ('022_create_empresa_profissionais'),
-    ('023_create_tarefas_itens'),
-    ('024_create_tarefas_itens_historico'),
+    ('023_create_tarefas_itens'), -- kept for historical tracking
     ('025_add_empresa_to_tarefas'),
-    ('026_migrate_deadline_datetime'),
-    ('027_fix_microtasks_profissionais_status'),
+    ('026_migrate_deadline_datetime'), -- Note: this actually creates tarefas_micro
     ('028_production_hardening')
 ON CONFLICT (migration_name) DO NOTHING;
 
@@ -27,6 +25,7 @@ ON CONFLICT (migration_name) DO NOTHING;
 -- 2. SYSTEM INTEGRITY CHECK FUNCTION
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+DROP FUNCTION IF EXISTS check_system_integrity();
 CREATE OR REPLACE FUNCTION check_system_integrity()
 RETURNS TABLE (
     status TEXT,
@@ -42,21 +41,22 @@ DECLARE
         '021_create_empresas',
         '022_create_empresa_profissionais',
         '023_create_tarefas_itens',
-        '024_create_tarefas_itens_historico',
         '025_add_empresa_to_tarefas',
-        '026_migrate_deadline_datetime',
-        '027_fix_microtasks_profissionais_status'
+        '026_create_micro_tasks_system'
     ];
     required_tables TEXT[] := ARRAY[
         'empresas',
         'empresa_profissionais',
-        'tarefas_itens',
-        'tarefas_itens_historico'
+        'empresas',
+        'empresa_profissionais',
+        'tarefas_micro',
+        'tarefas_micro_logs'
     ];
     required_triggers TEXT[] := ARRAY[
         'trigger_update_tarefa_status_after_item_change',
         'trigger_log_tarefas_itens_changes',
-        'trigger_set_tarefas_itens_concluida_at'
+        'trigger_update_macro_progress',
+        'trigger_check_macro_completion'
     ];
     v_missing_migrations TEXT[] := '{}';
     v_missing_tables TEXT[] := '{}';
@@ -102,30 +102,30 @@ BEGIN
     END LOOP;
 
     -- Check critical constraints
-    IF EXISTS (SELECT 1 FROM tarefas_itens LIMIT 1) THEN
+    IF EXISTS (SELECT 1 FROM tarefas_micro LIMIT 1) THEN
         -- Check status constraint
         IF NOT EXISTS (
             SELECT 1 FROM information_schema.check_constraints
-            WHERE constraint_name = 'tarefas_itens_status_check'
+            WHERE constraint_name = 'tarefas_micro_status_check'
         ) THEN
-            v_missing_constraints := array_append(v_missing_constraints, 'tarefas_itens_status_check');
+            v_missing_constraints := array_append(v_missing_constraints, 'tarefas_micro_status_check');
             v_status := 'ERROR';
         END IF;
 
         -- Check FK to profissionais
         IF NOT EXISTS (
             SELECT 1 FROM information_schema.table_constraints
-            WHERE constraint_name = 'tarefas_itens_profissional_id_fkey'
-            AND table_name = 'tarefas_itens'
+            WHERE constraint_name = 'tarefas_micro_profissional_id_fkey'
+            AND table_name = 'tarefas_micro'
         ) THEN
-            v_missing_constraints := array_append(v_missing_constraints, 'tarefas_itens_profissional_id_fkey');
+            v_missing_constraints := array_append(v_missing_constraints, 'tarefas_micro_profissional_id_fkey');
             v_status := 'ERROR';
         END IF;
     END IF;
 
     -- Check RLS is enabled on critical tables
-    IF NOT (SELECT relrowsecurity FROM pg_class WHERE relname = 'tarefas_itens') THEN
-        v_rls_issues := array_append(v_rls_issues, 'tarefas_itens: RLS not enabled');
+    IF NOT (SELECT relrowsecurity FROM pg_class WHERE relname = 'tarefas_micro') THEN
+        v_rls_issues := array_append(v_rls_issues, 'tarefas_micro: RLS not enabled');
         v_status := 'ERROR';
     END IF;
 
@@ -154,6 +154,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- 3. DATA INTEGRITY CHECKS
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+DROP FUNCTION IF EXISTS check_data_integrity();
 CREATE OR REPLACE FUNCTION check_data_integrity()
 RETURNS TABLE (
     check_name TEXT,
@@ -169,7 +170,7 @@ BEGIN
         CASE WHEN COUNT(*) = 0 THEN 'OK' ELSE 'WARNING' END::TEXT,
         COUNT(*)::INTEGER,
         'Micro-tarefas sem tarefa macro'::TEXT
-    FROM tarefas_itens ti
+    FROM tarefas_micro ti
     WHERE NOT EXISTS (SELECT 1 FROM tarefas t WHERE t.id = ti.tarefa_id);
 
     -- Check 2: Micro-tasks assigned to professionals outside company
@@ -179,7 +180,7 @@ BEGIN
         CASE WHEN COUNT(*) = 0 THEN 'OK' ELSE 'ERROR' END::TEXT,
         COUNT(*)::INTEGER,
         'Micro-tarefas atribuídas a profissionais fora da empresa'::TEXT
-    FROM tarefas_itens ti
+    FROM tarefas_micro ti
     INNER JOIN tarefas t ON t.id = ti.tarefa_id
     WHERE t.empresa_id IS NOT NULL
     AND NOT EXISTS (
@@ -198,7 +199,7 @@ BEGIN
     FROM tarefas t
     WHERE t.status = 'concluida'
     AND EXISTS (
-        SELECT 1 FROM tarefas_itens ti
+        SELECT 1 FROM tarefas_micro ti
         WHERE ti.tarefa_id = t.id
         AND ti.status = 'pendente'
     );
@@ -210,8 +211,8 @@ BEGIN
         CASE WHEN COUNT(*) = 0 THEN 'OK' ELSE 'ERROR' END::TEXT,
         COUNT(*)::INTEGER,
         'Status inválidos fora do enum permitido'::TEXT
-    FROM tarefas_itens
-    WHERE status NOT IN ('pendente', 'concluida');
+    FROM tarefas_micro
+    WHERE status NOT IN ('pendente', 'bloqueada', 'em_execucao', 'concluida', 'devolvida');
 
     -- Check 5: Tasks without deadline (if required by business logic)
     RETURN QUERY
@@ -232,6 +233,9 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 -- Improved trigger: only update if status actually changes
+-- Add explicit drop to avoid "cannot change return type" error if it was previously void/different
+DROP FUNCTION IF EXISTS update_tarefa_status_from_itens() CASCADE;
+
 CREATE OR REPLACE FUNCTION update_tarefa_status_from_itens()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -253,7 +257,7 @@ BEGIN
         COUNT(*),
         COUNT(*) FILTER (WHERE status = 'concluida')
     INTO total_itens, concluidas_itens
-    FROM tarefas_itens
+    FROM tarefas_micro
     WHERE tarefa_id = target_tarefa_id;
     
     -- If no micro-tasks, don't change status
@@ -286,6 +290,7 @@ $$ LANGUAGE plpgsql;
 -- 5. PRODUCTION CHECKLIST FUNCTION
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+DROP FUNCTION IF EXISTS production_checklist();
 CREATE OR REPLACE FUNCTION production_checklist()
 RETURNS TABLE (
     category TEXT,
@@ -321,7 +326,7 @@ BEGIN
         'Audit trail trigger'::TEXT,
         CASE WHEN EXISTS (
             SELECT 1 FROM information_schema.triggers 
-            WHERE trigger_name = 'trigger_log_tarefas_itens_changes'
+            WHERE trigger_name = 'trigger_update_macro_progress'
         ) THEN '✅' ELSE '❌' END::TEXT,
         ''::TEXT;
 
@@ -329,8 +334,8 @@ BEGIN
     RETURN QUERY
     SELECT 
         'RLS'::TEXT,
-        'tarefas_itens RLS enabled'::TEXT,
-        CASE WHEN (SELECT relrowsecurity FROM pg_class WHERE relname = 'tarefas_itens') 
+        'tarefas_micro RLS enabled'::TEXT,
+        CASE WHEN (SELECT relrowsecurity FROM pg_class WHERE relname = 'tarefas_micro') 
             THEN '✅' ELSE '❌' END::TEXT,
         ''::TEXT;
 
@@ -349,7 +354,7 @@ BEGIN
         'Status constraint (pt-BR)'::TEXT,
         CASE WHEN EXISTS (
             SELECT 1 FROM information_schema.check_constraints
-            WHERE constraint_name = 'tarefas_itens_status_check'
+            WHERE constraint_name = 'tarefas_micro_status_check'
         ) THEN '✅' ELSE '❌' END::TEXT,
         ''::TEXT;
 
@@ -359,7 +364,7 @@ BEGIN
         'FK to profissionais'::TEXT,
         CASE WHEN EXISTS (
             SELECT 1 FROM information_schema.table_constraints
-            WHERE constraint_name = 'tarefas_itens_profissional_id_fkey'
+            WHERE constraint_name = 'tarefas_micro_profissional_id_fkey'
         ) THEN '✅' ELSE '❌' END::TEXT,
         ''::TEXT;
 

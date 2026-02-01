@@ -6,6 +6,8 @@
 --              Resolves the regression of "Status atualizado — De 'X' para 'Y'".
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+-- Add explicit drop to avoid return type conflict
+DROP FUNCTION IF EXISTS criar_notificacoes_evento() CASCADE;
 CREATE OR REPLACE FUNCTION criar_notificacoes_evento()
 RETURNS TRIGGER
 SECURITY DEFINER

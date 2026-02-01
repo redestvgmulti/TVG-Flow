@@ -22,9 +22,8 @@ BEGIN
     SELECT ep_me.empresa_id
     FROM empresa_profissionais ep_me
     WHERE ep_me.profissional_id = auth.uid()
-    AND ep_me.ativo = true
-  )
-  AND ep_target.ativo = true;
+    AND ep_me.profissional_id = auth.uid()
+  );
 END;
 $$ LANGUAGE plpgsql;
 

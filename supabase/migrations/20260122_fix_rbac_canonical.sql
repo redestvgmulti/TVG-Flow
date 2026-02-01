@@ -41,9 +41,8 @@ BEGIN
             AND p.id = auth.uid()
             -- REGRA DE OURO: Apenas 'admin' explícito tem poder de gestão no tenant
             -- Super Admins devem ter papel 'admin' explícito se precisarem operar empresas
-            AND p.role = 'admin' 
-            AND ep.ativo = TRUE
-    );
+            AND p.role = 'admin'
+);
 END;
 $$ LANGUAGE plpgsql STABLE SECURITY DEFINER;
 

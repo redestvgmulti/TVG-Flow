@@ -5,6 +5,8 @@
 --              fonte de verdade para o AuthContext do frontend.
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+-- Add explicit drop to avoid return type conflict
+DROP FUNCTION IF EXISTS public.get_current_identity();
 CREATE OR REPLACE FUNCTION public.get_current_identity()
 RETURNS JSONB
 LANGUAGE plpgsql
