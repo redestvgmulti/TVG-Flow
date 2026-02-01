@@ -4,7 +4,7 @@
 CREATE TABLE IF NOT EXISTS empresa_profissionais (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     empresa_id UUID NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
-    profissional_id UUID NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    profissional_id UUID NOT NULL REFERENCES profissionais(id) ON DELETE CASCADE,
     setor VARCHAR(100),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
@@ -33,9 +33,10 @@ CREATE POLICY "Admin can manage all company-professional associations"
     TO authenticated
     USING (
         EXISTS (
-            SELECT 1 FROM usuarios
-            WHERE usuarios.id = auth.uid()
-            AND usuarios.tipo_perfil = 'admin'
+            SELECT 1 FROM profissionais
+            WHERE profissionais.id = auth.uid()
+            AND profissionais.role = 'admin'
+            AND profissionais.ativo = true
         )
     );
 

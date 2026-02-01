@@ -31,24 +31,25 @@ CREATE POLICY "Admin can manage all companies"
     TO authenticated
     USING (
         EXISTS (
-            SELECT 1 FROM usuarios
-            WHERE usuarios.id = auth.uid()
-            AND usuarios.tipo_perfil = 'admin'
+            SELECT 1 FROM profissionais
+            WHERE profissionais.id = auth.uid()
+            AND profissionais.role = 'admin'
+            AND profissionais.ativo = true
         )
     );
 
--- RLS Policy: Professionals can view their companies
-CREATE POLICY "Professionals can view their companies"
-    ON empresas
-    FOR SELECT
-    TO authenticated
-    USING (
-        EXISTS (
-            SELECT 1 FROM empresa_profissionais
-            WHERE empresa_profissionais.empresa_id = empresas.id
-            AND empresa_profissionais.profissional_id = auth.uid()
-        )
-    );
+-- RLS Policy: Professionals can view their companies (requires empresa_profissionais table - add in later migration)
+-- CREATE POLICY "Professionals can view their companies"
+--     ON empresas
+--     FOR SELECT
+--     TO authenticated
+--     USING (
+--         EXISTS (
+--             SELECT 1 FROM empresa_profissionais
+--             WHERE empresa_profissionais.empresa_id = empresas.id
+--             AND empresa_profissionais.profissional_id = auth.uid()
+--         )
+--     );
 
 -- Comment
 COMMENT ON TABLE empresas IS 'Companies/clients table for multi-company operations management';

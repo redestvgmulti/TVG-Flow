@@ -5,10 +5,18 @@
 ALTER TABLE tarefas
 ADD COLUMN IF NOT EXISTS deadline_at TIMESTAMP WITH TIME ZONE;
 
--- Step 2: Migrate existing data (preserve date, set time to end of day)
-UPDATE tarefas
-SET deadline_at = (due_date::timestamp + interval '23 hours 59 minutes')::timestamp with time zone
-WHERE due_date IS NOT NULL AND deadline_at IS NULL;
+-- Step 2: Migrate existing data (preserve date, set time to end of day) - only if due_date exists
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'tarefas' AND column_name = 'due_date'
+  ) THEN
+    UPDATE tarefas
+    SET deadline_at = (due_date::timestamp + interval '23 hours 59 minutes')::timestamp with time zone
+    WHERE due_date IS NOT NULL AND deadline_at IS NULL;
+  END IF;
+END$$;
 
 -- Step 3: Drop old column
 ALTER TABLE tarefas

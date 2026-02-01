@@ -4,7 +4,7 @@
 CREATE TABLE IF NOT EXISTS tarefas_itens (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tarefa_id UUID NOT NULL REFERENCES tarefas(id) ON DELETE CASCADE,
-    profissional_id UUID NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    profissional_id UUID NOT NULL REFERENCES profissionais(id) ON DELETE CASCADE,
     status VARCHAR(20) DEFAULT 'pendente' CHECK (status IN ('pendente', 'concluida')),
     entrega_link TEXT,
     observacoes TEXT,
@@ -114,9 +114,10 @@ CREATE POLICY "Admin can manage all micro-tasks"
     TO authenticated
     USING (
         EXISTS (
-            SELECT 1 FROM usuarios
-            WHERE usuarios.id = auth.uid()
-            AND usuarios.tipo_perfil = 'admin'
+            SELECT 1 FROM profissionais
+            WHERE profissionais.id = auth.uid()
+            AND profissionais.role = 'admin'
+            AND profissionais.ativo = true
         )
     );
 

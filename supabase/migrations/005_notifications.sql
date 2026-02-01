@@ -22,13 +22,23 @@ ADD COLUMN IF NOT EXISTS cleared_at TIMESTAMPTZ;
 -- INDEXES (ONLY IF NOT PRESENT)
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+-- Indexes (ONLY IF NOT PRESENT)
 DO $$
 BEGIN
-  IF NOT EXISTS (
+  -- Drop old index if exists (migration 003 uses 'read' column, not 'read_at')
+  IF EXISTS (
     SELECT 1 FROM pg_indexes
     WHERE indexname = 'idx_notifications_read'
   ) THEN
-    CREATE INDEX idx_notifications_read
+    DROP INDEX idx_notifications_read;
+  END IF;
+
+  -- Create new index on read_at column
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_indexes
+    WHERE indexname = 'idx_notifications_unread'
+  ) THEN
+    CREATE INDEX idx_notifications_unread
       ON notifications(read_at)
       WHERE read_at IS NULL;
   END IF;

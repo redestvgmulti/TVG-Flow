@@ -2,8 +2,17 @@
 -- Enable Realtime for notifications table
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
--- Enable realtime publication for notifications table
-ALTER PUBLICATION supabase_realtime ADD TABLE notifications;
+-- Enable realtime publication for notifications table (idempotent)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' 
+    AND tablename = 'notifications'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE notifications;
+  END IF;
+END$$;
 
 -- Ensure RLS is enabled (should already be, but confirming)
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;

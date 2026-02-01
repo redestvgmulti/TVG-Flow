@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS tarefas_itens_historico (
     acao VARCHAR(50) NOT NULL, -- 'criado', 'concluido', 'reaberto', 'atualizado'
     status_anterior VARCHAR(20),
     status_novo VARCHAR(20),
-    usuario_id UUID REFERENCES usuarios(id),
+    usuario_id UUID REFERENCES profissionais(id),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
@@ -83,9 +83,10 @@ CREATE POLICY "Admin can view all micro-task audit logs"
     TO authenticated
     USING (
         EXISTS (
-            SELECT 1 FROM usuarios
-            WHERE usuarios.id = auth.uid()
-            AND usuarios.tipo_perfil = 'admin'
+            SELECT 1 FROM profissionais
+            WHERE profissionais.id = auth.uid()
+            AND profissionais.role = 'admin'
+            AND profissionais.ativo = true
         )
     );
 

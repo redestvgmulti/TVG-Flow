@@ -4,6 +4,55 @@
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+-- 0️⃣ PRÉ-REQUISITO: Garantir que area_id existe
+-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+-- Criar tabela areas se não existir (pode já existir em migrations posteriores)
+CREATE TABLE IF NOT EXISTS areas (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nome TEXT NOT NULL UNIQUE,
+  ativo BOOLEAN DEFAULT true,
+  descricao TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Adicionar area_id em profissionais se não existir
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'profissionais' AND column_name = 'area_id'
+  ) THEN
+    ALTER TABLE profissionais
+    ADD COLUMN area_id UUID REFERENCES areas(id);
+  END IF;
+END$$;
+
+-- Adicionar area_id em tarefas se não existir
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'tarefas' AND column_name = 'area_id'
+  ) THEN
+    ALTER TABLE tarefas
+    ADD COLUMN area_id UUID REFERENCES areas(id);
+  END IF;
+END$$;
+
+-- Adicionar requested_by em tarefas se não existir
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'tarefas' AND column_name = 'requested_by'
+  ) THEN
+    ALTER TABLE tarefas
+    ADD COLUMN requested_by UUID REFERENCES profissionais(id);
+  END IF;
+END$$;
+
+-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 -- 1️⃣ CORREÇÃO: RLS de tarefas (suporte a area_id NULL)
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
