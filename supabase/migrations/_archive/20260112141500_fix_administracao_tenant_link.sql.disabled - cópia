@@ -1,0 +1,96 @@
+-- CRITICAL FIX: Correção Imediata de Administração TVG
+-- ========================================================
+-- Este script corrige o estado inválido do administracao@tvgflow.com
+
+-- STEP 1: Verificar estado atual
+DO $$
+DECLARE
+    admin_id UUID;
+    admin_role TEXT;
+    tenant_id UUID;
+    has_link BOOLEAN;
+BEGIN
+    -- Buscar administracao
+    SELECT id, role INTO admin_id, admin_role
+    FROM profissionais
+    WHERE email = 'administracao@tvgflow.com';
+
+    IF admin_id IS NULL THEN
+        RAISE EXCEPTION 'User administracao@tvgflow.com not found';
+    END IF;
+
+    RAISE NOTICE 'Found user: % (role: %)', admin_id, admin_role;
+
+    -- Buscar empresa TVG (tenant)
+    SELECT id INTO tenant_id
+    FROM empresas
+    WHERE nome ILIKE '%TVG%'
+      AND empresa_tipo = 'tenant'
+      AND ativo = true
+    LIMIT 1;
+
+    IF tenant_id IS NULL THEN
+        RAISE EXCEPTION 'TVG tenant empresa not found. Cannot proceed.';
+    END IF;
+
+    RAISE NOTICE 'Found TVG tenant: %', tenant_id;
+
+    -- Verificar se já tem vínculo ativo
+    SELECT EXISTS (
+        SELECT 1
+        FROM empresa_profissionais ep
+        WHERE ep.profissional_id = admin_id
+          AND ep.empresa_id = tenant_id
+) INTO has_link;
+
+    IF has_link THEN
+        RAISE NOTICE 'Link already exists and is active. No fix needed.';
+    ELSE
+        RAISE NOTICE 'No active link found. Creating...';
+        
+        -- Criar vínculo
+        INSERT INTO empresa_profissionais (
+            profissional_id,
+            empresa_id,
+            funcao,
+            ativo,
+            created_at
+        ) VALUES (
+            admin_id,
+            tenant_id,
+            'Administração',
+            true,
+            NOW()
+        )
+        ON CONFLICT DO NOTHING;
+
+        RAISE NOTICE 'Link created successfully!';
+    END IF;
+
+    -- Garantir que role está como admin
+    IF admin_role != 'admin' THEN
+        UPDATE profissionais
+        SET role = 'admin'
+        WHERE id = admin_id;
+        
+        RAISE NOTICE 'Role updated from % to admin', admin_role;
+    END IF;
+END $$;
+
+-- STEP 2: Atualizar evandro para staff (se necessário)
+UPDATE profissionais
+SET role = 'staff'
+WHERE email = 'evandro@tvgflow.com'
+  AND role != 'staff';
+
+-- STEP 3: Validação final
+SELECT 
+    p.email,
+    p.role,
+    COUNT(ep.id) FILTER (WHERE e.empresa_tipo = 'tenant'
+) as tenant_links
+FROM profissionais p
+LEFT JOIN empresa_profissionais ep ON ep.profissional_id = p.id
+LEFT JOIN empresas e ON e.id = ep.empresa_id
+WHERE p.email IN ('administracao@tvgflow.com', 'evandro@tvgflow.com')
+GROUP BY p.id, p.email, p.role;
