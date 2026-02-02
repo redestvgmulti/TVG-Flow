@@ -23,11 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 scripts/
-!scripts/switch-env.js
-
-# Environment Isolation
-.envs/
-.env.local.bak
 
 # Sensitive SQL files with credentials (DO NOT COMMIT)
 supabase/CRON_JOB_CONFIG.sql
