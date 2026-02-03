@@ -103,9 +103,42 @@ GRANT EXECUTE ON FUNCTION public.is_admin_of_tenant TO service_role;
 DROP POLICY IF EXISTS "Global Constraint: Write Isolation for Companies" ON empresas;
 DROP POLICY IF EXISTS "Global Constraint: Modify Isolation for Companies" ON empresas;
 DROP POLICY IF EXISTS "Global Constraint: Delete Isolation for Companies" ON empresas;
+DROP POLICY IF EXISTS "Global Constraint: Read Isolation for Companies" ON empresas;
 
 
 -- 4. APPLY NEW POLICIES
+
+-- SELECT POLICY (Fix Visibility for Admin's Operational Companies)
+CREATE POLICY "Global Constraint: Read Isolation for Companies"
+ON empresas
+AS RESTRICTIVE
+FOR SELECT
+TO authenticated
+USING (
+    -- CASE 1: Super Admin (Global Access)
+    public.is_super_admin()
+    
+    OR
+    
+    -- CASE 2: Admin (Own Tenant + Child Operational Companies)
+    (
+        public.is_admin_safe()
+        AND
+        (
+            -- A) The Tenant Company itself (Directly linked)
+            public.is_admin_of_tenant(id)
+            
+            OR
+            
+            -- B) Operational Company belonging to the Admin's Tenant
+            (
+                empresa_tipo = 'operacional'
+                AND
+                public.is_admin_of_tenant(tenant_id)
+            )
+        )
+    )
+);
 
 -- INSERT POLICY
 CREATE POLICY "Global Constraint: Write Isolation for Companies"
