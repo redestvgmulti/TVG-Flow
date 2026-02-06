@@ -992,7 +992,7 @@ function ExecutionView({ task, onBack, onUpdateStatus, onDeleteTask, user, role,
             {showReturnModal && (
                 <ReturnReasonModal
                     isOpen={showReturnModal}
-                    task={task}
+                    microTask={task}
                     professionals={professionals}
                     onClose={() => setShowReturnModal(false)}
                     onSubmit={handleReturnTask}
