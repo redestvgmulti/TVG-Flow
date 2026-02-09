@@ -648,20 +648,48 @@ function ExecutionView({ task, onBack, onUpdateStatus, onDeleteTask, user, role,
         try {
             setLoadingProfessionals(true)
 
-            // Load ALL professionals from ALL stages of this workflow
-            // This allows cross-stage returns (e.g., Editor → Locutor)
-            const { data, error } = await supabase
+            // 🔧 FIX: Buscar APENAS profissionais de etapas ANTERIORES no workflow
+            // Primeiro, buscar ordem da tarefa atual
+            const { data: currentTask, error: currentError } = await supabase
+                .from('tarefas_micro')
+                .select('ordem')
+                .eq('id', task.id)
+                .single()
+
+            if (currentError) {
+                console.error('[loadProfessionalsForReturn] Failed to get current task order:', currentError)
+                toast.error('Erro ao identificar posição no fluxo. Por favor, tente novamente.')
+                setShowReturnModal(false)
+                return
+            }
+
+            const currentOrder = currentTask?.ordem
+
+            // Buscar profissionais de etapas ANTERIORES (ordem < ordem atual)
+            // Se não tem ordem (tarefa antigo), busca todos EXCETO o próprio usuário
+            let query = supabase
                 .from('tarefas_micro')
                 .select(`
-            profissional_id,
-            funcao,
-            profissionais!inner (
-            id,
-            nome
-            )
-            `)
+                    profissional_id,
+                    funcao,
+                    ordem,
+                    profissionais!inner (
+                        id,
+                        nome
+                    )
+                `)
                 .eq('tarefa_id', task.tarefa_id)
                 .neq('profissional_id', user.id) // Exclude current user
+
+            // Se tem ordem definida, filtra apenas anteriores
+            if (currentOrder !== null && currentOrder !== undefined) {
+                query = query.lt('ordem', currentOrder)
+            }
+
+            // Ordena por ordem DECRESCENTE (mais próximo primeiro)
+            query = query.order('ordem', { ascending: false })
+
+            const { data, error } = await query
 
             if (error) {
                 console.error('[loadProfessionalsForReturn] Query failed:', error)
@@ -672,13 +700,20 @@ function ExecutionView({ task, onBack, onUpdateStatus, onDeleteTask, user, role,
 
             // Validate data existence
             if (!data || data.length === 0) {
-                console.warn('[loadProfessionalsForReturn] No other professionals found in OS:', task.tarefa_id)
-                toast.warning('Não há outros profissionais disponíveis para devolução nesta OS.')
+                console.warn('[loadProfessionalsForReturn] No previous professionals found in workflow:', {
+                    tarefa_id: task.tarefa_id,
+                    current_order: currentOrder
+                })
+                toast.warning('Não há profissionais anteriores no fluxo para devolução.')
                 setShowReturnModal(false)  // 🔥 FECHAR MODAL SE VAZIO
                 return
             }
 
-            console.log('[loadProfessionalsForReturn] Loaded professionals:', data.length)
+            console.log('[loadProfessionalsForReturn] Loaded professionals from previous stages:', {
+                count: data.length,
+                current_order: currentOrder,
+                professionals: data.map(p => ({ nome: p.profissionais.nome, ordem: p.ordem }))
+            })
             setProfessionals(data || [])
         } catch (error) {
             console.error('[loadProfessionalsForReturn] Unexpected error:', error)

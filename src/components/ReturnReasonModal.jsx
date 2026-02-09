@@ -64,7 +64,7 @@ export default function ReturnReasonModal({ microTask, professionals, onClose, o
                                 </option>
                                 {professionals.map(p => (
                                     <option key={p.profissional_id} value={p.profissional_id}>
-                                        {p.profissionais.nome}{p.funcao !== microTask.funcao ? ` (${p.funcao})` : ''}
+                                        #{p.ordem || '?'} - {p.profissionais.nome} ({p.funcao})
                                     </option>
                                 ))}
                             </select>
@@ -83,8 +83,10 @@ export default function ReturnReasonModal({ microTask, professionals, onClose, o
                                 required
                                 minLength={10}
                             />
-                            <span className="modal-form-hint">
-                                Mínimo 10 caracteres
+                            <span className="modal-form-hint" style={{
+                                color: motivo.trim().length < 10 ? '#ef4444' : '#64748b'
+                            }}>
+                                {motivo.trim().length}/10 caracteres mínimos
                             </span>
                         </div>
 
