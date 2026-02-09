@@ -640,6 +640,8 @@ function ExecutionView({ task, onBack, onUpdateStatus, onDeleteTask, user, role,
 
     async function loadProfessionalsForReturn() {
         if (!task.is_micro_task || !task.tarefa_id) {
+            console.warn('[loadProfessionalsForReturn] Invalid task for return:', { is_micro_task: task.is_micro_task, tarefa_id: task.tarefa_id })
+            toast.error('Tarefa inválida para solicitação de ajuste')
             return
         }
 
@@ -661,11 +663,27 @@ function ExecutionView({ task, onBack, onUpdateStatus, onDeleteTask, user, role,
                 .eq('tarefa_id', task.tarefa_id)
                 .neq('profissional_id', user.id) // Exclude current user
 
-            if (error) throw error
+            if (error) {
+                console.error('[loadProfessionalsForReturn] Query failed:', error)
+                toast.error('Erro ao carregar lista de profissionais. Por favor, tente novamente.')
+                setShowReturnModal(false)  // 🔥 FECHAR MODAL EM CASO DE ERRO
+                return
+            }
+
+            // Validate data existence
+            if (!data || data.length === 0) {
+                console.warn('[loadProfessionalsForReturn] No other professionals found in OS:', task.tarefa_id)
+                toast.warning('Não há outros profissionais disponíveis para devolução nesta OS.')
+                setShowReturnModal(false)  // 🔥 FECHAR MODAL SE VAZIO
+                return
+            }
+
+            console.log('[loadProfessionalsForReturn] Loaded professionals:', data.length)
             setProfessionals(data || [])
         } catch (error) {
-            console.error('Error loading professionals:', error)
-            toast.error('Erro ao carregar profissionais')
+            console.error('[loadProfessionalsForReturn] Unexpected error:', error)
+            toast.error('Erro inesperado ao carregar profissionais. Por favor, recarregue a página.')
+            setShowReturnModal(false)  // 🔥 SEMPRE FECHAR EM ERRO
         } finally {
             setLoadingProfessionals(false)
         }
@@ -943,7 +961,8 @@ function ExecutionView({ task, onBack, onUpdateStatus, onDeleteTask, user, role,
                     </PermissionGuard>
 
                     {/* Return Adjustment (Micro Task) */}
-                    {task.is_micro_task && task.status !== 'bloqueada' && !isCompleted && (
+                    {/* 🔧 FIX: Botão deve estar visível durante pendente, em_execucao E devolvida */}
+                    {task.is_micro_task && task.status !== 'bloqueada' && task.status !== 'concluida' && (
                         <button onClick={openReturnModal} className="btn-action secondary" disabled={loadingProfessionals}>
                             Solicitar Ajuste
                         </button>
