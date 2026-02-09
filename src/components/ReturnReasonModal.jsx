@@ -64,7 +64,7 @@ export default function ReturnReasonModal({ microTask, professionals, onClose, o
                                 </option>
                                 {professionals.map(p => (
                                     <option key={p.profissional_id} value={p.profissional_id}>
-                                        #{p.ordem || '?'} - {p.profissionais.nome} ({p.funcao})
+                                        {p.profissionais.nome} ({p.funcao})
                                     </option>
                                 ))}
                             </select>
