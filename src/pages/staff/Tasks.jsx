@@ -682,12 +682,10 @@ function ExecutionView({ task, onBack, onUpdateStatus, onDeleteTask, user, role,
 
             // Se tem ordem definida, filtra apenas anteriores
             if (currentOrder !== null && currentOrder !== undefined && currentOrder > 1) {
-                query = query.lt('ordem', currentOrder)
-                // Ordena por ordem DECRESCENTE (mais próximo primeiro)
-                query = query.order('ordem', { ascending: false, nullsFirst: false })
+                query = query.lt('ordem', currentOrder).order('ordem', { ascending: false })
             } else {
-                // Fallback: sem ordem ou primeira etapa, ordena por funcao
-                query = query.order('funcao', { ascending: true })
+                // Fallback: sem ordem ou primeira etapa, não ordena
+                // (deixa ordem natural da query)
             }
 
             const { data, error } = await query
