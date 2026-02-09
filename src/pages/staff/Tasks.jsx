@@ -648,46 +648,72 @@ function ExecutionView({ task, onBack, onUpdateStatus, onDeleteTask, user, role,
         try {
             setLoadingProfessionals(true)
 
-            // Buscar TODOS os outros profissionais desta OS (exceto o usuário atual)
-            const { data, error } = await supabase
+            // Buscar ordem da tarefa atual (se existe)
+            const { data: currentTask } = await supabase
+                .from('tarefas_micro')
+                .select('ordem')
+                .eq('id', task.id)
+                .maybeSingle()
+
+            const currentOrder = currentTask?.ordem
+
+            // Buscar profissionais (com ou sem filtro de ordem)
+            let query = supabase
                 .from('tarefas_micro')
                 .select(`
                     profissional_id,
                     funcao,
+                    ordem,
                     profissionais!inner (
                         id,
                         nome
                     )
                 `)
                 .eq('tarefa_id', task.tarefa_id)
-                .neq('profissional_id', user.id) // Exclude current user
+                .neq('profissional_id', user.id)
+
+            // Se tem ordem, filtra APENAS etapas anteriores
+            if (currentOrder != null && currentOrder > 1) {
+                query = query.lt('ordem', currentOrder).order('ordem', { ascending: false })
+                console.log('[loadProfessionalsForReturn] Filtering by ordem < ', currentOrder)
+            } else if (currentOrder === 1) {
+                // Primeira etapa - não há anteriores
+                console.log('[loadProfessionalsForReturn] First stage - no previous professionals')
+                toast.info('Esta é a primeira etapa do fluxo. Não há profissionais anteriores para devolução.')
+                setShowReturnModal(false)
+                return
+            }
+            // Se currentOrder é null, busca todos (tarefa antiga sem ordem)
+
+            const { data, error } = await query
 
             if (error) {
                 console.error('[loadProfessionalsForReturn] Query failed:', error)
                 toast.error('Erro ao carregar lista de profissionais. Por favor, tente novamente.')
-                setShowReturnModal(false)  // 🔥 FECHAR MODAL EM CASO DE ERRO
+                setShowReturnModal(false)
                 return
             }
 
-            // Validate data existence
             if (!data || data.length === 0) {
                 console.warn('[loadProfessionalsForReturn] No other professionals found:', {
-                    tarefa_id: task.tarefa_id
+                    tarefa_id: task.tarefa_id,
+                    current_ordem: currentOrder
                 })
-                toast.warning('Não há outros profissionais disponíveis para devolução nesta OS.')
-                setShowReturnModal(false)  // 🔥 FECHAR MODAL SE VAZIO
+                toast.warning('Não há outros profissionais disponíveis para devolução.')
+                setShowReturnModal(false)
                 return
             }
 
             console.log('[loadProfessionalsForReturn] Loaded professionals:', {
                 count: data.length,
-                professionals: data.map(p => ({ nome: p.profissionais.nome, funcao: p.funcao }))
+                current_ordem: currentOrder,
+                professionals: data.map(p => ({ nome: p.profissionais.nome, funcao: p.funcao, ordem: p.ordem }))
             })
             setProfessionals(data || [])
         } catch (error) {
             console.error('[loadProfessionalsForReturn] Unexpected error:', error)
             toast.error('Erro inesperado ao carregar profissionais. Por favor, recarregue a página.')
-            setShowReturnModal(false)  // 🔥 SEMPRE FECHAR EM ERRO
+            setShowReturnModal(false)
         } finally {
             setLoadingProfessionals(false)
         }
