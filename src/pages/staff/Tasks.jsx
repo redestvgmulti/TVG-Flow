@@ -79,6 +79,10 @@ export default function StaffTasks() {
                 .from('tarefas')
                 .select(`
                     *,
+                    criador:created_by (
+                        id,
+                        nome
+                    ),
                     tarefas_micro (
                         id,
                         profissional_id,
@@ -127,6 +131,10 @@ export default function StaffTasks() {
                             deadline: osTask.deadline,
                             prioridade: osTask.prioridade,
                             drive_link: osTask.drive_link,
+
+                            // Criador da OS
+                            criador_id: osTask.criador?.id || null,
+                            criador_nome: osTask.criador?.nome || 'Não identificado',
 
                             // Flags e referências
                             is_micro_task: true,
@@ -509,6 +517,12 @@ function TaskCard({ task, onClick }) {
                 <div className="staff-task-header">
                     <span className={`staff-task-status-dot ${statusClass}`}></span>
                     <span className="staff-task-status-text">{statusText}</span>
+                    {/* Nome do criador ao lado de PENDENTE */}
+                    {task.status === 'pendente' && task.criador_nome && (
+                        <span className="staff-task-creator" style={{ marginLeft: '8px', color: '#666', fontSize: '0.85em' }}>
+                            ({task.criador_nome})
+                        </span>
+                    )}
                     {isOverdue && (
                         <span className="staff-task-badge-overdue">
                             <AlertCircle size={10} />
@@ -677,10 +691,34 @@ function ExecutionView({ task, onBack, onUpdateStatus, onDeleteTask, user, role,
                 query = query.lt('ordem', currentOrder).order('ordem', { ascending: false })
                 console.log('[loadProfessionalsForReturn] Filtering by ordem < ', currentOrder)
             } else if (currentOrder === 1) {
-                // Primeira etapa - não há anteriores
-                console.log('[loadProfessionalsForReturn] First stage - no previous professionals')
-                toast.info('Esta é a primeira etapa do fluxo. Não há profissionais anteriores para devolução.')
-                setShowReturnModal(false)
+                // 🎯 FIX: Primeira etapa - devolver para o CRIADOR da OS
+                console.log('[loadProfessionalsForReturn] First stage - returning to OS creator')
+
+                // Buscar criador da OS
+                const { data: osData, error: osError } = await supabase
+                    .from('tarefas')
+                    .select('created_by, profissionais!created_by(id, nome)')
+                    .eq('id', task.tarefa_id)
+                    .single()
+
+                if (osError || !osData?.profissionais) {
+                    console.error('[loadProfessionalsForReturn] Failed to get OS creator:', osError)
+                    toast.error('Erro ao buscar criador da OS')
+                    setShowReturnModal(false)
+                    return
+                }
+
+                // Retornar apenas o criador como opção
+                setProfessionals([{
+                    profissional_id: osData.profissionais.id,
+                    funcao: 'CRIADOR DA OS',
+                    ordem: 0, // Ordem 0 = criador
+                    profissionais: {
+                        id: osData.profissionais.id,
+                        nome: osData.profissionais.nome
+                    }
+                }])
+                setLoadingProfessionals(false)
                 return
             }
             // Se currentOrder é null, busca todos (tarefa antiga sem ordem)
