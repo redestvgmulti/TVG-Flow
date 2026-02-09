@@ -686,8 +686,8 @@ function ExecutionView({ task, onBack, onUpdateStatus, onDeleteTask, user, role,
                 // Ordena por ordem DECRESCENTE (mais próximo primeiro)
                 query = query.order('ordem', { ascending: false, nullsFirst: false })
             } else {
-                // Fallback: sem ordem ou primeira etapa, ordena por nome
-                query = query.order('profissionais(nome)', { ascending: true })
+                // Fallback: sem ordem ou primeira etapa, ordena por funcao
+                query = query.order('funcao', { ascending: true })
             }
 
             const { data, error } = await query
