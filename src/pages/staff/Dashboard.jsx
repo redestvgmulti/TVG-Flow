@@ -205,7 +205,7 @@ function StaffDashboard() {
                 return new Date(a.deadline) - new Date(b.deadline)
             })
 
-            setRecentTasks(sortedTasks.slice(0, 5))
+            setRecentTasks(sortedTasks.slice(0, 20)) // C3: Increased to 20 for scroll
 
         } catch (error) {
             // Error handled silently
@@ -343,7 +343,7 @@ function StaffDashboard() {
                     </div>
 
                     {/* Recent Tasks List */}
-                    <div className="card content-card">
+                    <div className="card content-card dashboard-tasks-card">
                         <div className="card-header">
                             <h3 className="card-title flex items-center gap-2">
                                 <ListTodo size={18} />
@@ -364,7 +364,7 @@ function StaffDashboard() {
                                 <p className="subtitle">Você não tem tarefas pendentes.</p>
                             </div>
                         ) : (
-                            <div className="staff-tasks-list">
+                            <div className="staff-tasks-list dashboard-tasks-scroll">
                                 {safeRecentTasks.map(task => {
                                     const isOverdue = new Date(task.deadline) < new Date() && task.status !== 'concluida'
                                     const statusClass = task.status === 'concluida' ? 'status-completed' : task.status === 'em_progresso' ? 'status-in-progress' : 'status-pending'

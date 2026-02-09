@@ -223,3 +223,14 @@
         align-items: start;
     }
 }
+
+/* Custom Scroll for Dashboard Tasks - Max 2 items visible */
+.dashboard-tasks-scroll {
+    max-height: 250px; /* Approx 2 items + gap */
+    overflow-y: auto;
+    padding-right: 6px;
+}
+
+.dashboard-tasks-card {
+    min-height: auto !important; /* Allow shrinking to fit content */
+}

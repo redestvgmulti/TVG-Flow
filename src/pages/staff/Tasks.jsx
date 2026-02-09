@@ -18,7 +18,8 @@ import {
     Trash2,
     Workflow,
     Paperclip,
-    Download
+    Download,
+    User
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '../../contexts/AuthContext'
@@ -83,6 +84,10 @@ export default function StaffTasks() {
                         id,
                         nome
                     ),
+                    empresa:empresa_id (
+                        id,
+                        nome
+                    ),
                     tarefas_micro (
                         id,
                         profissional_id,
@@ -132,9 +137,10 @@ export default function StaffTasks() {
                             prioridade: osTask.prioridade,
                             drive_link: osTask.drive_link,
 
-                            // Criador da OS
+                            // Criador da OS & Empresa
                             criador_id: osTask.criador?.id || null,
                             criador_nome: osTask.criador?.nome || 'Não identificado',
+                            empresa_nome: osTask.empresa?.nome || '',
 
                             // Flags e referências
                             is_micro_task: true,
@@ -148,6 +154,9 @@ export default function StaffTasks() {
                     // OS SIMPLES: Mostrar a tarefa principal diretamente
                     allTasks.push({
                         ...osTask,
+                        // Ensure we map the joined data correctly for simple tasks too
+                        criador_nome: osTask.criador?.nome || 'Não identificado',
+                        empresa_nome: osTask.empresa?.nome || '',
                         is_micro_task: false,
                         is_os_simples: true,
                         is_os_complexa: false,
@@ -517,12 +526,25 @@ function TaskCard({ task, onClick }) {
                 <div className="staff-task-header">
                     <span className={`staff-task-status-dot ${statusClass}`}></span>
                     <span className="staff-task-status-text">{statusText}</span>
-                    {/* Nome do criador ao lado de PENDENTE */}
-                    {task.status === 'pendente' && task.criador_nome && (
-                        <span className="staff-task-creator" style={{ marginLeft: '8px', color: '#666', fontSize: '0.85em' }}>
-                            ({task.criador_nome})
-                        </span>
+
+                    {/* Novo formato: Dot + Criador + Dot + Empresa */}
+                    {task.status === 'pendente' && (task.criador_nome || task.empresa_nome) && (
+                        <div className="staff-task-origin-info">
+                            {task.criador_nome && (
+                                <>
+                                    <span className="dot-separator">•</span>
+                                    <span className="origin-creator">{task.criador_nome.split(' ')[0]}</span>
+                                </>
+                            )}
+                            {task.empresa_nome && (
+                                <>
+                                    <span className="dot-separator">•</span>
+                                    <span className="origin-company">{task.empresa_nome}</span>
+                                </>
+                            )}
+                        </div>
                     )}
+
                     {isOverdue && (
                         <span className="staff-task-badge-overdue">
                             <AlertCircle size={10} />
@@ -814,6 +836,26 @@ function ExecutionView({ task, onBack, onUpdateStatus, onDeleteTask, user, role,
                 <div className="execution-title-row">
                     <h1 className="execution-title">{task.titulo}</h1>
                 </div>
+
+                {/* Origin Info (New) */}
+                {(task.criador_nome || task.empresa_nome) && (
+                    <div className="execution-origin-info" style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem', color: '#6B7280' }}>
+                        {task.criador_nome && (
+                            <span className="origin-creator">
+                                <User size={14} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'text-bottom' }} />
+                                {task.criador_nome}
+                            </span>
+                        )}
+                        {task.criador_nome && task.empresa_nome && (
+                            <span className="dot-separator">•</span>
+                        )}
+                        {task.empresa_nome && (
+                            <span className="origin-company" style={{ fontWeight: 500, color: '#4B5563' }}>
+                                {task.empresa_nome}
+                            </span>
+                        )}
+                    </div>
+                )}
 
                 {/* Meta Data Grid */}
                 <div className="execution-meta-grid">
