@@ -50,16 +50,13 @@ export default function EditorialEngine({ clienteId }) {
     const fetchData = async () => {
         setLoading(true)
         try {
-            // Fetch all needed contextual state
-            const [settingsRes, promptRes, rulesRes, ragRes, limitsRes] = await Promise.all([
+            const [settingsRes, promptRes, ragRes] = await Promise.all([
                 supabase.functions.invoke('ap-editorial-settings'),
                 supabase.functions.invoke('ap-editorial-prompt'),
-                supabase.from('ap.editorial_rules').select('*').eq('cliente_id', clienteId),
                 supabase.functions.invoke('ap-editorial-rag-upload'),
-                supabase.from('ap.editorial_limits').select('*').eq('cliente_id', clienteId).maybeSingle()
             ])
 
-            if (settingsRes.error) throw settingsRes.error
+            if (settingsRes.error) throw new Error(settingsRes.error.message || 'Erro na API de Settings')
 
             if (settingsRes.data?.settings) {
                 setSettings(s => ({ ...s, ...settingsRes.data.settings }))
@@ -70,13 +67,13 @@ export default function EditorialEngine({ clienteId }) {
             if (settingsRes.data?.active_prompt) {
                 setActivePrompt(settingsRes.data.active_prompt.prompt_base)
             }
-            if (promptRes.data) setPromptHistory(promptRes.data)
-            if (rulesRes.data) setRules(rulesRes.data)
-            if (ragRes.data) setRagDocs(ragRes.data)
+            if (settingsRes.data?.rules) setRules(settingsRes.data.rules)
+            if (promptRes.data && !promptRes.error) setPromptHistory(Array.isArray(promptRes.data) ? promptRes.data : [])
+            if (ragRes.data && !ragRes.error) setRagDocs(Array.isArray(ragRes.data) ? ragRes.data : [])
 
         } catch (err) {
-            console.error(err)
-            setError('Erro ao carregar dados do Motor Editorial')
+            console.error('[EditorialEngine] fetchData error:', err)
+            setError('Erro ao carregar dados do Motor Editorial: ' + err.message)
         } finally {
             setLoading(false)
         }

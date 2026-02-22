@@ -73,6 +73,13 @@ Deno.serve(async (req: Request) => {
                 .eq("is_active", true)
                 .maybeSingle();
 
+            // Rules (so frontend doesn't need to query ap.* directly)
+            const { data: rules } = await sbAdmin
+                .from("ap.editorial_rules")
+                .select("*")
+                .eq("cliente_id", clienteId)
+                .order("created_at", { ascending: true });
+
             // Has key?
             const has_key = !!(settings?.vault_secret_id);
 
@@ -80,7 +87,8 @@ Deno.serve(async (req: Request) => {
                 JSON.stringify({
                     settings: { ...settings, vault_secret_id: undefined, has_api_key: has_key },
                     humanization,
-                    active_prompt: prompt
+                    active_prompt: prompt,
+                    rules: rules ?? []
                 }),
                 { headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );

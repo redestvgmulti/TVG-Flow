@@ -37,8 +37,11 @@ export default function AutoPublisher() {
             .eq('profissional_id', professionalId)
             .eq('ativo', true)
             .limit(1)
-            .single()
-            .then(({ data }) => { if (data) setClienteId(data.cliente_id) })
+            .maybeSingle()
+            .then(({ data, error }) => {
+                if (error) console.error('[AutoPublisher] clienteId resolve err:', error)
+                if (data) setClienteId(data.cliente_id)
+            })
     }, [professionalId])
 
     const [tab, setTab] = useState('review')
