@@ -46,7 +46,8 @@ export const createMeeting = async (payload) => {
             .select('empresa_id')
             .eq('profissional_id', user.id)
             .eq('ativo', true)
-            .single();
+            .limit(1)
+            .maybeSingle();
 
         if (empresaError || !empresaData) {
             console.error('[meetingService] Error determining company:', empresaError);
@@ -451,7 +452,8 @@ export const getAvailableStaff = async () => {
         .select('empresa_id')
         .eq('profissional_id', user.id)
         .eq('ativo', true)
-        .single();
+        .limit(1)
+        .maybeSingle();
 
     if (empresaError || !empresaData) {
         console.error('[meetingService] Error fetching user company:', empresaError);
