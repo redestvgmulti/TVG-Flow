@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../services/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import { resolveClienteId } from '../../services/resolveClienteId'
 import '../../styles/AutoPublisher.css'
 import {
     Rss, RefreshCcw, Check, X, Pencil,
@@ -26,23 +27,17 @@ const STAGES = [
 // Main Page — Newsroom Control Center (V2)
 // ──────────────────────────────────────────────────────────
 export default function AutoPublisher() {
-    const { professionalId } = useAuth()
+    const { professionalId, role } = useAuth()
     const [clienteId, setClienteId] = useState(null)
 
     useEffect(() => {
         if (!professionalId) return
-        supabase
-            .from('cliente_profissionais')
-            .select('cliente_id')
-            .eq('profissional_id', professionalId)
-            .eq('ativo', true)
-            .limit(1)
-            .maybeSingle()
-            .then(({ data, error }) => {
-                if (error) console.error('[AutoPublisher] clienteId resolve err:', error)
-                if (data) setClienteId(data.cliente_id)
-            })
-    }, [professionalId])
+        resolveClienteId(professionalId, role).then(id => {
+            if (id) setClienteId(id)
+            else console.warn('[AutoPublisher] No clienteId resolved for user:', professionalId)
+        })
+    }, [professionalId, role])
+
 
     const [tab, setTab] = useState('review')
     const [stageFilter, setStageFilter] = useState(null)

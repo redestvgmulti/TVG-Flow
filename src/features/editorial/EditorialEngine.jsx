@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from '../../services/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import { resolveClienteId } from '../../services/resolveClienteId'
 import { Save, Plus, Trash2, Cpu, Brain, Zap, RefreshCw, AlertCircle, FileText, CheckCircle2 } from 'lucide-react'
 import '../../styles/EditorialEngine.css'
 
 export default function EditorialEngine() {
-    const { professionalId } = useAuth()
+    const { professionalId, role } = useAuth()
     const [clienteId, setClienteId] = useState(null)
     const [loading, setLoading] = useState(false)
     const [clienteLoading, setClienteLoading] = useState(true)
@@ -46,22 +47,14 @@ export default function EditorialEngine() {
     const [promptSnapshot, setPromptSnapshot] = useState(null)
     const [loadingSnapshot, setLoadingSnapshot] = useState(false)
 
-    // 1. Resolve clienteId from JWT/professionalId
+    // 1. Resolve clienteId — works for admin AND profissional
     useEffect(() => {
         if (!professionalId) return
-        supabase
-            .from('cliente_profissionais')
-            .select('cliente_id')
-            .eq('profissional_id', professionalId)
-            .eq('ativo', true)
-            .limit(1)
-            .maybeSingle()
-            .then(({ data, error }) => {
-                if (error) console.error('[EditorialEngine] clienteId err:', error)
-                if (data?.cliente_id) setClienteId(data.cliente_id)
-                setClienteLoading(false)
-            })
-    }, [professionalId])
+        resolveClienteId(professionalId, role).then(id => {
+            if (id) setClienteId(id)
+            setClienteLoading(false)
+        })
+    }, [professionalId, role])
 
     // 2. Fetch editorial data when clienteId is ready
     useEffect(() => {
