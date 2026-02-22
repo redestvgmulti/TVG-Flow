@@ -17,6 +17,7 @@ import Companies from './pages/admin/Companies'
 import CompanyDetails from './pages/admin/CompanyDetails'
 import AdminContent from './pages/admin/AdminContent'
 import Meetings from './pages/admin/Meetings'
+import AutoPublisher from './pages/admin/AutoPublisher'
 import StaffDashboard from './pages/staff/Dashboard'
 import StaffTasks from './pages/staff/Tasks'
 import StaffContent from './pages/staff/StaffContent'
@@ -100,6 +101,7 @@ function App() {
                     <Route path="meetings" element={<Meetings />} />
                     <Route path="content" element={<AdminContent />} />
                     <Route path="reports" element={<Reports />} />
+                    <Route path="autopublisher" element={<AutoPublisher />} />
                   </Route>
 
                   {/* Staff Routes */}

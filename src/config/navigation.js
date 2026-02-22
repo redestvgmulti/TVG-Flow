@@ -8,7 +8,8 @@ import {
     BarChart,
     Users,
     Building,
-    Settings
+    Settings,
+    Rss
 } from 'lucide-react'
 
 // Single Source of Truth for Navigation
@@ -128,6 +129,14 @@ export const NAV_ITEMS = [
         icon: BarChart,
         roles: ['admin', 'super_admin'],
         showOnMobileBottom: true
+    },
+    {
+        key: 'admin-autopublisher',
+        label: 'AutoPublisher',
+        path: '/admin/autopublisher',
+        icon: Rss,
+        roles: ['admin', 'super_admin'],
+        showOnMobileBottom: false
     }
 ]
 

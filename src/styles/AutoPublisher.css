@@ -1,0 +1,242 @@
+/* ============================================================
+   AutoPublisher.css — CSS modular exclusivo do módulo
+   ============================================================ */
+
+.ap-page {
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* ── Header ─────────────────────────────────────────────── */
+.ap-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.ap-header h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--text-primary, #f1f5f9);
+  margin: 0;
+}
+
+.ap-badge {
+  background: #0ea5e9;
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+
+/* ── Tabs ─────────────────────────────────────────────────── */
+.ap-tabs {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  margin-bottom: 1.5rem;
+}
+
+.ap-tab {
+  padding: 0.6rem 1.25rem;
+  border: none;
+  background: none;
+  color: var(--text-secondary, #94a3b8);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.ap-tab:hover { color: var(--text-primary, #f1f5f9); }
+
+.ap-tab.active {
+  color: #0ea5e9;
+  border-bottom-color: #0ea5e9;
+}
+
+/* ── Status Badge ─────────────────────────────────────────── */
+.ap-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.ap-status.raw                { background: rgba(100,116,139,0.2); color: #94a3b8; }
+.ap-status.ready_for_scoring  { background: rgba(234,179,8,0.15);  color: #eab308; }
+.ap-status.scored             { background: rgba(168,85,247,0.15); color: #a855f7; }
+.ap-status.selected           { background: rgba(59,130,246,0.15); color: #3b82f6; }
+.ap-status.pending_render     { background: rgba(249,115,22,0.15); color: #f97316; }
+.ap-status.pending_review     { background: rgba(234,179,8,0.2);   color: #fbbf24; }
+.ap-status.approved           { background: rgba(34,197,94,0.15);  color: #22c55e; }
+.ap-status.queued_for_posting { background: rgba(14,165,233,0.15); color: #0ea5e9; }
+.ap-status.posted             { background: rgba(34,197,94,0.2);   color: #4ade80; }
+.ap-status.rejected           { background: rgba(239,68,68,0.15);  color: #ef4444; }
+
+/* ── Card Grid ────────────────────────────────────────────── */
+.ap-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1rem;
+}
+
+.ap-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.ap-card:hover {
+  border-color: rgba(14,165,233,0.3);
+  box-shadow: 0 0 0 1px rgba(14,165,233,0.1);
+}
+
+.ap-card-image {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.05);
+}
+
+.ap-card-headline {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary, #f1f5f9);
+  line-height: 1.4;
+}
+
+.ap-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--text-secondary, #94a3b8);
+}
+
+.ap-card-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: auto;
+}
+
+/* ── Buttons ─────────────────────────────────────────────── */
+.ap-btn {
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  border: none;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.1s;
+}
+.ap-btn:active { transform: scale(0.97); }
+
+.ap-btn.primary {
+  background: #0ea5e9;
+  color: #fff;
+}
+.ap-btn.primary:hover { opacity: 0.9; }
+
+.ap-btn.danger {
+  background: rgba(239,68,68,0.15);
+  color: #ef4444;
+}
+.ap-btn.danger:hover { background: rgba(239,68,68,0.25); }
+
+.ap-btn.ghost {
+  background: rgba(255,255,255,0.06);
+  color: var(--text-secondary, #94a3b8);
+}
+.ap-btn.ghost:hover { background: rgba(255,255,255,0.1); }
+
+/* ── Empty State ─────────────────────────────────────────── */
+.ap-empty {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: var(--text-secondary, #94a3b8);
+}
+
+.ap-empty svg {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 1rem;
+  opacity: 0.4;
+}
+
+.ap-empty p { font-size: 1rem; }
+
+/* ── Settings Form ─────────────────────────────────────────── */
+.ap-form-section {
+  margin-bottom: 2rem;
+}
+
+.ap-form-section h2 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary, #f1f5f9);
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.ap-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.ap-table th {
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-secondary, #94a3b8);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.ap-table td {
+  padding: 0.75rem;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  color: var(--text-primary, #f1f5f9);
+  vertical-align: middle;
+}
+
+.ap-table tr:last-child td { border-bottom: none; }
+.ap-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+/* ── Schedule Preview ─────────────────────────────────────── */
+.ap-schedule-time {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.8rem;
+  color: #0ea5e9;
+}
+
+/* ── Loading ─────────────────────────────────────────────── */
+.ap-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  color: var(--text-secondary, #94a3b8);
+  font-size: 0.9rem;
+  gap: 0.5rem;
+}
