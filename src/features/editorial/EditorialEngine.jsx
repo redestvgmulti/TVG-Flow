@@ -39,6 +39,8 @@ export default function EditorialEngine({ clienteId }) {
     const [testOutput, setTestOutput] = useState(null)
     const [testLoading, setTestLoading] = useState(false)
     const [testError, setTestError] = useState('')
+    const [promptSnapshot, setPromptSnapshot] = useState(null)
+    const [loadingSnapshot, setLoadingSnapshot] = useState(false)
 
     useEffect(() => {
         if (!clienteId) return
@@ -207,6 +209,7 @@ export default function EditorialEngine({ clienteId }) {
         setTestLoading(true)
         setTestError('')
         setTestOutput(null)
+        setPromptSnapshot(null)
         try {
             const { data, error: fnErr } = await supabase.functions.invoke('ap-editorial-test', {
                 method: 'POST',
@@ -219,6 +222,21 @@ export default function EditorialEngine({ clienteId }) {
             setTestError(err.message)
         } finally {
             setTestLoading(false)
+        }
+    }
+
+    const fetchSnapshot = async (logId) => {
+        if (!logId) return;
+        setLoadingSnapshot(true);
+        try {
+            const { data, error } = await supabase.from('ap.editorial_logs').select('prompt_snapshot').eq('id', logId).single();
+            if (error) throw error;
+            setPromptSnapshot(data.prompt_snapshot);
+        } catch (err) {
+            console.error(err);
+            setPromptSnapshot("Erro ao buscar log auditado.");
+        } finally {
+            setLoadingSnapshot(false);
         }
     }
 
@@ -478,15 +496,15 @@ export default function EditorialEngine({ clienteId }) {
                                 <span className="editorial-metric-value">{testOutput.tokens} <span style={{ fontSize: 10, color: '#888', fontWeight: 'normal' }}>(~${((testOutput.tokens / 1000000) * 0.15).toFixed(4)})</span></span>
                             </div>
                             <div className="editorial-metric">
-                                <span className="editorial-metric-label">Tamanho do RAG Injetado</span>
-                                <span className="editorial-metric-value">{testOutput.prompt_snapshot.includes('[TRECHO') ? 'Ativo' : '0 Bytes'}</span>
+                                <span className="editorial-metric-label">Status (Auditoria)</span>
+                                <span className="editorial-metric-value">{testOutput.log_id ? "Log Criptografado salvo" : "Sem Log"}</span>
                             </div>
                         </div>
 
-                        <details style={{ marginTop: 16 }}>
-                            <summary style={{ cursor: 'pointer', fontSize: 13, color: 'var(--color-primary)', fontWeight: 500 }}>Ver Prompt Final Montado (Auditoria)</summary>
+                        <details style={{ marginTop: 16 }} onToggle={(e) => { if (e.target.open && !promptSnapshot) fetchSnapshot(testOutput.log_id) }}>
+                            <summary style={{ cursor: 'pointer', fontSize: 13, color: 'var(--color-primary)', fontWeight: 500 }}>Consultar Log de Decisão (Requer Acesso Base)</summary>
                             <pre className="editorial-test-output" style={{ fontSize: 11, color: '#A0A0A0', borderColor: '#222', marginTop: 8 }}>
-                                {testOutput.prompt_snapshot}
+                                {loadingSnapshot ? "Buscando snapshot no Vault de logs..." : promptSnapshot || "Nenhum snapshot em memória"}
                             </pre>
                         </details>
                     </div>

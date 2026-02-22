@@ -19,10 +19,7 @@ Deno.serve(async (_req: Request) => {
         { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
-    const fallbackOpenaiKey = Deno.env.get("OPENAI_API_KEY");
-    if (!fallbackOpenaiKey) {
-        return new Response(JSON.stringify({ error: "No system fallback key configured" }), { status: 500 });
-    }
+    // No more global fallbacks. Each tenant MUST have an API Key in the Vault.
 
     // Only items that are 'selected' AND have no headline yet (idempotent guard)
     const cutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
@@ -53,55 +50,50 @@ Deno.serve(async (_req: Request) => {
                 clienteId = topic?.cliente_id;
             }
 
-            let prompt = "";
-            let finalOpenAiKey = fallbackOpenaiKey;
+            let finalOpenAiKey = "";
             let finalModel = OPENAI_MODEL_G;
-
+            let prompt = "";
             let editorialActive = false;
             let context = null;
 
             if (clienteId) {
-                context = await getEditorialContext(supabase, clienteId, "");
-                if (context && context.settings) {
+                context = await getEditorialContext(supabase, clienteId, item.conteudo || item.titulo || "");
+                if (context && context.settings && context.settings.vault_secret_id) {
                     editorialActive = true;
-                    // Vault Resolution
-                    const vaultId = context.settings.vault_secret_id;
-                    if (vaultId) {
-                        const { data: secretData } = await supabase.rpc('get_decrypted_secret', { secret_id: vaultId });
-                        if (secretData) finalOpenAiKey = secretData;
+                    const { data: secretData } = await supabase.rpc('get_decrypted_secret', { secret_id: context.settings.vault_secret_id });
+                    if (secretData) {
+                        finalOpenAiKey = secretData;
                     }
-                    prompt = buildEditorialPrompt({
-                        titulo: item.titulo,
-                        conteudo: item.conteudo,
-                        categoria: item.categoria,
-                        settings: context.settings,
-                        promptVersion: context.promptVersion,
-                        humanization: context.humanization,
-                        rules: context.rules,
-                        ragContext: context.ragContext
-                    });
-                    finalModel = context.settings.model_primary || OPENAI_MODEL_G;
                 }
             }
 
-            // Fallback to legacy behavior
-            if (!editorialActive) {
-                prompt = buildLegacyPrompt(item.titulo, item.conteudo, item.categoria);
+            if (!finalOpenAiKey) {
+                throw new Error("Tenant " + clienteId + " has no valid OpenAI API Key in Vault.");
             }
 
-            // Check Limits if Editorial
-            let limits = null;
-            if (editorialActive && clienteId) {
-                 const { data: l } = await supabase.from("ap.editorial_limits").select("*").eq("cliente_id", clienteId).maybeSingle();
-                 limits = l;
-                 if (limits && limits.monthly_token_used >= limits.monthly_token_limit) {
-                     // Failsafe: downgrade to pure fallback since limit reached, or throw
-                     console.error(`Tenant ${clienteId} reached token limit. Using fallback.`);
-                     prompt = buildLegacyPrompt(item.titulo, item.conteudo, item.categoria);
-                     finalOpenAiKey = fallbackOpenaiKey;
-                     finalModel = OPENAI_MODEL_G;
-                     editorialActive = false; 
-                 }
+            // Always use Editorial Builder now that legacy is dead
+            prompt = await buildEditorialPrompt(supabase, {
+                titulo: item.titulo,
+                conteudo: item.conteudo,
+                categoria: item.categoria,
+                settings: context?.settings || {},
+                promptVersion: context?.promptVersion,
+                humanization: context?.humanization,
+                rules: context?.rules || [],
+                ragContext: context?.ragContext || [],
+                openaiKey: finalOpenAiKey
+            });
+            finalModel = context?.settings?.model_primary || OPENAI_MODEL_G;
+
+            // Reserve tokens
+            const estimatedTokens = 1500;
+            const { data: reserved, error: reserveErr } = await supabase.rpc('reserve_editorial_tokens', {
+                p_cliente_id: clienteId,
+                p_tokens: estimatedTokens
+            });
+
+            if (reserveErr || !reserved) {
+                throw new Error("Tenant reached monthly token limit.");
             }
 
             let aiResponse = "";
@@ -110,43 +102,49 @@ Deno.serve(async (_req: Request) => {
             let promptTokens = 0;
 
             const makeCall = async (modelOverride?: string) => {
-                 const res = await callOpenAI(finalOpenAiKey, prompt, modelOverride || finalModel, editorialActive && context?.settings ? context.settings.temperature : 0.7);
-                 aiResponse = res.content;
-                 apiTokens = res.total_tokens;
-                 promptTokens = res.prompt_tokens;
-                 completionTokens = res.completion_tokens;
-                 return res;
+                const res = await callOpenAI(finalOpenAiKey!, prompt, modelOverride || finalModel, editorialActive && context?.settings ? context.settings.temperature : 0.7);
+                aiResponse = res.content;
+                apiTokens = res.total_tokens;
+                promptTokens = res.prompt_tokens;
+                completionTokens = res.completion_tokens;
+                return res;
             };
 
             try {
                 await makeCall();
             } catch (err) {
-                 if (editorialActive && context?.settings?.model_fallback) {
+                if (editorialActive && context?.settings?.model_fallback) {
                     console.warn(`Primary model failed, attempting fallback`, err);
                     finalModel = context.settings.model_fallback;
-                    await makeCall(finalModel);
-                 } else {
+                    try {
+                        await makeCall(finalModel);
+                    } catch (fallbackError) {
+                        await supabase.rpc('refund_editorial_tokens', { p_cliente_id: clienteId, p_tokens_to_refund: estimatedTokens });
+                        throw fallbackError;
+                    }
+                } else {
+                    await supabase.rpc('refund_editorial_tokens', { p_cliente_id: clienteId, p_tokens_to_refund: estimatedTokens });
                     throw err;
-                 }
+                }
             }
 
             const parsed = parseAiOutput(aiResponse);
 
+            // Refund unused tokens
+            const tokensToRefund = estimatedTokens - apiTokens;
+            if (tokensToRefund > 0) {
+                await supabase.rpc('refund_editorial_tokens', { p_cliente_id: clienteId, p_tokens_to_refund: tokensToRefund });
+            }
+
             // Log Editorial usage
             if (editorialActive && clienteId) {
-                 await supabase.from("ap.editorial_logs").insert({
+                await supabase.from("ap.editorial_logs").insert({
                     cliente_id: clienteId,
                     input_tokens: promptTokens,
                     output_tokens: completionTokens,
                     model: finalModel,
                     prompt_snapshot: prompt
-                 });
-
-                 if (limits) {
-                     await supabase.from("ap.editorial_limits").update({
-                         monthly_token_used: limits.monthly_token_used + apiTokens
-                     }).eq("id", limits.id);
-                 }
+                });
             }
 
             await supabase
@@ -176,21 +174,7 @@ Deno.serve(async (_req: Request) => {
     });
 });
 
-function buildLegacyPrompt(titulo: string, conteudo: string | null, categoria: string | null): string {
-    return `Você é um editor de notícias para redes sociais. Gere um JSON com os seguintes campos:
-- headline: título impactante entre 50-65 caracteres
-- caption: legenda para Instagram (max 220 chars, informal, engajador)
-- roteiro: array de 3 strings: [abertura, desenvolvimento, chamada_para_ação]
-- visual_energy_level: "low" | "medium" | "high" com base na urgência da notícia
-- has_face: true se a notícia provavelmente mostra um rosto em destaque
-
-Notícia:
-Título: ${titulo}
-${conteudo ? `Conteúdo: ${conteudo.slice(0, 500)}` : ""}
-Categoria: ${categoria ?? "geral"}
-
-Responda APENAS com o JSON, sem markdown.`;
-}
+// Removed legacy prompt builder to save space and rely on EditorialPromptBuilder baseline
 
 async function callOpenAI(apiKey: string, prompt: string, model: string, temp: number) {
     const res = await fetch("https://api.openai.com/v1/chat/completions", {

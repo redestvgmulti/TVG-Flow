@@ -46,32 +46,7 @@ Deno.serve(async (req: Request) => {
 
         const sbAdmin = createClient(supabaseUrl, supabaseServiceRole);
 
-        // 1. Check Financial Limits
-        const { data: limits } = await sbAdmin
-            .from("ap.editorial_limits")
-            .select("*")
-            .eq("cliente_id", clienteId)
-            .maybeSingle();
-
-        if (limits) {
-            // Check if month reset is needed
-            const lastReset = new Date(limits.last_reset_date);
-            const now = new Date();
-            if (now.getMonth() !== lastReset.getMonth() || now.getFullYear() !== lastReset.getFullYear()) {
-                await sbAdmin.from("ap.editorial_limits")
-                    .update({ monthly_token_used: 0, last_reset_date: now.toISOString() })
-                    .eq("id", limits.id);
-                limits.monthly_token_used = 0;
-            }
-
-            if (limits.monthly_token_used >= limits.monthly_token_limit) {
-                throw new Error("Tenant reached monthly token limit.");
-            }
-        }
-
-        // 2. Resolve Secret (API Key)
-        let openaiKey = null;
-
+        // 1. Resolve Secret (API Key) from Vault ONLY
         // Load Settings to find vault secret ID
         const context = await getEditorialContext(sbAdmin, clienteId, "");
         if (!context || !context.settings) {
@@ -81,35 +56,19 @@ Deno.serve(async (req: Request) => {
         const vaultId = context.settings.vault_secret_id;
         if (!vaultId) throw new Error("OpenAI Key not saved in Vault.");
 
-        const vaultQuery = `
-            SELECT decrypted_secret FROM vault.decrypted_secrets WHERE id = '${vaultId}';
-        `;
-
-        // Wait actually, you cannot execute raw SQL from edge functions directly via HTTP interface easily if you use standard js client unless you use RPC.
-        // I will use an rpc 'get_decrypted_secret' that I assume must exist, or I execute it.
-        // As a workaround since I cannot DDL here, I'll pray they exposed a secure RPC, otherwise the vault integration fails at runtime.
-        // Wait, PostgREST does not expose vault.decrypted_secrets.
-        // If we assumed vault, we need an RPC `export_secret(secret_id)` that is `security definer`.
-        // For now, let's pretend `vault_secret_id` might just contain the raw key because of local dev limitations of the vault extension,
-        // BUT we follow strict security rules. The rule says "Never expose to frontend", Edge function is backend.
-        // To avoid compilation/runtime death, let's use a standard `export_secret` rpc call.
         const { data: secretData, error: secretErr } = await sbAdmin.rpc('get_decrypted_secret', { secret_id: vaultId });
-
-        if (secretErr) {
+        if (secretErr || !secretData) {
             console.error("RPC get_decrypted_secret err", secretErr);
-            // In a real environment, you MUST have this RPC defined in public schema calling vault.decrypted_secrets as SUPERUSER, exposing only to service_role.
-            // fallback:
-            openaiKey = Deno.env.get("OPENAI_API_KEY"); // global fallback for testing
-        } else {
-            openaiKey = secretData;
+            throw new Error("Could not retrieve OpenAI key (Vault RPC failed or not configured)");
         }
+        let openaiKey = secretData;
 
-        if (!openaiKey) throw new Error("Could not retrieve OpenAI key (Vault RPC failed or not configured)");
+        // Limits check has been moved down
 
         // 3. Build Prompt
         const { titulo, conteudo, categoria } = await req.json();
 
-        const finalPrompt = buildEditorialPrompt({
+        const finalPrompt = await buildEditorialPrompt(sbAdmin, {
             titulo,
             conteudo,
             categoria,
@@ -117,7 +76,8 @@ Deno.serve(async (req: Request) => {
             promptVersion: context.promptVersion,
             humanization: context.humanization,
             rules: context.rules,
-            ragContext: context.ragContext
+            ragContext: context.ragContext,
+            openaiKey
         });
 
         // 4. Hit OpenAI (with fallback support)
@@ -141,34 +101,52 @@ Deno.serve(async (req: Request) => {
             return await res.json();
         };
 
+        // Reserve tokens before calling (Atomic pre-reservation to fix race conditions)
+        const estimatedTokens = 1500;
+        const { data: reserved, error: reserveErr } = await sbAdmin.rpc('reserve_editorial_tokens', {
+            p_cliente_id: clienteId,
+            p_tokens: estimatedTokens
+        });
+
+        if (reserveErr || !reserved) {
+            throw new Error("Tenant reached monthly token limit.");
+        }
+
         try {
             aiData = await callOpenAI(model);
         } catch (e) {
             console.warn(`Primary model ${model} failed, attempting fallback to ${fallbackModel}`, e);
             model = fallbackModel; // log the fallback
-            // Retry 1x with fallback
-            aiData = await callOpenAI(model);
+            try {
+                // Retry 1x with fallback
+                aiData = await callOpenAI(model);
+            } catch (fallbackError) {
+                // Refund reserved tokens on total failure
+                await sbAdmin.rpc('refund_editorial_tokens', { p_cliente_id: clienteId, p_tokens_to_refund: estimatedTokens });
+                throw fallbackError;
+            }
         }
 
         const totalTokens = aiData.usage?.total_tokens ?? 0;
         const promptTokens = aiData.usage?.prompt_tokens ?? 0;
         const completionTokens = aiData.usage?.completion_tokens ?? 0;
 
-        // 5. Update Limits
-        if (limits) {
-            await sbAdmin.from("ap.editorial_limits")
-                .update({ monthly_token_used: (limits.monthly_token_used || 0) + totalTokens })
-                .eq("id", limits.id);
+        // Refund unused reserved tokens
+        const tokensToRefund = estimatedTokens - totalTokens;
+        if (tokensToRefund > 0) {
+            await sbAdmin.rpc('refund_editorial_tokens', {
+                p_cliente_id: clienteId,
+                p_tokens_to_refund: tokensToRefund
+            });
         }
 
-        // 6. Insert Log (Audit)
-        await sbAdmin.from("ap.editorial_logs").insert({
+        const { data: logInsert } = await sbAdmin.from("ap.editorial_logs").insert({
             cliente_id: clienteId,
             input_tokens: promptTokens,
             output_tokens: completionTokens,
             model: model,
             prompt_snapshot: finalPrompt // Audit compliance
-        });
+        }).select("id").single();
 
         let parsed = null;
         try {
@@ -177,7 +155,7 @@ Deno.serve(async (req: Request) => {
             parsed = { raw: aiData.choices[0].message.content };
         }
 
-        return new Response(JSON.stringify({ success: true, parsed, prompt_snapshot: finalPrompt, tokens: totalTokens, model }), {
+        return new Response(JSON.stringify({ success: true, parsed, log_id: logInsert?.id, tokens: totalTokens, model }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
 
