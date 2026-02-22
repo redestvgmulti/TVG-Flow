@@ -1,10 +1,14 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from '../../services/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 import { Save, Plus, Trash2, Cpu, Brain, Zap, RefreshCw, AlertCircle, FileText, CheckCircle2 } from 'lucide-react'
 import '../../styles/EditorialEngine.css'
 
-export default function EditorialEngine({ clienteId }) {
-    const [loading, setLoading] = useState(true)
+export default function EditorialEngine() {
+    const { professionalId } = useAuth()
+    const [clienteId, setClienteId] = useState(null)
+    const [loading, setLoading] = useState(false)
+    const [clienteLoading, setClienteLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
@@ -42,6 +46,24 @@ export default function EditorialEngine({ clienteId }) {
     const [promptSnapshot, setPromptSnapshot] = useState(null)
     const [loadingSnapshot, setLoadingSnapshot] = useState(false)
 
+    // 1. Resolve clienteId from JWT/professionalId
+    useEffect(() => {
+        if (!professionalId) return
+        supabase
+            .from('cliente_profissionais')
+            .select('cliente_id')
+            .eq('profissional_id', professionalId)
+            .eq('ativo', true)
+            .limit(1)
+            .maybeSingle()
+            .then(({ data, error }) => {
+                if (error) console.error('[EditorialEngine] clienteId err:', error)
+                if (data?.cliente_id) setClienteId(data.cliente_id)
+                setClienteLoading(false)
+            })
+    }, [professionalId])
+
+    // 2. Fetch editorial data when clienteId is ready
     useEffect(() => {
         if (!clienteId) return
         fetchData()
@@ -237,7 +259,16 @@ export default function EditorialEngine({ clienteId }) {
         }
     }
 
-    if (loading) return <div style={{ padding: 40, color: '#A0A0A0' }}>Iniciando Motor Editorial...</div>
+    if (clienteLoading) return <div style={{ padding: 40, color: '#A0A0A0' }}>Iniciando Motor Editorial...</div>
+
+    if (!clienteId) return (
+        <div style={{ padding: 40, color: '#EF4444' }}>
+            Usuário sem tenant ativo vinculado. O Motor Editorial requer um vínculo em <strong>cliente_profissionais</strong>.
+        </div>
+    )
+
+    if (loading) return <div style={{ padding: 40, color: '#A0A0A0' }}>Carregando configurações...</div>
+
 
     return (
         <div className="motor-editorial-container">
