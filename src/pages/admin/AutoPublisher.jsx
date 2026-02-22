@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { supabase } from '../../lib/supabase'
+import { supabase } from '../../services/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import '../../styles/AutoPublisher.css'
 import { Rss, CheckCircle2, XCircle, Clock, Settings, ListVideo, History } from 'lucide-react'
@@ -15,8 +15,23 @@ const TAB_LABELS = { review: 'Fila de Revisão', published: 'Publicados', settin
 const TAB_ICONS = { review: ListVideo, published: History, settings: Settings }
 
 export default function AutoPublisher() {
-    const { activeMembership } = useAuth()
-    const clienteId = activeMembership?.cliente_id
+    const { professionalId } = useAuth()
+    const [clienteId, setClienteId] = useState(null)
+
+    // Fetch the cliente_id for the current professional
+    useEffect(() => {
+        if (!professionalId) return
+        supabase
+            .from('cliente_profissionais')
+            .select('cliente_id')
+            .eq('profissional_id', professionalId)
+            .eq('ativo', true)
+            .limit(1)
+            .single()
+            .then(({ data }) => {
+                if (data) setClienteId(data.cliente_id)
+            })
+    }, [professionalId])
 
     const [tab, setTab] = useState('review')
     const [reviewItems, setReviewItems] = useState([])
