@@ -1,0 +1,1 @@
+CREATE OR REPLACE FUNCTION get_decrypted_secret(secret_id uuid) RETURNS text SECURITY DEFINER SET search_path = public AS $$ DECLARE secret_text text; BEGIN SELECT decrypted_secret INTO secret_text FROM vault.decrypted_secrets WHERE id = secret_id; RETURN secret_text; END; $$;

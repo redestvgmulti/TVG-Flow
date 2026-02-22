@@ -1,0 +1,276 @@
+.motor-editorial-container {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+    padding: 24px;
+    background-color: var(--color-bg-primary, #111);
+    color: var(--color-text-primary, #E0E0E0);
+    border-radius: var(--radius-lg, 12px);
+    width: 100%;
+}
+
+.motor-editorial-header {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.motor-editorial-header h2 {
+    font-size: 24px;
+    font-weight: 600;
+    margin: 0;
+    color: var(--color-text-title, #FFF);
+}
+
+.motor-editorial-header p {
+    font-size: 14px;
+    color: var(--color-text-secondary, #A0A0A0);
+    margin: 0;
+}
+
+.editorial-section {
+    background-color: var(--color-bg-secondary, #1A1A1A);
+    border: 1px solid var(--color-border, #333);
+    border-radius: var(--radius-md, 8px);
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.editorial-section h3 {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0;
+    color: var(--color-text-title, #FFF);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.editorial-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.editorial-form-group label {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-text-secondary, #A0A0A0);
+}
+
+.editorial-input,
+.editorial-textarea,
+.editorial-select {
+    background-color: var(--color-bg-primary, #111);
+    border: 1px solid var(--color-border, #333);
+    color: var(--color-text-primary, #E0E0E0);
+    border-radius: var(--radius-sm, 6px);
+    padding: 12px;
+    font-size: 14px;
+    width: 100%;
+    transition: border-color 0.2s;
+}
+
+.editorial-input:focus,
+.editorial-textarea:focus,
+.editorial-select:focus {
+    outline: none;
+    border-color: var(--color-primary, #6366F1);
+}
+
+.editorial-textarea {
+    resize: vertical;
+    min-height: 100px;
+}
+
+.editorial-textarea.large {
+    min-height: 200px;
+}
+
+.editorial-button {
+    background-color: var(--color-primary, #6366F1);
+    color: #FFF;
+    border: none;
+    border-radius: var(--radius-sm, 6px);
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s, opacity 0.2s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.editorial-button:hover:not(:disabled) {
+    background-color: var(--color-primary-hover, #4F46E5);
+}
+
+.editorial-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.editorial-button.secondary {
+    background-color: transparent;
+    border: 1px solid var(--color-border, #333);
+    color: var(--color-text-primary, #E0E0E0);
+}
+
+.editorial-button.secondary:hover:not(:disabled) {
+    background-color: var(--color-bg-hover, #222);
+}
+
+.editorial-button.danger {
+    background-color: transparent;
+    border: 1px solid var(--color-danger, #EF4444);
+    color: var(--color-danger, #EF4444);
+}
+
+.editorial-button.danger:hover:not(:disabled) {
+    background-color: rgba(239, 68, 68, 0.1);
+}
+
+/* Range Sliders */
+.editorial-slider-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.editorial-slider-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.editorial-slider-value {
+    font-size: 12px;
+    color: var(--color-primary, #6366F1);
+    font-weight: 600;
+    background-color: rgba(99, 102, 241, 0.1);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.editorial-slider {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--color-border, #333);
+    outline: none;
+}
+
+.editorial-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--color-primary, #6366F1);
+    cursor: pointer;
+    transition: transform 0.1s;
+}
+
+.editorial-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+}
+
+/* Tables / Lists */
+.editorial-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+
+.editorial-table th,
+.editorial-table td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--color-border, #333);
+}
+
+.editorial-table th {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-secondary, #A0A0A0);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.editorial-table td {
+    font-size: 14px;
+    color: var(--color-text-primary, #E0E0E0);
+}
+
+.editorial-empty-state {
+    padding: 32px;
+    text-align: center;
+    color: var(--color-text-secondary, #A0A0A0);
+    font-size: 14px;
+    background-color: var(--color-bg-primary, #111);
+    border-radius: var(--radius-sm, 6px);
+    border: 1px dashed var(--color-border, #333);
+}
+
+/* Test Area Output */
+.editorial-test-output {
+    background-color: var(--color-bg-primary, #111);
+    border: 1px solid var(--color-border, #333);
+    border-radius: var(--radius-sm, 6px);
+    padding: 16px;
+    font-family: monospace;
+    font-size: 13px;
+    white-space: pre-wrap;
+    color: #10B981;
+    /* Green tint for success JSON */
+    min-height: 100px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.editorial-metrics-bar {
+    display: flex;
+    gap: 16px;
+    margin-top: 16px;
+    padding: 12px;
+    background-color: var(--color-bg-primary, #111);
+    border-radius: var(--radius-sm, 6px);
+    border: 1px solid var(--color-border, #333);
+}
+
+.editorial-metric {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.editorial-metric-label {
+    font-size: 11px;
+    color: var(--color-text-secondary, #A0A0A0);
+    text-transform: uppercase;
+}
+
+.editorial-metric-value {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-text-primary, #E0E0E0);
+}
+
+.editorial-row {
+    display: flex;
+    gap: 16px;
+    align-items: flex-end;
+}
+
+.editorial-row>* {
+    flex: 1;
+}
+
+.editorial-row>.auto-width {
+    flex: 0 0 auto;
+}

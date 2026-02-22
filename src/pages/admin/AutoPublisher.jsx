@@ -4,9 +4,10 @@ import { useAuth } from '../../contexts/AuthContext'
 import '../../styles/AutoPublisher.css'
 import {
     Rss, RefreshCcw, Check, X, Pencil,
-    ImageIcon, Clock, Zap, Info, Filter, MoreVertical
+    ImageIcon, Clock, Zap, Info, Filter, MoreVertical, Brain
 } from 'lucide-react'
 import AutoPublisherSettings from './AutoPublisherSettings'
+import EditorialEngine from '../../features/editorial/EditorialEngine'
 
 // ──────────────────────────────────────────────────────────
 // Pipeline stage config (FlowOS V2 Standard)
@@ -198,6 +199,7 @@ export default function AutoPublisher() {
                     {[
                         ['review', 'Fila de Revisão'],
                         ['published', 'Publicados'],
+                        ['editorial', 'Motor Editorial'],
                         ['settings', 'Configurações']
                     ].map(([key, label]) => (
                         <button key={key} className={`ap-tab${tab === key ? ' active' : ''}`} onClick={() => setTab(key)}>
@@ -263,6 +265,7 @@ export default function AutoPublisher() {
                     )
                 )}
 
+                {tab === 'editorial' && <EditorialEngine clienteId={clienteId} />}
                 {tab === 'settings' && <AutoPublisherSettings clienteId={clienteId} />}
             </div>
         </div>
