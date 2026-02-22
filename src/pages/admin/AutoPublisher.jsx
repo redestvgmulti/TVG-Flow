@@ -86,7 +86,7 @@ export default function AutoPublisher() {
         ap_candidate_scores(score_total)
       `)
             .eq('cliente_id', clienteId)
-            .in('status', ['pending_review', 'approved', 'queued_for_posting'])
+            .in('status', ['raw', 'scored', 'selected', 'pending_render', 'pending_review', 'approved', 'queued_for_posting'])
             .order('posicao_feed', { ascending: true })
         setReviewItems(data ?? [])
         setLoading(false)
@@ -140,7 +140,9 @@ export default function AutoPublisher() {
         fetchReview(); fetchCounts()
     }
 
-    const displayedReview = stageFilter ? reviewItems.filter(i => i.status === stageFilter) : reviewItems
+    const displayedReview = stageFilter
+        ? reviewItems.filter(i => i.status === stageFilter || (stageFilter === 'queued_for_posting' && i.status === 'approved'))
+        : reviewItems.filter(i => i.status === 'pending_review')
 
     return (
         <div className="ap-page">
@@ -179,7 +181,11 @@ export default function AutoPublisher() {
                         <button
                             key={key}
                             className={`ap-stage${stageFilter === key ? ' active' : ''}`}
-                            onClick={() => setStageFilter(p => p === key ? null : key)}
+                            onClick={() => {
+                                setStageFilter(p => p === key ? null : key)
+                                if (key === 'posted') setTab('published')
+                                else if (key !== 'settings') setTab('review')
+                            }}
                         >
                             <span className="ap-stage-count">{stageCounts[key] ?? 0}</span>
                             <span className="ap-stage-label">{label}</span>
