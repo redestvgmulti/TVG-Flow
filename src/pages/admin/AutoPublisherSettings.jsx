@@ -1,10 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
-import { motion } from 'framer-motion'
 import { supabase } from '../../services/supabase'
 import { Plus, Trash2, Globe, Users } from 'lucide-react'
 
 // ──────────────────────────────────────────────────────────
-// AutoPublisherSettings — CRUD for Sources & Sponsors
+// AutoPublisherSettings — FlowOS V2 Design System
 // ──────────────────────────────────────────────────────────
 
 export default function AutoPublisherSettings({ clienteId }) {
@@ -62,26 +61,23 @@ export default function AutoPublisherSettings({ clienteId }) {
     return (
         <div className="ap-settings">
             {/* ── Sources ────────────────────────────────── */}
-            <motion.div
-                className="ap-form-section"
-                initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}
-            >
+            <div className="ap-form-section">
                 <h2>
-                    <Globe size={12} />
-                    Fontes RSS
+                    <Globe size={16} style={{ color: 'var(--color-primary)' }} />
+                    Fontes RSS Cadastradas
                 </h2>
 
                 <div className="ap-form-row">
                     <input
                         className="ap-input"
-                        placeholder="Nome"
+                        placeholder="Nome (ex: Folha de SP)"
                         value={newSource.nome}
                         onChange={e => setNewSource(p => ({ ...p, nome: e.target.value }))}
                     />
                     <input
                         className="ap-input"
                         style={{ flex: 2 }}
-                        placeholder="URL do RSS"
+                        placeholder="URL do Feed RSS"
                         value={newSource.url}
                         onChange={e => setNewSource(p => ({ ...p, url: e.target.value }))}
                     />
@@ -90,42 +86,42 @@ export default function AutoPublisherSettings({ clienteId }) {
                         value={newSource.tipo}
                         onChange={e => setNewSource(p => ({ ...p, tipo: e.target.value }))}
                     >
-                        <option value="rss">RSS</option>
-                        <option value="google_news_rss">Google News</option>
+                        <option value="rss">Padrão XML / RSS</option>
+                        <option value="google_news_rss">Google News RSS</option>
                     </select>
                     <button className="ap-btn-add" onClick={addSource} disabled={saving || !newSource.nome || !newSource.url}>
-                        <Plus size={13} /> Adicionar
+                        <Plus size={14} /> Adicionar
                     </button>
                 </div>
 
                 <table className="ap-table">
                     <thead>
                         <tr>
-                            <th>Nome</th>
+                            <th>Nome da Fonte</th>
                             <th>Tipo</th>
-                            <th>URL</th>
+                            <th>Endereço do Feed</th>
                             <th>Status</th>
-                            <th></th>
+                            <th style={{ width: 60, textAlign: 'center' }}>Excluir</th>
                         </tr>
                     </thead>
                     <tbody>
                         {sources.length === 0 && (
                             <tr>
-                                <td colSpan={5} style={{ textAlign: 'center', color: '#1e293b', padding: '1.5rem' }}>
-                                    Nenhuma fonte cadastrada
+                                <td colSpan={5} style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-text-tertiary)' }}>
+                                    Nenhuma fonte RSS configurada neste ambiente.
                                 </td>
                             </tr>
                         )}
                         {sources.map(s => (
                             <tr key={s.id}>
-                                <td style={{ color: '#e2e8f0', fontWeight: 500 }}>{s.nome}</td>
+                                <td style={{ fontWeight: 500 }}>{s.nome}</td>
                                 <td>
-                                    <span style={{ fontSize: '0.7rem', background: 'rgba(255,255,255,0.06)', color: '#64748b', padding: '0.15rem 0.45rem', borderRadius: 5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    <span style={{ fontSize: 11, background: 'var(--color-bg-secondary)', color: 'var(--color-text-secondary)', padding: '2px 6px', borderRadius: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                         {s.tipo}
                                     </span>
                                 </td>
-                                <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                    <a href={s.url} target="_blank" rel="noreferrer" style={{ color: '#0ea5e9', textDecoration: 'none', fontSize: '0.78rem' }}>
+                                <td style={{ maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    <a href={s.url} target="_blank" rel="noreferrer" style={{ color: 'var(--color-primary)', textDecoration: 'none' }}>
                                         {s.url}
                                     </a>
                                 </td>
@@ -134,97 +130,98 @@ export default function AutoPublisherSettings({ clienteId }) {
                                         className={`ap-toggle ${s.ativo ? 'on' : 'off'}`}
                                         onClick={() => toggleSource(s.id, s.ativo)}
                                     >
-                                        {s.ativo ? 'Ativo' : 'Inativo'}
+                                        {s.ativo ? 'Ativo' : 'Pausado'}
                                     </button>
                                 </td>
-                                <td>
-                                    <button className="ap-btn-sm" onClick={() => deleteSource(s.id)}>
-                                        <Trash2 size={13} />
+                                <td style={{ textAlign: 'center' }}>
+                                    <button className="ap-btn-sm" onClick={() => deleteSource(s.id)} title="Excluir">
+                                        <Trash2 size={14} />
                                     </button>
                                 </td>
                             </tr>
                         ))}
                     </tbody>
                 </table>
-            </motion.div>
+            </div>
 
             {/* ── Sponsors ───────────────────────────────── */}
-            <motion.div
-                className="ap-form-section"
-                initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, delay: 0.06 }}
-            >
+            <div className="ap-form-section">
                 <h2>
-                    <Users size={12} />
-                    Patrocinadores
+                    <Users size={16} style={{ color: 'var(--color-primary)' }} />
+                    Patrocinadores Ativos
                 </h2>
 
                 <div className="ap-form-row">
                     <input
                         className="ap-input"
-                        placeholder="Nome"
+                        placeholder="Nome da Marca"
                         value={newSponsor.nome}
                         onChange={e => setNewSponsor(p => ({ ...p, nome: e.target.value }))}
                     />
                     <input
                         className="ap-input"
-                        placeholder="Template ID (Placid/Bannerbear)"
+                        placeholder="ID do Template (Placid)"
                         value={newSponsor.template_id}
                         onChange={e => setNewSponsor(p => ({ ...p, template_id: e.target.value }))}
                     />
                     <input
                         className="ap-input"
-                        placeholder="URL do Logo"
+                        placeholder="URL Opcional (Logo)"
                         value={newSponsor.logo_url}
                         onChange={e => setNewSponsor(p => ({ ...p, logo_url: e.target.value }))}
                     />
                     <button className="ap-btn-add" onClick={addSponsor} disabled={saving || !newSponsor.nome}>
-                        <Plus size={13} /> Adicionar
+                        <Plus size={14} /> Adicionar
                     </button>
                 </div>
 
                 <table className="ap-table">
                     <thead>
                         <tr>
-                            <th>Nome</th>
-                            <th>Template ID</th>
-                            <th>Último uso</th>
-                            <th>Status</th>
-                            <th></th>
+                            <th>Nome / Marca</th>
+                            <th>Template Integrado</th>
+                            <th>Data do Último Uso</th>
+                            <th>Rotação</th>
+                            <th style={{ width: 60, textAlign: 'center' }}>Excluir</th>
                         </tr>
                     </thead>
                     <tbody>
                         {sponsors.length === 0 && (
                             <tr>
-                                <td colSpan={5} style={{ textAlign: 'center', color: '#1e293b', padding: '1.5rem' }}>
-                                    Nenhum patrocinador cadastrado
+                                <td colSpan={5} style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-text-tertiary)' }}>
+                                    Nenhum patrocinador em rotação ativa.
                                 </td>
                             </tr>
                         )}
                         {sponsors.map(p => (
                             <tr key={p.id}>
-                                <td style={{ color: '#e2e8f0', fontWeight: 500 }}>{p.nome}</td>
-                                <td style={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>{p.template_id ?? '—'}</td>
-                                <td>{p.ultimo_uso_at ? new Date(p.ultimo_uso_at).toLocaleDateString('pt-BR') : '—'}</td>
-                                <td>
-                                    <span style={{
-                                        fontSize: '0.7rem', fontWeight: 600, padding: '0.2rem 0.5rem', borderRadius: 6,
-                                        background: p.ativo ? 'rgba(34,197,94,0.1)' : 'rgba(100,116,139,0.1)',
-                                        color: p.ativo ? '#4ade80' : '#64748b',
-                                        textTransform: 'uppercase', letterSpacing: '0.05em',
-                                    }}>
-                                        {p.ativo ? 'Ativo' : 'Inativo'}
-                                    </span>
+                                <td style={{ fontWeight: 500 }}>{p.nome}</td>
+                                <td style={{ fontFamily: 'monospace', color: 'var(--color-text-secondary)', fontSize: 13 }}>
+                                    {p.template_id ?? '—'}
+                                </td>
+                                <td style={{ color: 'var(--color-text-secondary)' }}>
+                                    {p.ultimo_uso_at ? new Date(p.ultimo_uso_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : 'Nunca'}
                                 </td>
                                 <td>
-                                    <button className="ap-btn-sm" onClick={() => deleteSponsor(p.id)}>
-                                        <Trash2 size={13} />
+                                    <span style={{
+                                        fontSize: 11, fontWeight: 500, padding: '2px 8px', borderRadius: 4,
+                                        background: p.ativo ? 'var(--color-success-bg)' : 'var(--color-bg-secondary)',
+                                        color: p.ativo ? 'var(--color-success)' : 'var(--color-text-secondary)',
+                                        textTransform: 'uppercase'
+                                    }}>
+                                        {p.ativo ? 'Em Rotação' : 'Pausado'}
+                                    </span>
+                                </td>
+                                <td style={{ textAlign: 'center' }}>
+                                    <button className="ap-btn-sm" onClick={() => deleteSponsor(p.id)} title="Excluir">
+                                        <Trash2 size={14} />
                                     </button>
                                 </td>
                             </tr>
                         ))}
                     </tbody>
                 </table>
-            </motion.div>
+            </div>
         </div>
     )
 }
