@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import AutoPublisherSettings from './AutoPublisherSettings'
 import EditorialEngine from '../../features/editorial/EditorialEngine'
+import { SkeletonCard, SkeletonTable } from '../../components/Skeleton'
 
 // ──────────────────────────────────────────────────────────
 // Pipeline stage config (FlowOS V2 Standard)
@@ -107,8 +108,11 @@ export default function AutoPublisher() {
 
     useEffect(() => {
         if (!clienteId) return
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         fetchCounts()
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         if (tab === 'review') fetchReview()
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         if (tab === 'published') fetchPublished()
     }, [clienteId, tab, fetchCounts, fetchReview, fetchPublished])
 
@@ -208,7 +212,11 @@ export default function AutoPublisher() {
 
                 {/* ── Content Area ─────────────────────────── */}
                 {tab === 'review' && (
-                    loading ? <LoadingState /> : displayedReview.length === 0 ? <EmptyStatePremium /> : (
+                    loading ? (
+                        <div className="ap-cards-grid">
+                            {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
+                        </div>
+                    ) : displayedReview.length === 0 ? <EmptyStatePremium /> : (
                         <div className="ap-cards-grid">
                             {displayedReview.map(item => (
                                 <ReviewCard key={item.id} item={item} onApprove={handleApprove} onReject={handleReject} />
@@ -218,7 +226,7 @@ export default function AutoPublisher() {
                 )}
 
                 {tab === 'published' && (
-                    loading ? <LoadingState /> : publishedItems.length === 0 ? <EmptyStatePremium /> : (
+                    loading ? <SkeletonTable rows={5} cols={5} /> : publishedItems.length === 0 ? <EmptyStatePremium /> : (
                         <table className="ap-table">
                             <thead>
                                 <tr>
@@ -339,17 +347,8 @@ function EmptyStatePremium() {
     return (
         <div className="ap-empty">
             <div className="ap-empty-icon"><Info size={20} /></div>
-            <p className="ap-empty-title">Sistema Operacional</p>
-            <p className="ap-empty-sub">Nenhum registro encontrado para esta visualização.</p>
-        </div>
-    )
-}
-
-function LoadingState() {
-    return (
-        <div className="ap-loading">
-            <div className="ap-spinner" />
-            <span>Carregando...</span>
+            <p className="ap-empty-title">Nenhum Registro</p>
+            <p className="ap-empty-sub">A fila de processos se encontra vazia no momento.</p>
         </div>
     )
 }

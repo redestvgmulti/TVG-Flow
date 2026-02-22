@@ -9,7 +9,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
-    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Origin": "http://localhost:4173, https://flowos.app",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
     "Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE",
 };
@@ -36,9 +36,10 @@ Deno.serve(async (req: Request) => {
         // 2. Resolve target Client ID
         // For admin multi-tenant: they only have 1 active company usually.
         let clienteId = null;
+        let role = null;
         const { data: profData } = await supabase
             .from("cliente_profissionais")
-            .select("cliente_id")
+            .select("cliente_id, role")
             .eq("profissional_id", user.id)
             .eq("ativo", true)
             .limit(1)
@@ -46,6 +47,7 @@ Deno.serve(async (req: Request) => {
 
         if (!profData) throw new Error("User has no active tenant");
         clienteId = profData.cliente_id;
+        role = profData.role;
 
         const sbAdmin = createClient(supabaseUrl, supabaseServiceRole);
 
@@ -96,6 +98,10 @@ Deno.serve(async (req: Request) => {
 
         // ================= PUT =================
         if (req.method === "PUT") {
+            if (role !== "admin") {
+                throw new Error("Ação não autorizada. Apenas administradores podem modificar as configurações editoriais.");
+            }
+
             const body = await req.json();
             const { settings, apiKey, humanization } = body;
 

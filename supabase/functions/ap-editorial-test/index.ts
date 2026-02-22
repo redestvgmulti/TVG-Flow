@@ -9,7 +9,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildEditorialPrompt, getEditorialContext } from "../_shared/editorialPromptBuilder.ts";
 
 const corsHeaders = {
-    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Origin": "http://localhost:4173, https://flowos.app",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
@@ -155,9 +155,26 @@ Deno.serve(async (req: Request) => {
             parsed = { raw: aiData.choices[0].message.content };
         }
 
-        return new Response(JSON.stringify({ success: true, parsed, log_id: logInsert?.id, tokens: totalTokens, model }), {
-            headers: { ...corsHeaders, "Content-Type": "application/json" }
-        });
+        // 5. Hide large prompt snapshot from frontend output
+        const maskedPrompt = finalPrompt.length > 200
+            ? finalPrompt.slice(0, 100) + " ... [TRUNCATED] ... " + finalPrompt.slice(-100)
+            : finalPrompt;
+
+        return new Response(
+            JSON.stringify({
+                result: parsed,
+                tokens: {
+                    total: totalTokens,
+                    prompt: promptTokens,
+                    completion: completionTokens,
+                    estimated: estimatedTokens,
+                    refunded: tokensToRefund
+                },
+                prompt_snapshot: maskedPrompt, // enterprise hardening: never leak full payload to client
+                model: model
+            }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
 
     } catch (err: any) {
         console.error("Test Endpoint Err:", err);

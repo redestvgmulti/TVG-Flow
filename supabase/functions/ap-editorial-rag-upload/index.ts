@@ -9,7 +9,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { encode, decode } from "npm:gpt-tokenizer";
 
 const corsHeaders = {
-    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Origin": "http://localhost:4173, https://flowos.app",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
     "Access-Control-Allow-Methods": "POST, GET, OPTIONS, DELETE",
 };
@@ -36,9 +36,10 @@ Deno.serve(async (req: Request) => {
         if (authError || !user) throw new Error("Unauthorized");
 
         let clienteId = null;
+        let role = null;
         const { data: profData } = await supabase
             .from("cliente_profissionais")
-            .select("cliente_id")
+            .select("cliente_id, role")
             .eq("profissional_id", user.id)
             .eq("ativo", true)
             .limit(1)
@@ -46,6 +47,7 @@ Deno.serve(async (req: Request) => {
 
         if (!profData) throw new Error("User has no active tenant");
         clienteId = profData.cliente_id;
+        role = profData.role;
 
         const sbAdmin = createClient(supabaseUrl, supabaseServiceRole);
 
@@ -80,8 +82,28 @@ Deno.serve(async (req: Request) => {
         if (!openaiKey) throw new Error("Could not decrypt OpenAI Key from Vault.");
 
         if (req.method === "POST") {
+            if (role !== "admin") {
+                throw new Error("Ação não autorizada. Apenas administradores podem fazer upload de base de conhecimento.");
+            }
+
             const { file_name, content } = await req.json();
             if (!file_name || !content) throw new Error("Missing file_name or content");
+
+            // Hard Limits (Enterprise P1)
+            // 1. Max size: 1MB (roughly 1 million chars)
+            if (content.length > 1048576) {
+                throw new Error("Limites excedidos: o tamanho máximo do documento é de 1MB.");
+            }
+
+            // 2. Max docs limit: 50
+            const { count: docsCount } = await sbAdmin
+                .from("ap.editorial_rag_documents")
+                .select("id", { count: "exact", head: true })
+                .eq("cliente_id", clienteId);
+
+            if (docsCount && docsCount >= 50) {
+                throw new Error("Limite empresarial alcançado: máximo de 50 documentos RAG por tenant.");
+            }
 
             // Chunking strategy using gpt-tokenizer
             const tokens = encode(content);
@@ -154,6 +176,10 @@ Deno.serve(async (req: Request) => {
 
         // DELETE
         if (req.method === "DELETE") {
+            if (role !== "admin") {
+                throw new Error("Ação não autorizada. Apenas administradores podem excluir da base de conhecimento.");
+            }
+
             const url = new URL(req.url);
             const docId = url.searchParams.get('source_document_id');
             if (!docId) throw new Error("docId required");
