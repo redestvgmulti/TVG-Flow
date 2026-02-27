@@ -17,7 +17,7 @@ Deno.serve(async (_req: Request) => {
 
     // Fetch all selected items, grouped by cliente_id
     const { data: items } = await supabase
-        .from("ap.candidate_news")
+        .schema("ap").from("candidate_news")
         .select("id, cliente_id, categoria, fonte_id, has_face")
         .eq("status", "selected")
         .order("cliente_id");
@@ -41,7 +41,7 @@ Deno.serve(async (_req: Request) => {
         // Update posicao_feed — idempotent (can run N times, result is same)
         for (let i = 0; i < ordered.length; i++) {
             await supabase
-                .from("ap.candidate_news")
+                .schema("ap").from("candidate_news")
                 .update({ posicao_feed: i + 1 })
                 .eq("id", ordered[i].id)
                 .eq("status", "selected");

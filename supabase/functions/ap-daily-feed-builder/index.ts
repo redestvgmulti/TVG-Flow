@@ -26,11 +26,10 @@ Deno.serve(async (_req: Request) => {
 
     // Fetch scored items with their scores — highest score first per category
     const { data: scored } = await supabase
-        .from("ap.candidate_news")
-        .select("id, cliente_id, categoria, ap_candidate_scores(score_total)")
+        .schema("ap").from("candidate_news")
+        .select("id, cliente_id, categoria, candidate_scores(score_total)")
         .eq("status", "scored")
-        .not("categoria", "is", null)
-        .order("ap_candidate_scores(score_total)", { ascending: false });
+        .order("candidate_scores(score_total)", { ascending: false });
 
     if (!scored?.length) {
         return new Response(JSON.stringify({ ok: true, selected: 0 }), { headers: { "Content-Type": "application/json" } });
@@ -51,7 +50,7 @@ Deno.serve(async (_req: Request) => {
 
         // Fill quotas per category
         for (const [category, quota] of Object.entries(QUOTAS)) {
-            const categoryItems = items.filter((i) => i.categoria === category);
+            const categoryItems = items.filter((i) => (i.categoria || "regional") === category);
             for (const item of categoryItems) {
                 if ((categoryCounts[category] ?? 0) >= quota) break;
                 selected.push(item.id);
@@ -76,7 +75,7 @@ Deno.serve(async (_req: Request) => {
         // Advance status for selected items — idempotent
         for (const id of selected) {
             await supabase
-                .from("ap.candidate_news")
+                .schema("ap").from("candidate_news")
                 .update({ status: "selected" })
                 .eq("id", id)
                 .eq("status", "scored");

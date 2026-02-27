@@ -1,15 +1,16 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // AutoPublisher — Motor Editorial: RAG Knowledge Base Uploader
-// Receives text content, chunks into 800 tokens, gets embeddings, saves via pgvector
-// verify_jwt: true
+// MODE: SINGLE-TENANT (TVG only)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { encode, decode } from "npm:gpt-tokenizer";
 
+const FIXED_CLIENT_ID = "cd287e6e-f273-4d0f-a72d-2a8c391e40e9";
+
 const corsHeaders = {
-    "Access-Control-Allow-Origin": "http://localhost:4173, https://flowos.app",
+    "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
     "Access-Control-Allow-Methods": "POST, GET, OPTIONS, DELETE",
 };
@@ -21,91 +22,80 @@ Deno.serve(async (req: Request) => {
     if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
     try {
-        const authHeader = req.headers.get("Authorization");
-        if (!authHeader) throw new Error("Missing Authorization header");
-
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-        const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
         const supabaseServiceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-        const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-            global: { headers: { Authorization: authHeader } },
-        });
-
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
-        if (authError || !user) throw new Error("Unauthorized");
-
-        let clienteId = null;
-        let role = null;
-        const { data: profData } = await supabase
-            .from("cliente_profissionais")
-            .select("cliente_id, role")
-            .eq("profissional_id", user.id)
-            .eq("ativo", true)
-            .limit(1)
-            .maybeSingle();
-
-        if (!profData) throw new Error("User has no active tenant");
-        clienteId = profData.cliente_id;
-        role = profData.role;
+        const clienteId = FIXED_CLIENT_ID;
 
         const sbAdmin = createClient(supabaseUrl, supabaseServiceRole);
 
-        // Fetch Vault key proxy logic
+        // ================= GET: Listar documentos =================
+        if (req.method === "GET") {
+            const { data: docs } = await sbAdmin
+                .schema("ap")
+                .from("editorial_rag_documents")
+                .select("source_document_id, file_name, created_at, chunk_count")
+                .eq("cliente_id", clienteId)
+                .order("created_at", { ascending: false });
+
+            const unique = docs ? Object.values(
+                docs.reduce((acc: Record<string, unknown>, d: Record<string, unknown>) => {
+                    if (!acc[d.source_document_id as string]) {
+                        acc[d.source_document_id as string] = {
+                            source_document_id: d.source_document_id,
+                            file_name: d.file_name,
+                            created_at: d.created_at,
+                            chunk_count: d.chunk_count
+                        };
+                    }
+                    return acc;
+                }, {})
+            ) : [];
+
+            return new Response(JSON.stringify(unique), {
+                headers: { ...corsHeaders, "Content-Type": "application/json" }
+            });
+        }
+
+        // Fetch Vault key para POST/DELETE
         const { data: settings } = await sbAdmin
-            .from("ap.editorial_settings")
-            .select("vault_secret_id")
+            .schema("ap")
+            .from("editorial_settings")
+            .select("vault_secret_id, api_base_url")
             .eq("cliente_id", clienteId)
             .maybeSingle();
 
-        if (!settings || !settings.vault_secret_id) {
-            throw new Error("Editorial Settings or OpenAI Key not configured for this tenant.");
+        if (!settings?.vault_secret_id) {
+            throw new Error("OpenAI Key não configurada. Acesse o Motor Editorial e salve a API Key primeiro.");
         }
 
-        const { data: secretData } = await sbAdmin.rpc("read_secret", {
-            secret_id: settings.vault_secret_id,
-        });
-
-        // If we don't have Vault properly resolving read_secret, we might need a fallback.
-        // Usually read_secret takes a name/uuid, let's assume it works.
-        // Actually, Supabase vault `decrypted_secret` is accessed via the `vault.secrets` view if you have service role.
-        let openaiKey = null;
-
-        // Direct Query from vault schema (Requires Service Role)
-        const { data: vaultData } = await sbAdmin.from('vault.decrypted_secrets')
-            .select('decrypted_secret')
-            .eq('id', settings.vault_secret_id)
+        const { data: vaultData } = await sbAdmin
+            .from("vault.decrypted_secrets")
+            .select("decrypted_secret")
+            .eq("id", settings.vault_secret_id)
             .maybeSingle();
 
-        openaiKey = vaultData?.decrypted_secret;
+        const openaiKey = vaultData?.decrypted_secret;
+        if (!openaiKey) throw new Error("Não foi possível descriptografar a OpenAI Key do Vault.");
 
-        if (!openaiKey) throw new Error("Could not decrypt OpenAI Key from Vault.");
-
+        // ================= POST: Upload =================
         if (req.method === "POST") {
-            if (role !== "admin") {
-                throw new Error("Ação não autorizada. Apenas administradores podem fazer upload de base de conhecimento.");
-            }
-
             const { file_name, content } = await req.json();
             if (!file_name || !content) throw new Error("Missing file_name or content");
 
-            // Hard Limits (Enterprise P1)
-            // 1. Max size: 1MB (roughly 1 million chars)
             if (content.length > 1048576) {
-                throw new Error("Limites excedidos: o tamanho máximo do documento é de 1MB.");
+                throw new Error("Tamanho máximo do documento excedido: 1MB.");
             }
 
-            // 2. Max docs limit: 50
             const { count: docsCount } = await sbAdmin
-                .from("ap.editorial_rag_documents")
+                .schema("ap")
+                .from("editorial_rag_documents")
                 .select("id", { count: "exact", head: true })
                 .eq("cliente_id", clienteId);
 
             if (docsCount && docsCount >= 50) {
-                throw new Error("Limite empresarial alcançado: máximo de 50 documentos RAG por tenant.");
+                throw new Error("Limite de 50 documentos RAG atingido.");
             }
 
-            // Chunking strategy using gpt-tokenizer
             const tokens = encode(content);
             const chunks: string[] = [];
 
@@ -117,28 +107,28 @@ Deno.serve(async (req: Request) => {
                 }
             }
 
-            // Get embeddings batch
-            const embedRes = await fetch("https://api.openai.com/v1/embeddings", {
+            const baseUrl = settings?.api_base_url || "https://api.openai.com/v1";
+
+            if (baseUrl.includes("anthropic.com")) {
+                throw new Error("O provedor Anthropic não suporta Embeddings nativamente. O recurso RAG está indisponível para esta API no momento.");
+            }
+
+            const embedRes = await fetch(`${baseUrl}/embeddings`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                     "Authorization": `Bearer ${openaiKey}`
                 },
-                body: JSON.stringify({
-                    model: "text-embedding-3-small",
-                    input: chunks
-                })
+                body: JSON.stringify({ model: "text-embedding-3-small", input: chunks })
             });
 
             if (!embedRes.ok) {
-                let err = await embedRes.text();
-                throw new Error("OpenAI Embeddings Failed: " + err);
+                throw new Error("OpenAI Embeddings Failed: " + await embedRes.text());
             }
 
             const embedData = await embedRes.json();
             const sourceDocId = crypto.randomUUID();
 
-            // Insert chunks into DB
             const insertPayload = chunks.map((chunkStr, index) => ({
                 cliente_id: clienteId,
                 file_name,
@@ -149,7 +139,8 @@ Deno.serve(async (req: Request) => {
             }));
 
             const { error: insertErr } = await sbAdmin
-                .from("ap.editorial_rag_documents")
+                .schema("ap")
+                .from("editorial_rag_documents")
                 .insert(insertPayload);
 
             if (insertErr) throw insertErr;
@@ -159,32 +150,15 @@ Deno.serve(async (req: Request) => {
             });
         }
 
-        // GET = list documents (grouped by source_document_id or just distinct file_names)
-        if (req.method === "GET") {
-            // we return distinct files
-            const { data } = await sbAdmin
-                .from("ap.editorial_rag_documents")
-                .select("id, file_name, created_at, source_document_id")
-                .eq("cliente_id", clienteId)
-                .eq("chunk_index", 0) // only fetch roots for listing summary
-                .order("created_at", { ascending: false });
-
-            return new Response(JSON.stringify(data || []), {
-                headers: { ...corsHeaders, "Content-Type": "application/json" }
-            });
-        }
-
-        // DELETE
+        // ================= DELETE =================
         if (req.method === "DELETE") {
-            if (role !== "admin") {
-                throw new Error("Ação não autorizada. Apenas administradores podem excluir da base de conhecimento.");
-            }
+            const body = await req.json().catch(() => ({}));
+            const docId = body.source_document_id ?? new URL(req.url).searchParams.get("source_document_id");
+            if (!docId) throw new Error("source_document_id required");
 
-            const url = new URL(req.url);
-            const docId = url.searchParams.get('source_document_id');
-            if (!docId) throw new Error("docId required");
-
-            await sbAdmin.from("ap.editorial_rag_documents")
+            await sbAdmin
+                .schema("ap")
+                .from("editorial_rag_documents")
                 .delete()
                 .eq("cliente_id", clienteId)
                 .eq("source_document_id", docId);

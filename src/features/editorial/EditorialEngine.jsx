@@ -40,6 +40,14 @@ export default function EditorialEngine() {
 
     const [ragDocs, setRagDocs] = useState([])
 
+    const detectProvider = () => {
+        const url = (settings.api_base_url || '').toLowerCase()
+        if (!url) return 'openai'
+        if (url.includes('anthropic.com')) return 'anthropic'
+        if (url.includes('googleapis.com')) return 'gemini'
+        return 'openai'
+    }
+
     // Test section state
     const [testInput, setTestInput] = useState({ titulo: '', conteudo: '', categoria: '' })
     const [testOutput, setTestOutput] = useState(null)
@@ -325,8 +333,35 @@ export default function EditorialEngine() {
                                 placeholder="ex: gpt-4o-mini, llama3, claude-3"
                             />
                             <datalist id="modelos-primarios">
-                                <option value="gpt-4o-mini">GPT-4o Mini (Recomendado, Rápido)</option>
-                                <option value="gpt-4o">GPT-4o (Avançado, Oneroso)</option>
+                                {(() => {
+                                    const provider = detectProvider()
+                                    if (provider === 'anthropic') {
+                                        return (
+                                            <>
+                                                <option value="claude-3-haiku-20240307">Claude 3 Haiku (Rápido)</option>
+                                                <option value="claude-3-sonnet-20240229">Claude 3 Sonnet (Equilíbrio)</option>
+                                                <option value="claude-3-opus-20240229">Claude 3 Opus (Avançado)</option>
+                                            </>
+                                        )
+                                    }
+                                    if (provider === 'gemini') {
+                                        return (
+                                            <>
+                                                <option value="gemini-1.5-flash-002">Gemini 1.5 Flash 002 (Rápido)</option>
+                                                <option value="gemini-1.5-pro-002">Gemini 1.5 Pro 002 (Avançado)</option>
+                                            </>
+                                        )
+                                    }
+                                    // OpenAI / compat
+                                    return (
+                                        <>
+                                            <option value="gpt-4o-mini">GPT-4o Mini (Recomendado, Rápido)</option>
+                                            <option value="gpt-4o">GPT-4o (Avançado, Oneroso)</option>
+                                            <option value="gpt-4.1-mini">GPT-4.1 Mini</option>
+                                            <option value="gpt-4.1">GPT-4.1</option>
+                                        </>
+                                    )
+                                })()}
                             </datalist>
                         </div>
                         <div className="editorial-form-group">
@@ -339,9 +374,33 @@ export default function EditorialEngine() {
                                 placeholder="ex: gpt-4o, mixtral"
                             />
                             <datalist id="modelos-fallback">
-                                <option value="gpt-4o-mini">GPT-4o Mini</option>
-                                <option value="gpt-4o">GPT-4o (Avançado)</option>
-                                <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Legado)</option>
+                                {(() => {
+                                    const provider = detectProvider()
+                                    if (provider === 'anthropic') {
+                                        return (
+                                            <>
+                                                <option value="claude-3-haiku-20240307">Claude 3 Haiku</option>
+                                                <option value="claude-3-sonnet-20240229">Claude 3 Sonnet</option>
+                                            </>
+                                        )
+                                    }
+                                    if (provider === 'gemini') {
+                                        return (
+                                            <>
+                                                <option value="gemini-1.5-flash-002">Gemini 1.5 Flash 002</option>
+                                                <option value="gemini-1.5-pro-002">Gemini 1.5 Pro 002</option>
+                                            </>
+                                        )
+                                    }
+                                    // OpenAI / compat
+                                    return (
+                                        <>
+                                            <option value="gpt-4o-mini">GPT-4o Mini</option>
+                                            <option value="gpt-4o">GPT-4o (Avançado)</option>
+                                            <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Legado)</option>
+                                        </>
+                                    )
+                                })()}
                             </datalist>
                         </div>
                     </div>

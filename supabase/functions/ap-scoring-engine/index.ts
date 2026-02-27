@@ -20,7 +20,7 @@ Deno.serve(async (_req: Request) => {
     // Select items in 'ready_for_scoring' — with self-healing
     const cutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     const { data: items } = await supabase
-        .from("ap.candidate_news")
+        .schema("ap").from("candidate_news")
         .select("id, cliente_id, titulo, conteudo, imagem_storage, published_at, fonte_id, categoria")
         .eq("status", "ready_for_scoring")
         .or(`processing_started_at.is.null,processing_started_at.lt.${cutoff}`)
@@ -28,14 +28,14 @@ Deno.serve(async (_req: Request) => {
 
     for (const item of items ?? []) {
         // Lock the item
-        const { count } = await supabase
-            .from("ap.candidate_news")
+        const { data: updatedData, error: updateErr } = await supabase
+            .schema("ap").from("candidate_news")
             .update({ processing_started_at: new Date().toISOString() })
             .eq("id", item.id)
             .eq("status", "ready_for_scoring")
-            .select("id", { count: "exact", head: true });
+            .select("id");
 
-        if (!count) continue; // Already taken
+        if (updateErr || !updatedData || updatedData.length === 0) continue; // Already taken
 
         try {
             // Heuristic base score (0-10)
@@ -49,7 +49,7 @@ Deno.serve(async (_req: Request) => {
 
             // Learning score: average of approved items from same categoria+fonte in last 30 days
             const { data: history } = await supabase
-                .from("ap.learning_history")
+                .schema("ap").from("learning_history")
                 .select("score_delta")
                 .eq("cliente_id", item.cliente_id)
                 .eq("categoria", item.categoria)
@@ -63,21 +63,21 @@ Deno.serve(async (_req: Request) => {
                     : 0;
 
             // Upsert score — idempotent
-            await supabase.from("ap.candidate_scores").upsert(
+            await supabase.schema("ap").from("candidate_scores").upsert(
                 { news_id: item.id, cliente_id: item.cliente_id, base_score, learning_score },
                 { onConflict: "news_id" }
             );
 
             // Advance status — idempotent
             await supabase
-                .from("ap.candidate_news")
+                .schema("ap").from("candidate_news")
                 .update({ status: "scored", processing_started_at: null })
                 .eq("id", item.id)
                 .eq("status", "ready_for_scoring");
         } catch (err) {
             console.error(`[ap-scoring-engine] item ${item.id}:`, err);
             await supabase
-                .from("ap.candidate_news")
+                .schema("ap").from("candidate_news")
                 .update({ processing_started_at: null })
                 .eq("id", item.id);
         }

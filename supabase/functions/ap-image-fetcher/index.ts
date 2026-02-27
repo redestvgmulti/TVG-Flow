@@ -26,12 +26,11 @@ Deno.serve(async (_req: Request) => {
     // Self-healing + race condition safe: FOR UPDATE SKIP LOCKED equivalent via RPC
     // Select items that are 'raw' and not in processing (or stuck >10min)
     const { data: items, error } = await supabase
-        .from("ap.candidate_news")
+        .schema("ap").from("candidate_news")
         .select("id, imagem_url")
         .eq("status", "raw")
         .or("processing_started_at.is.null,processing_started_at.lt." + new Date(Date.now() - 10 * 60 * 1000).toISOString())
-        .not("imagem_url", "is", null)
-        .limit(BATCH_LIMIT);
+        .limit(BATCH_LIMIT); // Removed the `.not("imagem_url", "is", null)` filter
 
     if (error) {
         console.error("[ap-image-fetcher] select error:", error.message);
@@ -42,33 +41,62 @@ Deno.serve(async (_req: Request) => {
 
     for (const item of items ?? []) {
         // Mark as processing (self-healing signal)
-        const { count } = await supabase
-            .from("ap.candidate_news")
+        const { data: updatedData, error: updateErr } = await supabase
+            .schema("ap").from("candidate_news")
             .update({ processing_started_at: new Date().toISOString() })
             .eq("id", item.id)
             .eq("status", "raw")
-            .select("id", { count: "exact", head: true });
+            .select("id");
 
-        if (!count) continue; // Another worker grabbed it — skip
+        if (updateErr || !updatedData || updatedData.length === 0) continue; // Another worker grabbed it — skip
 
         try {
-            const imgRes = await fetch(item.imagem_url, { headers: { "User-Agent": "FlowOS AutoPublisher/1.0" } });
-            if (!imgRes.ok) throw new Error(`Image fetch failed: HTTP ${imgRes.status}`);
+            let storagePath = null;
+            let targetImgUrl = item.imagem_url;
 
-            const blob = await imgRes.arrayBuffer();
-            const contentType = imgRes.headers.get("content-type") || "image/jpeg";
-            const ext = contentType.includes("png") ? "png" : "jpg";
-            const storagePath = `${item.id}.${ext}`;
+            // Fallback: If no image_url provided by RSS, try fetching it from the original URL's OpenGraph tags
+            if (!targetImgUrl && item.url_original) {
+                try {
+                    const pageRes = await fetch(item.url_original, { headers: { "User-Agent": "FlowOS AutoPublisher Bot/1.0" } });
+                    if (pageRes.ok) {
+                        const html = await pageRes.text();
+                        const ogImageMatch = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["'][^>]*>/i)
+                            || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["'][^>]*>/i);
+                        if (ogImageMatch && ogImageMatch[1]) {
+                            targetImgUrl = ogImageMatch[1];
+                            console.log(`[ap-image-fetcher] Scraped OG Image for ${item.id}:`, targetImgUrl);
+                        }
+                    }
+                } catch (e) {
+                    console.log(`[ap-image-fetcher] Failed to scrape OG Image for ${item.id}`);
+                }
+            }
 
-            const { error: uploadError } = await supabase.storage
-                .from(BUCKET)
-                .upload(storagePath, blob, { contentType, upsert: true });
+            if (targetImgUrl) {
+                const imgRes = await fetch(targetImgUrl, { headers: { "User-Agent": "FlowOS AutoPublisher/1.0" } });
+                if (imgRes.ok) {
+                    const blob = await imgRes.arrayBuffer();
+                    const contentType = imgRes.headers.get("content-type") || "image/jpeg";
+                    const ext = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
+                    storagePath = `${item.id}.${ext}`;
 
-            if (uploadError) throw new Error(uploadError.message);
+                    const { error: uploadError } = await supabase.storage
+                        .from(BUCKET)
+                        .upload(storagePath, blob, { contentType, upsert: true });
+
+                    if (uploadError) {
+                        console.error(`[ap-image-fetcher] item ${item.id} image upload error:`, uploadError);
+                        storagePath = null; // Proceed without image if upload fails
+                    }
+                } else {
+                    console.error(`[ap-image-fetcher] item ${item.id} image fetch failed: HTTP ${imgRes.status}`);
+                    // Proceed without image
+                }
+            }
 
             // Advance status — idempotent: WHERE status = 'raw'
             await supabase
-                .from("ap.candidate_news")
+                .schema("ap").from("candidate_news")
                 .update({ imagem_storage: storagePath, status: "ready_for_scoring", processing_started_at: null })
                 .eq("id", item.id)
                 .eq("status", "raw");
@@ -78,7 +106,7 @@ Deno.serve(async (_req: Request) => {
             console.error(`[ap-image-fetcher] item ${item.id} error:`, err);
             // Clear processing lock so self-healing can retry after 10min
             await supabase
-                .from("ap.candidate_news")
+                .schema("ap").from("candidate_news")
                 .update({ processing_started_at: null })
                 .eq("id", item.id);
         }

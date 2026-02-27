@@ -22,12 +22,25 @@ Deno.serve(async (_req: Request) => {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  // Fetch active sources (LIMIT: process max BATCH_LIMIT sources per run)
-  const { data: sources, error: sourcesError } = await supabase
-    .from("ap.sources")
+  // 1. Identificar locatários que PAUSARAM o motor de ingestão globalmente
+  const { data: disabledConfigs } = await supabase
+    .schema("ap").from("system_config")
+    .select("cliente_id")
+    .eq("ingestion_enabled", false);
+
+  const disabledClienteIds = disabledConfigs?.map((c: any) => c.cliente_id) || [];
+
+  // 2. Fetch active sources (ignoring paused tenants)
+  let query = supabase
+    .schema("ap").from("sources")
     .select("id, cliente_id, url")
-    .eq("ativo", true)
-    .limit(BATCH_LIMIT);
+    .eq("ativo", true);
+
+  if (disabledClienteIds.length > 0) {
+    query = query.not("cliente_id", "in", `(${disabledClienteIds.join(',')})`);
+  }
+
+  const { data: sources, error: sourcesError } = await query.limit(BATCH_LIMIT);
 
   if (sourcesError) {
     console.error("[ap-data-ingestion] fetch sources error:", sourcesError.message);
@@ -48,7 +61,7 @@ Deno.serve(async (_req: Request) => {
       const items = parseRssItems(xml);
 
       for (const item of items) {
-        const { error: insertErr } = await supabase.from("ap.candidate_news").insert({
+        const { error: insertErr } = await supabase.schema("ap").from("candidate_news").insert({
           cliente_id: source.cliente_id,
           fonte_id: source.id,
           titulo: item.title,

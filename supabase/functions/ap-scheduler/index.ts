@@ -50,7 +50,8 @@ Deno.serve(async (req: Request) => {
 
     // Guard: item must be 'approved' and not already scheduled
     const { data: item } = await supabase
-        .from("ap.candidate_news")
+        .schema("ap")
+        .from("candidate_news")
         .select("id, cliente_id, horario_agendado, status")
         .eq("id", news_id)
         .eq("status", "approved")
@@ -69,7 +70,8 @@ Deno.serve(async (req: Request) => {
     today.setUTCHours(0, 0, 0, 0);
 
     const { data: lastScheduled } = await supabase
-        .from("ap.candidate_news")
+        .schema("ap")
+        .from("candidate_news")
         .select("horario_agendado")
         .eq("cliente_id", item.cliente_id)
         .eq("status", "queued_for_posting")
@@ -94,7 +96,8 @@ Deno.serve(async (req: Request) => {
 
     // Idempotent update — WHERE horario_agendado IS NULL ensures no overwrite
     const { error } = await supabase
-        .from("ap.candidate_news")
+        .schema("ap")
+        .from("candidate_news")
         .update({ horario_agendado: nextSlot.toISOString(), status: "queued_for_posting" })
         .eq("id", item.id)
         .eq("status", "approved")

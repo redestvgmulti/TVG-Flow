@@ -2,59 +2,90 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../services/supabase'
 import { Plus, Trash2, Globe, Users } from 'lucide-react'
 
+const FIXED_CLIENT_ID = 'cd287e6e-f273-4d0f-a72d-2a8c391e40e9'
+
 // ──────────────────────────────────────────────────────────
 // AutoPublisherSettings — FlowOS V2 Design System
 // ──────────────────────────────────────────────────────────
 
-export default function AutoPublisherSettings({ clienteId }) {
+export default function AutoPublisherSettings() {
+    const clienteId = FIXED_CLIENT_ID
     const [sources, setSources] = useState([])
     const [sponsors, setSponsors] = useState([])
     const [newSource, setNewSource] = useState({ nome: '', url: '', tipo: 'rss' })
     const [newSponsor, setNewSponsor] = useState({ nome: '', logo_url: '', template_id: '' })
     const [saving, setSaving] = useState(false)
 
+    async function apConfig(resource, action, payload = null) {
+        const body = { resource, action }
+        if (payload) body.payload = payload
+
+        const { data, error } = await supabase.functions.invoke('ap-config', {
+            method: 'POST',
+            body,
+        })
+        if (error) {
+            console.error('[ap-config HTTP Error]', error)
+            throw error
+        }
+        if (data && data.has_error) {
+            console.error('[ap-config Data Error DETAILED]', data)
+            throw new Error(`Edge Function Error: ${data.error} | Type: ${data.type}`);
+        }
+        return data
+    }
+
     const fetchData = useCallback(async () => {
-        if (!clienteId) return
-        const [{ data: s }, { data: p }] = await Promise.all([
-            supabase.from('ap.sources').select('*').eq('cliente_id', clienteId).order('created_at'),
-            supabase.from('ap.patrocinadores').select('*').eq('cliente_id', clienteId).order('created_at'),
+        const [s, p] = await Promise.all([
+            apConfig('sources', 'list'),
+            apConfig('patrocinadores', 'list'),
         ])
         setSources(s ?? [])
         setSponsors(p ?? [])
-    }, [clienteId])
+    }, [])
 
     useEffect(() => { fetchData() }, [fetchData])
 
     async function addSource() {
         if (!newSource.nome || !newSource.url) return
         setSaving(true)
-        await supabase.from('ap.sources').insert({ ...newSource, cliente_id: clienteId })
-        setNewSource({ nome: '', url: '', tipo: 'rss' })
-        await fetchData()
-        setSaving(false)
+        try {
+            await apConfig('sources', 'insert', newSource)
+            setNewSource({ nome: '', url: '', tipo: 'rss' })
+            await fetchData()
+        } catch (err) {
+            console.error('[Sources]', err)
+        } finally {
+            setSaving(false)
+        }
     }
 
     async function deleteSource(id) {
-        await supabase.from('ap.sources').delete().eq('id', id)
+        await apConfig('sources', 'delete', { id })
         fetchData()
     }
 
     async function toggleSource(id, ativo) {
-        await supabase.from('ap.sources').update({ ativo: !ativo }).eq('id', id)
+        await apConfig('sources', 'update', { id, ativo: !ativo })
         fetchData()
     }
 
     async function addSponsor() {
         if (!newSponsor.nome) return
         setSaving(true)
-        await supabase.from('ap.patrocinadores').insert({ ...newSponsor, cliente_id: clienteId })
-        setNewSponsor({ nome: '', logo_url: '', template_id: '' })
-        await fetchData()
-        setSaving(false)
+        try {
+            await apConfig('patrocinadores', 'insert', newSponsor)
+            setNewSponsor({ nome: '', logo_url: '', template_id: '' })
+            await fetchData()
+        } catch (err) {
+            console.error('[Sponsors]', err)
+        } finally {
+            setSaving(false)
+        }
     }
 
     async function deleteSponsor(id) {
-        await supabase.from('ap.patrocinadores').delete().eq('id', id)
+        await apConfig('patrocinadores', 'delete', { id })
         fetchData()
     }
 

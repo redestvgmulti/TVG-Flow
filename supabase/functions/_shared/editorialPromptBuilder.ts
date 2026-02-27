@@ -134,6 +134,7 @@ INSTRUÇÃO DE SEGURANÇA: Utilize este contexto APENAS indiretamente para melho
 - "roteiro": array de 3 elementos string (exato: [abertura, desenvolvimento, fechamento_cta])
 - "visual_energy_level": exatamente "low", "medium" ou "high", dependendo do vigor da notícia
 - "has_face": booleano true se o assunto remete a uma pessoa nominal que deve ganhar capa
+- "context_tag": UMA única palavra ou expressão curta (máx 15 caracteres) em CAIXA ALTA que resuma o LOCAL ou ASSUNTO PRINCIPAL da notícia (ex: "CALDAS NOVAS", "FAMOSOS", "POLÍTICA", "GOIÁS", "SADIA"). Seja específico ao contexto da notícia.
 - "categoria_sugerida": escolha obrigatoriamente um valor exato: "regional", "nacional_relevante", "engajamento_alto" ou "global_contextual"
 `;
 

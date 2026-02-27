@@ -20,7 +20,7 @@ Deno.serve(async (_req: Request) => {
 
     // Fetch all approved/rejected events in the last 30 days
     const { data: history } = await supabase
-        .from("ap.learning_history")
+        .schema("ap").from("learning_history")
         .select("cliente_id, categoria, fonte_id, acao, score_delta")
         .gte("registrado_at", since);
 
@@ -56,7 +56,7 @@ Deno.serve(async (_req: Request) => {
         const avgDelta = count > 0 ? sum / count : 0;
 
         const { count: rowsUpdated } = await supabase
-            .from("ap.candidate_scores")
+            .schema("ap").from("candidate_scores")
             .update({ learning_score: avgDelta })
             .eq("cliente_id", keyObj.cliente_id)
             .select("id", { count: "exact", head: true });

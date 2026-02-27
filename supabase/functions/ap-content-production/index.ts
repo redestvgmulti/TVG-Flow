@@ -13,7 +13,7 @@ import { callLLM } from "../_shared/llmClient.ts";
 const BATCH_LIMIT = 5; // AI calls are expensive — smaller batch
 const OPENAI_MODEL_G = "gpt-4o-mini";
 
-Deno.serve(async (_req: Request) => {
+Deno.serve(async (req: Request) => {
     const supabase = createClient(
         Deno.env.get("SUPABASE_URL")!,
         Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -22,15 +22,41 @@ Deno.serve(async (_req: Request) => {
 
     // No more global fallbacks. Each tenant MUST have an API Key in the Vault.
 
+    // Optional targeted processing when invoked manualy (e.g. matéria manual)
+    let targetNewsId: string | null = null;
+    try {
+        if (req.method === "POST") {
+            const contentType = req.headers.get("Content-Type") || "";
+            if (contentType.includes("application/json")) {
+                const body = await req.json().catch(() => null);
+                if (body && body.action === "process_selected" && typeof body.newsId === "string") {
+                    targetNewsId = body.newsId;
+                }
+            }
+        }
+    } catch (e) {
+        console.error("[ap-content-production] Failed to parse request body:", e);
+    }
+
     // Only items that are 'selected' AND have no headline yet (idempotent guard)
     const cutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-    const { data: items } = await supabase
+    let query = supabase
         .schema("ap").from("candidate_news")
         .select("id, cliente_id, titulo, conteudo, categoria")
         .eq("status", "selected")
-        .is("headline", null)
-        .or(`processing_started_at.is.null,processing_started_at.lt.${cutoff}`)
-        .limit(BATCH_LIMIT);
+        .is("headline", null);
+
+    if (targetNewsId) {
+        // Execução dirigida para uma notícia específica (ex: matéria manual).
+        query = query.eq("id", targetNewsId);
+    } else {
+        // Execução em lote via cron.
+        query = query
+            .or(`processing_started_at.is.null,processing_started_at.lt.${cutoff}`)
+            .limit(BATCH_LIMIT);
+    }
+
+    const { data: items } = await query;
 
     const errors: any[] = [];
     for (const item of items ?? []) {
@@ -65,7 +91,8 @@ Deno.serve(async (_req: Request) => {
                     if (isGoogleTarget) {
                         // The vault is stuck with the old sk-ant key. We force the known Gemini key if target is Google.
                         finalOpenAiKey = "AIzaSyAsVYDm9hD8lcZgYyrX8VROk3VMAnQCX_A";
-                        console.log(`[ContentProduction] Gemini Bypass Active: Forced AIza... key`);
+                        finalModel = "gemini-1.5-flash-latest";
+                        console.log(`[ContentProduction] Gemini Bypass Active: Forced AIza... key with gemini-1.5-flash-latest`);
                     } else if (secretData) {
                         finalOpenAiKey = secretData;
                         console.log(`[ContentProduction] Chave recuperada do Vault (Prefixo): ${finalOpenAiKey.substring(0, 10)}...`);
@@ -179,6 +206,7 @@ Deno.serve(async (_req: Request) => {
                     roteiro_json: parsed.roteiro,
                     visual_energy_level: parsed.visual_energy_level,
                     has_face: parsed.has_face,
+                    context_tag: parsed.context_tag,
                     categoria: item.categoria || parsed.categoria_sugerida,
                     status: targetStatus,
                     processing_started_at: null,
@@ -223,6 +251,7 @@ function parseAiOutput(raw: string) {
                 ? parsed.visual_energy_level
                 : "medium",
             has_face: Boolean(parsed.has_face),
+            context_tag: String(parsed.context_tag ?? "").toUpperCase().slice(0, 20),
             categoria_sugerida: cat
         };
     } catch (err) {
@@ -233,6 +262,7 @@ function parseAiOutput(raw: string) {
             roteiro: [],
             visual_energy_level: "medium",
             has_face: false,
+            context_tag: null,
             categoria_sugerida: "regional"
         };
     }

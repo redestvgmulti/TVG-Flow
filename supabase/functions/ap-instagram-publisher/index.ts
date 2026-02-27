@@ -32,7 +32,7 @@ Deno.serve(async (_req: Request) => {
     const now = new Date().toISOString();
 
     const { data: item } = await supabase
-        .from("ap.candidate_news")
+        .schema("ap").from("candidate_news")
         .select("id, caption, render_url, instagram_post_id")
         .eq("status", "queued_for_posting")
         .lte("horario_agendado", now)
@@ -50,7 +50,7 @@ Deno.serve(async (_req: Request) => {
 
     // Lock the item
     const { count } = await supabase
-        .from("ap.candidate_news")
+        .schema("ap").from("candidate_news")
         .update({ processing_started_at: new Date().toISOString() })
         .eq("id", item.id)
         .eq("status", "queued_for_posting")
@@ -96,7 +96,7 @@ Deno.serve(async (_req: Request) => {
 
         // Advance status — idempotent, clears processing lock
         await supabase
-            .from("ap.candidate_news")
+            .schema("ap").from("candidate_news")
             .update({
                 instagram_post_id: postId,
                 status: "posted",
@@ -112,7 +112,7 @@ Deno.serve(async (_req: Request) => {
         console.error(`[ap-instagram-publisher] item ${item.id}:`, err);
         // Clear lock so self-healing retries after 10min
         await supabase
-            .from("ap.candidate_news")
+            .schema("ap").from("candidate_news")
             .update({ processing_started_at: null })
             .eq("id", item.id);
 

@@ -1,3 +1,0 @@
--- BASELINE MIGRATION
--- This file represents the consolidated schema state as of 2026-02-01
--- Previous migrations were applied manually or via legacy processes
