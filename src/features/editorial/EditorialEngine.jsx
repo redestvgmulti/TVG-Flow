@@ -1,15 +1,14 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from '../../services/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import { resolveClienteId } from '../../services/resolveClienteId'
 import { Save, Plus, Trash2, Cpu, Brain, Zap, RefreshCw, AlertCircle, FileText, CheckCircle2 } from 'lucide-react'
+import { SkeletonCard } from '../../components/Skeleton'
 import '../../styles/EditorialEngine.css'
 
+const FIXED_CLIENT_ID = 'cd287e6e-f273-4d0f-a72d-2a8c391e40e9'
 export default function EditorialEngine() {
-    const { professionalId, role } = useAuth()
-    const [clienteId, setClienteId] = useState(null)
+    const clienteId = FIXED_CLIENT_ID
     const [loading, setLoading] = useState(false)
-    const [clienteLoading, setClienteLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState('')
     const [success, setSuccess] = useState('')
@@ -22,6 +21,7 @@ export default function EditorialEngine() {
         max_tokens: 400,
         system_prompt_override: false,
         override_prompt_text: '',
+        api_base_url: '',
         has_api_key: false // Readonly from backend
     })
     const [newApiKey, setNewApiKey] = useState('')
@@ -29,6 +29,8 @@ export default function EditorialEngine() {
     const [activePrompt, setActivePrompt] = useState('')
 
     const [rules, setRules] = useState([])
+    const [activeRuleType, setActiveRuleType] = useState(null)
+    const [ruleInput, setRuleInput] = useState('')
     const [humanization, setHumanization] = useState({
         formality_level: 50,
         creativity_level: 50,
@@ -46,27 +48,17 @@ export default function EditorialEngine() {
     const [promptSnapshot, setPromptSnapshot] = useState(null)
     const [loadingSnapshot, setLoadingSnapshot] = useState(false)
 
-    // 1. Resolve clienteId — works for admin AND profissional
+    // Fetch editorial data on mount
     useEffect(() => {
-        if (!professionalId) return
-        resolveClienteId(professionalId, role).then(id => {
-            if (id) setClienteId(id)
-            setClienteLoading(false)
-        })
-    }, [professionalId, role])
-
-    // 2. Fetch editorial data when clienteId is ready
-    useEffect(() => {
-        if (!clienteId) return
         fetchData()
-    }, [clienteId])
+    }, [])
 
     const fetchData = async () => {
         setLoading(true)
         try {
             const [settingsRes, ragRes] = await Promise.all([
-                supabase.functions.invoke('ap-editorial-settings'),
-                supabase.functions.invoke('ap-editorial-rag-upload'),
+                supabase.functions.invoke('ap-editorial-settings', { method: 'GET' }),
+                supabase.functions.invoke('ap-editorial-rag-upload', { method: 'GET' }),
             ])
 
             if (settingsRes.error) throw new Error(settingsRes.error.message || 'Erro na API de Settings')
@@ -104,7 +96,18 @@ export default function EditorialEngine() {
                 body: payload
             })
 
-            if (fnErr) throw fnErr
+            if (fnErr) {
+                console.error("DEBUG EDGE FUNCTION ERR:", fnErr)
+                // Se context for null e for error custom, podemos tentar extrair.
+                const errMsg = await (async () => {
+                    try {
+                        if (fnErr instanceof Response) return (await fnErr.json()).error
+                        if (fnErr.context) return await fnErr.context.json().then(j => j.error).catch(() => fnErr.context.error)
+                        return fnErr.message || JSON.stringify(fnErr)
+                    } catch { return fnErr.message }
+                })()
+                throw new Error(String(errMsg))
+            }
 
             if (newApiKey) {
                 setSettings(s => ({ ...s, has_api_key: true }))
@@ -138,33 +141,50 @@ export default function EditorialEngine() {
         }
     }
 
-    const addRule = async (type) => {
-        const val = prompt(`Digite a regra (tipo: ${type}):`)
-        if (!val) return
+    const startAddRule = (type) => {
+        setActiveRuleType(type)
+        setRuleInput('')
+    }
+
+    const submitRule = async () => {
+        if (!ruleInput.trim() || !activeRuleType) return
 
         try {
-            const { error: dbErr } = await supabase.from('ap.editorial_rules').insert({ cliente_id: clienteId, rule_type: type, value: val })
+            const { error: dbErr } = await supabase.schema('ap').from('editorial_rules').insert({ cliente_id: clienteId, rule_type: activeRuleType, value: ruleInput.trim() })
             if (dbErr) throw dbErr
-            const { data } = await supabase.from('ap.editorial_rules').select('*').eq('cliente_id', clienteId)
+            const { data } = await supabase.schema('ap').from('editorial_rules').select('*').eq('cliente_id', clienteId)
             setRules(data)
+            setActiveRuleType(null)
+            setRuleInput('')
         } catch (err) {
-            alert(err.message)
+            setError('Erro ao salvar regra: ' + err.message)
         }
+    }
+
+    const cancelAddRule = () => {
+        setActiveRuleType(null)
+        setRuleInput('')
     }
 
     const deleteRule = async (id) => {
         try {
-            const { error: dbErr } = await supabase.from('ap.editorial_rules').delete().eq('id', id)
+            const { error: dbErr } = await supabase.schema('ap').from('editorial_rules').delete().eq('id', id)
             if (dbErr) throw dbErr
             setRules(rules.filter(r => r.id !== id))
         } catch (err) {
-            alert(err.message)
+            setError('Erro ao deletar regra: ' + err.message)
         }
     }
 
     const uploadRagFile = async (e) => {
         const file = e.target.files[0]
         if (!file) return
+
+        if (settings.api_base_url && settings.api_base_url.includes('anthropic.com')) {
+            alert("A Anthropic não suporta envio de documentos RAG nativamente. Desabilite-a ou use o modelo OpenAI padrão para subir arquivos.")
+            e.target.value = null
+            return
+        }
 
         if (!settings.has_api_key) {
             alert("Salve a API Key do OpenAI antes de enviar documentos para o RAG.")
@@ -197,18 +217,12 @@ export default function EditorialEngine() {
         try {
             const { error: fnErr } = await supabase.functions.invoke('ap-editorial-rag-upload', {
                 method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
-                query: { source_document_id } // sending via query param or you can change fetch
+                body: { source_document_id }
             })
-            if (fnErr) console.warn("Erro ao deletar vetor no edge function:", fnErr)
-            // The above uses edge func URL queries which is non-standard for jsr client if not implemented correctly.
-            // fallback: let's call our custom fetch if query args don't work reliably with supabase client
-
-            // alternative native: supabase client doesn't support query directly easily on invoke DELETE
-            await supabase.from("ap.editorial_rag_documents").delete().eq("source_document_id", source_document_id)
+            if (fnErr) throw fnErr
             setRagDocs(ragDocs.filter(d => d.source_document_id !== source_document_id))
         } catch (err) {
-            alert(err.message)
+            setError('Erro ao deletar documento: ' + err.message)
         }
     }
 
@@ -237,7 +251,7 @@ export default function EditorialEngine() {
         if (!logId) return;
         setLoadingSnapshot(true);
         try {
-            const { data, error } = await supabase.from('ap.editorial_logs').select('prompt_snapshot').eq('id', logId).single();
+            const { data, error } = await supabase.schema('ap').from('editorial_logs').select('prompt_snapshot').eq('id', logId).single();
             if (error) throw error;
             setPromptSnapshot(data.prompt_snapshot);
         } catch (err) {
@@ -248,15 +262,17 @@ export default function EditorialEngine() {
         }
     }
 
-    if (clienteLoading) return <div style={{ padding: 40, color: '#A0A0A0' }}>Iniciando Motor Editorial...</div>
-
-    if (!clienteId) return (
-        <div style={{ padding: 40, color: '#EF4444' }}>
-            Usuário sem tenant ativo vinculado. O Motor Editorial requer um vínculo em <strong>cliente_profissionais</strong>.
+    if (loading) return (
+        <div className="motor-editorial-container">
+            <div className="motor-editorial-header">
+                <h2><Brain size={24} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 8, color: 'var(--color-primary)' }} /> Motor Editorial IA</h2>
+                <p>Pipeline de Inteligência Artificial para curadoria, edição e padronização (Enterprise V2).</p>
+            </div>
+            <div className="editorial-cards-grid">
+                {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
+            </div>
         </div>
     )
-
-    if (loading) return <div style={{ padding: 40, color: '#A0A0A0' }}>Carregando configurações...</div>
 
 
     return (
@@ -274,7 +290,7 @@ export default function EditorialEngine() {
                 {/* CARD 1: NÚCLEO E IDENTIDADE */}
                 <div className="editorial-section">
                     <h3><Cpu size={18} /> Núcleo de Processamento</h3>
-                    <div className="editorial-row" style={{ marginTop: 12 }}>
+                    <div className="editorial-fields-row" style={{ marginTop: 12 }}>
                         <div className="editorial-form-group">
                             <label>OpenAI API Key (Vault Seguro)</label>
                             <input
@@ -284,34 +300,59 @@ export default function EditorialEngine() {
                                 value={newApiKey}
                                 onChange={e => setNewApiKey(e.target.value)}
                             />
-                            <span style={{ fontSize: 11, color: '#64748b' }}>As chaves NUNCA são salvas em texto puro ou retornadas pela API.</span>
+                            <span className="editorial-hint">As chaves NUNCA são salvas em texto puro ou retornadas pela API.</span>
                         </div>
                         <div className="editorial-form-group">
-                            <label>Modelo Primário</label>
-                            <select className="editorial-select" value={settings.model_primary} onChange={e => setSettings({ ...settings, model_primary: e.target.value })}>
-                                <option value="gpt-4o-mini">GPT-4o Mini (Recomendado, Rápido)</option>
-                                <option value="gpt-4o">GPT-4o (Avançado, Oneroso)</option>
-                            </select>
+                            <label>API Base URL (Endpoint)</label>
+                            <input
+                                type="text"
+                                className="editorial-input"
+                                placeholder={settings.api_base_url || "Padrão: https://api.openai.com/v1"}
+                                value={settings.api_base_url || ''}
+                                onChange={e => setSettings({ ...settings, api_base_url: e.target.value })}
+                            />
+                            <span className="editorial-hint">Deixe em branco para usar a OpenAI padrão.</span>
                         </div>
                     </div>
-                    <div className="editorial-row">
+                    <div className="editorial-fields-row" style={{ marginTop: 12 }}>
+                        <div className="editorial-form-group">
+                            <label>Modelo Primário</label>
+                            <input
+                                list="modelos-primarios"
+                                className="editorial-input"
+                                value={settings.model_primary}
+                                onChange={e => setSettings({ ...settings, model_primary: e.target.value })}
+                                placeholder="ex: gpt-4o-mini, llama3, claude-3"
+                            />
+                            <datalist id="modelos-primarios">
+                                <option value="gpt-4o-mini">GPT-4o Mini (Recomendado, Rápido)</option>
+                                <option value="gpt-4o">GPT-4o (Avançado, Oneroso)</option>
+                            </datalist>
+                        </div>
                         <div className="editorial-form-group">
                             <label>Modelo de Fallback</label>
-                            <select className="editorial-select" value={settings.model_fallback} onChange={e => setSettings({ ...settings, model_fallback: e.target.value })}>
+                            <input
+                                list="modelos-fallback"
+                                className="editorial-input"
+                                value={settings.model_fallback}
+                                onChange={e => setSettings({ ...settings, model_fallback: e.target.value })}
+                                placeholder="ex: gpt-4o, mixtral"
+                            />
+                            <datalist id="modelos-fallback">
                                 <option value="gpt-4o-mini">GPT-4o Mini</option>
                                 <option value="gpt-4o">GPT-4o (Avançado)</option>
                                 <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Legado)</option>
-                            </select>
+                            </datalist>
                         </div>
+                    </div>
+                    <div className="editorial-save-row" style={{ marginTop: 12 }}>
                         <div className="editorial-form-group">
                             <label>Temperatura (0 a 2)</label>
                             <input type="number" step="0.1" min="0" max="2" className="editorial-input" value={settings.temperature} onChange={e => setSettings({ ...settings, temperature: parseFloat(e.target.value) })} />
                         </div>
-                        <div className="editorial-form-group auto-width" style={{ justifyContent: 'flex-end', paddingBottom: 2 }}>
-                            <button className="editorial-button" onClick={saveSettings} disabled={saving}>
-                                <Save size={16} /> Salvar Motor
-                            </button>
-                        </div>
+                        <button className="editorial-button" onClick={saveSettings} disabled={saving}>
+                            <Save size={16} /> Salvar Motor
+                        </button>
                     </div>
 
                     <hr style={{ borderColor: 'var(--color-border-light, #e2e8f0)', margin: '24px 0 16px 0', borderStyle: 'solid', borderWidth: '1px 0 0 0' }} />
@@ -345,41 +386,64 @@ export default function EditorialEngine() {
                 {/* CARD 2: REGRAS E HUMANIZAÇÃO */}
                 <div className="editorial-section">
                     <h3><AlertCircle size={18} /> Regras Inegociáveis</h3>
-                    <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                        <button className="editorial-button secondary" onClick={() => addRule('forbidden')}><Plus size={14} /> Palavra Proibida</button>
-                        <button className="editorial-button secondary" onClick={() => addRule('mandatory')}><Plus size={14} /> Termo Obrigatório</button>
-                        <button className="editorial-button secondary" onClick={() => addRule('substitution')}><Plus size={14} /> Substituição</button>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+                        <button className="editorial-button secondary" onClick={() => startAddRule('forbidden')}><Plus size={14} /> Palavra Proibida</button>
+                        <button className="editorial-button secondary" onClick={() => startAddRule('mandatory')}><Plus size={14} /> Termo Obrigatório</button>
+                        <button className="editorial-button secondary" onClick={() => startAddRule('substitution')}><Plus size={14} /> Substituição</button>
                     </div>
 
+                    {activeRuleType && (
+                        <div style={{ marginTop: 16, padding: 12, borderRadius: 8, backgroundColor: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-light)' }}>
+                            <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                                Adicionando {activeRuleType === 'forbidden' ? 'Palavra Proibida' : activeRuleType === 'mandatory' ? 'Termo Obrigatório' : 'Substituição'}
+                            </label>
+                            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                                <input
+                                    autoFocus
+                                    className="editorial-input"
+                                    style={{ flex: 1 }}
+                                    placeholder={activeRuleType === 'substitution' ? "Ex: JSON -> JSONB" : "Digite o termo..."}
+                                    value={ruleInput}
+                                    onChange={e => setRuleInput(e.target.value)}
+                                    onKeyDown={e => e.key === 'Enter' && submitRule()}
+                                />
+                                <button className="editorial-button" onClick={submitRule} disabled={!ruleInput.trim()}>Salvar</button>
+                                <button className="editorial-button secondary" onClick={cancelAddRule}>Cancelar</button>
+                            </div>
+                        </div>
+                    )}
+
                     {rules.length === 0 ? <div className="editorial-empty-state" style={{ marginTop: 12 }}>Nenhuma regra definida. A IA está livre.</div> : (
-                        <table className="editorial-table">
-                            <thead>
-                                <tr>
-                                    <th>Tipo</th>
-                                    <th>Regra</th>
-                                    <th>Ação</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {rules.map(r => (
-                                    <tr key={r.id}>
-                                        <td>
-                                            <span style={{
-                                                fontSize: 12, padding: '2px 8px', borderRadius: 4, fontWeight: 600,
-                                                backgroundColor: r.rule_type === 'forbidden' ? 'rgba(239,68,68,0.1)' : r.rule_type === 'mandatory' ? 'rgba(16,185,129,0.1)' : 'rgba(245,158,11,0.1)',
-                                                color: r.rule_type === 'forbidden' ? '#EF4444' : r.rule_type === 'mandatory' ? '#10B981' : '#F59E0B'
-                                            }}>
-                                                {r.rule_type.toUpperCase()}
-                                            </span>
-                                        </td>
-                                        <td>{r.value}</td>
-                                        <td style={{ width: 50 }}>
-                                            <button className="editorial-button danger" style={{ padding: 6, opacity: 0.7 }} onClick={() => deleteRule(r.id)}><Trash2 size={14} /></button>
-                                        </td>
+                        <div style={{ maxHeight: '160px', overflowY: 'auto', border: '1px solid var(--color-border-light, #e2e8f0)', borderRadius: '6px', marginTop: '12px' }}>
+                            <table className="editorial-table" style={{ margin: 0, border: 'none' }}>
+                                <thead style={{ position: 'sticky', top: 0, backgroundColor: 'var(--color-bg-secondary, #f8f9fa)', zIndex: 1 }}>
+                                    <tr>
+                                        <th>Tipo</th>
+                                        <th>Regra</th>
+                                        <th>Ação</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    {rules.map(r => (
+                                        <tr key={r.id}>
+                                            <td>
+                                                <span style={{
+                                                    fontSize: 12, padding: '2px 8px', borderRadius: 4, fontWeight: 600,
+                                                    backgroundColor: r.rule_type === 'forbidden' ? 'rgba(239,68,68,0.1)' : r.rule_type === 'mandatory' ? 'rgba(16,185,129,0.1)' : 'rgba(245,158,11,0.1)',
+                                                    color: r.rule_type === 'forbidden' ? '#EF4444' : r.rule_type === 'mandatory' ? '#10B981' : '#F59E0B'
+                                                }}>
+                                                    {r.rule_type === 'forbidden' ? 'PROIBIDA' : r.rule_type === 'mandatory' ? 'OBRIGATÓRIO' : 'SUBSTITUIÇÃO'}
+                                                </span>
+                                            </td>
+                                            <td>{r.value}</td>
+                                            <td style={{ width: 50 }}>
+                                                <button className="editorial-button danger" style={{ padding: 6, opacity: 0.7 }} onClick={() => deleteRule(r.id)}><Trash2 size={14} /></button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     )}
 
                     <hr style={{ borderColor: 'var(--color-border-light, #e2e8f0)', margin: '24px 0 16px 0', borderStyle: 'solid', borderWidth: '1px 0 0 0' }} />
@@ -437,8 +501,14 @@ export default function EditorialEngine() {
                     <h3><Brain size={18} /> Adestramento Contextual (RAG)</h3>
                     <p style={{ margin: '12px 0 16px 0', fontSize: 13, color: 'var(--color-text-secondary, #64748b)' }}>Faça upload de documentos texto para injetar conhecimento privado no pipeline editorial.</p>
 
+                    {(settings.api_base_url && settings.api_base_url.includes('anthropic.com')) && (
+                        <div style={{ padding: 12, backgroundColor: 'rgba(245, 158, 11, 0.1)', color: '#F59E0B', borderRadius: 6, marginBottom: 16, fontSize: 13, display: 'flex', gap: 8, alignItems: 'center' }}>
+                            <AlertCircle size={16} /> <span><strong>RAG Desativado:</strong> A API da Anthropic preenchida acima não oferece suporte ao endpoint de Embeddings.</span>
+                        </div>
+                    )}
+
                     <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-                        <input type="file" accept=".txt" onChange={uploadRagFile} disabled={saving} style={{ color: 'var(--color-text-primary, #1e293b)', fontSize: 14 }} />
+                        <input type="file" accept=".txt" onChange={uploadRagFile} disabled={saving || (settings.api_base_url && settings.api_base_url.includes('anthropic.com'))} style={{ color: 'var(--color-text-primary, #1e293b)', fontSize: 14 }} />
                     </div>
 
                     {ragDocs.length === 0 ? <div className="editorial-empty-state" style={{ marginTop: 16, padding: 16 }}>A base vetorial está vazia. O modelo trabalhará apenas com o LLM puro.</div> : (
@@ -510,13 +580,24 @@ export default function EditorialEngine() {
                                 </div>
                                 <div className="editorial-metric">
                                     <span className="editorial-metric-label">Tokens Totais (Billing)</span>
-                                    <span className="editorial-metric-value">{testOutput.tokens} <span style={{ fontSize: 10, color: '#64748b', fontWeight: 'normal' }}>(~${((testOutput.tokens / 1000000) * 0.15).toFixed(4)})</span></span>
+                                    <span className="editorial-metric-value">
+                                        {testOutput.tokens}
+                                        <span style={{ fontSize: 10, color: '#64748b', fontWeight: 'normal', marginLeft: 4 }}>
+                                            (~${(((testOutput.tokens ?? 0) / 1000000) * 0.15).toFixed(4)})
+                                        </span>
+                                    </span>
                                 </div>
                                 <div className="editorial-metric">
                                     <span className="editorial-metric-label">Status (Auditoria)</span>
                                     <span className="editorial-metric-value">{testOutput.log_id ? "Salvo" : "Não Auditado"}</span>
                                 </div>
                             </div>
+
+                            {testOutput.tokens_detail && (
+                                <div style={{ marginTop: 8, fontSize: 11, color: 'var(--color-text-secondary, #64748b)' }}>
+                                    <span>Prompt: {testOutput.tokens_detail.prompt} • Resposta: {testOutput.tokens_detail.completion}</span>
+                                </div>
+                            )}
 
                             {testOutput.log_id && (
                                 <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>

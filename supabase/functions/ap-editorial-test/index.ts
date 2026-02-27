@@ -7,9 +7,10 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildEditorialPrompt, getEditorialContext } from "../_shared/editorialPromptBuilder.ts";
+import { callLLM } from "../_shared/llmClient.ts";
 
 const corsHeaders = {
-    "Access-Control-Allow-Origin": "http://localhost:4173, https://flowos.app",
+    "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
@@ -80,26 +81,11 @@ Deno.serve(async (req: Request) => {
             openaiKey
         });
 
-        // 4. Hit OpenAI (with fallback support)
+        // 4. Chamada à IA via adapter unificado (com fallback de modelo)
         let model = context.settings.model_primary || "gpt-4o-mini";
-        let fallbackModel = context.settings.model_fallback || "gpt-4o";
-        let aiData = null;
+        const fallbackModel = context.settings.model_fallback || "gpt-4o";
 
-        const callOpenAI = async (modelToUse: string) => {
-            const res = await fetch("https://api.openai.com/v1/chat/completions", {
-                method: "POST",
-                headers: { "Authorization": `Bearer ${openaiKey}`, "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    model: modelToUse,
-                    messages: [{ role: "user", content: finalPrompt }],
-                    temperature: context.settings.temperature ?? 0.7,
-                    max_tokens: context.settings.max_tokens ?? 400,
-                }),
-                signal: AbortSignal.timeout(30000) // 30s timeout
-            });
-            if (!res.ok) throw new Error(`OpenAI HTTP ${res.status}`);
-            return await res.json();
-        };
+        const baseUrl = context.settings.api_base_url || "https://api.openai.com/v1";
 
         // Reserve tokens before calling (Atomic pre-reservation to fix race conditions)
         const estimatedTokens = 1500;
@@ -112,24 +98,48 @@ Deno.serve(async (req: Request) => {
             throw new Error("Tenant reached monthly token limit.");
         }
 
+        let llmContent = "";
+        let totalTokens = 0;
+        let promptTokens = 0;
+        let completionTokens = 0;
+
+        const temperature = context.settings.temperature ?? 0.7;
+        const maxTokens = context.settings.max_tokens ?? 400;
+
         try {
-            aiData = await callOpenAI(model);
+            const { content, tokens } = await callLLM({
+                apiKey: openaiKey,
+                baseUrl,
+                model,
+                prompt: finalPrompt,
+                temperature,
+                maxTokens
+            });
+            llmContent = content;
+            totalTokens = tokens.total;
+            promptTokens = tokens.prompt;
+            completionTokens = tokens.completion;
         } catch (e) {
-            console.warn(`Primary model ${model} failed, attempting fallback to ${fallbackModel}`, e);
-            model = fallbackModel; // log the fallback
+            console.warn(`[ap-editorial-test] Primary model ${model} failed, attempting fallback to ${fallbackModel}`, e);
+            model = fallbackModel;
             try {
-                // Retry 1x with fallback
-                aiData = await callOpenAI(model);
+                const { content, tokens } = await callLLM({
+                    apiKey: openaiKey,
+                    baseUrl,
+                    model,
+                    prompt: finalPrompt,
+                    temperature,
+                    maxTokens
+                });
+                llmContent = content;
+                totalTokens = tokens.total;
+                promptTokens = tokens.prompt;
+                completionTokens = tokens.completion;
             } catch (fallbackError) {
-                // Refund reserved tokens on total failure
                 await sbAdmin.rpc('refund_editorial_tokens', { p_cliente_id: clienteId, p_tokens_to_refund: estimatedTokens });
                 throw fallbackError;
             }
         }
-
-        const totalTokens = aiData.usage?.total_tokens ?? 0;
-        const promptTokens = aiData.usage?.prompt_tokens ?? 0;
-        const completionTokens = aiData.usage?.completion_tokens ?? 0;
 
         // Refund unused reserved tokens
         const tokensToRefund = estimatedTokens - totalTokens;
@@ -140,7 +150,7 @@ Deno.serve(async (req: Request) => {
             });
         }
 
-        const { data: logInsert } = await sbAdmin.from("ap.editorial_logs").insert({
+        const { data: logInsert } = await sbAdmin.schema("ap").from("editorial_logs").insert({
             cliente_id: clienteId,
             input_tokens: promptTokens,
             output_tokens: completionTokens,
@@ -148,30 +158,26 @@ Deno.serve(async (req: Request) => {
             prompt_snapshot: finalPrompt // Audit compliance
         }).select("id").single();
 
-        let parsed = null;
-        try {
-            parsed = JSON.parse(aiData.choices[0].message.content);
-        } catch {
-            parsed = { raw: aiData.choices[0].message.content };
-        }
+        const logId = logInsert?.id ?? null;
 
-        // 5. Hide large prompt snapshot from frontend output
-        const maskedPrompt = finalPrompt.length > 200
-            ? finalPrompt.slice(0, 100) + " ... [TRUNCATED] ... " + finalPrompt.slice(-100)
-            : finalPrompt;
+        let parsed: any;
+        try {
+            parsed = JSON.parse(llmContent || "{}");
+        } catch {
+            parsed = { raw: llmContent };
+        }
 
         return new Response(
             JSON.stringify({
-                result: parsed,
-                tokens: {
+                parsed,
+                tokens: totalTokens,
+                tokens_detail: {
                     total: totalTokens,
                     prompt: promptTokens,
-                    completion: completionTokens,
-                    estimated: estimatedTokens,
-                    refunded: tokensToRefund
+                    completion: completionTokens
                 },
-                prompt_snapshot: maskedPrompt, // enterprise hardening: never leak full payload to client
-                model: model
+                model,
+                log_id: logId
             }),
             { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
