@@ -60,7 +60,8 @@ export async function callLLM({
     isAnthropic = true;
     isGoogle = false;
     cleanBaseUrl = 'https://api.anthropic.com';
-    if (!cleanModel.includes('claude')) cleanModel = 'claude-3-5-sonnet-20241022';
+    // IMPORTANT: Client's key requires "claude-sonnet-4-6" exactly
+    if (!cleanModel.includes('claude-sonnet-4-6')) cleanModel = 'claude-sonnet-4-6';
   } else if (isGeminiKey && !isOpenRouterKey) {
     isGoogle = true;
     isAnthropic = false;
