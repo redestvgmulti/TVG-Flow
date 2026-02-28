@@ -288,8 +288,8 @@ function parseAiOutput(raw: string) {
         }
 
         return {
-            headline: String(parsed.headline ?? "").slice(0, 65),
-            caption: String(parsed.caption ?? "").slice(0, 220),
+            headline: String(parsed.headline ?? "").slice(0, 150),
+            caption: String(parsed.caption ?? "").trim(),
             roteiro: Array.isArray(parsed.roteiro) ? parsed.roteiro : [],
             visual_energy_level: ["low", "medium", "high"].includes(parsed.visual_energy_level)
                 ? parsed.visual_energy_level
