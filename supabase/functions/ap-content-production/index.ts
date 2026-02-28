@@ -267,7 +267,18 @@ Deno.serve(async (req: Request) => {
 
 function parseAiOutput(raw: string) {
     try {
-        const cleanedRaw = raw.replace(/^```json/, "").replace(/```$/, "").trim();
+        let cleanedRaw = raw.trim();
+        // Extract the JSON object by finding the first { and last }
+        const startIdx = cleanedRaw.indexOf('{');
+        const endIdx = cleanedRaw.lastIndexOf('}');
+
+        if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+            cleanedRaw = cleanedRaw.substring(startIdx, endIdx + 1);
+        } else {
+            // Fallback for edge cases
+            cleanedRaw = cleanedRaw.replace(/^```json/, "").replace(/```$/, "").trim();
+        }
+
         const parsed = JSON.parse(cleanedRaw);
 
         let cat = String(parsed.categoria_sugerida ?? "regional").toLowerCase().trim();
