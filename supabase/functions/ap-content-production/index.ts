@@ -10,10 +10,19 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildEditorialPrompt, getEditorialContext } from "../_shared/editorialPromptBuilder.ts";
 import { callLLM } from "../_shared/llmClient.ts";
 
-const BATCH_LIMIT = 5; // AI calls are expensive — smaller batch
+const BATCH_LIMIT = 25; // Aumentado para lidar o gargalo
 const OPENAI_MODEL_G = "gpt-4o-mini";
 
+const corsHeaders = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
 Deno.serve(async (req: Request) => {
+    if (req.method === "OPTIONS") {
+        return new Response("ok", { headers: corsHeaders });
+    }
+
     const supabase = createClient(
         Deno.env.get("SUPABASE_URL")!,
         Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -86,16 +95,11 @@ Deno.serve(async (req: Request) => {
                     editorialActive = true;
                     const { data: secretData } = await supabase.rpc('get_decrypted_secret', { secret_id: context.settings.vault_secret_id });
 
-                    // FORCED BYPASS FOR GEMINI SYNC ISSUE
-                    const isGoogleTarget = (context.settings.api_base_url || "").includes("googleapis.com");
-                    if (isGoogleTarget) {
-                        // The vault is stuck with the old sk-ant key. We force the known Gemini key if target is Google.
-                        finalOpenAiKey = "AIzaSyAsVYDm9hD8lcZgYyrX8VROk3VMAnQCX_A";
-                        finalModel = "gemini-1.5-flash-latest";
-                        console.log(`[ContentProduction] Gemini Bypass Active: Forced AIza... key with gemini-1.5-flash-latest`);
-                    } else if (secretData) {
+                    if (secretData) {
                         finalOpenAiKey = secretData;
                         console.log(`[ContentProduction] Chave recuperada do Vault (Prefixo): ${finalOpenAiKey.substring(0, 10)}...`);
+                    } else {
+                        console.warn(`[ContentProduction] Chave nao recuperada do Vault para ID: ${context.settings.vault_secret_id}`);
                     }
                 }
             }
@@ -143,9 +147,15 @@ Deno.serve(async (req: Request) => {
             const temperature = editorialActive && context?.settings ? context.settings.temperature : 0.7;
             const maxTokens = 400;
 
-            const makeCall = async (modelOverride?: string) => {
+            // Tier 1: Client Key. Tier 2: Global FlowOS / TVG Key
+            const hasGoodGlobalKey = Deno.env.get("ANTHROPIC_API_KEY") || Deno.env.get("OPENAI_API_KEY") || "";
+
+            const makeCall = async (modelOverride?: string, useGlobalKey: boolean = false) => {
+                const effectiveKey = useGlobalKey ? hasGoodGlobalKey : finalOpenAiKey.trim();
+                if (!effectiveKey) throw new Error("Nenhuma chave válida encontrada neste nível (Tier).");
+
                 const { content, tokens } = await callLLM({
-                    apiKey: finalOpenAiKey.trim(),
+                    apiKey: effectiveKey,
                     baseUrl,
                     model: (modelOverride || finalModel),
                     prompt,
@@ -159,20 +169,40 @@ Deno.serve(async (req: Request) => {
             };
 
             try {
+                // Tenta usar a chave do cliente primeiro
                 await makeCall();
-            } catch (err) {
-                if (editorialActive && context?.settings?.model_fallback) {
-                    console.warn(`Primary model failed, attempting fallback`, err);
-                    finalModel = context.settings.model_fallback;
+            } catch (err: any) {
+                console.warn(`[ContentProduction] Tier 1 failed for item ${item.id}:`, err.message);
+
+                let successOnFallback = false;
+
+                // Se a falha foi 401/400 (Erro de Chave) e temos a Chave Mestra Global, ativamos a "Rede de Segurança" (Tier 2/3)
+                const isAuthError = err.message.includes("401") || err.message.includes("400") || err.message.includes("chave");
+                if (isAuthError && hasGoodGlobalKey) {
+                    console.log(`[ContentProduction] Falling back to Tier 2 (Global Keys) for item ${item.id}`);
                     try {
-                        await makeCall(finalModel);
-                    } catch (fallbackError) {
-                        await supabase.schema('ap').rpc('refund_editorial_tokens', { p_cliente_id: clienteId, p_tokens_to_refund: estimatedTokens });
-                        throw fallbackError;
+                        await makeCall(undefined, true); // Usa a chave global com o mesmo modelo
+                        successOnFallback = true;
+                    } catch (globalFallbackErr) {
+                        console.error(`[ContentProduction] Tier 2 Global Key ALSO failed`, globalFallbackErr);
                     }
-                } else {
-                    await supabase.schema('ap').rpc('refund_editorial_tokens', { p_cliente_id: clienteId, p_tokens_to_refund: estimatedTokens });
-                    throw err;
+                }
+
+                // Se a chave não era o problema ou ela também falhou, tentamos fazer a fallback lateral (Falllback de Modelo)
+                if (!successOnFallback) {
+                    if (editorialActive && context?.settings?.model_fallback) {
+                        console.warn(`[ContentProduction] Attempting Model Fallback to ${context.settings.model_fallback}`);
+                        finalModel = context.settings.model_fallback;
+                        try {
+                            await makeCall(finalModel, hasGoodGlobalKey ? true : false); // Tenta o modelo menor usando a chave que estiver viva
+                        } catch (fallbackError) {
+                            await supabase.schema('ap').rpc('refund_editorial_tokens', { p_cliente_id: clienteId, p_tokens_to_refund: estimatedTokens });
+                            throw fallbackError;
+                        }
+                    } else {
+                        await supabase.schema('ap').rpc('refund_editorial_tokens', { p_cliente_id: clienteId, p_tokens_to_refund: estimatedTokens });
+                        throw err; // Nenhuma salvação possível, falha dura.
+                    }
                 }
             }
 
@@ -195,8 +225,10 @@ Deno.serve(async (req: Request) => {
                 });
             }
 
-            // Definir o status de destino. Se não tem foto, passa no render-engine. Se já tem, vai direto pra review.
-            const targetStatus = item.imagem_url ? "pending_review" : "pending_render";
+            // Forçar TODAS as matérias para pending_render.
+            // Isso garante que mesmo o upload manual de foto na "Nova Matéria" 
+            // receba o logo e a moldura do Placid como as demais.
+            const targetStatus = "pending_render";
 
             const { error: updateError } = await supabase
                 .schema("ap").from("candidate_news")
@@ -228,7 +260,7 @@ Deno.serve(async (req: Request) => {
     }
 
     return new Response(JSON.stringify({ ok: true, processed: items?.length ?? 0, errors }), {
-        headers: { "Content-Type": "application/json" },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 });
 

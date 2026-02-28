@@ -41,11 +41,43 @@ export async function callLLM({
   temperature,
   maxTokens
 }: CallLLMParams): Promise<CallLLMResult> {
-  const cleanBaseUrl = normalizeBaseUrl(baseUrl || '')
-  const cleanModel = model.trim()
+  let cleanBaseUrl = normalizeBaseUrl(baseUrl || '');
+  let cleanModel = model.trim();
 
-  const isAnthropic = cleanBaseUrl.includes('anthropic.com')
-  const isGoogle = cleanBaseUrl.includes('googleapis.com')
+  // 1. AUTO-ROUTING INTELLIGENCE (Override based on API Key Prefix)
+  // This makes the system resilient against client misconfiguration.
+  const isAnthropicKey = apiKey.startsWith('sk-ant-');
+  const isOpenAIKey = apiKey.startsWith('sk-proj-') || (apiKey.startsWith('sk-') && !isAnthropicKey && apiKey.length > 40);
+  const isGeminiKey = apiKey.startsWith('AIzaSy');
+  const isOpenRouterKey = apiKey.startsWith('sk-or-');
+
+  let isAnthropic = cleanBaseUrl.includes('anthropic.com');
+  let isGoogle = cleanBaseUrl.includes('googleapis.com');
+  let isOpenRouter = cleanBaseUrl.includes('openrouter.ai');
+
+  // Prefix trumps configured URL (Auto-Correction)
+  if (isAnthropicKey && !isOpenRouterKey) {
+    isAnthropic = true;
+    isGoogle = false;
+    cleanBaseUrl = 'https://api.anthropic.com';
+    if (!cleanModel.includes('claude')) cleanModel = 'claude-3-5-sonnet-20241022';
+  } else if (isGeminiKey && !isOpenRouterKey) {
+    isGoogle = true;
+    isAnthropic = false;
+    cleanBaseUrl = 'https://generativelanguage.googleapis.com';
+    if (!cleanModel.includes('gemini')) cleanModel = 'gemini-1.5-flash-latest';
+  } else if (isOpenRouterKey) {
+    isOpenRouter = true;
+    isGoogle = false;
+    isAnthropic = false;
+    cleanBaseUrl = 'https://openrouter.ai/api/v1';
+  } else if (isOpenAIKey && !isOpenRouterKey) {
+    // Default to OpenAI if it looks like a standard OpenAI key
+    isAnthropic = false;
+    isGoogle = false;
+    cleanBaseUrl = 'https://api.openai.com/v1';
+    if (!cleanModel.includes('gpt')) cleanModel = 'gpt-4o-mini';
+  }
 
   let fetchUrl: string
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
@@ -97,6 +129,10 @@ export async function callLLM({
     fetchUrl = `${normalizeBaseUrl(base)}/chat/completions`
 
     headers['Authorization'] = `Bearer ${apiKey}`
+    if (isOpenRouter) {
+      headers['HTTP-Referer'] = 'https://tvgflow.com';
+      headers['X-Title'] = 'AutoPublisher';
+    }
 
     body = {
       model: cleanModel,

@@ -13,7 +13,7 @@ const corsHeaders = {
     "Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE",
 };
 
-const BATCH_LIMIT = 5;
+const BATCH_LIMIT = 25;
 
 Deno.serve(async (req: Request) => {
     if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });

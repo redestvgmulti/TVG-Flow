@@ -8,7 +8,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const BATCH_LIMIT = 10;
+const BATCH_LIMIT = 30;
 
 Deno.serve(async (_req: Request) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -54,7 +54,18 @@ Deno.serve(async (_req: Request) => {
     let errors = 0;
 
     try {
-      const res = await fetch(source.url, { headers: { "User-Agent": "FlowOS AutoPublisher/1.0" } });
+      let fetchUrl = source.url;
+
+      // Automatically proxy Instagram URLs to RSSHub to prevent silent ingestion failure
+      if (fetchUrl.includes("instagram.com")) {
+        const match = fetchUrl.match(/instagram\.com\/([^\/?#]+)/i);
+        if (match && match[1]) {
+          fetchUrl = `https://rsshub.app/instagram/user/${match[1]}`;
+          console.log(`[ap-data-ingestion] Proxied Instagram URL: ${fetchUrl}`);
+        }
+      }
+
+      const res = await fetch(fetchUrl, { headers: { "User-Agent": "FlowOS AutoPublisher/1.0" } });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
       const xml = await res.text();
