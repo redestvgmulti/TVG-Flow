@@ -270,7 +270,7 @@ export default function AutoPublisher() {
             imagem_url: finalImageUrl,
             context_tag: manualForm.context_tag ? manualForm.context_tag.trim().toUpperCase() : null,
             status: 'selected', // Send directly to AI 
-            url_original: manualForm.url_original ? manualForm.url_original : `manual_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+            url_original: manualForm.url_original ? `${manualForm.url_original}#manual_${Date.now()}` : `manual_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
         }).select('id').single()
 
         if (error) {
