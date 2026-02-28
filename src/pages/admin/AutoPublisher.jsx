@@ -43,7 +43,7 @@ export default function AutoPublisher() {
 
     // Manual Input State
     const [isManualModalOpen, setManualModalOpen] = useState(false)
-    const [manualForm, setManualForm] = useState({ titulo: '', conteudo: '', imagem_url: '', context_tag: '' })
+    const [manualForm, setManualForm] = useState({ titulo: '', conteudo: '', imagem_url: '', context_tag: '', url_original: '' })
     const [isSubmittingManual, setIsSubmittingManual] = useState(false)
     const [selectedFile, setSelectedFile] = useState(null)
     const [isDragging, setIsDragging] = useState(false)
@@ -207,10 +207,42 @@ export default function AutoPublisher() {
 
     async function submitManualNews(e) {
         e.preventDefault()
-        if (!manualForm.titulo || !manualForm.conteudo) return
+
+        if (!manualForm.titulo && !manualForm.url_original) {
+            alert('Você precisa preencher o título da matéria OU colar um link válido.');
+            return;
+        }
+
         setIsSubmittingManual(true)
 
-        let finalImageUrl = manualForm.imagem_url || null
+        let finalTitulo = manualForm.titulo;
+        let finalConteudo = manualForm.conteudo;
+        let finalImageUrl = manualForm.imagem_url || null;
+
+        // Auto-Scraping Logic (If URL is provided but content is missing)
+        if (manualForm.url_original && (!finalTitulo || !finalConteudo)) {
+            try {
+                const { data, error } = await supabase.functions.invoke('ap-link-scraper', {
+                    body: { url: manualForm.url_original }
+                });
+                if (error) throw error;
+
+                finalTitulo = data.title || finalTitulo;
+                finalConteudo = data.content || finalConteudo;
+                finalImageUrl = data.image_url || finalImageUrl;
+            } catch (err) {
+                console.error('[AutoPublisher] Auto-Scrape error:', err);
+                alert('A IA tentou extrair os dados do link, mas falhou. Verifique se a URL é suportada ou preencha o texto manualmente.');
+                setIsSubmittingManual(false);
+                return;
+            }
+        }
+
+        if (!finalTitulo || !finalConteudo) {
+            alert('Não foi possível obter Título e Conteúdo. Preencha manualmente ou tente outro link.');
+            setIsSubmittingManual(false);
+            return;
+        }
 
         // 1. Upload File se existir
         if (selectedFile) {
@@ -233,12 +265,12 @@ export default function AutoPublisher() {
         // 2. Insert DB
         const { data, error } = await supabase.from('ap_candidate_news').insert({
             cliente_id: clienteId,
-            titulo: manualForm.titulo,
-            conteudo: manualForm.conteudo,
+            titulo: finalTitulo,
+            conteudo: finalConteudo,
             imagem_url: finalImageUrl,
             context_tag: manualForm.context_tag ? manualForm.context_tag.trim().toUpperCase() : null,
             status: 'selected', // Send directly to AI 
-            url_original: `manual_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+            url_original: manualForm.url_original ? manualForm.url_original : `manual_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
         }).select('id').single()
 
         if (error) {
@@ -481,15 +513,26 @@ export default function AutoPublisher() {
                             <button onClick={() => {
                                 setManualModalOpen(false);
                                 setSelectedFile(null);
-                                setManualForm({ titulo: '', conteudo: '', imagem_url: '', context_tag: '' });
+                                setManualForm({ titulo: '', conteudo: '', imagem_url: '', context_tag: '', url_original: '' });
                             }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--color-text-tertiary)' }}><X size={20} /></button>
                         </div>
                         <form onSubmit={submitManualNews} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                            <div style={{ paddingBottom: '16px', borderBottom: '1px solid var(--color-border)', marginBottom: '0px' }}>
+                                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--color-primary)', marginBottom: '6px' }}>🔗 LINK DA MATÉRIA (G1, UOL, ETC) - A IA LERÁ E INCLUIRÁ A FONTE</label>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <input
+                                        className="pt-input"
+                                        value={manualForm.url_original || ''}
+                                        onChange={e => setManualForm({ ...manualForm, url_original: e.target.value })}
+                                        placeholder="Cole a URL externa original aqui e deixe o resto com a IA..."
+                                        style={{ flex: 1, padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--color-primary)', outline: 'none' }}
+                                    />
+                                </div>
+                            </div>
                             <div>
-                                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>TÍTULO DA POSTAGEM</label>
+                                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>TÍTULO MANUAL DA POSTAGEM (OPCIONAL SE USAR LINK)</label>
                                 <input
                                     className="pt-input"
-                                    required
                                     value={manualForm.titulo}
                                     onChange={e => setManualForm({ ...manualForm, titulo: e.target.value })}
                                     placeholder="Ex: Prefeito anuncia nova ponte..."
@@ -497,10 +540,9 @@ export default function AutoPublisher() {
                                 />
                             </div>
                             <div>
-                                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>TEXTO BRUTO / CONTEÚDO</label>
+                                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>TEXTO BRUTO / CONTEÚDO (OPCIONAL SE USAR LINK)</label>
                                 <textarea
                                     className="pt-input"
-                                    required
                                     value={manualForm.conteudo}
                                     onChange={e => setManualForm({ ...manualForm, conteudo: e.target.value })}
                                     placeholder="Cole aqui o release ou os dados da matéria para que a Inteligência Artificial faça a formatação editorial..."
@@ -560,6 +602,14 @@ export default function AutoPublisher() {
                                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
                                             <ImageIcon size={28} color="var(--color-primary)" />
                                             <span style={{ fontSize: '13px', color: 'var(--color-text-primary)' }}>{selectedFile.name} selecionado.</span>
+                                            <span style={{ fontSize: '11px', color: 'var(--color-primary)' }}>Clique ou solte outra imagem para trocar</span>
+                                        </div>
+                                    ) : manualForm.imagem_url ? (
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                                            <div style={{ width: 80, height: 80, borderRadius: 8, overflow: 'hidden' }}>
+                                                <img src={manualForm.imagem_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Preview" />
+                                            </div>
+                                            <span style={{ fontSize: '13px', color: 'var(--color-text-primary)' }}>Imagem extraída do link!</span>
                                             <span style={{ fontSize: '11px', color: 'var(--color-primary)' }}>Clique ou solte outra imagem para trocar</span>
                                         </div>
                                     ) : (

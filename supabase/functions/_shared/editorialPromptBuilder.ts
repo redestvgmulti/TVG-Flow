@@ -9,6 +9,7 @@ export interface EditorialInput {
     titulo: string;
     conteudo: string | null;
     categoria: string | null;
+    url_original?: string | null;
     settings: any;
     promptVersion: string | null;
     humanization: any;
@@ -18,7 +19,7 @@ export interface EditorialInput {
 }
 
 export async function buildEditorialPrompt(sbAdmin: SupabaseClient, data: EditorialInput): Promise<string> {
-    const { titulo, conteudo, categoria, settings, promptVersion, humanization, rules, openaiKey } = data;
+    const { titulo, conteudo, categoria, url_original, settings, promptVersion, humanization, rules, openaiKey } = data;
 
     // SANITIZAÇÃO (P0)
     const safeTitulo = titulo.slice(0, 500);
@@ -125,10 +126,21 @@ INSTRUÇÃO DE SEGURANÇA: Utilize este contexto APENAS indiretamente para melho
     }
 
     // 5. INPUT CONTENT (Sanitized)
-    const inputSection = `\nCONTEÚDO BRUTO (FONTE RSS):\nTítulo: ${safeTitulo}\nCategoria: ${safeCategoria ?? "geral"}\nConteúdo Original:\n${safeConteudo ?? "Apenas título disponível."}\n`;
+    const inputSection = `\nCONTEÚDO BRUTO (FONTE RSS):\nTítulo: ${safeTitulo}\nCategoria: ${safeCategoria ?? "geral"}\nURL Fonte: ${url_original ?? "N/A"}\nConteúdo Original:\n${safeConteudo ?? "Apenas título disponível."}\n`;
 
     // 6. EXPECTED FORMAT (JSON Schema Instructions - Strict)
-    const formatSection = `\nINSTRUÇÕES DE OUTPUT OBRIGATÓRIAS:\nAo final, responda estritamente em um JSON válido (sem marcadores \`\`\`json) contendo os seguintes campos:
+    let sourceInstruction = "";
+    if (url_original && url_original.startsWith("http")) {
+        try {
+            const urlObj = new URL(url_original);
+            let domain = urlObj.hostname.replace('www.', '');
+            if (domain) {
+                sourceInstruction = `\n[IMPORTANTE: A matéria original veio do portal '${domain}'. Você deve OBRIGATORIAMENTE adicionar ao final do texto da 'caption' (completamente separado por quebras de linha) o crédito: "Fonte: ${domain}".]\n`;
+            }
+        } catch (e) { }
+    }
+
+    const formatSection = `\nINSTRUÇÕES DE OUTPUT OBRIGATÓRIAS:${sourceInstruction}\nAo final, responda estritamente em um JSON válido (sem marcadores \`\`\`json) contendo os seguintes campos:
 - "headline": título impactante e direto
 - "caption": legenda para a rede social adequada ao estilo configurado, emojis se combinar
 - "roteiro": array de 3 elementos string (exato: [abertura, desenvolvimento, fechamento_cta])

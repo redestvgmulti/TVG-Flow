@@ -51,7 +51,7 @@ Deno.serve(async (req: Request) => {
     const cutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     let query = supabase
         .schema("ap").from("candidate_news")
-        .select("id, cliente_id, titulo, conteudo, categoria, context_tag")
+        .select("id, cliente_id, titulo, conteudo, categoria, context_tag, url_original")
         .eq("status", "selected")
         .is("headline", null);
 
@@ -118,6 +118,7 @@ Deno.serve(async (req: Request) => {
                 titulo: item.titulo,
                 conteudo: item.conteudo,
                 categoria: item.categoria,
+                url_original: item.url_original,
                 settings: context?.settings || {},
                 promptVersion: context?.promptVersion,
                 humanization: context?.humanization,
