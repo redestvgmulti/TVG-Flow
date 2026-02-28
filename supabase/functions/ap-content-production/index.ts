@@ -146,7 +146,7 @@ Deno.serve(async (req: Request) => {
 
             const baseUrl = context?.settings?.api_base_url || "https://api.openai.com/v1";
             const temperature = editorialActive && context?.settings ? context.settings.temperature : 0.7;
-            const maxTokens = 400;
+            const maxTokens = 2500;
 
             // Tier 1: Client Key. Tier 2: Global FlowOS / TVG Key
             const hasGoodGlobalKey = Deno.env.get("ANTHROPIC_API_KEY") || Deno.env.get("OPENAI_API_KEY") || "";
