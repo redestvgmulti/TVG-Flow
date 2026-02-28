@@ -43,7 +43,7 @@ export default function AutoPublisher() {
 
     // Manual Input State
     const [isManualModalOpen, setManualModalOpen] = useState(false)
-    const [manualForm, setManualForm] = useState({ titulo: '', conteudo: '', imagem_url: '' })
+    const [manualForm, setManualForm] = useState({ titulo: '', conteudo: '', imagem_url: '', context_tag: '' })
     const [isSubmittingManual, setIsSubmittingManual] = useState(false)
     const [selectedFile, setSelectedFile] = useState(null)
     const [isDragging, setIsDragging] = useState(false)
@@ -236,6 +236,7 @@ export default function AutoPublisher() {
             titulo: manualForm.titulo,
             conteudo: manualForm.conteudo,
             imagem_url: finalImageUrl,
+            context_tag: manualForm.context_tag ? manualForm.context_tag.trim().toUpperCase() : null,
             status: 'selected', // Send directly to AI 
             url_original: `manual_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
         }).select('id').single()
@@ -269,7 +270,7 @@ export default function AutoPublisher() {
 
         setIsSubmittingManual(false)
         setManualModalOpen(false)
-        setManualForm({ titulo: '', conteudo: '', imagem_url: '' })
+        setManualForm({ titulo: '', conteudo: '', imagem_url: '', context_tag: '' })
         setSelectedFile(null)
         setTab('review')
         fetchCounts()
@@ -480,7 +481,7 @@ export default function AutoPublisher() {
                             <button onClick={() => {
                                 setManualModalOpen(false);
                                 setSelectedFile(null);
-                                setManualForm({ titulo: '', conteudo: '', imagem_url: '' });
+                                setManualForm({ titulo: '', conteudo: '', imagem_url: '', context_tag: '' });
                             }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--color-text-tertiary)' }}><X size={20} /></button>
                         </div>
                         <form onSubmit={submitManualNews} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -505,6 +506,17 @@ export default function AutoPublisher() {
                                     placeholder="Cole aqui o release ou os dados da matéria para que a Inteligência Artificial faça a formatação editorial..."
                                     rows={5}
                                     style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--color-border)', outline: 'none', resize: 'vertical' }}
+                                />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>TAG DO VÍDEO / MATÉRIA (OPCIONAL)</label>
+                                <input
+                                    className="pt-input"
+                                    value={manualForm.context_tag || ''}
+                                    onChange={e => setManualForm({ ...manualForm, context_tag: e.target.value.toUpperCase() })}
+                                    maxLength={20}
+                                    placeholder="Ex: URGENTE, POLÍCIA... Se vazio, a IA define sozinha."
+                                    style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--color-border)', outline: 'none' }}
                                 />
                             </div>
                             <div>
