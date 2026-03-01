@@ -61,13 +61,12 @@ export default function EmployeeMode({ isOpen, onClose }) {
                 // Check for duplicates first using the complete view to get more details if needed
                 const { data: existingNews, error: searchError } = await supabase
                     .from('ap_candidate_news')
-                    .select('criado_por_user_id, role_criador')
+                    .select('id')
                     .ilike('url_original', `${form.url_original}%`)
                     .limit(1);
 
                 if (!searchError && existingNews && existingNews.length > 0) {
-                    const criador = existingNews[0].criado_por_user_id ? existingNews[0].criado_por_user_id.substring(0, 8) + '...' : (existingNews[0].role_criador || 'um administrador');
-                    throw new Error(`Esta matéria já foi gerada no sistema por: ${criador}. Pautas duplicadas não são permitidas.`);
+                    throw new Error(`Esta matéria já foi gerada no sistema por outro usuário. Pautas duplicadas não são permitidas.`);
                 }
             }
 
