@@ -120,26 +120,37 @@ Deno.serve(async (req: Request) => {
             openaiKey: Deno.env.get("OPENAI_API_KEY") || ""
         });
 
-        const promptArray = [
-            { role: "system", content: "Aja como gerador de posts para redes sociais. Retorne APENAS um JSON válido. Não adicione markdown além das chaves." },
-            { role: "user", content: prompt }
-        ];
+        const promptArray = prompt;
 
         let aiResultStr = "";
         try {
-            // Buscando OpenAI Key default do tenant ou global
-            let oaiKey = Deno.env.get("OPENAI_API_KEY");
-            const { data: secrets } = await supabase.schema('vault').from('secrets').select('name, secret');
-            if (secrets) {
-                const s = secrets.find((x: any) => x.name === `OPENAI_API_KEY_${empresa_id}`);
-                if (s) oaiKey = s.secret;
+            let oaiKey = Deno.env.get("ANTHROPIC_API_KEY") || Deno.env.get("OPENAI_API_KEY") || "";
+            let baseUrl = Deno.env.get("OPENAI_BASE_URL") || "https://api.openai.com/v1";
+            let model = OPENAI_MODEL_G;
+
+            const { data: settingsData } = await supabase.schema('ap').from('editorial_settings').select('*').eq('cliente_id', empresa_id).single();
+            if (settingsData) {
+                if (settingsData.vault_secret_id) {
+                    const { data: secretData } = await supabase.rpc('get_decrypted_secret', { secret_id: settingsData.vault_secret_id });
+                    if (secretData) oaiKey = secretData;
+                }
+                baseUrl = settingsData.api_base_url || baseUrl;
+                model = settingsData.model_primary || model;
             }
 
-            const { content } = await callLLM(OPENAI_MODEL_G, promptArray, oaiKey || "");
+            const { content } = await callLLM({
+                apiKey: oaiKey || "",
+                baseUrl: baseUrl,
+                model: model,
+                prompt: "Aja como gerador de posts para redes sociais. Retorne APENAS um JSON válido. Não adicione markdown além das chaves.\n\n" + prompt,
+                temperature: 0.7,
+                maxTokens: 2000
+            });
             aiResultStr = content;
         } catch (e: any) {
             console.error("[ap-employee-generator] IA Error:", e);
-            return failProcess("Erro ao chamar IA.");
+            const errMsg = e.message || e.toString() || "Unknown error";
+            return failProcess("Erro ao chamar IA: " + errMsg);
         }
 
         // 4. Extrair JSON
