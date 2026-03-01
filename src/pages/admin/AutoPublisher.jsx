@@ -284,7 +284,7 @@ export default function AutoPublisher() {
         if (manualForm.url_original) {
             // Check for duplicates first using the complete view to get more details if needed
             const { data: existingNews, error: searchError } = await supabase
-                .from('ap_candidate_news_complete')
+                .from('ap_candidate_news')
                 .select('criado_por_user_id, role_criador')
                 .ilike('url_original', `${manualForm.url_original}%`)
                 .limit(1);
