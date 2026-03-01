@@ -121,7 +121,7 @@ export default function EmployeeMode({ isOpen, onClose }) {
                     <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex' }}><X size={24} color="#64748b" /></button>
                 </div>
 
-                <div style={{ padding: '20px', overflowY: 'auto', flex: 1, paddingBottom: '100px' }}>
+                <div style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
 
                     {errorMsg && (
                         <div style={{ background: '#fef2f2', border: '1px solid #fecaca', padding: '16px', borderRadius: '12px', marginBottom: '20px', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
@@ -255,25 +255,28 @@ export default function EmployeeMode({ isOpen, onClose }) {
                                 />
                             </div>
 
-                            {/* Sticky Bottom Bar for Action */}
-                            <div style={{ position: 'fixed', bottom: 0, left: 0, width: '100%', background: '#ffffff', borderTop: '1px solid #e2e8f0', padding: '16px 20px', boxShadow: '0 -4px 6px -1px rgba(0,0,0,0.05)', zIndex: 20 }}>
-                                <div style={{ maxWidth: '600px', margin: '0 auto' }}>
-                                    <button type="submit" disabled={isSubmitting} style={{ width: '100%', background: isSubmitting ? '#475569' : '#0f172a', color: '#fff', border: 'none', padding: '18px', borderRadius: '12px', fontSize: '17px', fontWeight: 700, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', cursor: isSubmitting ? 'not-allowed' : 'pointer' }}>
-                                        {isSubmitting ? (
-                                            <>
-                                                <div style={{ width: '20px', height: '20px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
-                                                Gerando (Pode levar 10s)...
-                                            </>
-                                        ) : (
-                                            <><Brain size={22} /> Gerar Matéria</>
-                                        )}
-                                    </button>
-                                </div>
-                            </div>
-
                         </form>
                     )}
                 </div>
+
+                {/* Sticky Bottom Bar for Action */}
+                {!successData && (
+                    <div style={{ background: '#ffffff', borderTop: '1px solid #e2e8f0', padding: '16px 20px', zIndex: 20, flexShrink: 0 }}>
+                        <div style={{ maxWidth: '600px', margin: '0 auto' }}>
+                            <button type="submit" onClick={handleGenerate} disabled={isSubmitting} style={{ width: '100%', background: isSubmitting ? '#475569' : '#0f172a', color: '#fff', border: 'none', padding: '18px', borderRadius: '12px', fontSize: '17px', fontWeight: 700, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', cursor: isSubmitting ? 'not-allowed' : 'pointer' }}>
+                                {isSubmitting ? (
+                                    <>
+                                        <div style={{ width: '20px', height: '20px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                                        Gerando (Pode levar 10s)...
+                                    </>
+                                ) : (
+                                    <><Brain size={22} /> Gerar Matéria</>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 <style>{`
                 @keyframes spin {
                     to { transform: rotate(360deg); }
