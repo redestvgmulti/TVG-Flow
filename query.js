@@ -1,12 +1,14 @@
-require('dotenv').config({ path: '.env' });
+require('dotenv').config({ path: '.env.local' });
 const { createClient } = require('@supabase/supabase-js');
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const db = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_SERVICE_ROLE_KEY);
+(async () => {
+  const { data: news } = await db.from('ap.candidate_news')
+    .select('id, titulo, criado_por_user_id')
+    .eq('role_criador', 'employee')
+    .order('gerado_em', { ascending: false })
+    .limit(5);
+  console.log("Recent News:", JSON.stringify(news, null, 2));
 
-async function main() {
-    const { data: item, error } = await supabase.from('ap_candidate_news').select('*').order('created_at', { ascending: false }).limit(2);
-    console.log("LAST ITEMS:", JSON.stringify(item, null, 2));
-
-    const { data: logs } = await supabase.from('ap_editorial_logs').select('*').order('created_at', { ascending: false }).limit(1);
-    console.log("LAST LOG:", JSON.stringify(logs, null, 2));
-}
-main();
+  const { data: users } = await db.rpc('get_user_emails_for_ap');
+  console.log("Users Map:", JSON.stringify(users, null, 2));
+})();

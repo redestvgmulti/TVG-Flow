@@ -2,11 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../../services/supabase';
 import { CheckCircle2, Copy, Download, X, AlertCircle, RefreshCcw, ImageIcon, Brain, Search, SearchCode } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 
 // Cliente Fixo por ora
 const FIXED_CLIENT_ID = 'cd287e6e-f273-4d0f-a72d-2a8c391e40e9';
 
-export default function EmployeeMode({ isOpen, onClose, user, empresaId }) {
+export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaId }) {
+    const { user: ctxUser } = useAuth();
+    const user = propUser || ctxUser;
+
     const [form, setForm] = useState({
         titulo: '',
         conteudo: '',
