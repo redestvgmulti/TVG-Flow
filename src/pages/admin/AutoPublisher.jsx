@@ -281,6 +281,22 @@ export default function AutoPublisher() {
 
         setIsSubmittingManual(true)
 
+        if (manualForm.url_original) {
+            // Check for duplicates first using the complete view to get more details if needed
+            const { data: existingNews, error: searchError } = await supabase
+                .from('ap_candidate_news_complete')
+                .select('criado_por_user_id, role_criador')
+                .ilike('url_original', `${manualForm.url_original}%`)
+                .limit(1);
+
+            if (!searchError && existingNews && existingNews.length > 0) {
+                const criador = existingNews[0].criado_por_user_id ? existingNews[0].criado_por_user_id.substring(0, 8) + '...' : (existingNews[0].role_criador || 'um usuário');
+                alert(`Esta matéria já foi enviada ao sistema por: ${criador}. Pautas duplicadas não são permitidas.`);
+                setIsSubmittingManual(false);
+                return;
+            }
+        }
+
         let finalTitulo = manualForm.titulo;
         let finalConteudo = manualForm.conteudo;
         let finalImageUrl = manualForm.imagem_url || null;
@@ -336,7 +352,7 @@ export default function AutoPublisher() {
             imagem_url: finalImageUrl,
             context_tag: manualForm.context_tag ? manualForm.context_tag.trim().toUpperCase() : null,
             status: 'selected', // Send directly to AI 
-            url_original: manualForm.url_original ? `${manualForm.url_original}#manual_${Date.now()}` : `manual_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+            url_original: manualForm.url_original || null
         }).select('id').single()
 
         if (error) {

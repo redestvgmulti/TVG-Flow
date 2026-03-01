@@ -57,6 +57,20 @@ export default function EmployeeMode({ isOpen, onClose }) {
             let finalConteudo = form.conteudo;
             let finalImageUrl = form.imagem_url;
 
+            if (form.url_original) {
+                // Check for duplicates first using the complete view to get more details if needed
+                const { data: existingNews, error: searchError } = await supabase
+                    .from('ap_candidate_news_complete')
+                    .select('criado_por_user_id, role_criador')
+                    .ilike('url_original', `${form.url_original}%`)
+                    .limit(1);
+
+                if (!searchError && existingNews && existingNews.length > 0) {
+                    const criador = existingNews[0].criado_por_user_id ? existingNews[0].criado_por_user_id.substring(0, 8) + '...' : (existingNews[0].role_criador || 'um administrador');
+                    throw new Error(`Esta matéria já foi gerada no sistema por: ${criador}. Pautas duplicadas não são permitidas.`);
+                }
+            }
+
             // Auto-Scraping Logic (If URL is provided but content is missing)
             if (form.url_original && (!finalTitulo || !finalConteudo)) {
                 const { data, error } = await supabase.functions.invoke('ap-link-scraper', {
@@ -134,17 +148,21 @@ export default function EmployeeMode({ isOpen, onClose }) {
 
     return createPortal(
         <div className="modal-backdrop" onClick={onClose} style={{ zIndex: 9999 }}>
-            <div className="modal-container" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px', width: '95%', maxHeight: '90vh', background: '#f8fafc', overflow: 'hidden', display: 'flex', flexDirection: 'column', borderRadius: '16px' }}>
-                {/* Cabecalho Mobile Simple */}
-                <div style={{ background: '#ffffff', padding: '20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 10 }}>
-                    <h1 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <Brain size={20} color="#3b82f6" />
+            <div className="ap-modal-content" onClick={e => e.stopPropagation()} style={{ background: '#ffffff', padding: '0', borderRadius: '20px', width: '560px', maxWidth: '100%', boxShadow: '0 24px 48px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+
+                {/* Header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '24px', borderBottom: '1px solid #f0f0f0', background: '#fafafa' }}>
+                    <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#111827', margin: 0, display: 'flex', alignItems: 'center', gap: '10px', letterSpacing: '-0.02em' }}>
+                        <div style={{ background: '#eff6ff', color: '#3b82f6', padding: '8px', borderRadius: '10px', display: 'flex' }}><Brain size={18} /></div>
                         Gerador de Pautas
-                    </h1>
-                    <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex' }}><X size={24} color="#64748b" /></button>
+                    </h2>
+                    <button onClick={onClose} style={{ background: '#f3f4f6', border: 'none', cursor: 'pointer', color: '#6b7280', width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}>
+                        <X size={18} />
+                    </button>
                 </div>
 
-                <div style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
+                {/* Scrollable Content */}
+                <div style={{ display: 'flex', flexDirection: 'column', padding: '24px', gap: '20px', maxHeight: '75vh', overflowY: 'auto' }}>
 
                     {errorMsg && (
                         <div style={{ background: '#fef2f2', border: '1px solid #fecaca', padding: '16px', borderRadius: '12px', marginBottom: '20px', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
@@ -179,13 +197,13 @@ export default function EmployeeMode({ isOpen, onClose }) {
 
                             {/* Action Buttons */}
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '10px' }}>
-                                <button onClick={handleDownload} style={{ background: '#0f172a', color: '#fff', border: 'none', padding: '16px', borderRadius: '12px', fontSize: '16px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
-                                    <Download size={20} /> Baixar Arte
+                                <button onClick={handleDownload} style={{ width: '100%', background: '#111827', color: '#fff', border: 'none', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', boxShadow: '0 4px 6px -1px rgba(17, 24, 39, 0.1)', cursor: 'pointer', transition: 'all 0.2s' }}>
+                                    <Download size={18} /> Baixar Arte
                                 </button>
-                                <button onClick={handleCopy} style={{ background: '#fff', color: '#0f172a', border: '1px solid #cbd5e1', padding: '16px', borderRadius: '12px', fontSize: '16px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}>
-                                    {copied ? <><CheckCircle2 size={20} color="#16a34a" /> Copiado!</> : <><Copy size={20} /> Copiar Legenda</>}
+                                <button onClick={handleCopy} style={{ width: '100%', background: '#fff', color: '#111827', border: '1px solid #e2e8f0', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: 'pointer', transition: 'all 0.2s' }}>
+                                    {copied ? <><CheckCircle2 size={18} color="#10b981" /> Copiado!</> : <><Copy size={18} /> Copiar Legenda</>}
                                 </button>
-                                <button onClick={() => { setSuccessData(null); setForm({ titulo: '', conteudo: '', imagem_url: '', url_original: '' }); setSelectedFile(null); }} style={{ background: 'transparent', color: '#64748b', border: 'none', padding: '16px', fontSize: '15px', fontWeight: 500, marginTop: '10px' }}>
+                                <button onClick={() => { setSuccessData(null); setForm({ titulo: '', conteudo: '', imagem_url: '', url_original: '' }); setSelectedFile(null); }} style={{ background: 'transparent', color: '#64748b', border: 'none', padding: '16px', fontSize: '14px', fontWeight: 600, marginTop: '4px', cursor: 'pointer' }}>
                                     Criar Nova Matéria
                                 </button>
                             </div>
@@ -291,19 +309,17 @@ export default function EmployeeMode({ isOpen, onClose }) {
 
                 {/* Sticky Bottom Bar for Action */}
                 {!successData && (
-                    <div style={{ background: '#ffffff', borderTop: '1px solid #e2e8f0', padding: '16px 20px', zIndex: 20, flexShrink: 0 }}>
-                        <div style={{ maxWidth: '600px', margin: '0 auto' }}>
-                            <button type="submit" onClick={handleGenerate} disabled={isSubmitting} style={{ width: '100%', background: isSubmitting ? '#475569' : '#0f172a', color: '#fff', border: 'none', padding: '18px', borderRadius: '12px', fontSize: '17px', fontWeight: 700, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', cursor: isSubmitting ? 'not-allowed' : 'pointer' }}>
-                                {isSubmitting ? (
-                                    <>
-                                        <div style={{ width: '20px', height: '20px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
-                                        Gerando (Pode levar 10s)...
-                                    </>
-                                ) : (
-                                    <><Brain size={22} /> Gerar Matéria</>
-                                )}
-                            </button>
-                        </div>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', padding: '20px 24px', borderTop: '1px solid #f0f0f0', background: '#ffffff' }}>
+                        <button type="submit" onClick={handleGenerate} disabled={isSubmitting} style={{ width: '100%', background: isSubmitting ? '#475569' : '#111827', color: '#fff', border: 'none', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', boxShadow: '0 4px 6px -1px rgba(17, 24, 39, 0.1)', cursor: isSubmitting ? 'not-allowed' : 'pointer', transition: 'all 0.2s' }}>
+                            {isSubmitting ? (
+                                <>
+                                    <div style={{ width: '18px', height: '18px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                                    Extraindo e Gerando IA...
+                                </>
+                            ) : (
+                                <><Brain size={18} /> Gerar Matéria</>
+                            )}
+                        </button>
                     </div>
                 )}
 
