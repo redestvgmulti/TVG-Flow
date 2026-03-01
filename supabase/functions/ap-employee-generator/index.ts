@@ -57,7 +57,7 @@ Deno.serve(async (req: Request) => {
         }
 
         // 1. Chamar RPC para obter o template da Fila Global (Transacional)
-        const { data: templateData, error: rpcError } = await supabase.schema("ap").rpc("get_and_advance_template", {
+        const { data: templateData, error: rpcError } = await supabase.rpc("get_and_advance_template", {
             p_empresa_id: empresa_id
         });
 
