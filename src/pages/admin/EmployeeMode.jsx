@@ -107,7 +107,18 @@ export default function EmployeeMode({ isOpen, onClose }) {
                 body: payload
             });
 
-            if (error) throw new Error(error.message || 'Erro de rede na Edge Function');
+            if (error) {
+                let realErrorMsg = error.message;
+                if (error.context) {
+                    try {
+                        const errBody = await error.context.json();
+                        if (errBody && errBody.error) realErrorMsg = errBody.error;
+                    } catch (e) {
+                        console.error('Failed to parse edge function error:', e);
+                    }
+                }
+                throw new Error(realErrorMsg || 'Erro de rede na Edge Function');
+            }
             if (data?.error) throw new Error(data.error);
 
             setSuccessData(data);
