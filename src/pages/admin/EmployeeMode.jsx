@@ -194,7 +194,6 @@ export default function EmployeeMode({ isOpen, onClose, user, empresaId }) {
                 .from('ap_candidate_news_complete')
                 .select('id, titulo, headline, caption, render_url, gerado_em, status, template_nome_snapshot, context_tag')
                 .eq('criado_por_user_id', user?.id)
-                .eq('role_criador', 'employee')
                 .order('gerado_em', { ascending: false })
                 .range(page * ITEMS_PER_PAGE, (page + 1) * ITEMS_PER_PAGE - 1);
 
