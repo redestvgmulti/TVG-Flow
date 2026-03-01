@@ -62,7 +62,7 @@ export default function EmployeeMode({ isOpen, onClose }) {
                 const { data: existingNews, error: searchError } = await supabase
                     .from('ap_candidate_news')
                     .select('id')
-                    .ilike('url_original', `${form.url_original}%`)
+                    .eq('url_original', form.url_original)
                     .limit(1);
 
                 if (!searchError && existingNews && existingNews.length > 0) {

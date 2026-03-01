@@ -53,17 +53,17 @@ Deno.serve(async (req: Request) => {
 
         const renderApiKey = Deno.env.get("RENDER_API_KEY");
         if (!renderApiKey) {
-            return new Response(JSON.stringify({ error: "RENDER_API_KEY ausente" }), { status: 500, headers: corsHeaders });
+            return new Response(JSON.stringify({ error: "RENDER_API_KEY ausente" }), { status: 400, headers: corsHeaders });
         }
 
         // 1. Chamar RPC para obter o template da Fila Global (Transacional)
-        const { data: templateData, error: rpcError } = await supabase.rpc("get_and_advance_template", {
+        const { data: templateData, error: rpcError } = await supabase.schema("ap").rpc("get_and_advance_template", {
             p_empresa_id: empresa_id
         });
 
         if (rpcError || !templateData) {
             console.error("[ap-employee-generator] Falha ao recuperar/avançar template:", rpcError);
-            return new Response(JSON.stringify({ error: "Falha na Fila de Templates: " + (rpcError?.message || 'vazio') }), { status: 500, headers: corsHeaders });
+            return new Response(JSON.stringify({ error: "Fila de Templates vazia ou erro: " + (rpcError?.message || 'Nenhum template ativo') }), { status: 400, headers: corsHeaders });
         }
 
         // templateData retornado via JSONB: { id, placid_template_uuid, ordem, nome }
@@ -93,17 +93,16 @@ Deno.serve(async (req: Request) => {
 
         if (insertError || !newsItem) {
             console.error("[ap-employee-generator] Falha ao criar registro news:", insertError);
-            return new Response(JSON.stringify({ error: "Database Insert Error" }), { status: 500, headers: corsHeaders });
+            return new Response(JSON.stringify({ error: "Erro de Unicidade/Banco de Dados: " + insertError?.message }), { status: 400, headers: corsHeaders });
         }
 
         const newsId = newsItem.id;
 
-        // Função local p/ falha
         const failProcess = async (msg: string) => {
             await supabase.schema("ap").from("candidate_news")
                 .update({ status: "failed", caption: msg })
                 .eq("id", newsId);
-            return new Response(JSON.stringify({ error: msg }), { status: 500, headers: corsHeaders });
+            return new Response(JSON.stringify({ error: msg }), { status: 400, headers: corsHeaders });
         };
 
         // 3. Processar Texto via IA
@@ -223,6 +222,6 @@ Deno.serve(async (req: Request) => {
 
     } catch (error) {
         console.error("[ap-employee-generator] Global Error:", error);
-        return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: corsHeaders });
+        return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: corsHeaders });
     }
 });

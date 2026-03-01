@@ -286,7 +286,7 @@ export default function AutoPublisher() {
             const { data: existingNews, error: searchError } = await supabase
                 .from('ap_candidate_news')
                 .select('id')
-                .ilike('url_original', `${manualForm.url_original}%`)
+                .eq('url_original', manualForm.url_original)
                 .limit(1);
 
             if (!searchError && existingNews && existingNews.length > 0) {
