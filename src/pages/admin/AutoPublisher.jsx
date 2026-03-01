@@ -124,15 +124,46 @@ export default function AutoPublisher() {
     const fetchEmployeeItems = useCallback(async () => {
         if (!clienteId) return
         setLoading(true)
-        const { data } = await supabase
-            .from('ap_candidate_news_complete')
-            .select(`id, titulo, headline, caption, render_url, imagem_url, status, gerado_em, template_nome_snapshot, template_ordem, criado_por_user_id, context_tag`)
-            .eq('cliente_id', clienteId)
-            .eq('role_criador', 'employee')
-            .order('gerado_em', { ascending: false })
-            .limit(50)
-        setEmployeeItems(data ?? [])
-        setLoading(false)
+
+        try {
+            // 1. Fetch news items
+            const { data: newsData, error: newsError } = await supabase
+                .from('ap_candidate_news_complete')
+                .select(`id, titulo, headline, caption, render_url, imagem_url, status, gerado_em, template_nome_snapshot, template_ordem, criado_por_user_id, context_tag`)
+                .eq('cliente_id', clienteId)
+                .eq('role_criador', 'employee')
+                .order('gerado_em', { ascending: false })
+                .limit(50)
+
+            if (newsError) throw newsError;
+
+            // 2. Fetch user emails mapping
+            const { data: usersData, error: usersError } = await supabase.rpc('get_user_emails_for_ap');
+
+            if (usersError) {
+                console.warn("Could not fetch user emails", usersError);
+                setEmployeeItems(newsData || []);
+            } else {
+                // Create a map of id -> email
+                const emailMap = {};
+                if (usersData) {
+                    usersData.forEach(u => emailMap[u.id] = u.email);
+                }
+
+                // Map the emails back to the news items
+                const mappedData = (newsData || []).map(item => ({
+                    ...item,
+                    criado_por_email: emailMap[item.criado_por_user_id] || item.criado_por_user_id?.substring(0, 8) + '...' || 'Anônimo'
+                }));
+
+                setEmployeeItems(mappedData);
+            }
+        } catch (err) {
+            console.error('[AutoPublisher] fetchEmployeeItems error:', err);
+            setEmployeeItems([]);
+        } finally {
+            setLoading(false);
+        }
     }, [clienteId])
 
     async function handleForceProcess() {
@@ -562,7 +593,7 @@ export default function AutoPublisher() {
                                         {employeeItems.map(item => (
                                             <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                                                 <td style={{ padding: '12px', fontSize: '14px', color: '#334155', verticalAlign: 'top' }}>
-                                                    {item.gerado_em ? new Date(item.gerado_em).toLocaleString() : 'N/A'}
+                                                    {item.gerado_em ? new Date(item.gerado_em).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'N/A'}
                                                     <div style={{ marginTop: '4px' }}>
                                                         <span style={{ padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600, background: item.status === 'ready_to_publish' ? '#dcfce7' : '#f1f5f9', color: item.status === 'ready_to_publish' ? '#166534' : '#475569' }}>
                                                             {item.status.toUpperCase()}
@@ -570,7 +601,8 @@ export default function AutoPublisher() {
                                                     </div>
                                                 </td>
                                                 <td style={{ padding: '12px', fontSize: '14px', color: '#334155', verticalAlign: 'top' }}>
-                                                    {item.criado_por_user_id ? item.criado_por_user_id.substring(0, 8) + '...' : 'Anônimo'}
+                                                    <div style={{ fontWeight: 600, color: '#0f172a' }}>{item.criado_por_email || 'Anônimo'}</div>
+                                                    <div style={{ fontSize: '11px', color: '#64748b' }}>User ID: {item.criado_por_user_id ? item.criado_por_user_id.substring(0, 8) + '...' : 'N/A'}</div>
                                                 </td>
                                                 <td style={{ padding: '12px', fontSize: '14px', color: '#334155', verticalAlign: 'top' }}>
                                                     <strong style={{ color: '#0f172a' }}>#{item.template_ordem}</strong><br />
@@ -589,8 +621,18 @@ export default function AutoPublisher() {
                                                         )}
                                                         <div style={{ flex: 1 }}>
                                                             <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', marginBottom: '4px' }}>{item.headline || item.titulo}</div>
-                                                            <div style={{ display: 'flex', gap: '6px' }}>
+                                                            <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
                                                                 {item.context_tag && <span style={{ fontSize: '11px', background: '#e0e7ff', color: '#3730a3', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>{item.context_tag}</span>}
+                                                            </div>
+                                                            <div style={{ display: 'flex', gap: '8px' }}>
+                                                                <button onClick={() => { navigator.clipboard.writeText(item.caption || ''); alert("Legenda copiada!") }} style={{ fontSize: '12px', padding: '4px 8px', borderRadius: '4px', border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                    <Copy size={12} /> Copiar Legenda
+                                                                </button>
+                                                                {item.render_url && (
+                                                                    <button onClick={() => window.open(item.render_url, '_blank')} style={{ fontSize: '12px', padding: '4px 8px', borderRadius: '4px', border: 'none', background: '#e2e8f0', color: '#0f172a', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                        <Download size={12} /> Baixar Arte
+                                                                    </button>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     </div>

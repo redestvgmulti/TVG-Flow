@@ -120,53 +120,93 @@ Deno.serve(async (req: Request) => {
             openaiKey: Deno.env.get("OPENAI_API_KEY") || ""
         });
 
-        const promptArray = prompt;
+        // Ensure strict JSON return regardless of prompt overrides
+        const strictJsonInstructions = "\n\nCRÍTICO E OBRIGATÓRIO: Você deve e apenas deve retornar um objeto JSON estritamente válido. O JSON tem que conter obrigatoriamente três (3) chaves escritas em letras minúsculas: 'headline' (string, mínimo de 10 caracteres, máx 30), 'caption' (string, texto para post de instagram com várias linhas, emojis e a fonte, mínimo de 20 caracteres) e 'tag' (string, max 15 caracteres). NÃO COLOQUE bloco markdown, NÃO COLOQUE crases antes do JSON. A primeira resposta deve ser '{' e a última '}'.";
 
+        const promptArray = prompt + strictJsonInstructions;
+
+        let parsedData: any = null;
         let aiResultStr = "";
-        try {
-            let oaiKey = Deno.env.get("ANTHROPIC_API_KEY") || Deno.env.get("OPENAI_API_KEY") || "";
-            let baseUrl = Deno.env.get("OPENAI_BASE_URL") || "https://api.openai.com/v1";
-            let model = OPENAI_MODEL_G;
+        let attempt = 0;
+        const maxAttempts = 2; // Try once, and retry once if failure
+        let finalErrorMsg = "";
 
-            const { data: settingsData } = await supabase.schema('ap').from('editorial_settings').select('*').eq('cliente_id', empresa_id).single();
-            if (settingsData) {
-                if (settingsData.vault_secret_id) {
-                    const { data: secretData } = await supabase.rpc('get_decrypted_secret', { secret_id: settingsData.vault_secret_id });
-                    if (secretData) oaiKey = secretData;
+        while (attempt < maxAttempts) {
+            try {
+                let oaiKey = Deno.env.get("ANTHROPIC_API_KEY") || Deno.env.get("OPENAI_API_KEY") || "";
+                let baseUrl = Deno.env.get("OPENAI_BASE_URL") || "https://api.openai.com/v1";
+                let model = OPENAI_MODEL_G;
+
+                const { data: settingsData } = await supabase.schema('ap').from('editorial_settings').select('*').eq('cliente_id', empresa_id).single();
+                if (settingsData) {
+                    if (settingsData.vault_secret_id) {
+                        const { data: secretData } = await supabase.rpc('get_decrypted_secret', { secret_id: settingsData.vault_secret_id });
+                        if (secretData) oaiKey = secretData;
+                    }
+                    baseUrl = settingsData.api_base_url || baseUrl;
+                    model = settingsData.model_primary || model;
                 }
-                baseUrl = settingsData.api_base_url || baseUrl;
-                model = settingsData.model_primary || model;
-            }
 
-            const { content } = await callLLM({
-                apiKey: oaiKey || "",
-                baseUrl: baseUrl,
-                model: model,
-                prompt: "Aja como gerador de posts para redes sociais. Retorne APENAS um JSON válido. Não adicione markdown além das chaves.\n\n" + prompt,
-                temperature: 0.7,
-                maxTokens: 2000
-            });
-            aiResultStr = content;
-        } catch (e: any) {
-            console.error("[ap-employee-generator] IA Error:", e);
-            const errMsg = e.message || e.toString() || "Unknown error";
-            return failProcess("Erro ao chamar IA: " + errMsg);
+                // Append retry prefix if attempt > 0
+                const finalPrompt = attempt === 0 ? promptArray : promptArray + "\n\nO RETORNO ANTERIOR FOI INVÁLIDO. Você deve retornar ÚNICA e EXCLUSIVAMENTE um objeto JSON válido, começando explicitamente por '{' e terminando por '}'. Sem texto em volta.";
+
+                const { content } = await callLLM({
+                    apiKey: oaiKey,
+                    baseUrl: baseUrl,
+                    model: model,
+                    prompt: finalPrompt,
+                    temperature: 0.7,
+                    maxTokens: 1100
+                });
+                aiResultStr = content;
+
+                // Strip potential markdown wrappers just in case
+                const m = aiResultStr.match(/<json>([\s\S]*?)<\/json>/);
+                let jsonContent = m ? m[1] : aiResultStr;
+
+                // Also strip markdown json ticks if they exist
+                jsonContent = jsonContent.replace(/^```json\s*/, '').replace(/```\s*$/, '').trim();
+
+                parsedData = JSON.parse(jsonContent);
+
+                // Validation rules
+                if (!parsedData.headline || typeof parsedData.headline !== 'string' || parsedData.headline.length < 10) {
+                    throw new Error("Invalid 'headline'. Must be a string of at least 10 chars.");
+                }
+                if (!parsedData.caption || typeof parsedData.caption !== 'string' || parsedData.caption.length < 20) {
+                    throw new Error("Invalid 'caption'. Must be a string of at least 20 chars.");
+                }
+                if (!parsedData.tag || typeof parsedData.tag !== 'string') {
+                    throw new Error("Invalid 'tag'.");
+                }
+
+                // If we got here, JSON is valid and required fields are present
+                break;
+            } catch (e: any) {
+                console.error(`[ap-employee-generator] Attempt ${attempt + 1} failed:`, e);
+                finalErrorMsg = e.message || "Parse/Validation Error";
+                parsedData = null; // reset
+            }
+            attempt++;
         }
 
-        // 4. Extrair JSON
-        let parsedData = null;
-        try {
-            const m = aiResultStr.match(/<json>([\s\S]*?)<\/json>/);
-            const content = m ? m[1] : aiResultStr;
-            parsedData = JSON.parse(content);
-        } catch (e) {
-            console.error("[ap-employee-generator] Parse JSON erro:", aiResultStr);
-            return failProcess("Falha na interpretação da resposta IA.");
+        if (!parsedData) {
+            await supabase.schema("ap").from("candidate_news").update({ status: "failed_generation", caption: "Erro Crítico: " + finalErrorMsg }).eq("id", newsId);
+            return failProcess(`Falha extrema após ${maxAttempts} tentativas de geração de IA (Formato Inválido). Detalhe: ${finalErrorMsg}`);
         }
 
         const resolvedTag = parsedData.tag || context_tag || "DESTAQUE";
         const headline = parsedData.headline || titulo || "Destaque OMNI";
         const caption = parsedData.caption || titulo || "";
+
+        // 4.1. Prevent Broken Render Validation
+        if (!headline || headline.trim().length === 0 || !caption || caption.trim().length === 0) {
+            console.error("[ap-employee-generator] Empty headline/caption validation failed. Bailing Placid.");
+            await supabase.schema("ap").from("candidate_news")
+                .update({ status: "failed_generation", headline, caption, categoria: resolvedTag, context_tag: resolvedTag })
+                .eq("id", newsId);
+            return failProcess("Validação de conteúdo vazio. Abortando renderização.");
+        }
 
         // Fallback de Imagem
         const bgImage = imagem_url || "https://images.unsplash.com/photo-1504711434969-e33886168f5c?q=80&w=1000&auto=format&fit=crop";

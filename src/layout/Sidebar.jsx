@@ -197,7 +197,7 @@ function Sidebar({ mobileMenuOpen, onClose }) {
                         <div className="nav-section">
                             <p className="nav-label">MEU ESPAÇO</p>
 
-                            {NAV_ITEMS.filter(item => (item.roles.includes('staff') || item.roles.includes('profissional')) && item.key !== 'profile').map(item => (
+                            {NAV_ITEMS.filter(item => (item.roles.includes('staff') || item.roles.includes('profissional')) && item.key !== 'profile' && item.key !== 'staff-autopublisher').map(item => (
                                 <NavLink
                                     key={item.key}
                                     to={item.path}
@@ -217,6 +217,24 @@ function Sidebar({ mobileMenuOpen, onClose }) {
                                             {upcomingMeetingsCount}
                                         </span>
                                     )}
+                                </NavLink>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* FERRMENTAS (Disponível para todos exceto admin) */}
+                    {!canSeeAdminMenu && (
+                        <div className="nav-section">
+                            <p className="nav-label">FERRAMENTAS</p>
+                            {NAV_ITEMS.filter(item => item.key === 'staff-autopublisher').map(item => (
+                                <NavLink
+                                    key={item.key}
+                                    to={item.path}
+                                    className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+                                    onClick={handleNavClick}
+                                >
+                                    <item.icon size={20} className="nav-icon" />
+                                    <span className="nav-text">{item.label}</span>
                                 </NavLink>
                             ))}
                         </div>

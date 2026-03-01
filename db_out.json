@@ -1,0 +1,35 @@
+{
+  "error": null,
+  "data": [
+    {
+      "id": "db230821-d5eb-4738-a3fe-6ff76d5bb212",
+      "titulo": "Ana Paula Renault diz que sister quer 'queimar' Breno e pondera: 'Imagina do que é capaz' | Gshow",
+      "status": "processing",
+      "render_url": null,
+      "caption": null,
+      "role_criador": "employee",
+      "url_original": "https://gshow.globo.com/realities/bbb/bbb-26/dentro-da-casa/noticia/ana-paula-renault-critica-samira-diz-que-a-sister-quer-queimar-breno-e-ainda-pondera-imagina-do-que-e-capaz.ghtml",
+      "imagem_url": "https://s2-gshow.glbimg.com/8brj-zdScF9AEBoMCCANxn31Xv8=/1280x0/filters:format(jpeg)/https://thumbor.globoi.com/unsafe/fit-in/1280x720/s04.video.glbimg.com/deo/vi/39/03/14390339"
+    },
+    {
+      "id": "3daf03ae-b813-4ba5-87f9-ebf7f91e008a",
+      "titulo": "Pauta OMNI",
+      "status": "processing",
+      "render_url": null,
+      "caption": null,
+      "role_criador": "employee",
+      "url_original": "https://g1.globo.com/mundo/noticia/2026/02/28/ira-anuncia-lider-test-1772380125956.ghtml",
+      "imagem_url": null
+    },
+    {
+      "id": "bd053c29-147d-44b5-9fd9-576124014181",
+      "titulo": "Samira chora durante atrito com Ana Paula Renault sobre Cowboy: 'Ele não comeu meu cérebro' | Gshow",
+      "status": "processing",
+      "render_url": null,
+      "caption": null,
+      "role_criador": "employee",
+      "url_original": "https://gshow.globo.com/realities/bbb/bbb-26/dentro-da-casa/noticia/samira-chora-durante-discussao-com-ana-paula-renault-sobre-brother-no-bbb-26-ele-nao-comeu-meu-cerebro.ghtml",
+      "imagem_url": "https://s2-gshow.glbimg.com/DGHv35j6qxKHZrjHJf0_b1z0QUo=/1280x0/filters:format(jpeg)/https://thumbor.globoi.com/unsafe/fit-in/1280x720/s01.video.glbimg.com/deo/vi/28/02/14390228"
+    }
+  ]
+}

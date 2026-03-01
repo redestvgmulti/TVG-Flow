@@ -30,18 +30,10 @@ function BottomNav() {
             {/* STAFF NAV */}
             {(role === 'staff' || role === 'profissional') && (
                 <>
-                    {/* 
-                      Order Requirement: Tasks, Agenda, Request (CTA), Content, Profile.
-                      We filter items that have showOnMobileBottom=true. 
-                      Note: Profile is NOT in NAV_ITEMS by default above for 'staff' in the config I wrote? 
-                      Wait, I added 'key: profile' to NAV_ITEMS in the previous step.
-                      So we can just map.
-                    */}
-                    {NAV_ITEMS.filter(item => (item.roles.includes('staff') || item.roles.includes('profissional')) && item.showOnMobileBottom).map(item => (
+                    {NAV_ITEMS.filter(item => (item.roles.includes('staff') || item.roles.includes('profissional')) && item.key !== 'profile' && item.key !== 'staff-autopublisher' && item.showOnMobileBottom).map(item => (
                         <NavLink
                             key={item.key}
                             to={item.path}
-                            // Request is special: CTA
                             className={({ isActive }) =>
                                 item.isCTA
                                     ? `bottom-nav-link cta-button ${isActive ? 'active' : ''}`
@@ -49,6 +41,22 @@ function BottomNav() {
                             }
                         >
                             <item.icon size={item.isCTA ? 24 : 20} />
+                            <span>{item.label}</span>
+                        </NavLink>
+                    ))}
+                </>
+            )}
+
+            {/* UNIVERSAL NON-ADMIN FAB OR NAV */}
+            {role !== 'admin' && role !== 'super_admin' && (
+                <>
+                    {NAV_ITEMS.filter(item => item.key === 'staff-autopublisher').map(item => (
+                        <NavLink
+                            key={item.key}
+                            to={item.path}
+                            className={({ isActive }) => `bottom-nav-link ${isActive ? 'active' : ''}`}
+                        >
+                            <item.icon size={20} />
                             <span>{item.label}</span>
                         </NavLink>
                     ))}
