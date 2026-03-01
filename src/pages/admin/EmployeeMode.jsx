@@ -18,6 +18,10 @@ export default function EmployeeMode({ isOpen, onClose, user, empresaId }) {
     const [successData, setSuccessData] = useState(null);
     const [errorMsg, setErrorMsg] = useState('');
     const [copied, setCopied] = useState(false);
+    // Publication tracking per generated article
+    const [actionBaixou, setActionBaixou] = useState(false);
+    const [actionCopiou, setActionCopiou] = useState(false);
+    const [isPublished, setIsPublished] = useState(false);
 
     // Tab state: 'create' | 'history'
     const [activeTab, setActiveTab] = useState('create');
@@ -152,6 +156,9 @@ export default function EmployeeMode({ isOpen, onClose, user, empresaId }) {
             if (parsedData?.error) throw new Error(parsedData.error);
 
             setSuccessData(parsedData);
+            setActionBaixou(false);
+            setActionCopiou(false);
+            setIsPublished(false);
         } catch (err) {
             setErrorMsg(err.message || 'Erro ao gerar matéria. Verifique os templates ativos.');
         } finally {
@@ -159,11 +166,33 @@ export default function EmployeeMode({ isOpen, onClose, user, empresaId }) {
         }
     };
 
-    const handleCopy = () => {
+    const markActionInDB = async (newsId, field) => {
+        if (!newsId) return;
+        // Update the action flag
+        const update = { [field]: true };
+        // Check if other flag is already set
+        const otherField = field === 'acao_baixou' ? 'acao_copiou' : 'acao_baixou';
+        const otherVal = field === 'acao_baixou' ? actionCopiou : actionBaixou;
+        // If other flag is ALREADY true, promote to published
+        if (otherVal) {
+            update.status = 'published';
+        }
+        await supabase.schema('ap').from('candidate_news')
+            .update(update)
+            .eq('id', newsId);
+    };
+
+    const handleCopy = async () => {
         if (!successData?.caption) return;
         navigator.clipboard.writeText(successData.caption);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
+        const newCopiou = true;
+        setActionCopiou(newCopiou);
+        if (successData?.news_id) {
+            await markActionInDB(successData.news_id, 'acao_copiou');
+            if (actionBaixou) setIsPublished(true);
+        }
     };
 
     const handleDownloadUrl = async (url) => {
@@ -185,7 +214,15 @@ export default function EmployeeMode({ isOpen, onClose, user, empresaId }) {
         }
     };
 
-    const handleDownload = () => handleDownloadUrl(successData?.render_url);
+    const handleDownload = async () => {
+        await handleDownloadUrl(successData?.render_url);
+        const newBaixou = true;
+        setActionBaixou(newBaixou);
+        if (successData?.news_id) {
+            await markActionInDB(successData.news_id, 'acao_baixou');
+            if (actionCopiou) setIsPublished(true);
+        }
+    };
 
     const fetchHistory = async (page = 0, append = false) => {
         setIsLoadingHistory(true);
@@ -295,13 +332,26 @@ export default function EmployeeMode({ isOpen, onClose, user, empresaId }) {
                                     </p>
                                 </div>
 
+                                {/* Action Tracking Bar */}
+                                {(actionBaixou || actionCopiou) && !isPublished && (
+                                    <div style={{ background: '#fef9c3', border: '1px solid #fde68a', borderRadius: '10px', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', color: '#92400e', fontWeight: 500 }}>
+                                        <span>Falta {actionBaixou ? '✓ Arte' : '◦ Arte'} {actionCopiou ? '✓ Legenda' : '◦ Legenda'} para publicar</span>
+                                    </div>
+                                )}
+                                {isPublished && (
+                                    <div style={{ background: '#dcfce7', border: '1px solid #86efac', borderRadius: '10px', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#166534', fontWeight: 700 }}>
+                                        <CheckCircle2 size={18} color="#16a34a" />
+                                        Publicada! Esta matéria foi movida para o painel do Admin.
+                                    </div>
+                                )}
+
                                 {/* Action Buttons */}
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '10px' }}>
-                                    <button onClick={handleDownload} style={{ width: '100%', background: '#111827', color: '#fff', border: 'none', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', boxShadow: '0 4px 6px -1px rgba(17, 24, 39, 0.1)', cursor: 'pointer', transition: 'all 0.2s' }}>
-                                        <Download size={18} /> Baixar Arte
+                                    <button onClick={handleDownload} style={{ width: '100%', background: actionBaixou ? '#16a34a' : '#111827', color: '#fff', border: 'none', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', boxShadow: '0 4px 6px -1px rgba(17, 24, 39, 0.1)', cursor: 'pointer', transition: 'all 0.2s' }}>
+                                        {actionBaixou ? <CheckCircle2 size={18} /> : <Download size={18} />} {actionBaixou ? 'Arte baixada!' : 'Baixar Arte'}
                                     </button>
-                                    <button onClick={handleCopy} style={{ width: '100%', background: '#fff', color: '#111827', border: '1px solid #e2e8f0', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: 'pointer', transition: 'all 0.2s' }}>
-                                        {copied ? <><CheckCircle2 size={18} color="#10b981" /> Copiado!</> : <><Copy size={18} /> Copiar Legenda</>}
+                                    <button onClick={handleCopy} style={{ width: '100%', background: '#fff', color: actionCopiou ? '#16a34a' : '#111827', border: actionCopiou ? '2px solid #16a34a' : '1px solid #e2e8f0', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: 'pointer', transition: 'all 0.2s' }}>
+                                        {actionCopiou ? <><CheckCircle2 size={18} color="#16a34a" /> Legenda copiada!</> : <>{copied ? <><CheckCircle2 size={18} color="#10b981" /> Copiado!</> : <><Copy size={18} /> Copiar Legenda</>}</>}
                                     </button>
                                     <button onClick={() => { setSuccessData(null); setForm({ titulo: '', conteudo: '', imagem_url: '', url_original: '' }); setSelectedFile(null); }} style={{ background: 'transparent', color: '#64748b', border: 'none', padding: '16px', fontSize: '14px', fontWeight: 600, marginTop: '4px', cursor: 'pointer' }}>
                                         Criar Nova Matéria

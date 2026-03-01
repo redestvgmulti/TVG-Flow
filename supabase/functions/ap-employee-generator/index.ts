@@ -279,11 +279,12 @@ Deno.serve(async (req: Request) => {
         // 7. Retornar payload síncrono para o cliente final
         return new Response(JSON.stringify({
             success: true,
+            news_id: newsId,
             render_url: placidImageUrl,
             caption: caption,
             headline: headline,
             template_nome: templateData.nome
-        }), { status: 200, headers: corsHeaders });
+        }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     } catch (error) {
         console.error("[ap-employee-generator] Global Error:", error);

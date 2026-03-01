@@ -145,15 +145,16 @@ export default function AutoPublisher() {
                 setEmployeeItems(newsData || []);
             } else {
                 // Create a map of id -> email
-                const emailMap = {};
+                const userMap = {};
                 if (usersData) {
-                    usersData.forEach(u => emailMap[u.id] = u.email);
+                    usersData.forEach(u => userMap[u.id] = { nome: u.nome, email: u.email });
                 }
 
-                // Map the emails back to the news items
+                // Map nome and email back to the news items
                 const mappedData = (newsData || []).map(item => ({
                     ...item,
-                    criado_por_email: emailMap[item.criado_por_user_id] || item.criado_por_user_id?.substring(0, 8) + '...' || 'Anônimo'
+                    criado_por_nome: userMap[item.criado_por_user_id]?.nome || null,
+                    criado_por_email: userMap[item.criado_por_user_id]?.email || null
                 }));
 
                 setEmployeeItems(mappedData);
@@ -546,7 +547,7 @@ export default function AutoPublisher() {
                             ['review', 'Fila de Revisão'],
                             ['published', 'Publicados'],
                             ['editorial', 'Motor Editorial'],
-                            ['employee', 'Auditoria (Funcionários)'],
+                            ['employee', 'Auditoria'],
                             ['settings', 'Configurações']
                         ].map(([key, label]) => (
                             <button key={key} className={`ap-tab${tab === key ? ' active' : ''}`} onClick={() => setTab(key)}>
@@ -577,81 +578,103 @@ export default function AutoPublisher() {
                         {loading ? (
                             <SkeletonTable />
                         ) : employeeItems.length === 0 ? (
-                            <div style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>Nenhuma matéria gerada por funcionários ainda.</div>
+                            <div style={{ padding: '60px', textAlign: 'center', color: '#94a3b8' }}>
+                                <ImageIcon size={40} style={{ marginBottom: '12px', opacity: 0.4 }} />
+                                <p style={{ margin: 0, fontWeight: 500 }}>Nenhuma matéria gerada por funcionários ainda.</p>
+                            </div>
                         ) : (
-                            <div style={{ overflowX: 'auto' }}>
-                                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                                    <thead>
-                                        <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                                            <th style={{ padding: '12px', color: '#475569', fontWeight: 600, fontSize: '13px', textTransform: 'uppercase' }}>Data</th>
-                                            <th style={{ padding: '12px', color: '#475569', fontWeight: 600, fontSize: '13px', textTransform: 'uppercase' }}>Trabalhador</th>
-                                            <th style={{ padding: '12px', color: '#475569', fontWeight: 600, fontSize: '13px', textTransform: 'uppercase' }}>Template Usado</th>
-                                            <th style={{ padding: '12px', color: '#475569', fontWeight: 600, fontSize: '13px', textTransform: 'uppercase' }}>Matéria / Artifact final</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {employeeItems.map(item => (
-                                            <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                                <td style={{ padding: '12px', fontSize: '14px', color: '#334155', verticalAlign: 'top' }}>
-                                                    {item.gerado_em ? new Date(item.gerado_em).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'N/A'}
-                                                    <div style={{ marginTop: '4px' }}>
-                                                        {(() => {
-                                                            const STATUS_COLORS = {
-                                                                ready_to_publish: { bg: '#dcfce7', color: '#166534' },
-                                                                processing: { bg: '#fef9c3', color: '#854d0e' },
-                                                                failed: { bg: '#fee2e2', color: '#991b1b' },
-                                                                failed_generation: { bg: '#fee2e2', color: '#991b1b' },
-                                                            };
-                                                            const style = STATUS_COLORS[item.status] || { bg: '#f1f5f9', color: '#475569' };
-                                                            return (
-                                                                <span style={{ padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600, background: style.bg, color: style.color }}>
-                                                                    {item.status.replace(/_/g, ' ').toUpperCase()}
-                                                                </span>
-                                                            );
-                                                        })()}
+                            <div style={{ display: 'grid', gap: '12px' }}>
+                                {employeeItems.map(item => {
+                                    const STATUS_PTBR = {
+                                        processing: { label: 'Processando', bg: '#fef9c3', color: '#854d0e' },
+                                        ready_to_publish: { label: 'Pronto', bg: '#dcfce7', color: '#166534' },
+                                        published: { label: 'Publicado', bg: '#dbeafe', color: '#1e40af' },
+                                        failed: { label: 'Falhou', bg: '#fee2e2', color: '#991b1b' },
+                                        failed_generation: { label: 'Falhou', bg: '#fee2e2', color: '#991b1b' },
+                                    };
+                                    const badge = STATUS_PTBR[item.status] || { label: item.status || 'Desconhecido', bg: '#f1f5f9', color: '#475569' };
+                                    const titleText = item.headline || item.titulo || 'Sem título';
+                                    const thumb = item.render_url || item.imagem_url;
+                                    return (
+                                        <div key={item.id} style={{ display: 'flex', gap: '16px', padding: '16px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0', alignItems: 'flex-start', transition: 'box-shadow 0.2s' }}>
+                                            {/* Thumbnail */}
+                                            <div style={{ flexShrink: 0 }}>
+                                                {thumb ? (
+                                                    <a href={thumb} target="_blank" rel="noreferrer">
+                                                        <img
+                                                            src={thumb}
+                                                            alt=""
+                                                            style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '10px', border: '2px solid #e2e8f0', display: 'block' }}
+                                                        />
+                                                    </a>
+                                                ) : (
+                                                    <div style={{ width: '80px', height: '80px', background: '#e2e8f0', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                        <ImageIcon size={24} color="#94a3b8" />
                                                     </div>
-                                                </td>
-                                                <td style={{ padding: '12px', fontSize: '14px', color: '#334155', verticalAlign: 'top' }}>
-                                                    <div style={{ fontWeight: 600, color: '#0f172a' }}>{item.criado_por_email || 'Anônimo'}</div>
-                                                    <div style={{ fontSize: '11px', color: '#64748b' }}>User ID: {item.criado_por_user_id ? item.criado_por_user_id.substring(0, 8) + '...' : 'N/A'}</div>
-                                                </td>
-                                                <td style={{ padding: '12px', fontSize: '14px', color: '#334155', verticalAlign: 'top' }}>
-                                                    <strong style={{ color: '#0f172a' }}>#{item.template_ordem}</strong><br />
-                                                    <span style={{ color: '#64748b' }}>{item.template_nome_snapshot || 'Desconhecido'}</span>
-                                                </td>
-                                                <td style={{ padding: '12px' }}>
-                                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                                                        {item.render_url ? (
-                                                            <a href={item.render_url} target="_blank" rel="noreferrer">
-                                                                <img src={item.render_url} alt="" style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #e2e8f0' }} />
-                                                            </a>
-                                                        ) : (
-                                                            <div style={{ width: '60px', height: '60px', background: '#f1f5f9', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                                <ImageIcon size={20} color="#cbd5e1" />
-                                                            </div>
-                                                        )}
-                                                        <div style={{ flex: 1 }}>
-                                                            <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', marginBottom: '4px' }}>{item.headline || item.titulo}</div>
-                                                            <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
-                                                                {item.context_tag && <span style={{ fontSize: '11px', background: '#e0e7ff', color: '#3730a3', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>{item.context_tag}</span>}
-                                                            </div>
-                                                            <div style={{ display: 'flex', gap: '8px' }}>
-                                                                <button onClick={() => { navigator.clipboard.writeText(item.caption || ''); alert("Legenda copiada!") }} style={{ fontSize: '12px', padding: '4px 8px', borderRadius: '4px', border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                                    <Copy size={12} /> Copiar Legenda
-                                                                </button>
-                                                                {item.render_url && (
-                                                                    <button onClick={() => window.open(item.render_url, '_blank')} style={{ fontSize: '12px', padding: '4px 8px', borderRadius: '4px', border: 'none', background: '#e2e8f0', color: '#0f172a', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                                        <Download size={12} /> Baixar Arte
-                                                                    </button>
-                                                                )}
-                                                            </div>
+                                                )}
+                                            </div>
+
+                                            {/* Content */}
+                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap' }}>
+                                                    <span style={{ padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 700, background: badge.bg, color: badge.color, letterSpacing: '0.03em' }}>
+                                                        {badge.label}
+                                                    </span>
+                                                    {item.context_tag && (
+                                                        <span style={{ padding: '3px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: 600, background: '#e0e7ff', color: '#3730a3' }}>
+                                                            {item.context_tag}
+                                                        </span>
+                                                    )}
+                                                    {item.template_nome_snapshot && (
+                                                        <span style={{ padding: '3px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: 600, background: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0' }}>
+                                                            #{item.template_ordem} {item.template_nome_snapshot}
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                <div style={{ fontSize: '15px', fontWeight: 600, color: '#0f172a', lineHeight: 1.4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', marginBottom: '8px' }}>
+                                                    {titleText}
+                                                </div>
+
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '8px' }}>
+                                                    {/* Creator */}
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '12px', fontWeight: 700, flexShrink: 0 }}>
+                                                            {(item.criado_por_nome || item.criado_por_email || 'A').charAt(0).toUpperCase()}
+                                                        </div>
+                                                        <div>
+                                                            <div style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>{item.criado_por_nome || item.criado_por_email?.split('@')[0] || 'Anônimo'}</div>
+                                                            <div style={{ fontSize: '11px', color: '#94a3b8' }}>{item.criado_por_email || '—'}</div>
                                                         </div>
                                                     </div>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+
+                                                    {/* Date + Actions */}
+                                                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                                        <span style={{ fontSize: '12px', color: '#94a3b8' }}>
+                                                            {item.gerado_em ? new Date(item.gerado_em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—'}
+                                                        </span>
+                                                        <button
+                                                            onClick={() => { navigator.clipboard.writeText(item.caption || ''); }}
+                                                            style={{ fontSize: '12px', padding: '5px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', color: '#475569', fontWeight: 500 }}
+                                                            title="Copiar legenda"
+                                                        >
+                                                            <Copy size={12} /> Legenda
+                                                        </button>
+                                                        {item.render_url && (
+                                                            <button
+                                                                onClick={() => window.open(item.render_url, '_blank')}
+                                                                style={{ fontSize: '12px', padding: '5px 10px', borderRadius: '6px', border: 'none', background: '#0f172a', color: '#fff', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                                                title="Baixar arte"
+                                                            >
+                                                                <Download size={12} /> Arte
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         )}
                     </div>
