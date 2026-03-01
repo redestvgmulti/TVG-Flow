@@ -196,7 +196,21 @@ Deno.serve(async (req: Request) => {
             if (renderRes.ok) {
                 const data = await renderRes.json();
                 placidImageUrl = data.image_url;
-                // Nota: se Placid usar polling agressivo, data.image_url pode gerar a imagem sob demanda via browser. Retornar essa URL é seguro.
+                const pollingUrl = data.polling_url;
+
+                if (!placidImageUrl && pollingUrl) {
+                    for (let i = 0; i < 6; i++) {
+                        await new Promise(r => setTimeout(r, 2000));
+                        const pollRes = await fetch(pollingUrl, { headers: { "Authorization": `Bearer ${renderApiKey}` } });
+                        if (pollRes.ok) {
+                            const pollData = await pollRes.json();
+                            if (pollData.status === "finished" && pollData.image_url) {
+                                placidImageUrl = pollData.image_url;
+                                break;
+                            }
+                        }
+                    }
+                }
             } else {
                 const errtxt = await renderRes.text();
                 return failProcess(`Placid API Erro: ${errtxt}`);
