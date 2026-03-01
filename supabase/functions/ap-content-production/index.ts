@@ -7,7 +7,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { buildEditorialPrompt, getEditorialContext } from "../_shared/editorialPromptBuilder.ts";
+import { buildEditorialPrompt, getEditorialContext, buildStudioPrompt } from "../_shared/editorialPromptBuilder.ts";
 import { callLLM } from "../_shared/llmClient.ts";
 
 const BATCH_LIMIT = 25; // Aumentado para lidar o gargalo
@@ -33,12 +33,17 @@ Deno.serve(async (req: Request) => {
 
     // Optional targeted processing when invoked manualy (e.g. matéria manual)
     let targetNewsId: string | null = null;
+    let actionType: "process_selected" | "process_studio" = "process_selected";
+
     try {
         if (req.method === "POST") {
             const contentType = req.headers.get("Content-Type") || "";
             if (contentType.includes("application/json")) {
                 const body = await req.json().catch(() => null);
-                if (body && body.action === "process_selected" && typeof body.newsId === "string") {
+                if (body && body.action) {
+                    actionType = body.action;
+                }
+                if (body && typeof body.newsId === "string") {
                     targetNewsId = body.newsId;
                 }
             }
@@ -47,34 +52,35 @@ Deno.serve(async (req: Request) => {
         console.error("[ap-content-production] Failed to parse request body:", e);
     }
 
-    // Only items that are 'selected' AND have no headline yet (idempotent guard)
     const cutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     let query = supabase
         .schema("ap").from("candidate_news")
-        .select("id, cliente_id, titulo, conteudo, categoria, context_tag, url_original")
-        .eq("status", "selected")
-        .is("headline", null);
+        .select("id, cliente_id, titulo, conteudo, categoria, context_tag, url_original, status");
 
-    if (targetNewsId) {
-        // Execução dirigida para uma notícia específica (ex: matéria manual).
-        query = query.eq("id", targetNewsId);
+    if (actionType === "process_studio") {
+        query = query.eq("id", targetNewsId); // Studio process é sempre um clique direto
     } else {
-        // Execução em lote via cron.
-        query = query
-            .or(`processing_started_at.is.null,processing_started_at.lt.${cutoff}`)
-            .limit(BATCH_LIMIT);
+        if (targetNewsId) {
+            query = query.eq("id", targetNewsId);
+        } else {
+            // Execução em lote via cron
+            query = query
+                .eq("status", "selected")
+                .is("headline", null)
+                .or(`processing_started_at.is.null,processing_started_at.lt.${cutoff}`)
+                .limit(BATCH_LIMIT);
+        }
     }
 
     const { data: items } = await query;
 
     const errors: any[] = [];
     for (const item of items ?? []) {
-        // Lock
+        // Lock temporário (removido restrição eq('status','selected') para aceitar revisão)
         const { data: updatedData, error: updateErr } = await supabase
             .schema("ap").from("candidate_news")
             .update({ processing_started_at: new Date().toISOString() })
             .eq("id", item.id)
-            .eq("status", "selected")
             .select("id");
 
         if (updateErr || !updatedData || updatedData.length === 0) continue;
@@ -113,19 +119,34 @@ Deno.serve(async (req: Request) => {
                 throw new Error("Tenant " + clienteId + " tem chave Vault vazia e as variáveis globais ANTHROPIC_API_KEY/OPENAI_API_KEY também estão ausentes no Supabase.");
             }
 
-            // Always use Editorial Builder now that legacy is dead
-            prompt = await buildEditorialPrompt(supabase, {
-                titulo: item.titulo,
-                conteudo: item.conteudo,
-                categoria: item.categoria,
-                url_original: item.url_original,
-                settings: context?.settings || {},
-                promptVersion: context?.promptVersion,
-                humanization: context?.humanization,
-                rules: context?.rules || [],
-                ragContext: context?.ragContext || [],
-                openaiKey: finalOpenAiKey
-            });
+            // Determina qual gerador de prompt utilizar
+            if (actionType === "process_studio") {
+                prompt = buildStudioPrompt({
+                    titulo: item.titulo,
+                    conteudo: item.conteudo,
+                    categoria: item.categoria,
+                    url_original: item.url_original,
+                    settings: context?.settings || {},
+                    promptVersion: context?.promptVersion,
+                    humanization: context?.humanization,
+                    rules: context?.rules || [],
+                    ragContext: context?.ragContext || [],
+                    openaiKey: finalOpenAiKey
+                });
+            } else {
+                prompt = await buildEditorialPrompt(supabase, {
+                    titulo: item.titulo,
+                    conteudo: item.conteudo,
+                    categoria: item.categoria,
+                    url_original: item.url_original,
+                    settings: context?.settings || {},
+                    promptVersion: context?.promptVersion,
+                    humanization: context?.humanization,
+                    rules: context?.rules || [],
+                    ragContext: context?.ragContext || [],
+                    openaiKey: finalOpenAiKey
+                });
+            }
             finalModel = context?.settings?.model_primary || OPENAI_MODEL_G;
 
             // Reserve tokens
@@ -207,7 +228,7 @@ Deno.serve(async (req: Request) => {
                 }
             }
 
-            const parsed = parseAiOutput(aiResponse);
+            const parsed: any = actionType === "process_studio" ? parseStudioOutput(aiResponse) : parseAiOutput(aiResponse);
 
             // Refund unused tokens
             const tokensToRefund = estimatedTokens - apiTokens;
@@ -226,14 +247,18 @@ Deno.serve(async (req: Request) => {
                 });
             }
 
-            // Forçar TODAS as matérias para pending_render.
-            // Isso garante que mesmo o upload manual de foto na "Nova Matéria" 
-            // receba o logo e a moldura do Placid como as demais.
-            const targetStatus = "pending_render";
+            let updatePayload: any = {};
 
-            const { error: updateError } = await supabase
-                .schema("ap").from("candidate_news")
-                .update({
+            if (actionType === "process_studio") {
+                updatePayload = {
+                    roteiro_studio: parsed.roteiro_teleprompter,
+                    duracao_estimada: parsed.duracao_estimada_segundos,
+                    broll_sugestao: parsed.broll_sugestao,
+                    status: "studio_selected",
+                    processing_started_at: null,
+                };
+            } else {
+                updatePayload = {
                     headline: parsed.headline,
                     caption: parsed.caption,
                     roteiro_json: parsed.roteiro,
@@ -241,11 +266,15 @@ Deno.serve(async (req: Request) => {
                     has_face: parsed.has_face,
                     context_tag: item.context_tag ? item.context_tag : parsed.context_tag,
                     categoria: item.categoria || parsed.categoria_sugerida,
-                    status: targetStatus,
+                    status: "pending_render",
                     processing_started_at: null,
-                })
-                .eq("id", item.id)
-                .eq("status", "selected");
+                };
+            }
+
+            const { error: updateError } = await supabase
+                .schema("ap").from("candidate_news")
+                .update(updatePayload)
+                .eq("id", item.id);
 
             if (updateError) {
                 throw new Error(`DB Update falhou para ${item.id}: ${updateError.message}`);
@@ -264,6 +293,33 @@ Deno.serve(async (req: Request) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 });
+
+function parseStudioOutput(raw: string) {
+    try {
+        let cleanedRaw = raw.trim();
+        const startIdx = cleanedRaw.indexOf('{');
+        const endIdx = cleanedRaw.lastIndexOf('}');
+
+        if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+            cleanedRaw = cleanedRaw.substring(startIdx, endIdx + 1);
+        } else {
+            cleanedRaw = cleanedRaw.replace(/^```json/, "").replace(/```$/, "").trim();
+        }
+
+        const parsed = JSON.parse(cleanedRaw);
+        return {
+            titulo_studio: String(parsed.titulo_studio || ""),
+            duracao_estimada_segundos: Number(parsed.duracao_estimada_segundos || 0),
+            roteiro_teleprompter: String(parsed.roteiro_teleprompter || ""),
+            broll_sugestao: String(parsed.broll_sugestao || "")
+        };
+    } catch (e) {
+        console.error("Studio JSON parse error", e);
+        return {
+            titulo_studio: "", duracao_estimada_segundos: 0, roteiro_teleprompter: "", broll_sugestao: ""
+        };
+    }
+}
 
 function parseAiOutput(raw: string) {
     try {

@@ -23,9 +23,12 @@ function RoleProtectedRoute({ children, allowedRole }) {
         )
     }
 
+    // Normalize to array
+    const rolesToCheck = Array.isArray(allowedRole) ? allowedRole : [allowedRole]
+
     // Allow 'profissional' role to access 'staff' routes
     // This fixes the blank screen for users with 'profissional' role
-    const isAllowed = role === allowedRole || (allowedRole === 'staff' && role === 'profissional')
+    const isAllowed = rolesToCheck.includes(role) || (rolesToCheck.includes('staff') && role === 'profissional')
 
     if (!isAllowed) {
 

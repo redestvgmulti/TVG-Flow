@@ -121,7 +121,8 @@
   background: #ffffff;
   border: 1px solid var(--color-border-light, #e2e8f0);
   border-radius: var(--radius-md, 8px);
-  overflow: hidden;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .ap-stage {
@@ -213,7 +214,7 @@
 /* ── Review Card Grid ─────────────────────────────────────── */
 .ap-cards-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
   gap: 1.5rem;
 }
 
@@ -310,6 +311,7 @@
   margin: 0;
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -673,15 +675,20 @@
   }
 
   .ap-pipeline {
-    grid-template-columns: repeat(4, 1fr);
-    gap: 1px;
-    background: var(--color-border-light, #e2e8f0);
-    border: none;
+    /* Permitir scroll horizontal em telas médias/pequenas para manter a sequência */
+    display: flex;
+    flex-wrap: nowrap;
+    border: 1px solid var(--color-border-light, #e2e8f0);
+    background: #ffffff;
+    gap: 0;
   }
 
   .ap-stage {
+    flex: 1 0 auto;
+    min-width: 110px;
     background: #ffffff;
     border: none;
+    border-right: 1px solid var(--color-border-light, #e2e8f0);
   }
 }
 
@@ -691,10 +698,6 @@
   }
 
   .ap-metrics {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .ap-pipeline {
     grid-template-columns: repeat(2, 1fr);
   }
 
@@ -725,6 +728,23 @@
   .ap-header-title {
     font-size: 1rem;
   }
+
+  .ap-modal-content {
+    padding: 12px !important;
+  }
+
+  .ap-modal-content h2 {
+    font-size: 1.1rem !important;
+  }
+
+  .ap-modal-content form {
+    padding: 16px 12px !important;
+  }
+
+  /* Ajustar wrap the botões no cabeçalho */
+  .ap-header>div {
+    flex-wrap: wrap;
+  }
 }
 
 @media (max-width: 400px) {
@@ -733,11 +753,12 @@
   }
 
   .ap-stage {
-    padding: 0.75rem 0.25rem;
+    padding: 0.75rem 0.5rem;
+    min-width: 90px;
   }
 
   .ap-stage-label {
-    font-size: 0.6rem;
+    font-size: 0.65rem;
   }
 
   .ap-btn-refresh {

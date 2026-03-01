@@ -43,15 +43,23 @@ Deno.serve(async (req: Request) => {
             $('title').text() ||
             $('h1').first().text();
 
-        // 4. Extrair Imagem
+        // 4. Extrair Imagem e Vídeo
         let image_url = $('meta[property="og:image"]').attr('content') ||
             $('meta[name="twitter:image"]').attr('content') ||
             $('article img').first().attr('src');
+            
+        let video_url = $('meta[property="og:video"]').attr('content') ||
+            $('meta[property="og:video:url"]').attr('content') ||
+            $('meta[property="og:video:secure_url"]').attr('content') || null;
 
-        // Se a imagem for caminho relativo, converter para absoluto
+        // Se a imagem ou vídeo for caminho relativo, converter para absoluto
         if (image_url && image_url.startsWith('/')) {
             const urlObj = new URL(url);
             image_url = `${urlObj.protocol}//${urlObj.host}${image_url}`;
+        }
+        if (video_url && video_url.startsWith('/')) {
+            const urlObj = new URL(url);
+            video_url = `${urlObj.protocol}//${urlObj.host}${video_url}`;
         }
 
         // 5. Extrair Conteúdo (Priorizar article, main, ou body)
@@ -78,7 +86,9 @@ Deno.serve(async (req: Request) => {
         return new Response(JSON.stringify({
             title: title?.trim() || "",
             image_url: image_url?.trim() || "",
-            content: content?.trim() || ""
+            content: content?.trim() || "",
+            studio_media_image_url: image_url?.trim() || "",
+            studio_media_video_url: video_url?.trim() || null
         }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
         });

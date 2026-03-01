@@ -69,7 +69,34 @@ Deno.serve(async (_req: Request) => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
       const xml = await res.text();
-      const items = parseRssItems(xml);
+      const rawItems = parseRssItems(xml);
+
+      // Parallel fast fetch to extract OG tags using a short timeout
+      const items = await Promise.all(rawItems.map(async (item) => {
+        let studio_media_video_url = null;
+        let studio_media_image_url = item.imageUrl ?? null;
+
+        try {
+          const ab = new AbortController();
+          const timer = setTimeout(() => ab.abort(), 2000);
+          const r = await fetch(item.link, { signal: ab.signal, headers: { "User-Agent": "FlowOS/1.0" } }).catch(() => null);
+          clearTimeout(timer);
+          if (r && r.ok) {
+            // only read first 50kb to be fast
+            const html = await r.text();
+            const sample = html.slice(0, 50000);
+            const ogImage = sample.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i)?.[1];
+            const ogVideo = sample.match(/<meta[^>]*property=["']og:video(:url|:secure_url)?["'][^>]*content=["']([^"']+)["']/i)?.[2];
+
+            if (ogImage) studio_media_image_url = ogVideo ? ogVideo : ogImage; // Fallback or direct use
+            if (ogImage && !ogVideo) studio_media_image_url = ogImage;
+            if (ogVideo) studio_media_video_url = ogVideo;
+          }
+        } catch (e) {
+          // Silently ignore to not block ingestion
+        }
+        return { ...item, studio_media_image_url, studio_media_video_url };
+      }));
 
       for (const item of items) {
         const { error: insertErr } = await supabase.schema("ap").from("candidate_news").insert({
@@ -79,6 +106,8 @@ Deno.serve(async (_req: Request) => {
           conteudo: item.description,
           url_original: item.link,
           imagem_url: item.imageUrl ?? null,
+          studio_media_image_url: item.studio_media_image_url,
+          studio_media_video_url: item.studio_media_video_url,
           published_at: item.pubDate ? new Date(item.pubDate).toISOString() : null,
           status: "raw",
         }).throwOnError();

@@ -181,3 +181,37 @@ export async function getEditorialContext(sbAdmin: SupabaseClient, clienteId: st
         return null; // fallback
     }
 }
+
+export function buildStudioPrompt(data: EditorialInput): string {
+    const { titulo, conteudo, categoria } = data;
+
+    const safeTitulo = titulo.slice(0, 500);
+    const safeConteudo = conteudo ? conteudo.slice(0, 3000) : null;
+    const safeCategoria = categoria ? categoria.slice(0, 100) : null;
+
+    const systemPrompt = `Você é um âncora e roteirista sênior de telejornal de TV.
+O seu trabalho é receber uma matéria bruta (RSS ou portal) e convertê-la em um roteiro EXTREMAMENTE FLUIDO e PROFISSIONAL, perfeitamente formatado para leitura dinâmica em um Teleprompter.`;
+
+    const mandatoryRules = `
+REGRAS OBRIGATÓRIAS (P0 - INEGOCIÁVEIS):
+1. Linguagem puramente natural para leitura humana falada.
+2. Construa APENAS frases curtas, na ordem direta (Sujeito - Verbo - Complemento).
+3. PROIBIDO o uso de emojis (nenhum emoji).
+4. PROIBIDO o uso de hashtags ou jargões de internet.
+5. SEM OPINIÃO PESSOAL (mantenha neutralidade jornalística).
+6. O tempo estimado de leitura deve ter entre 45 e 90 segundos. Considerando um ritmo de TV (aprox. 150 palavras por minuto).
+7. Texto pronto para o teleprompter (ex: escreva números complexos por extenso se facilitar a leitura, evite siglas obscuras sem explicação).
+`;
+
+    const inputSection = `\nMATÉRIA ORIGINAL:\nTítulo: ${safeTitulo}\nCategoria: ${safeCategoria ?? "geral"}\nConteúdo:\n${safeConteudo ?? "Apenas título disponível."}\n`;
+
+    const formatSection = `\nINSTRUÇÕES DE SAÍDA:
+Você DEVE OBRIGATORIAMENTE retornar um JSON válido e estruturado, sem nenhum markdown envolvendo-o (sem \`\`\`json). O JSON deve ter as seguintes chaves exatas:
+- "titulo_studio": (string) Título interno para o estúdio identificar o script
+- "duracao_estimada_segundos": (number) Tempo estimado de leitura falada profissionalmente em segundos
+- "roteiro_teleprompter": (string) O texto final adaptado e fluído para leitura no teleprompter. Pode conter formatação de parágrafos normais (\\n).
+- "broll_sugestao": (string) Ideias curtas de imagens ou vídeos de cobertura que o editor de vídeo deveria colocar na tela enquanto o âncora lê (ex: "imagens de apoio do trânsito na rodovia XYZ", ou "foto do político Y discursando").
+`;
+
+    return `${systemPrompt}\n${mandatoryRules}${inputSection}${formatSection}`;
+}

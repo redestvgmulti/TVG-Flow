@@ -18,6 +18,7 @@ import CompanyDetails from './pages/admin/CompanyDetails'
 import AdminContent from './pages/admin/AdminContent'
 import Meetings from './pages/admin/Meetings'
 import AutoPublisher from './pages/admin/AutoPublisher'
+import EmployeeMode from './pages/admin/EmployeeMode'
 import StaffDashboard from './pages/staff/Dashboard'
 import StaffTasks from './pages/staff/Tasks'
 import StaffContent from './pages/staff/StaffContent'
@@ -146,6 +147,17 @@ function App() {
                     <Route path="system" element={<SystemStatusPage />} />
                   </Route>
 
+                  {/* Employee Mode Shared Route */}
+                  <Route
+                    path="/flowos/autopublisher/employee"
+                    element={
+                      <ProtectedRoute>
+                        <RoleProtectedRoute allowedRole={['admin', 'staff', 'employee']}>
+                          <EmployeeMode />
+                        </RoleProtectedRoute>
+                      </ProtectedRoute>
+                    }
+                  />
 
                   <Route path="/" element={<Navigate to="/login" replace />} />
                 </Routes>
