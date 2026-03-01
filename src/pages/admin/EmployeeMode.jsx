@@ -147,11 +147,11 @@ export default function EmployeeMode({ isOpen, onClose }) {
     };
 
     return createPortal(
-        <div className="modal-backdrop" onClick={onClose} style={{ zIndex: 9999 }}>
-            <div className="ap-modal-content" onClick={e => e.stopPropagation()} style={{ background: '#ffffff', padding: '0', borderRadius: '20px', width: '560px', maxWidth: '100%', boxShadow: '0 24px 48px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <div className="modal-backdrop" onClick={onClose} style={{ zIndex: 9999, padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box', width: '100vw', height: '100vh', position: 'fixed', top: 0, left: 0 }}>
+            <div className="ap-modal-content" onClick={e => e.stopPropagation()} style={{ background: '#ffffff', padding: '0', borderRadius: '20px', width: '100%', maxWidth: '560px', maxHeight: '100%', boxShadow: '0 24px 48px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05)', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
 
                 {/* Header */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '24px', borderBottom: '1px solid #f0f0f0', background: '#fafafa' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #f0f0f0', background: '#fafafa', flexShrink: 0 }}>
                     <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#111827', margin: 0, display: 'flex', alignItems: 'center', gap: '10px', letterSpacing: '-0.02em' }}>
                         <div style={{ background: '#eff6ff', color: '#3b82f6', padding: '8px', borderRadius: '10px', display: 'flex' }}><Brain size={18} /></div>
                         Gerador de Pautas
@@ -162,7 +162,7 @@ export default function EmployeeMode({ isOpen, onClose }) {
                 </div>
 
                 {/* Scrollable Content */}
-                <div style={{ display: 'flex', flexDirection: 'column', padding: '24px', gap: '20px', maxHeight: '75vh', overflowY: 'auto' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', padding: '20px', gap: '20px', overflowY: 'auto', flex: 1, WebkitOverflowScrolling: 'touch', width: '100%', boxSizing: 'border-box' }}>
 
                     {errorMsg && (
                         <div style={{ background: '#fef2f2', border: '1px solid #fecaca', padding: '16px', borderRadius: '12px', marginBottom: '20px', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
@@ -212,14 +212,14 @@ export default function EmployeeMode({ isOpen, onClose }) {
                     ) : (
                         <form onSubmit={handleGenerate} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
-                            <div style={{ padding: '16px', background: '#e0f2fe', border: '1px solid #bae6fd', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px' }}>
+                            <div style={{ padding: '16px', background: '#e0f2fe', border: '1px solid #bae6fd', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px', width: '100%', boxSizing: 'border-box' }}>
                                 <label style={{ fontSize: '14px', fontWeight: 700, color: '#0284c7', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Motor de IA (Link)</label>
                                 <p style={{ margin: 0, fontSize: '13px', color: '#0369a1' }}>Cole um link para a IA extrair todo o contexto e foto automaticamente.</p>
                                 <input
                                     value={form.url_original || ''}
                                     onChange={e => setForm({ ...form, url_original: e.target.value })}
                                     placeholder="https://globo.com/acidente..."
-                                    style={{ width: '100%', padding: '16px', borderRadius: '10px', border: '1px solid #7dd3fc', fontSize: '15px', outline: 'none', backgroundColor: '#fff' }}
+                                    style={{ width: '100%', padding: '14px', borderRadius: '10px', border: '1px solid #7dd3fc', fontSize: '15px', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' }}
                                     onFocus={e => e.target.style.borderColor = '#0284c7'}
                                     onBlur={e => e.target.style.borderColor = '#7dd3fc'}
                                 />
@@ -231,26 +231,26 @@ export default function EmployeeMode({ isOpen, onClose }) {
                                 <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
                             </div>
 
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
                                 <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Título (Manual)</label>
                                 <input
                                     value={form.titulo}
                                     onChange={e => setForm({ ...form, titulo: e.target.value })}
                                     placeholder="Grave acidente no centro..."
-                                    style={{ width: '100%', padding: '16px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '16px', outline: 'none', backgroundColor: '#fff', appearance: 'none' }}
+                                    style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', appearance: 'none', boxSizing: 'border-box' }}
                                     onFocus={e => e.target.style.borderColor = '#3b82f6'}
                                     onBlur={e => e.target.style.borderColor = '#cbd5e1'}
                                 />
                             </div>
 
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
                                 <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Texto Base (Manual)</label>
                                 <textarea
                                     value={form.conteudo}
                                     onChange={e => setForm({ ...form, conteudo: e.target.value })}
                                     placeholder="Descreva os detalhes da notícia para a IA interpretar..."
-                                    rows={5}
-                                    style={{ width: '100%', padding: '16px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '16px', outline: 'none', backgroundColor: '#fff', appearance: 'none', resize: 'vertical' }}
+                                    rows={4}
+                                    style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', appearance: 'none', resize: 'vertical', boxSizing: 'border-box' }}
                                     onFocus={e => e.target.style.borderColor = '#3b82f6'}
                                     onBlur={e => e.target.style.borderColor = '#cbd5e1'}
                                 />
@@ -269,7 +269,7 @@ export default function EmployeeMode({ isOpen, onClose }) {
                                         }
                                     }}
                                     onClick={() => document.getElementById('employee-file-upload').click()}
-                                    style={{ border: isDragging ? '2px dashed #3b82f6' : '2px dashed #cbd5e1', borderRadius: '12px', padding: '30px 20px', textAlign: 'center', background: isDragging ? '#eff6ff' : '#ffffff', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}
+                                    style={{ border: isDragging ? '2px dashed #3b82f6' : '2px dashed #cbd5e1', borderRadius: '12px', padding: '30px 20px', textAlign: 'center', background: isDragging ? '#eff6ff' : '#ffffff', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', width: '100%', boxSizing: 'border-box' }}
                                 >
                                     <input
                                         id="employee-file-upload"
@@ -309,8 +309,8 @@ export default function EmployeeMode({ isOpen, onClose }) {
 
                 {/* Sticky Bottom Bar for Action */}
                 {!successData && (
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', padding: '20px 24px', borderTop: '1px solid #f0f0f0', background: '#ffffff' }}>
-                        <button type="submit" onClick={handleGenerate} disabled={isSubmitting} style={{ width: '100%', background: isSubmitting ? '#475569' : '#111827', color: '#fff', border: 'none', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', boxShadow: '0 4px 6px -1px rgba(17, 24, 39, 0.1)', cursor: isSubmitting ? 'not-allowed' : 'pointer', transition: 'all 0.2s' }}>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', padding: '20px', borderTop: '1px solid #f0f0f0', background: '#ffffff', width: '100%', boxSizing: 'border-box' }}>
+                        <button type="submit" onClick={handleGenerate} disabled={isSubmitting} style={{ width: '100%', boxSizing: 'border-box', background: isSubmitting ? '#475569' : '#111827', color: '#fff', border: 'none', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', boxShadow: '0 4px 6px -1px rgba(17, 24, 39, 0.1)', cursor: isSubmitting ? 'not-allowed' : 'pointer', transition: 'all 0.2s' }}>
                             {isSubmitting ? (
                                 <>
                                     <div style={{ width: '18px', height: '18px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
