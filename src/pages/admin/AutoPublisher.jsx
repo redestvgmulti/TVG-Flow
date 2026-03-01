@@ -51,7 +51,7 @@ export default function AutoPublisher() {
 
     const fetchSystemConfig = useCallback(async () => {
         if (!clienteId) return
-        const { data, error } = await supabase.schema('ap').from('system_config').select('ingestion_enabled').eq('cliente_id', clienteId).single()
+        const { data } = await supabase.schema('ap').from('system_config').select('ingestion_enabled').eq('cliente_id', clienteId).single()
         if (data) setIngestionEnabled(data.ingestion_enabled)
     }, [clienteId])
 
@@ -203,7 +203,7 @@ export default function AutoPublisher() {
             // Limpa o canal quando o componente desmontar (ou mudar de tenant)
             supabase.removeChannel(channel)
         }
-    }, [clienteId, tab, fetchCounts, fetchReview, fetchPublished])
+    }, [clienteId, tab, fetchCounts, fetchReview, fetchPublished, fetchEmployeeItems, fetchSystemConfig])
 
     async function handleApprove(item) {
         if (item.status !== 'pending_review') return

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { supabase } from '../../services/supabase';
 import { Brain, Image as ImageIcon, UploadCloud, Copy, Download, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
