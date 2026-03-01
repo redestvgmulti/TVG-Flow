@@ -9,7 +9,7 @@ const FIXED_CLIENT_ID = 'cd287e6e-f273-4d0f-a72d-2a8c391e40e9';
 
 export default function EmployeeMode({ isOpen, onClose }) {
     const { user } = useAuth();
-    const [form, setForm] = useState({ titulo: '', conteudo: '', imagem_url: '' });
+    const [form, setForm] = useState({ titulo: '', conteudo: '', imagem_url: '', url_original: '' });
     const [selectedFile, setSelectedFile] = useState(null);
     const [isDragging, setIsDragging] = useState(false);
 
@@ -43,8 +43,8 @@ export default function EmployeeMode({ isOpen, onClose }) {
 
     const handleGenerate = async (e) => {
         e.preventDefault();
-        if (!form.titulo && !form.conteudo) {
-            setErrorMsg("Preencha o Título ou Conteúdo.");
+        if (!form.titulo && !form.conteudo && !form.url_original) {
+            setErrorMsg("Preencha o Título, Conteúdo ou insira um Link Externo.");
             return;
         }
 
@@ -53,7 +53,29 @@ export default function EmployeeMode({ isOpen, onClose }) {
         setSuccessData(null);
 
         try {
+            let finalTitulo = form.titulo;
+            let finalConteudo = form.conteudo;
             let finalImageUrl = form.imagem_url;
+
+            // Auto-Scraping Logic (If URL is provided but content is missing)
+            if (form.url_original && (!finalTitulo || !finalConteudo)) {
+                const { data, error } = await supabase.functions.invoke('ap-link-scraper', {
+                    body: { url: form.url_original }
+                });
+
+                if (error) {
+                    console.error('[EmployeeMode] Auto-Scrape error:', error);
+                    throw new Error('A IA falhou ao extrair dados do link. Verifique se a URL é suportada ou preencha o texto manualmente.');
+                }
+
+                finalTitulo = data.title || finalTitulo;
+                finalConteudo = data.content || finalConteudo;
+                finalImageUrl = data.image_url || finalImageUrl;
+            }
+
+            if (!finalTitulo || !finalConteudo) {
+                throw new Error('Não foi possível obter Título e Conteúdo. Preencha manualmente ou tente outro link.');
+            }
 
             if (selectedFile) {
                 finalImageUrl = await handleFileUpload(selectedFile);
@@ -61,8 +83,9 @@ export default function EmployeeMode({ isOpen, onClose }) {
 
             const payload = {
                 empresa_id: FIXED_CLIENT_ID,
-                titulo: form.titulo,
-                conteudo: form.conteudo,
+                titulo: finalTitulo,
+                conteudo: finalConteudo,
+                url_original: form.url_original || null,
                 imagem_url: finalImageUrl,
                 auth_user_id: user?.id
             };
@@ -162,7 +185,7 @@ export default function EmployeeMode({ isOpen, onClose }) {
                                 <button onClick={handleCopy} style={{ background: '#fff', color: '#0f172a', border: '1px solid #cbd5e1', padding: '16px', borderRadius: '12px', fontSize: '16px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}>
                                     {copied ? <><CheckCircle2 size={20} color="#16a34a" /> Copiado!</> : <><Copy size={20} /> Copiar Legenda</>}
                                 </button>
-                                <button onClick={() => { setSuccessData(null); setForm({ titulo: '', conteudo: '', imagem_url: '' }); setSelectedFile(null); }} style={{ background: 'transparent', color: '#64748b', border: 'none', padding: '16px', fontSize: '15px', fontWeight: 500, marginTop: '10px' }}>
+                                <button onClick={() => { setSuccessData(null); setForm({ titulo: '', conteudo: '', imagem_url: '', url_original: '' }); setSelectedFile(null); }} style={{ background: 'transparent', color: '#64748b', border: 'none', padding: '16px', fontSize: '15px', fontWeight: 500, marginTop: '10px' }}>
                                     Criar Nova Matéria
                                 </button>
                             </div>
@@ -171,8 +194,27 @@ export default function EmployeeMode({ isOpen, onClose }) {
                     ) : (
                         <form onSubmit={handleGenerate} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
+                            <div style={{ padding: '16px', background: '#e0f2fe', border: '1px solid #bae6fd', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px' }}>
+                                <label style={{ fontSize: '14px', fontWeight: 700, color: '#0284c7', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Motor de IA (Link)</label>
+                                <p style={{ margin: 0, fontSize: '13px', color: '#0369a1' }}>Cole um link para a IA extrair todo o contexto e foto automaticamente.</p>
+                                <input
+                                    value={form.url_original || ''}
+                                    onChange={e => setForm({ ...form, url_original: e.target.value })}
+                                    placeholder="https://globo.com/acidente..."
+                                    style={{ width: '100%', padding: '16px', borderRadius: '10px', border: '1px solid #7dd3fc', fontSize: '15px', outline: 'none', backgroundColor: '#fff' }}
+                                    onFocus={e => e.target.style.borderColor = '#0284c7'}
+                                    onBlur={e => e.target.style.borderColor = '#7dd3fc'}
+                                />
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', opacity: 0.6, marginTop: '-4px', marginBottom: '-4px' }}>
+                                <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
+                                <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Ou faça manualmente</span>
+                                <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
+                            </div>
+
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Título Principal</label>
+                                <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Título (Manual)</label>
                                 <input
                                     value={form.titulo}
                                     onChange={e => setForm({ ...form, titulo: e.target.value })}
@@ -184,7 +226,7 @@ export default function EmployeeMode({ isOpen, onClose }) {
                             </div>
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Texto Base / Detalhes</label>
+                                <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Texto Base (Manual)</label>
                                 <textarea
                                     value={form.conteudo}
                                     onChange={e => setForm({ ...form, conteudo: e.target.value })}
@@ -197,7 +239,7 @@ export default function EmployeeMode({ isOpen, onClose }) {
                             </div>
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Foto Visual (Obrigatório)</label>
+                                <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Foto Visual (Opcional)</label>
                                 <div
                                     onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
                                     onDragLeave={() => setIsDragging(false)}
@@ -235,25 +277,13 @@ export default function EmployeeMode({ isOpen, onClose }) {
                                             <div style={{ background: '#f1f5f9', color: '#64748b', padding: '12px', borderRadius: '50%' }}>
                                                 <UploadCloud size={28} />
                                             </div>
-                                            <span style={{ fontSize: '15px', fontWeight: 600, color: '#0f172a' }}>Tocar para adicionar foto</span>
-                                            <span style={{ fontSize: '13px', color: '#64748b' }}>Foto limpa do evento (JPG/PNG)</span>
+                                            <span style={{ fontSize: '15px', fontWeight: 600, color: '#0f172a' }}>Tocar para adicionar foto externa</span>
+                                            <span style={{ fontSize: '13px', color: '#64748b' }}>A IA usará a foto da matéria caso não tenha foto.</span>
                                         </>
                                     )}
                                 </div>
-
-                                <div style={{ textAlign: 'center', margin: '8px 0' }}>
-                                    <span style={{ fontSize: '13px', color: '#94a3b8', fontWeight: 500, textTransform: 'uppercase' }}>OU URL DIRETA EXTERNA</span>
-                                </div>
-
-                                <input
-                                    value={form.imagem_url}
-                                    onChange={e => setForm({ ...form, imagem_url: e.target.value })}
-                                    placeholder="http://exemplo.com/foto.jpg"
-                                    style={{ width: '100%', padding: '16px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', appearance: 'none' }}
-                                    onFocus={e => e.target.style.borderColor = '#3b82f6'}
-                                    onBlur={e => e.target.style.borderColor = '#cbd5e1'}
-                                />
                             </div>
+
 
                         </form>
                     )}
