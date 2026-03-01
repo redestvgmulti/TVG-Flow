@@ -595,9 +595,20 @@ export default function AutoPublisher() {
                                                 <td style={{ padding: '12px', fontSize: '14px', color: '#334155', verticalAlign: 'top' }}>
                                                     {item.gerado_em ? new Date(item.gerado_em).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'N/A'}
                                                     <div style={{ marginTop: '4px' }}>
-                                                        <span style={{ padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600, background: item.status === 'ready_to_publish' ? '#dcfce7' : '#f1f5f9', color: item.status === 'ready_to_publish' ? '#166534' : '#475569' }}>
-                                                            {item.status.toUpperCase()}
-                                                        </span>
+                                                        {(() => {
+                                                            const STATUS_COLORS = {
+                                                                ready_to_publish: { bg: '#dcfce7', color: '#166534' },
+                                                                processing: { bg: '#fef9c3', color: '#854d0e' },
+                                                                failed: { bg: '#fee2e2', color: '#991b1b' },
+                                                                failed_generation: { bg: '#fee2e2', color: '#991b1b' },
+                                                            };
+                                                            const style = STATUS_COLORS[item.status] || { bg: '#f1f5f9', color: '#475569' };
+                                                            return (
+                                                                <span style={{ padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600, background: style.bg, color: style.color }}>
+                                                                    {item.status.replace(/_/g, ' ').toUpperCase()}
+                                                                </span>
+                                                            );
+                                                        })()}
                                                     </div>
                                                 </td>
                                                 <td style={{ padding: '12px', fontSize: '14px', color: '#334155', verticalAlign: 'top' }}>
