@@ -152,7 +152,7 @@ function App() {
                     path="/flowos/autopublisher/employee"
                     element={
                       <ProtectedRoute>
-                        <RoleProtectedRoute allowedRole={['admin', 'staff', 'employee']}>
+                        <RoleProtectedRoute allowedRole={['admin', 'super_admin', 'staff', 'profissional', 'employee']}>
                           <EmployeeMode />
                         </RoleProtectedRoute>
                       </ProtectedRoute>

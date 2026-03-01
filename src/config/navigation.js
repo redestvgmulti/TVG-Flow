@@ -65,6 +65,14 @@ export const NAV_ITEMS = [
         showOnMobileBottom: true
     },
     {
+        key: 'staff-autopublisher',
+        label: 'Criar Matérias',
+        path: '/flowos/autopublisher/employee',
+        icon: Rss,
+        roles: ['staff', 'profissional', 'employee'],
+        showOnMobileBottom: false
+    },
+    {
         key: 'profile',
         label: 'Perfil',
         path: '/staff/profile',
