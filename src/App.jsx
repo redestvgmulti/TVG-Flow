@@ -147,17 +147,7 @@ function App() {
                     <Route path="system" element={<SystemStatusPage />} />
                   </Route>
 
-                  {/* Employee Mode Shared Route */}
-                  <Route
-                    path="/flowos/autopublisher/employee"
-                    element={
-                      <ProtectedRoute>
-                        <RoleProtectedRoute allowedRole={['admin', 'super_admin', 'staff', 'profissional', 'employee']}>
-                          <EmployeeMode />
-                        </RoleProtectedRoute>
-                      </ProtectedRoute>
-                    }
-                  />
+
 
                   <Route path="/" element={<Navigate to="/login" replace />} />
                 </Routes>
