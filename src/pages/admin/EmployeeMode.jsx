@@ -3,12 +3,13 @@ import { createPortal } from 'react-dom';
 import { supabase } from '../../services/supabase';
 import { CheckCircle2, Copy, Download, X, AlertCircle, RefreshCcw, ImageIcon, Brain, Search, SearchCode } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { resolveClienteId } from '../../services/resolveClienteId';
 
-// Cliente Fixo por ora
-const FIXED_CLIENT_ID = 'cd287e6e-f273-4d0f-a72d-2a8c391e40e9';
+// Fallback provider client
+const FALLBACK_CLIENT_ID = 'cd287e6e-f273-4d0f-a72d-2a8c391e40e9';
 
 export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaId }) {
-    const { user: ctxUser } = useAuth();
+    const { user: ctxUser, professionalId, role } = useAuth();
     const user = propUser || ctxUser;
 
     const [form, setForm] = useState({
@@ -26,6 +27,17 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
     const [actionBaixou, setActionBaixou] = useState(false);
     const [actionCopiou, setActionCopiou] = useState(false);
     const [isPublished, setIsPublished] = useState(false);
+
+    // Multi-tenant resolution
+    const [clienteId, setClienteId] = useState(empresaId || FALLBACK_CLIENT_ID);
+
+    useEffect(() => {
+        if (isOpen && professionalId && !empresaId) {
+            resolveClienteId(professionalId, role).then(id => {
+                if (id) setClienteId(id);
+            });
+        }
+    }, [isOpen, professionalId, role, empresaId]);
 
     // Tab state: 'create' | 'history'
     const [activeTab, setActiveTab] = useState('create');
@@ -122,12 +134,12 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
             }
 
             const payload = {
-                empresa_id: FIXED_CLIENT_ID,
+                empresa_id: clienteId,
                 titulo: finalTitulo,
                 conteudo: finalConteudo,
                 url_original: form.url_original || null,
                 imagem_url: finalImageUrl,
-                auth_user_id: user?.id
+                auth_user_id: professionalId || user?.id
             };
 
             const { data, error } = await supabase.functions.invoke('ap-employee-generator', {
