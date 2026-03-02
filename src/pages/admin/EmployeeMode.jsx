@@ -33,11 +33,16 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
 
     useEffect(() => {
         if (isOpen && professionalId && !empresaId) {
-            resolveClienteId(professionalId, role).then(id => {
-                if (id) setClienteId(id);
+            // Use server-side RPC to bypass RLS restrictions safely
+            supabase.rpc('get_my_cliente_id').then(({ data: id, error }) => {
+                if (error) {
+                    console.error('[EmployeeMode] Failed to resolve clienteId via RPC:', error);
+                } else if (id) {
+                    setClienteId(id);
+                }
             });
         }
-    }, [isOpen, professionalId, role, empresaId]);
+    }, [isOpen, professionalId, empresaId]);
 
     // Tab state: 'create' | 'history'
     const [activeTab, setActiveTab] = useState('create');
