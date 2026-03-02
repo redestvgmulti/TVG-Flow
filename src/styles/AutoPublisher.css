@@ -220,13 +220,18 @@
 
 /* ── Review Card ──────────────────────────────────────────── */
 .ap-review-card {
-  background: #ffffff;
-  border: 1px solid var(--color-border-light, #e2e8f0);
-  border-radius: var(--radius-md, 8px);
+  background: var(--color-bg-surface, #ffffff);
+  border: 1px solid var(--color-border, #E5E7EB);
+  border-radius: var(--radius-md, 10px);
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-soft, 0 2px 8px rgba(0,0,0,0.04));
+  transition: box-shadow var(--transition-fast, 150ms ease), transform var(--transition-fast, 150ms ease);
+}
+
+.ap-review-card:hover {
+  box-shadow: var(--shadow-float, 0 8px 16px rgba(0,0,0,0.08));
 }
 
 .ap-card-score-bar {
@@ -379,20 +384,174 @@
 }
 
 .ap-btn-reject {
-  background: #ffffff;
-  color: var(--color-danger, #ef4444);
-  border: 1px solid var(--color-border, #cbd5e1);
-  border-radius: var(--radius-sm, 4px);
+  background: var(--color-bg-surface, #ffffff);
+  color: var(--color-danger, #DC2626);
+  border: 1px solid var(--color-border, #E5E7EB);
+  border-radius: var(--radius-md, 10px);
   padding: 0.6rem 0.8rem;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.15s;
+  transition: all var(--transition-fast, 150ms ease);
+  font-size: 0.875rem;
+  font-weight: 500;
 }
 
 .ap-btn-reject:hover {
-  background: var(--color-bg-hover, #f1f5f9);
+  background: var(--color-danger-bg, #FEE2E2);
+  border-color: var(--color-danger, #DC2626);
+}
+
+/* ── ReviewCard Action Buttons ─────────────────────────────── */
+.ap-card-actions-wrap {
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ap-card-btn-row {
+  display: flex;
+  gap: 8px;
+}
+
+/* Secondary action button (Baixar Arte, links de asset) */
+.ap-card-btn-secondary {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 12px;
+  background: var(--color-bg-surface, #ffffff);
+  color: var(--color-text-primary, #111827);
+  border: 1px solid var(--color-border, #E5E7EB);
+  border-radius: var(--radius-md, 10px);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast, 150ms ease);
+  box-shadow: var(--shadow-soft, 0 2px 8px rgba(0,0,0,0.04));
+}
+
+.ap-card-btn-secondary:hover:not(:disabled) {
+  background: var(--color-bg-subtle, #F0F2F5);
+  border-color: var(--color-border-hover, #D1D5DB);
+}
+
+/* Copy button — muda para verde quando copiado */
+.ap-card-btn-copy {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 12px;
+  background: var(--color-bg-surface, #ffffff);
+  color: var(--color-text-primary, #111827);
+  border: 1px solid var(--color-border, #E5E7EB);
+  border-radius: var(--radius-md, 10px);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-smooth, 300ms cubic-bezier(0.4, 0, 0.2, 1));
+  box-shadow: var(--shadow-soft, 0 2px 8px rgba(0,0,0,0.04));
+}
+
+.ap-card-btn-copy:hover:not(.copied) {
+  background: var(--color-bg-subtle, #F0F2F5);
+  border-color: var(--color-border-hover, #D1D5DB);
+}
+
+.ap-card-btn-copy.copied {
+  background: var(--color-success-bg, #D1FAE5);
+  color: var(--color-success, #059669);
+  border-color: var(--color-success, #059669);
+}
+
+/* Primary approve button */
+.ap-card-btn-primary {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 12px;
+  background: var(--color-primary, #2563EB);
+  color: #ffffff;
+  border: none;
+  border-radius: var(--radius-md, 10px);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast, 150ms ease);
+  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+}
+
+.ap-card-btn-primary:hover:not(:disabled) {
+  background: var(--color-primary-hover, #1D4ED8);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+  transform: translateY(-1px);
+}
+
+/* Dark/Black Studio button */
+.ap-card-btn-black {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 12px;
+  background: linear-gradient(135deg, #111827 0%, #1f2937 100%);
+  color: #ffffff;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--radius-md, 10px);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast, 150ms ease);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+}
+
+.ap-card-btn-black:hover:not(:disabled) {
+  background: linear-gradient(135deg, #1f2937 0%, #374151 100%);
+  box-shadow: 0 6px 12px rgba(0,0,0,0.2);
+  transform: translateY(-1px);
+}
+
+/* Send to Studio full-width button */
+.ap-card-btn-full {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 11px 16px;
+  border: none;
+  border-radius: var(--radius-md, 10px);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast, 150ms ease);
+}
+
+.ap-card-btn-full.sent {
+  background: var(--color-success, #059669);
+  color: #ffffff;
+  cursor: default;
+}
+
+.ap-card-btn-full.unsent {
+  background: linear-gradient(135deg, #111827 0%, #1f2937 100%);
+  color: #ffffff;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+}
+
+.ap-card-btn-full.unsent:hover {
+  background: linear-gradient(135deg, #1f2937 0%, #374151 100%);
+  box-shadow: 0 6px 12px rgba(0,0,0,0.2);
+  transform: translateY(-1px);
 }
 
 /* ── Empty State ──────────────────────────────────────────── */

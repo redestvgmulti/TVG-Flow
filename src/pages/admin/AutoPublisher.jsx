@@ -3,7 +3,8 @@ import { supabase } from '../../services/supabase'
 import '../../styles/AutoPublisher.css'
 import {
     Rss, RefreshCcw, Check, X, Pencil, Copy, Download,
-    ImageIcon, Clock, Zap, Info, Filter, MoreVertical, Brain, Heart, MessageCircle, Send, Bookmark, Plus, UploadCloud, Link2
+    ImageIcon, Clock, Zap, Info, Filter, MoreVertical, Brain, Heart, MessageCircle, Send, Bookmark, Plus, UploadCloud, Link2,
+    Video, CheckCircle2
 } from 'lucide-react'
 import AutoPublisherSettings from './AutoPublisherSettings'
 import EditorialEngine from '../../features/editorial/EditorialEngine'
@@ -966,7 +967,7 @@ function ReviewCard({ item, onApprove, onReject, onStudio, onSendToStudio, onApp
     }
 
     return (
-        <div className="ap-review-card insta-mock" style={{ maxWidth: '400px', margin: '0 auto', background: '#fff', border: '1px solid #dbdbdb', borderRadius: '8px', paddingBottom: '16px', display: 'flex', flexDirection: 'column' }}>
+        <div className="ap-review-card insta-mock" style={{ maxWidth: '400px', margin: '0 auto', paddingBottom: '16px' }}>
 
             {/* Header (Score / Confiança / Fake Header Insta) */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid #efefef' }}>
@@ -1088,15 +1089,15 @@ function ReviewCard({ item, onApprove, onReject, onStudio, onSendToStudio, onApp
 
             {/* Ações de Triagem na Fila SELECIONADOS */}
             {item.status === 'selected' && (
-                <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <div className="ap-card-actions" style={{ display: 'flex', gap: '8px', borderTop: 'none', background: 'transparent', padding: '0' }}>
-                        <button className="ap-btn-reject" onClick={() => onReject(item)} title="Descartar" style={{ background: '#fff', border: '1px solid #dbdbdb', borderRadius: '8px', padding: '8px', color: '#ed4956', flexShrink: 0, cursor: 'pointer' }}>
+                <div className="ap-card-actions-wrap">
+                    <div className="ap-card-btn-row">
+                        <button className="ap-btn-reject" onClick={() => onReject(item)} title="Descartar" style={{ flexShrink: 0 }}>
                             <X size={16} />
                         </button>
-                        <button onClick={() => onStudio(item)} style={{ flex: 1, background: '#1c1c1e', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px', fontSize: '13px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', cursor: 'pointer' }}>
-                            🎥 Studio
+                        <button className="ap-card-btn-black" onClick={() => onStudio(item)}>
+                            <Video size={14} /> Studio
                         </button>
-                        <button onClick={() => onApproveSelected(item)} style={{ background: '#0095f6', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px', fontSize: '13px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', flex: 1, cursor: 'pointer' }}>
+                        <button className="ap-card-btn-primary" onClick={() => onApproveSelected(item)}>
                             Aprovar p/ IG
                         </button>
                     </div>
@@ -1105,25 +1106,30 @@ function ReviewCard({ item, onApprove, onReject, onStudio, onSendToStudio, onApp
 
             {/* Ações de Aprovação (Rejeitar / Editar / Aprovar) */}
             {item.status === 'pending_review' && (
-                <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                        <button onClick={handleDownload} title="Baixar Arte" style={{ flex: 1, background: '#fff', border: '1px solid #dbdbdb', borderRadius: '8px', padding: '8px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600, color: '#262626', cursor: 'pointer' }}>
+                <div className="ap-card-actions-wrap">
+                    <div className="ap-card-btn-row">
+                        <button className="ap-card-btn-secondary" onClick={handleDownload} title="Baixar Arte">
                             <Download size={14} /> Baixar Arte
                         </button>
-                        <button onClick={handleCopy} title="Copiar Texto" style={{ flex: 1, background: copied ? 'var(--color-success-bg)' : '#fff', border: copied ? '1px solid var(--color-success-text)' : '1px solid #dbdbdb', borderRadius: '8px', padding: '8px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600, color: copied ? 'var(--color-success-text)' : '#262626', cursor: 'pointer', transition: 'all 0.2s' }}>
-                            {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copiado!' : 'Copiar Texto'}
+                        <button
+                            className={`ap-card-btn-copy${copied ? ' copied' : ''}`}
+                            onClick={handleCopy}
+                            title="Copiar Texto"
+                        >
+                            {copied ? <Check size={14} /> : <Copy size={14} />}
+                            {copied ? 'Copiado!' : 'Copiar Texto'}
                         </button>
                     </div>
 
-                    <div className="ap-card-actions" style={{ display: 'flex', gap: '8px', borderTop: 'none', background: 'transparent', padding: '0' }}>
-                        <button className="ap-btn-reject" onClick={() => onReject(item)} title="Descartar" style={{ background: '#fff', border: '1px solid #dbdbdb', borderRadius: '8px', padding: '8px', color: '#ed4956', flexShrink: 0, cursor: 'pointer' }}>
+                    <div className="ap-card-btn-row">
+                        <button className="ap-btn-reject" onClick={() => onReject(item)} title="Descartar" style={{ flexShrink: 0 }}>
                             <X size={16} />
                         </button>
-                        <button onClick={() => onStudio(item)} style={{ flex: 1, background: '#1c1c1e', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px', fontSize: '13px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', cursor: 'pointer' }}>
-                            🎥 Studio
+                        <button className="ap-card-btn-black" onClick={() => onStudio(item)}>
+                            <Video size={14} /> Studio
                         </button>
-                        <button className="ap-btn-approve" onClick={() => onApprove(item)} style={{ background: '#0095f6', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px', fontSize: '13px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', flex: 1, cursor: 'pointer' }}>
-                            Aprovar <Check size={16} style={{ marginLeft: 6 }} />
+                        <button className="ap-card-btn-primary" onClick={() => onApprove(item)}>
+                            Aprovar <Check size={16} />
                         </button>
                     </div>
                 </div>
@@ -1131,25 +1137,30 @@ function ReviewCard({ item, onApprove, onReject, onStudio, onSendToStudio, onApp
 
             {/* Ações da Gravação Mode */}
             {(item.status === 'studio_selected' || item.status === 'studio_ready') && (
-                <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
-                        {item.studio_media_image_url && (
-                            <button onClick={() => window.open(item.studio_media_image_url, '_blank')} style={{ flex: 1, background: '#fff', border: '1px solid #dbdbdb', borderRadius: '8px', padding: '8px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600, color: '#262626', cursor: 'pointer' }}>
-                                <Download size={14} /> Imagem
-                            </button>
-                        )}
-                        {item.studio_media_video_url && (
-                            <button onClick={() => window.open(item.studio_media_video_url, '_blank')} style={{ flex: 1, background: '#fff', border: '1px solid #dbdbdb', borderRadius: '8px', padding: '8px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600, color: '#262626', cursor: 'pointer' }}>
-                                <Download size={14} /> Vídeo
-                            </button>
-                        )}
-                    </div>
+                <div className="ap-card-actions-wrap">
+                    {(item.studio_media_image_url || item.studio_media_video_url) && (
+                        <div className="ap-card-btn-row" style={{ marginBottom: '4px' }}>
+                            {item.studio_media_image_url && (
+                                <button className="ap-card-btn-secondary" onClick={() => window.open(item.studio_media_image_url, '_blank')}>
+                                    <Download size={14} /> Imagem
+                                </button>
+                            )}
+                            {item.studio_media_video_url && (
+                                <button className="ap-card-btn-secondary" onClick={() => window.open(item.studio_media_video_url, '_blank')}>
+                                    <Download size={14} /> Vídeo
+                                </button>
+                            )}
+                        </div>
+                    )}
 
                     <button
+                        className={`ap-card-btn-full ${item.enviado_para_studio ? 'sent' : 'unsent'}`}
                         onClick={() => onSendToStudio(item)}
                         disabled={item.enviado_para_studio}
-                        style={{ background: item.enviado_para_studio ? '#34c759' : '#000', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px', fontSize: '13px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%', cursor: item.enviado_para_studio ? 'default' : 'pointer' }}>
-                        {item.enviado_para_studio ? 'Enviado para Gravação ✅' : 'Enviar para Studio 🎥'}
+                    >
+                        {item.enviado_para_studio
+                            ? <><CheckCircle2 size={15} /> Enviado para Gravação</>
+                            : <><Video size={15} /> Enviar para Studio</>}
                     </button>
                 </div>
             )}
