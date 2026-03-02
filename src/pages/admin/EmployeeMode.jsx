@@ -490,35 +490,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                     />
                                 </div>
 
-                                <button
-                                    type="submit"
-                                    disabled={isSubmitting || isUploading || (!form.titulo && !form.url_original)}
-                                    style={{
-                                        width: '100%',
-                                        background: (isSubmitting || isUploading || (!form.titulo && !form.url_original)) ? '#cbd5e1' : '#2563eb',
-                                        color: '#fff',
-                                        border: 'none',
-                                        padding: '16px',
-                                        borderRadius: '12px',
-                                        fontSize: '16px',
-                                        fontWeight: 600,
-                                        marginTop: '10px',
-                                        cursor: (isSubmitting || isUploading || (!form.titulo && !form.url_original)) ? 'not-allowed' : 'pointer',
-                                        transition: 'all 0.2s',
-                                        display: 'flex',
-                                        justifyContent: 'center',
-                                        alignItems: 'center',
-                                        gap: '10px',
-                                        boxShadow: (isSubmitting || isUploading || (!form.titulo && !form.url_original)) ? 'none' : '0 4px 6px -1px rgba(37, 99, 235, 0.2), 0 2px 4px -1px rgba(37, 99, 235, 0.1)'
-                                    }}
-                                >
-                                    {isSubmitting || isUploading ? (
-                                        <><RefreshCcw size={20} className="spin" /> Processando com IA...</>
-                                    ) : (
-                                        <><Brain size={20} /> Gerar Post Pronto</>
-                                    )}
-                                </button>
-                                <p style={{ textAlign: 'center', fontSize: '12px', color: '#94a3b8', margin: '-10px 0 0 0' }}>Sua empresa confia no que você gera.</p>
+
                             </form>
                         )
                     )}
