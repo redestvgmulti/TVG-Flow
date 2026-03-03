@@ -144,7 +144,8 @@ Deno.serve(async (req: Request) => {
                     humanization: context?.humanization,
                     rules: context?.rules || [],
                     ragContext: context?.ragContext || [],
-                    openaiKey: finalOpenAiKey
+                    openaiKey: finalOpenAiKey,
+                    contentType: item.content_type
                 });
             }
             finalModel = context?.settings?.model_primary || OPENAI_MODEL_G;

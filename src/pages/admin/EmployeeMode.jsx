@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../../services/supabase';
-import { CheckCircle2, Copy, Download, X, AlertCircle, RefreshCcw, ImageIcon, Brain, Search, SearchCode } from 'lucide-react';
+import { CheckCircle2, Copy, Download, X, AlertCircle, RefreshCcw, ImageIcon, Brain, Search, SearchCode, Video, Image as ImageIconLucide } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { resolveClienteId } from '../../services/resolveClienteId';
 
 // Fallback provider client
 const FALLBACK_CLIENT_ID = 'cd287e6e-f273-4d0f-a72d-2a8c391e40e9';
@@ -18,6 +17,8 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
         imagem_url: '',
         url_original: ''
     });
+
+    const [contentType, setContentType] = useState('feed'); // 'feed' | 'reels'
 
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [successData, setSuccessData] = useState(null);
@@ -110,7 +111,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                     .limit(1);
 
                 if (!searchError && existingNews && existingNews.length > 0) {
-                    throw new Error(`Esta matéria já foi gerada no sistema por outro usuário.Pautas duplicadas não são permitidas.`);
+                    throw new Error(`Esta matéria já foi gerada no sistema por outro usuário. Pautas duplicadas não são permitidas.`);
                 }
             }
 
@@ -134,7 +135,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                 throw new Error('Não foi possível obter Título e Conteúdo. Preencha manualmente ou tente outro link.');
             }
 
-            if (selectedFile) {
+            if (selectedFile && contentType === 'feed') {
                 finalImageUrl = await handleFileUpload(selectedFile);
             }
 
@@ -143,7 +144,8 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                 titulo: finalTitulo,
                 conteudo: finalConteudo,
                 url_original: form.url_original || null,
-                imagem_url: finalImageUrl,
+                imagem_url: contentType === 'feed' ? finalImageUrl : null,
+                content_type: contentType,
                 auth_user_id: professionalId || user?.id
             };
 
@@ -205,7 +207,12 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
 
     const handleCopy = async () => {
         if (!successData?.caption) return;
-        navigator.clipboard.writeText(successData.caption);
+
+        let copyText = successData.caption;
+        // Removido a concatenação forçada de Roteiro + Legenda para Reels, para manter a legenda "clean" como solicitado.
+        // O roteiro continua sendo exibido no modal para consulta se for Reels.
+
+        navigator.clipboard.writeText(copyText);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
         const newCopiou = true;
@@ -216,7 +223,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
         }
     };
 
-    const handleDownloadUrl = async (url) => {
+    const handleDownloadUrl = async (url, type = 'feed') => {
         if (!url) return;
         try {
             const response = await fetch(url);
@@ -224,7 +231,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
             const objUrl = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = objUrl;
-            link.download = `materia_${Date.now()}.png`;
+            link.download = type === 'reels' ? `frame_${Date.now()}.png` : `materia_${Date.now()}.png`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -236,7 +243,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
     };
 
     const handleDownload = async () => {
-        await handleDownloadUrl(successData?.render_url);
+        await handleDownloadUrl(successData?.render_url, successData?.content_type);
         const newBaixou = true;
         setActionBaixou(newBaixou);
         if (successData?.news_id) {
@@ -295,7 +302,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #f0f0f0', background: '#fafafa', flexShrink: 0 }}>
                     <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#111827', margin: 0, display: 'flex', alignItems: 'center', gap: '10px', letterSpacing: '-0.02em' }}>
                         <div style={{ background: '#eff6ff', color: '#3b82f6', padding: '8px', borderRadius: '10px', display: 'flex' }}><Brain size={18} /></div>
-                        Painel de Pautas AI
+                        Nova Matéria
                     </h2>
                     <button onClick={onClose} style={{ background: '#f3f4f6', border: 'none', cursor: 'pointer', color: '#6b7280', width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}>
                         <X size={18} />
@@ -308,7 +315,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                         onClick={() => setActiveTab('create')}
                         style={{ padding: '16px 20px', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: 600, color: activeTab === 'create' ? '#3b82f6' : '#64748b', borderBottom: activeTab === 'create' ? '2px solid #3b82f6' : '2px solid transparent', transition: 'all 0.2s' }}
                     >
-                        Criar Matéria
+                        Criar Conteúdo
                     </button>
                     <button
                         onClick={() => setActiveTab('history')}
@@ -335,7 +342,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                 <div style={{ background: '#dcfce7', border: '1px solid #bbf7d0', padding: '16px', borderRadius: '12px', display: 'flex', gap: '12px', alignItems: 'center' }}>
                                     <CheckCircle2 color="#16a34a" size={24} />
                                     <div>
-                                        <h3 style={{ margin: 0, fontSize: '15px', color: '#166534', fontWeight: 700 }}>Material Pronto!</h3>
+                                        <h3 style={{ margin: 0, fontSize: '15px', color: '#166534', fontWeight: 700 }}>Material Pronto! ({successData.content_type === 'reels' ? 'Reels' : 'Feed'})</h3>
                                         <span style={{ fontSize: '13px', color: '#15803d' }}>Template usado: {successData.template_nome}</span>
                                     </div>
                                 </div>
@@ -345,7 +352,16 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                     <img src={successData.render_url} alt="Arte Final" style={{ width: '100%', display: 'block', objectFit: 'cover' }} />
                                 </div>
 
-                                {/* Caption Result */}
+                                {/* Content Results */}
+                                {successData.content_type === 'reels' && successData.roteiro && (
+                                    <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '16px', border: '1px dashed #cbd5e1', position: 'relative' }}>
+                                        <h4 style={{ margin: '0 0 8px 0', fontSize: '13px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Roteiro Sugerido</h4>
+                                        <p style={{ margin: 0, fontSize: '15px', color: '#334155', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
+                                            {successData.roteiro}
+                                        </p>
+                                    </div>
+                                )}
+
                                 <div style={{ background: '#fff', padding: '16px', borderRadius: '16px', border: '1px solid #e2e8f0', position: 'relative' }}>
                                     <h4 style={{ margin: '0 0 8px 0', fontSize: '13px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Legenda Sugerida</h4>
                                     <p style={{ margin: 0, fontSize: '15px', color: '#334155', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
@@ -356,7 +372,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                 {/* Action Tracking Bar */}
                                 {(actionBaixou || actionCopiou) && !isPublished && (
                                     <div style={{ background: '#fef9c3', border: '1px solid #fde68a', borderRadius: '10px', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', color: '#92400e', fontWeight: 500 }}>
-                                        <span>Falta {actionBaixou ? '✓ Arte' : '◦ Arte'} {actionCopiou ? '✓ Legenda' : '◦ Legenda'} para publicar</span>
+                                        <span>Falta {actionBaixou ? '✓ Arte' : '◦ Arte'} {actionCopiou ? '✓ Legenda / Roteiro' : '◦ Textos'} para publicar</span>
                                     </div>
                                 )}
                                 {isPublished && (
@@ -369,13 +385,13 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                 {/* Action Buttons */}
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '10px' }}>
                                     <button onClick={handleDownload} style={{ width: '100%', background: actionBaixou ? '#16a34a' : '#111827', color: '#fff', border: 'none', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', boxShadow: '0 4px 6px -1px rgba(17, 24, 39, 0.1)', cursor: 'pointer', transition: 'all 0.2s' }}>
-                                        {actionBaixou ? <CheckCircle2 size={18} /> : <Download size={18} />} {actionBaixou ? 'Arte baixada!' : 'Baixar Arte'}
+                                        {actionBaixou ? <CheckCircle2 size={18} /> : <Download size={18} />} {actionBaixou ? 'Frame/Resumo Baixado!' : 'Baixar Imagem/Moldura'}
                                     </button>
                                     <button onClick={handleCopy} style={{ width: '100%', background: '#fff', color: actionCopiou ? '#16a34a' : '#111827', border: actionCopiou ? '2px solid #16a34a' : '1px solid #e2e8f0', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: 'pointer', transition: 'all 0.2s' }}>
-                                        {actionCopiou ? <><CheckCircle2 size={18} color="#16a34a" /> Legenda copiada!</> : <>{copied ? <><CheckCircle2 size={18} color="#10b981" /> Copiado!</> : <><Copy size={18} /> Copiar Legenda</>}</>}
+                                        {actionCopiou ? <><CheckCircle2 size={18} color="#16a34a" /> Copiado!</> : <><Copy size={18} /> Copiar {successData.content_type === 'reels' ? 'Roteiro e Legenda' : 'Legenda'}</>}
                                     </button>
                                     <button onClick={() => { setSuccessData(null); setForm({ titulo: '', conteudo: '', imagem_url: '', url_original: '' }); setSelectedFile(null); }} style={{ background: 'transparent', color: '#64748b', border: 'none', padding: '16px', fontSize: '14px', fontWeight: 600, marginTop: '4px', cursor: 'pointer' }}>
-                                        Criar Nova Matéria
+                                        Novo Conteúdo
                                     </button>
                                 </div>
 
@@ -383,13 +399,31 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                         ) : (
                             <form onSubmit={handleGenerate} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
+                                {/* Formato Selector */}
+                                <div style={{ display: 'flex', gap: '12px', background: '#f1f5f9', padding: '6px', borderRadius: '16px' }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setContentType('feed')}
+                                        style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', background: contentType === 'feed' ? '#fff' : 'transparent', color: contentType === 'feed' ? '#0f172a' : '#64748b', fontWeight: 600, fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: contentType === 'feed' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', cursor: 'pointer', transition: 'all 0.2s' }}
+                                    >
+                                        <ImageIconLucide size={18} /> Estático (Feed)
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setContentType('reels')}
+                                        style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', background: contentType === 'reels' ? '#fff' : 'transparent', color: contentType === 'reels' ? '#0f172a' : '#64748b', fontWeight: 600, fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: contentType === 'reels' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', cursor: 'pointer', transition: 'all 0.2s' }}
+                                    >
+                                        <Video size={18} /> Vídeo (Reels)
+                                    </button>
+                                </div>
+
                                 <div style={{ padding: '16px', background: '#e0f2fe', border: '1px solid #bae6fd', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px', width: '100%', boxSizing: 'border-box' }}>
                                     <label style={{ fontSize: '14px', fontWeight: 700, color: '#0284c7', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Motor de IA (Link)</label>
-                                    <p style={{ margin: 0, fontSize: '13px', color: '#0369a1' }}>Cole um link para a IA extrair todo o contexto e foto automaticamente.</p>
+                                    <p style={{ margin: 0, fontSize: '13px', color: '#0369a1' }}>Cole um link para a IA extrair todo o contexto e gerar os textos e {contentType === 'reels' ? 'o roteiro' : 'títulos'} automaticamente.</p>
                                     <input
                                         value={form.url_original || ''}
                                         onChange={e => setForm({ ...form, url_original: e.target.value })}
-                                        placeholder="https://globo.com/acidente..."
+                                        placeholder="https://globo.com/noticia..."
                                         style={{ width: '100%', padding: '14px', borderRadius: '10px', border: '1px solid #7dd3fc', fontSize: '15px', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' }}
                                         onFocus={e => e.target.style.borderColor = '#0284c7'}
                                         onBlur={e => e.target.style.borderColor = '#7dd3fc'}
@@ -403,11 +437,11 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                 </div>
 
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
-                                    <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Título (Manual)</label>
+                                    <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Título Principal</label>
                                     <input
                                         value={form.titulo}
                                         onChange={e => setForm({ ...form, titulo: e.target.value })}
-                                        placeholder="Grave acidente no centro..."
+                                        placeholder="Escreva a manchete aqui..."
                                         style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', appearance: 'none', boxSizing: 'border-box' }}
                                         onFocus={e => e.target.style.borderColor = '#94a3b8'}
                                         onBlur={e => e.target.style.borderColor = '#cbd5e1'}
@@ -419,7 +453,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                     <textarea
                                         value={form.conteudo}
                                         onChange={e => setForm({ ...form, conteudo: e.target.value })}
-                                        placeholder="Mais informações se necessário..."
+                                        placeholder="Informações para complementar o conteúdo ou instruir a IA..."
                                         rows={3}
                                         style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', resize: 'vertical', minHeight: '80px', appearance: 'none', boxSizing: 'border-box' }}
                                         onFocus={e => e.target.style.borderColor = '#94a3b8'}
@@ -427,85 +461,87 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                     />
                                 </div>
 
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
-                                    <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Foto de Capa</label>
+                                {contentType === 'feed' && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
+                                        <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Foto (Fundo do Card)</label>
 
-                                    <div
-                                        onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
-                                        onDragLeave={() => setIsDragging(false)}
-                                        onDrop={e => {
-                                            e.preventDefault();
-                                            setIsDragging(false);
-                                            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-                                                setSelectedFile(e.dataTransfer.files[0]);
-                                                setForm({ ...form, imagem_url: '' });
-                                            }
-                                        }}
-                                        style={{
-                                            border: isDragging ? '2px dashed #3b82f6' : '2px dashed #cbd5e1',
-                                            borderRadius: '12px',
-                                            padding: '20px 16px',
-                                            textAlign: 'center',
-                                            background: isDragging ? '#eff6ff' : '#f8fafc',
-                                            cursor: 'pointer',
-                                            transition: 'all 0.2s',
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            alignItems: 'center',
-                                            gap: '8px'
-                                        }}
-                                        onClick={() => document.getElementById('employee-file-input').click()}
-                                    >
-                                        <input
-                                            id="employee-file-input"
-                                            type="file"
-                                            accept="image/*"
-                                            style={{ display: 'none' }}
-                                            onChange={(e) => {
-                                                if (e.target.files && e.target.files[0]) {
-                                                    setSelectedFile(e.target.files[0]);
+                                        <div
+                                            onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
+                                            onDragLeave={() => setIsDragging(false)}
+                                            onDrop={e => {
+                                                e.preventDefault();
+                                                setIsDragging(false);
+                                                if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                                                    setSelectedFile(e.dataTransfer.files[0]);
                                                     setForm({ ...form, imagem_url: '' });
                                                 }
                                             }}
+                                            style={{
+                                                border: isDragging ? '2px dashed #3b82f6' : '2px dashed #cbd5e1',
+                                                borderRadius: '12px',
+                                                padding: '20px 16px',
+                                                textAlign: 'center',
+                                                background: isDragging ? '#eff6ff' : '#f8fafc',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                alignItems: 'center',
+                                                gap: '8px'
+                                            }}
+                                            onClick={() => document.getElementById('employee-file-input').click()}
+                                        >
+                                            <input
+                                                id="employee-file-input"
+                                                type="file"
+                                                accept="image/*"
+                                                style={{ display: 'none' }}
+                                                onChange={(e) => {
+                                                    if (e.target.files && e.target.files[0]) {
+                                                        setSelectedFile(e.target.files[0]);
+                                                        setForm({ ...form, imagem_url: '' });
+                                                    }
+                                                }}
+                                            />
+
+                                            {selectedFile ? (
+                                                <>
+                                                    <div style={{ background: '#dcfce7', color: '#166534', padding: '8px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                        <CheckCircle2 size={16} /> Arquivo Anexado: {selectedFile.name}
+                                                    </div>
+                                                    <span style={{ fontSize: '12px', color: '#64748b' }}>Clique para alterar</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <div style={{ background: '#e2e8f0', width: '40px', height: '40px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                        <ImageIcon size={20} color="#64748b" />
+                                                    </div>
+                                                    <span style={{ fontSize: '14px', color: '#475569', fontWeight: 500 }}>
+                                                        Clique ou arraste a imagem original aqui
+                                                    </span>
+                                                </>
+                                            )}
+                                        </div>
+
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '8px 0' }}>
+                                            <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
+                                            <span style={{ fontSize: '11px', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase' }}>OU URL</span>
+                                            <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
+                                        </div>
+
+                                        <input
+                                            value={form.imagem_url}
+                                            onChange={e => {
+                                                setForm({ ...form, imagem_url: e.target.value });
+                                                if (e.target.value) setSelectedFile(null);
+                                            }}
+                                            placeholder="https://exemplo.com/foto.jpg"
+                                            style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', appearance: 'none', boxSizing: 'border-box' }}
+                                            onFocus={e => e.target.style.borderColor = '#94a3b8'}
+                                            onBlur={e => e.target.style.borderColor = '#cbd5e1'}
                                         />
-
-                                        {selectedFile ? (
-                                            <>
-                                                <div style={{ background: '#dcfce7', color: '#166534', padding: '8px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                    <CheckCircle2 size={16} /> Arquivo Anexado: {selectedFile.name}
-                                                </div>
-                                                <span style={{ fontSize: '12px', color: '#64748b' }}>Clique para alterar</span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <div style={{ background: '#e2e8f0', width: '40px', height: '40px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                    <ImageIcon size={20} color="#64748b" />
-                                                </div>
-                                                <span style={{ fontSize: '14px', color: '#475569', fontWeight: 500 }}>
-                                                    Clique ou arraste a imagem original aqui
-                                                </span>
-                                            </>
-                                        )}
                                     </div>
-
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '8px 0' }}>
-                                        <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
-                                        <span style={{ fontSize: '11px', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase' }}>OU URL</span>
-                                        <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
-                                    </div>
-
-                                    <input
-                                        value={form.imagem_url}
-                                        onChange={e => {
-                                            setForm({ ...form, imagem_url: e.target.value });
-                                            if (e.target.value) setSelectedFile(null);
-                                        }}
-                                        placeholder="https://exemplo.com/foto.jpg"
-                                        style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', appearance: 'none', boxSizing: 'border-box' }}
-                                        onFocus={e => e.target.style.borderColor = '#94a3b8'}
-                                        onBlur={e => e.target.style.borderColor = '#cbd5e1'}
-                                    />
-                                </div>
+                                )}
 
 
                             </form>
@@ -554,11 +590,11 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                             )}
 
                                             <div style={{ display: 'flex', gap: '8px' }}>
-                                                <button onClick={() => { navigator.clipboard.writeText(item.caption); alert("Legenda copiada!") }} style={{ flex: 1, padding: '10px', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '13px', fontWeight: 600, color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: 'pointer' }}>
-                                                    <Copy size={16} /> Legenda
+                                                <button onClick={() => { navigator.clipboard.writeText(item.caption); alert("Textos copiados!") }} style={{ flex: 1, padding: '10px', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '13px', fontWeight: 600, color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: 'pointer' }}>
+                                                    <Copy size={16} /> Textos
                                                 </button>
                                                 <button onClick={() => handleDownloadUrl(item.render_url)} style={{ flex: 1, padding: '10px', background: '#1e293b', border: '1px solid #1e293b', borderRadius: '8px', fontSize: '13px', fontWeight: 600, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: 'pointer' }}>
-                                                    <Download size={16} /> Arte
+                                                    <Download size={16} /> Cópia (Frame/Arte)
                                                 </button>
                                             </div>
                                         </div>
@@ -607,7 +643,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                     Extraindo e Gerando IA...
                                 </>
                             ) : (
-                                <><Brain size={18} /> Gerar Matéria</>
+                                <><Brain size={18} /> {contentType === 'reels' ? 'Gerar Roteiro e Frame' : 'Gerar Matéria'}</>
                             )}
                         </button>
                     </div>

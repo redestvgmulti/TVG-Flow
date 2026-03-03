@@ -9,6 +9,7 @@ import {
 import AutoPublisherSettings from './AutoPublisherSettings'
 import EditorialEngine from '../../features/editorial/EditorialEngine'
 import { SkeletonCard, SkeletonTable } from '../../components/Skeleton'
+import { toast } from 'sonner'
 
 const FIXED_CLIENT_ID = 'cd287e6e-f273-4d0f-a72d-2a8c391e40e9'
 
@@ -45,7 +46,7 @@ export default function AutoPublisher() {
 
     // Manual Input State
     const [isManualModalOpen, setManualModalOpen] = useState(false)
-    const [manualForm, setManualForm] = useState({ titulo: '', conteudo: '', imagem_url: '', context_tag: '', url_original: '' })
+    const [manualForm, setManualForm] = useState({ titulo: '', conteudo: '', imagem_url: '', context_tag: '', url_original: '', content_type: 'feed' })
     const [isSubmittingManual, setIsSubmittingManual] = useState(false)
     const [selectedFile, setSelectedFile] = useState(null)
     const [isDragging, setIsDragging] = useState(false)
@@ -64,12 +65,19 @@ export default function AutoPublisher() {
 
     const fetchCounts = useCallback(async () => {
         if (!clienteId) return
-        const { data, error } = await supabase.from('ap_candidate_news').select('id, status, created_at').eq('cliente_id', clienteId)
+        const { data, error } = await supabase.schema('ap').from('candidate_news').select('id, status, created_at').eq('cliente_id', clienteId)
         if (error) console.error('[AutoPublisher] fetchCounts error:', error)
 
         const counts = {}
         for (const row of data ?? []) {
-            counts[row.status] = (counts[row.status] ?? 0) + 1
+            let mappedStatus = row.status
+            // Agrupar statuses equivalentes para a esteira visual
+            if (row.status === 'ready_to_publish') mappedStatus = 'pending_review'
+            if (row.status === 'processing') mappedStatus = 'pending_render'
+            if (row.status === 'studio_selected' || row.status === 'studio_ready') mappedStatus = 'studio'
+            if (row.status === 'approved' || row.status === 'queued_for_posting') mappedStatus = 'posted'
+
+            counts[mappedStatus] = (counts[mappedStatus] ?? 0) + 1
         }
         setStageCounts(counts)
 
@@ -82,7 +90,7 @@ export default function AutoPublisher() {
         setMetrics({
             ingeridas: ingeridasCount,
             processadas: (counts['scored'] ?? 0) + (counts['selected'] ?? 0),
-            revisao: counts['pending_review'] ?? 0,
+            revisao: (counts['pending_review'] ?? 0) + (counts['ready_to_publish'] ?? 0),
             agendadas: counts['queued_for_posting'] ?? 0,
             publicadas: counts['posted'] ?? 0,
         })
@@ -92,18 +100,23 @@ export default function AutoPublisher() {
         if (!clienteId) return
         setLoading(true)
         const { data, error } = await supabase
-            .from('ap_candidate_news_complete')
+            .schema('ap')
+            .from('candidate_news')
             .select(`
         id, titulo, headline, caption, render_url, imagem_url,
-        status, posicao_feed, horario_agendado, created_at,
-        categoria, fonte_id, visual_energy_level, context_tag,
-        studio_media_image_url, studio_media_video_url, enviado_para_studio, roteiro_studio
+        status, created_at, context_tag, content_type,
+        template_nome_snapshot
       `)
             .eq('cliente_id', clienteId)
-            .in('status', ['raw', 'scored', 'selected', 'pending_render', 'pending_review', 'approved', 'queued_for_posting', 'studio_selected', 'studio_ready'])
-            .order('posicao_feed', { ascending: true })
+            .in('status', ['raw', 'scored', 'selected', 'pending_render', 'pending_review', 'approved', 'queued_for_posting', 'studio_selected', 'studio_ready', 'ready_to_publish', 'processing'])
+            .order('created_at', { ascending: false })
         if (error) console.error('[AutoPublisher] fetchReview error:', error)
-        else console.log('[AutoPublisher] Fetched review items:', data?.length)
+        else {
+            console.log('[AutoPublisher] Fetched review items:', data?.length)
+            if (data?.length > 0) {
+                console.log('[AutoPublisher] Review statuses:', data.map(i => i.status))
+            }
+        }
         setReviewItems(data ?? [])
         setLoading(false)
     }, [clienteId])
@@ -113,10 +126,10 @@ export default function AutoPublisher() {
         setLoading(true)
         const { data } = await supabase
             .from('ap_candidate_news')
-            .select('id, titulo, headline, caption, render_url, instagram_post_id, horario_agendado, status')
+            .select('id, titulo, headline, caption, render_url, instagram_post_id, horario_agendado, status, content_type')
             .eq('cliente_id', clienteId)
             .in('status', ['posted', 'rejected'])
-            .order('horario_agendado', { ascending: false })
+            .order('created_at', { ascending: false })
             .limit(30)
         setPublishedItems(data ?? [])
         setLoading(false)
@@ -130,10 +143,10 @@ export default function AutoPublisher() {
             // 1. Fetch news items
             const { data: newsData, error: newsError } = await supabase
                 .from('ap_candidate_news_complete')
-                .select(`id, titulo, headline, caption, render_url, imagem_url, status, gerado_em, template_nome_snapshot, template_ordem, criado_por_user_id, context_tag`)
+                .select(`id, titulo, headline, caption, render_url, imagem_url, status, gerado_em, created_at, template_nome_snapshot, template_ordem, criado_por_user_id, context_tag, content_type`)
                 .eq('cliente_id', clienteId)
                 .eq('role_criador', 'employee')
-                .order('gerado_em', { ascending: false })
+                .order('created_at', { ascending: false })
                 .limit(50)
 
             if (newsError) throw newsError;
@@ -208,8 +221,8 @@ export default function AutoPublisher() {
                 'postgres_changes',
                 {
                     event: '*', // Escuta INSERT, UPDATE, DELETE
-                    schema: 'public',
-                    table: 'ap_candidate_news',
+                    schema: 'ap',
+                    table: 'candidate_news',
                     // Idealmente filter: `cliente_id=eq.${clienteId}` mas RLS cuidará ou filtramos localmente
                 },
                 (payload) => {
@@ -239,8 +252,8 @@ export default function AutoPublisher() {
     }, [clienteId, tab, fetchCounts, fetchReview, fetchPublished, fetchEmployeeItems, fetchSystemConfig])
 
     async function handleApprove(item) {
-        if (item.status !== 'pending_review') return
-        await supabase.from('ap_candidate_news').update({ status: 'posted', instagram_post_id: 'manual_action' }).eq('id', item.id)
+        if (item.status !== 'pending_review' && item.status !== 'ready_to_publish') return
+        await supabase.schema('ap').from('candidate_news').update({ status: 'posted' }).eq('id', item.id)
 
         await supabase.from('ap_learning_history').insert({
             cliente_id: clienteId, news_id: item.id, categoria: item.categoria, fonte_id: item.fonte_id, acao: 'approved', score_delta: 1,
@@ -249,7 +262,7 @@ export default function AutoPublisher() {
     }
 
     async function handleReject(item) {
-        await supabase.from('ap_candidate_news').update({ status: 'rejected' }).eq('id', item.id)
+        await supabase.schema('ap').from('candidate_news').update({ status: 'rejected' }).eq('id', item.id)
         await supabase.from('ap_learning_history').insert({
             cliente_id: clienteId, news_id: item.id, categoria: item.categoria, fonte_id: item.fonte_id, acao: 'rejected', score_delta: -1,
         })
@@ -260,12 +273,14 @@ export default function AutoPublisher() {
         if (item.status !== 'pending_review') return
         setIsProcessing(true) // Mostrar loading visual
         try {
-            const { error } = await supabase.functions.invoke('ap-content-production', { body: { action: 'process_studio', newsId: item.id } });
-            if (error) throw error;
-            alert("Roteiro de Estúdio gerado com sucesso!")
+            const { data, error } = await supabase.functions.invoke('ap-content-production', {
+                body: { action: 'process_studio', newsId: item.id }
+            })
+            if (error) throw error
+            toast.success("Roteiro de Estúdio gerado com sucesso!")
         } catch (err) {
-            console.error('[AutoPublisher] handleStudio error:', err)
-            alert("Falha ao gerar roteiro do estúdio pela IA.")
+            console.error('[AutoPublisher] handleStudioProcess error:', err)
+            toast.error("Falha ao gerar roteiro do estúdio pela IA.")
         }
         setIsProcessing(false)
         fetchReview(); fetchCounts()
@@ -277,12 +292,12 @@ export default function AutoPublisher() {
         if (!ok) return;
 
         try {
-            const { error } = await supabase.functions.invoke('ap-send-to-studio', { body: { newsId: item.id } });
-            if (error) throw error;
-            alert("Enviado para gravação com sucesso!");
+            const { error: updErr } = await supabase.from('ap_candidate_news').update({ status: 'studio_ready' }).eq('id', item.id)
+            if (updErr) throw updErr
+            toast.success("Enviado para gravação com sucesso!");
         } catch (err) {
-            console.error('[AutoPublisher] handleSendToStudio error:', err)
-            alert("Falha ao sincronizar com o Estúdio.")
+            console.error('[AutoPublisher] approveToStudio error:', err)
+            toast.error("Falha ao sincronizar com o Estúdio.")
         }
         fetchReview(); fetchCounts()
     }
@@ -291,14 +306,15 @@ export default function AutoPublisher() {
         if (item.status !== 'selected') return
         setIsProcessing(true) // Mostrar loading visual
         try {
-            // Repassa para a IA, forçando formatação e dps Engine
-            const { error } = await supabase.functions.invoke('ap-content-production', { body: { action: 'process_selected', newsId: item.id } });
-            if (error) throw error;
-            await supabase.functions.invoke('ap-render-engine');
-            alert("Texto e Arte gerados com sucesso e enviados para Revisão Editorial!")
+            // Repassa para a IA, forçando formatação
+            const { data, error } = await supabase.functions.invoke('ap-content-production', {
+                body: { action: 'process_selected', newsId: item.id }
+            })
+            if (error) throw error
+            toast.success("Texto e Arte gerados com sucesso e enviados para Revisão Editorial!")
         } catch (err) {
             console.error('[AutoPublisher] handleApproveSelected error:', err)
-            alert("Falha ao aprovar matéria selecionada.")
+            toast.error("Falha ao aprovar matéria selecionada.")
         }
         setIsProcessing(false)
         fetchReview(); fetchCounts()
@@ -308,7 +324,7 @@ export default function AutoPublisher() {
         e.preventDefault()
 
         if (!manualForm.titulo && !manualForm.url_original) {
-            alert('Você precisa preencher o título da matéria OU colar um link válido.');
+            toast.error('Você precisa preencher o título da matéria OU colar um link válido.');
             return;
         }
 
@@ -323,7 +339,7 @@ export default function AutoPublisher() {
                 .limit(1);
 
             if (!searchError && existingNews && existingNews.length > 0) {
-                alert(`Esta matéria já foi enviada ao sistema por outro usuário. Pautas duplicadas não são permitidas.`);
+                toast.error(`Esta matéria já foi enviada ao sistema por outro usuário. Pautas duplicadas não são permitidas.`);
                 setIsSubmittingManual(false);
                 return;
             }
@@ -346,14 +362,14 @@ export default function AutoPublisher() {
                 finalImageUrl = data.image_url || finalImageUrl;
             } catch (err) {
                 console.error('[AutoPublisher] Auto-Scrape error:', err);
-                alert('A IA tentou extrair os dados do link, mas falhou. Verifique se a URL é suportada ou preencha o texto manualmente.');
+                toast.error('A IA tentou extrair os dados do link, mas falhou. Verifique se a URL é suportada ou preencha o texto manualmente.');
                 setIsSubmittingManual(false);
                 return;
             }
         }
 
         if (!finalTitulo || !finalConteudo) {
-            alert('Não foi possível obter Título e Conteúdo. Preencha manualmente ou tente outro link.');
+            toast.error('Não foi possível obter Título e Conteúdo. Preencha manualmente ou tente outro link.');
             setIsSubmittingManual(false);
             return;
         }
@@ -369,49 +385,33 @@ export default function AutoPublisher() {
 
             if (uploadError) {
                 console.error('[AutoPublisher] Img Upload Error:', uploadError)
-                alert('Erro ao fazer upload da imagem.')
+                toast.error('Erro ao fazer upload da imagem.')
             } else {
                 const { data: pubData } = supabase.storage.from('ap_media').getPublicUrl(fileName)
                 finalImageUrl = pubData.publicUrl
             }
         }
 
-        // 2. Insert DB
-        const { data, error } = await supabase.from('ap_candidate_news').insert({
-            cliente_id: clienteId,
-            titulo: finalTitulo,
-            conteudo: finalConteudo,
-            imagem_url: finalImageUrl,
-            context_tag: manualForm.context_tag ? manualForm.context_tag.trim().toUpperCase() : null,
-            status: 'selected', // Send directly to AI 
-            url_original: manualForm.url_original || null
-        }).select('id').single()
+        // 2. Chamar o Edge Function unificado (ap-employee-generator) para processamento completo (Fila -> IA -> Placid)
+        try {
+            const { data, error } = await supabase.functions.invoke('ap-employee-generator', {
+                body: {
+                    empresa_id: clienteId,
+                    titulo: finalTitulo,
+                    conteudo: finalConteudo,
+                    imagem_url: finalImageUrl,
+                    context_tag: manualForm.context_tag ? manualForm.context_tag.trim().toUpperCase() : null,
+                    url_original: manualForm.url_original || null,
+                    content_type: manualForm.content_type || 'feed'
+                }
+            })
 
-        if (error) {
-            console.error('[AutoPublisher] Manual Error:', error)
-            setIsSubmittingManual(false)
-            return
-        }
+            if (error) throw error;
+            if (data?.error) throw new Error(data.error);
 
-        // 3. Disparar Motor Editorial imediatamente para esta matéria
-        if (data?.id) {
-            try {
-                await supabase.functions.invoke('ap-content-production', {
-                    body: {
-                        action: 'process_selected',
-                        newsId: data.id
-                    }
-                })
-                // Em seguida, disparar o Render Engine apenas para esta matéria
-                await supabase.functions.invoke('ap-render-engine', {
-                    body: {
-                        action: 'render_one',
-                        newsId: data.id
-                    }
-                })
-            } catch (fnErr) {
-                console.error('[AutoPublisher] pipeline manual error:', fnErr)
-            }
+        } catch (fnErr) {
+            console.error('[AutoPublisher] pipeline manual error:', fnErr);
+            toast.error('Falha ao gerar matéria. Verifique se há Templates configurados ou tente novamente.');
         }
 
         setIsSubmittingManual(false)
@@ -425,11 +425,18 @@ export default function AutoPublisher() {
 
     const displayedReview = stageFilter
         ? reviewItems.filter(i => {
+            if (stageFilter === 'pending_review') {
+                const match = i.status === 'pending_review' || i.status === 'ready_to_publish'
+                return match
+            }
+            if (stageFilter === 'pending_render') return i.status === 'pending_render' || i.status === 'processing'
             if (stageFilter === 'studio') return i.status === 'studio_selected' || i.status === 'studio_ready'
-            if (stageFilter === 'queued_for_posting') return i.status === 'approved' || i.status === 'queued_for_posting'
+            if (stageFilter === 'posted') return i.status === 'posted' || i.status === 'approved' || i.status === 'queued_for_posting'
             return i.status === stageFilter
         })
-        : reviewItems.filter(i => i.status === 'pending_review')
+        : reviewItems.filter(i => i.status === 'pending_review' || i.status === 'ready_to_publish' || i.status === 'processing')
+
+    console.log('[AutoPublisher] Rendering Review tab. StageFilter:', stageFilter, 'Items count:', reviewItems.length, 'Displayed:', displayedReview.length)
 
     return (
         <>
@@ -568,7 +575,7 @@ export default function AutoPublisher() {
                                 onClick={async () => {
                                     if (!confirm('Tem certeza que deseja forçar o reinício da Fila de Templates? O próximo post gerado usará o Primeiro Template (Ordem 1).')) return;
                                     await supabase.schema('ap').from('template_queue_state').upsert({ empresa_id: clienteId, current_index: 1 });
-                                    alert('Fila de templates reiniciada (Próximo será o Template #1).');
+                                    toast.success('Fila de templates reiniciada (Próximo será o Template #1).');
                                 }}
                                 style={{ padding: '8px 16px', background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}
                             >
@@ -631,6 +638,9 @@ export default function AutoPublisher() {
                                                             #{item.template_ordem} {item.template_nome_snapshot}
                                                         </span>
                                                     )}
+                                                    <span style={{ padding: '3px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: 600, background: item.content_type === 'reels' ? '#ede9fe' : '#f1f5f9', color: item.content_type === 'reels' ? '#6d28d9' : '#475569', border: item.content_type === 'reels' ? '1px solid #ddd6fe' : '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                        {item.content_type === 'reels' ? <><Video size={10} /> Reels</> : <><ImageIcon size={10} /> Feed</>}
+                                                    </span>
                                                 </div>
 
                                                 <div style={{ fontSize: '15px', fontWeight: 600, color: '#0f172a', lineHeight: 1.4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', marginBottom: '8px' }}>
@@ -705,47 +715,54 @@ export default function AutoPublisher() {
 
                 {tab === 'published' && (
                     loading ? <SkeletonTable rows={5} cols={5} /> : publishedItems.length === 0 ? <EmptyStatePremium /> : (
-                        <table className="ap-table">
-                            <thead>
-                                <tr>
-                                    <th style={{ width: '120px' }}>Imagem</th>
-                                    <th>Notícia</th>
-                                    <th style={{ width: '150px' }}>Status</th>
-                                    <th style={{ width: '150px' }}>Data</th>
-                                    <th style={{ width: '80px', textAlign: 'center' }}><MoreVertical size={14} /></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {publishedItems.map(item => (
-                                    <tr key={item.id}>
-                                        <td>
-                                            {item.render_url ? (
-                                                <div style={{ width: 100, height: 56, borderRadius: 4, overflow: 'hidden', background: 'var(--color-bg-secondary)' }}>
-                                                    <img src={item.render_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} lazy="true" />
-                                                </div>
-                                            ) : <span style={{ color: 'var(--color-text-tertiary)', fontSize: 12 }}>Sem Imagem</span>}
-                                        </td>
-                                        <td>
-                                            <div style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>{item.headline ?? item.titulo}</div>
-                                            <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 4 }}>
-                                                {item.caption ? (item.caption.length > 80 ? item.caption.slice(0, 80) + '...' : item.caption) : '—'}
-                                            </div>
-                                        </td>
-                                        <td><span className={`ap-status ${item.status}`}>{item.status}</span></td>
-                                        <td style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
-                                            {item.horario_agendado ? new Date(item.horario_agendado).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—'}
-                                        </td>
-                                        <td style={{ textAlign: 'center' }}>
-                                            {item.instagram_post_id && (
-                                                <a href={`https://www.instagram.com/p/${item.instagram_post_id}`} target="_blank" rel="noreferrer" style={{ color: 'var(--color-primary)' }}>
-                                                    <Rss size={14} />
-                                                </a>
-                                            )}
-                                        </td>
+                        <div className="ap-table-container">
+                            <table className="ap-table">
+                                <thead>
+                                    <tr>
+                                        <th style={{ width: '120px' }}>Imagem</th>
+                                        <th>Notícia</th>
+                                        <th style={{ width: '150px' }}>Status</th>
+                                        <th style={{ width: '150px' }}>Data</th>
+                                        <th style={{ width: '80px', textAlign: 'center' }}><MoreVertical size={14} /></th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    {publishedItems.map(item => (
+                                        <tr key={item.id}>
+                                            <td>
+                                                {item.render_url ? (
+                                                    <div style={{ width: 100, height: 56, borderRadius: 4, overflow: 'hidden', background: 'var(--color-bg-secondary)' }}>
+                                                        <img src={item.render_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} lazy="true" />
+                                                    </div>
+                                                ) : <span style={{ color: 'var(--color-text-tertiary)', fontSize: 12 }}>Sem Imagem</span>}
+                                            </td>
+                                            <td>
+                                                <div style={{ fontWeight: 500, color: 'var(--color-text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    {item.headline ?? item.titulo}
+                                                    {item.content_type === 'reels' && (
+                                                        <span style={{ padding: '2px 6px', background: '#ede9fe', color: '#6d28d9', borderRadius: '4px', fontSize: '10px', fontWeight: 700, border: '1px solid #ddd6fe', display: 'flex', alignItems: 'center', gap: '4px' }}><Video size={10} /> REELS</span>
+                                                    )}
+                                                </div>
+                                                <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 4 }}>
+                                                    {item.caption ? (item.caption.length > 80 ? item.caption.slice(0, 80) + '...' : item.caption) : '—'}
+                                                </div>
+                                            </td>
+                                            <td><span className={`ap-status ${item.status}`}>{item.status}</span></td>
+                                            <td style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                                                {item.horario_agendado ? new Date(item.horario_agendado).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—'}
+                                            </td>
+                                            <td style={{ textAlign: 'center' }}>
+                                                {item.instagram_post_id && (
+                                                    <a href={`https://www.instagram.com/p/${item.instagram_post_id}`} target="_blank" rel="noreferrer" style={{ color: 'var(--color-primary)' }}>
+                                                        <Rss size={14} />
+                                                    </a>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     )
                 )}
 
@@ -757,161 +774,203 @@ export default function AutoPublisher() {
             {
                 isManualModalOpen && (
                     <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-                        <div className="ap-modal-content" style={{ background: '#ffffff', padding: '0', borderRadius: '20px', width: '560px', maxWidth: '100%', boxShadow: '0 24px 48px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                        <div className="ap-modal-content" style={{ background: '#ffffff', padding: '0', borderRadius: '20px', width: '560px', maxWidth: '100%', boxShadow: '0 24px 48px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05)', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
                             {/* Header */}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '24px', borderBottom: '1px solid #f0f0f0', background: '#fafafa' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #f0f0f0', background: '#fafafa', flexShrink: 0 }}>
                                 <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#111827', margin: 0, display: 'flex', alignItems: 'center', gap: '10px', letterSpacing: '-0.02em' }}>
-                                    <div style={{ background: '#eff6ff', color: '#3b82f6', padding: '8px', borderRadius: '10px', display: 'flex' }}><Pencil size={18} /></div>
-                                    Nova Pauta
+                                    <div style={{ background: '#eff6ff', color: '#3b82f6', padding: '8px', borderRadius: '10px', display: 'flex' }}><Brain size={18} /></div>
+                                    Nova Matéria
                                 </h2>
                                 <button onClick={() => {
                                     setManualModalOpen(false);
                                     setSelectedFile(null);
-                                    setManualForm({ titulo: '', conteudo: '', imagem_url: '', context_tag: '', url_original: '' });
+                                    setManualForm({ titulo: '', conteudo: '', imagem_url: '', context_tag: '', url_original: '', content_type: 'feed' });
                                 }} style={{ background: '#f3f4f6', border: 'none', cursor: 'pointer', color: '#6b7280', width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}>
                                     <X size={18} />
                                 </button>
                             </div>
 
                             {/* Body */}
-                            <form onSubmit={submitManualNews} style={{ display: 'flex', flexDirection: 'column', padding: '24px', gap: '20px', maxHeight: '75vh', overflowY: 'auto' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', padding: '20px', gap: '20px', overflowY: 'auto', flex: 1, WebkitOverflowScrolling: 'touch', width: '100%', boxSizing: 'border-box', maxHeight: '75vh' }}>
+                                <form onSubmit={submitManualNews} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
-                                {/* Link Source - Highlighted Block */}
-                                <div style={{ padding: '16px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                        <Link2 size={14} color="#3b82f6" /> Motor de Scraping (Link)
-                                    </label>
-                                    <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>Cole o link original. Nossa IA irá ler, extrair fotos e montar a estrutura sozinha.</p>
-                                    <input
-                                        value={manualForm.url_original || ''}
-                                        onChange={e => setManualForm({ ...manualForm, url_original: e.target.value })}
-                                        placeholder="https://g1.globo.com/exemplo..."
-                                        style={{ width: '100%', padding: '12px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', outline: 'none', fontSize: '14px', transition: 'border-color 0.2s', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.05)' }}
-                                        onFocus={e => e.target.style.borderColor = '#3b82f6'}
-                                        onBlur={e => e.target.style.borderColor = '#cbd5e1'}
-                                    />
-                                </div>
+                                    {/* Formato Selector */}
+                                    <div style={{ display: 'flex', gap: '12px', background: '#f1f5f9', padding: '6px', borderRadius: '16px' }}>
+                                        <button
+                                            type="button"
+                                            onClick={() => setManualForm({ ...manualForm, content_type: 'feed' })}
+                                            style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', background: manualForm.content_type === 'feed' ? '#fff' : 'transparent', color: manualForm.content_type === 'feed' ? '#0f172a' : '#64748b', fontWeight: 600, fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: manualForm.content_type === 'feed' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', cursor: 'pointer', transition: 'all 0.2s' }}
+                                        >
+                                            <ImageIcon size={18} /> Estático (Feed)
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setManualForm({ ...manualForm, content_type: 'reels' })}
+                                            style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', background: manualForm.content_type === 'reels' ? '#fff' : 'transparent', color: manualForm.content_type === 'reels' ? '#0f172a' : '#64748b', fontWeight: 600, fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: manualForm.content_type === 'reels' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', cursor: 'pointer', transition: 'all 0.2s' }}
+                                        >
+                                            <Video size={18} /> Vídeo (Reels)
+                                        </button>
+                                    </div>
 
-                                {/* Separator */}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', opacity: 0.6 }}>
-                                    <div style={{ height: '1px', background: '#e2e8f0', flex: 1 }}></div>
-                                    <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Ou crie manualmente</span>
-                                    <div style={{ height: '1px', background: '#e2e8f0', flex: 1 }}></div>
-                                </div>
+                                    {/* Link Source - Highlighted Block */}
+                                    <div style={{ padding: '16px', background: '#e0f2fe', border: '1px solid #bae6fd', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px', width: '100%', boxSizing: 'border-box' }}>
+                                        <label style={{ fontSize: '14px', fontWeight: 700, color: '#0284c7', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Motor de IA (Link)</label>
+                                        <p style={{ margin: 0, fontSize: '13px', color: '#0369a1' }}>Cole um link para a IA extrair todo o contexto e gerar os textos automaticamente.</p>
+                                        <input
+                                            value={manualForm.url_original || ''}
+                                            onChange={e => setManualForm({ ...manualForm, url_original: e.target.value })}
+                                            placeholder="https://g1.globo.com/exemplo..."
+                                            style={{ width: '100%', padding: '14px', borderRadius: '10px', border: '1px solid #7dd3fc', fontSize: '15px', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' }}
+                                            onFocus={e => e.target.style.borderColor = '#0284c7'}
+                                            onBlur={e => e.target.style.borderColor = '#7dd3fc'}
+                                        />
+                                    </div>
 
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#334155', marginBottom: '8px' }}>Título da Matéria</label>
+                                    {/* Separator */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', opacity: 0.6, marginTop: '-4px', marginBottom: '-4px' }}>
+                                        <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
+                                        <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Ou crie manualmente</span>
+                                        <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
+                                    </div>
+
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
+                                        <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Título Principal</label>
                                         <input
                                             value={manualForm.titulo}
                                             onChange={e => setManualForm({ ...manualForm, titulo: e.target.value })}
                                             placeholder="Prefeito anuncia nova ponte na cidade..."
-                                            style={{ width: '100%', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', outline: 'none', fontSize: '14px', transition: 'all 0.2s' }}
+                                            style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', appearance: 'none', boxSizing: 'border-box' }}
                                             onFocus={e => e.target.style.borderColor = '#94a3b8'}
-                                            onBlur={e => e.target.style.borderColor = '#e2e8f0'}
+                                            onBlur={e => e.target.style.borderColor = '#cbd5e1'}
                                         />
                                     </div>
 
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#334155', marginBottom: '8px' }}>Texto Bruto (Conteúdo)</label>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
+                                        <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Detalhes Adicionais (Texto Bruto)</label>
                                         <textarea
                                             value={manualForm.conteudo}
                                             onChange={e => setManualForm({ ...manualForm, conteudo: e.target.value })}
                                             placeholder="Cole o release da ascom ou o corpo do texto aqui..."
                                             rows={4}
-                                            style={{ width: '100%', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', outline: 'none', fontSize: '14px', resize: 'vertical', minHeight: '100px', transition: 'all 0.2s' }}
+                                            style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', resize: 'vertical', minHeight: '80px', appearance: 'none', boxSizing: 'border-box' }}
                                             onFocus={e => e.target.style.borderColor = '#94a3b8'}
-                                            onBlur={e => e.target.style.borderColor = '#e2e8f0'}
+                                            onBlur={e => e.target.style.borderColor = '#cbd5e1'}
                                         />
                                     </div>
 
-                                    <div style={{ display: 'flex', gap: '16px' }}>
-                                        <div style={{ flex: 1 }}>
-                                            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#334155', marginBottom: '8px' }}>Tag de Editoria</label>
-                                            <input
-                                                value={manualForm.context_tag || ''}
-                                                onChange={e => setManualForm({ ...manualForm, context_tag: e.target.value.toUpperCase() })}
-                                                maxLength={20}
-                                                placeholder="Ex: URGENTE"
-                                                style={{ width: '100%', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', outline: 'none', fontSize: '14px', transition: 'all 0.2s' }}
-                                                onFocus={e => e.target.style.borderColor = '#94a3b8'}
-                                                onBlur={e => e.target.style.borderColor = '#e2e8f0'}
-                                            />
-                                        </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
+                                        <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Tag de Editoria</label>
+                                        <input
+                                            value={manualForm.context_tag || ''}
+                                            onChange={e => setManualForm({ ...manualForm, context_tag: e.target.value.toUpperCase() })}
+                                            maxLength={20}
+                                            placeholder="Ex: URGENTE"
+                                            style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', appearance: 'none', boxSizing: 'border-box' }}
+                                            onFocus={e => e.target.style.borderColor = '#94a3b8'}
+                                            onBlur={e => e.target.style.borderColor = '#cbd5e1'}
+                                        />
                                     </div>
 
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#334155', marginBottom: '8px' }}>Assets Visuais (Capa)</label>
-                                        <div
-                                            onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
-                                            onDragLeave={() => setIsDragging(false)}
-                                            onDrop={e => {
-                                                e.preventDefault();
-                                                setIsDragging(false);
-                                                if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-                                                    setSelectedFile(e.dataTransfer.files[0]);
-                                                    setManualForm({ ...manualForm, imagem_url: '' });
-                                                }
-                                            }}
-                                            style={{
-                                                border: isDragging ? '2px dashed #3b82f6' : '2px dashed #cbd5e1',
-                                                borderRadius: '12px',
-                                                padding: '24px 16px',
-                                                textAlign: 'center',
-                                                background: isDragging ? '#eff6ff' : '#f8fafc',
-                                                cursor: 'pointer',
-                                                transition: 'all 0.2s ease'
-                                            }}
-                                            onClick={() => document.getElementById('manual-file-upload').click()}
-                                        >
-                                            <input
-                                                id="manual-file-upload"
-                                                type="file"
-                                                accept="image/*"
-                                                style={{ display: 'none' }}
-                                                onChange={e => {
-                                                    if (e.target.files && e.target.files[0]) {
-                                                        setSelectedFile(e.target.files[0]);
+                                    {manualForm.content_type === 'feed' && (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
+                                            <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Foto (Fundo do Card)</label>
+                                            <div
+                                                onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
+                                                onDragLeave={() => setIsDragging(false)}
+                                                onDrop={e => {
+                                                    e.preventDefault();
+                                                    setIsDragging(false);
+                                                    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                                                        setSelectedFile(e.dataTransfer.files[0]);
                                                         setManualForm({ ...manualForm, imagem_url: '' });
                                                     }
                                                 }}
-                                            />
-                                            {selectedFile ? (
-                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-                                                    <div style={{ background: '#dcfce7', color: '#16a34a', padding: '12px', borderRadius: '50%' }}>
-                                                        <ImageIcon size={24} />
-                                                    </div>
-                                                    <span style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>Arquivo selecionado com sucesso</span>
-                                                    <span style={{ fontSize: '13px', color: '#64748b' }}>{selectedFile.name}</span>
-                                                </div>
-                                            ) : manualForm.imagem_url ? (
-                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
-                                                    <div style={{ width: 100, height: 60, borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-                                                        <img src={manualForm.imagem_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Preview AI" />
-                                                    </div>
-                                                    <span style={{ fontSize: '13px', fontWeight: 600, color: '#3b82f6' }}>Imagem Extraída Automática!</span>
-                                                </div>
-                                            ) : (
-                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
-                                                    <div style={{ background: '#f1f5f9', color: '#64748b', padding: '12px', borderRadius: '50%' }}>
-                                                        <UploadCloud size={24} />
-                                                    </div>
-                                                    <span style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>Fazer upload de foto</span>
-                                                    <span style={{ fontSize: '13px', color: '#64748b' }}>Arraste um JPEG/PNG ou clique aqui</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
+                                                style={{
+                                                    border: isDragging ? '2px dashed #3b82f6' : '2px dashed #cbd5e1',
+                                                    borderRadius: '12px',
+                                                    padding: '20px 16px',
+                                                    textAlign: 'center',
+                                                    background: isDragging ? '#eff6ff' : '#f8fafc',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.2s',
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    alignItems: 'center',
+                                                    gap: '8px'
+                                                }}
+                                                onClick={() => document.getElementById('manual-file-upload').click()}
+                                            >
+                                                <input
+                                                    id="manual-file-upload"
+                                                    type="file"
+                                                    accept="image/*"
+                                                    style={{ display: 'none' }}
+                                                    onChange={e => {
+                                                        if (e.target.files && e.target.files[0]) {
+                                                            setSelectedFile(e.target.files[0]);
+                                                            setManualForm({ ...manualForm, imagem_url: '' });
+                                                        }
+                                                    }}
+                                                />
+                                                {selectedFile ? (
+                                                    <>
+                                                        <div style={{ background: '#dcfce7', color: '#166534', padding: '8px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                            <CheckCircle2 size={16} /> Arquivo Anexado: {selectedFile.name}
+                                                        </div>
+                                                        <span style={{ fontSize: '12px', color: '#64748b' }}>Clique para alterar</span>
+                                                    </>
+                                                ) : manualForm.imagem_url ? (
+                                                    <>
+                                                        <div style={{ width: 100, height: 60, borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                                                            <img src={manualForm.imagem_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Preview AI" />
+                                                        </div>
+                                                        <div style={{ background: '#eff6ff', color: '#1e40af', padding: '8px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
+                                                            <CheckCircle2 size={16} /> Imagem Extraída
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <div style={{ background: '#e2e8f0', width: '40px', height: '40px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                            <UploadCloud size={20} color="#64748b" />
+                                                        </div>
+                                                        <span style={{ fontSize: '14px', color: '#475569', fontWeight: 500 }}>
+                                                            Clique ou arraste a imagem original aqui
+                                                        </span>
+                                                    </>
+                                                )}
+                                            </div>
 
-                                {/* Footer Base */}
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', paddingTop: '20px', borderTop: '1px solid #f0f0f0', marginTop: '10px' }}>
-                                    <button type="button" onClick={() => { setManualModalOpen(false); setSelectedFile(null); }} style={{ padding: '12px 20px', borderRadius: '10px', border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer', fontWeight: 600, color: '#475569', fontSize: '14px', transition: 'all 0.2s' }}>Cancelar</button>
-                                    <button type="submit" disabled={isSubmittingManual} style={{ padding: '12px 24px', borderRadius: '10px', border: 'none', background: '#111827', color: '#fff', cursor: isSubmittingManual ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 4px 6px -1px rgba(17, 24, 39, 0.1), 0 2px 4px -1px rgba(17, 24, 39, 0.06)', transition: 'all 0.2s' }}>
-                                        {isSubmittingManual ? 'Carregando Motor...' : <><Brain size={18} /> Injetar no Motor IA</>}
-                                    </button>
-                                </div>
-                            </form>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '8px 0' }}>
+                                                <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
+                                                <span style={{ fontSize: '11px', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase' }}>OU URL</span>
+                                                <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
+                                            </div>
+
+                                            <input
+                                                value={manualForm.imagem_url || ''}
+                                                onChange={e => {
+                                                    setManualForm({ ...manualForm, imagem_url: e.target.value });
+                                                    if (e.target.value) setSelectedFile(null);
+                                                }}
+                                                placeholder="https://exemplo.com/foto.jpg"
+                                                style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', appearance: 'none', boxSizing: 'border-box' }}
+                                                onFocus={e => e.target.style.borderColor = '#94a3b8'}
+                                                onBlur={e => e.target.style.borderColor = '#cbd5e1'}
+                                            />
+                                        </div>
+                                    )}
+
+                                    {/* Action Buttons */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #e2e8f0' }}>
+                                        <button type="submit" disabled={isSubmittingManual} style={{ width: '100%', background: '#111827', color: '#fff', border: 'none', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', boxShadow: '0 4px 6px -1px rgba(17, 24, 39, 0.1)', cursor: isSubmittingManual ? 'not-allowed' : 'pointer', transition: 'all 0.2s', opacity: isSubmittingManual ? 0.7 : 1 }}>
+                                            {isSubmittingManual ? 'Carregando Motor...' : <>Gerar Matéria</>}
+                                        </button>
+                                        <button type="button" onClick={() => { setManualModalOpen(false); setSelectedFile(null); }} style={{ background: 'transparent', color: '#64748b', border: 'none', padding: '16px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>
+                                            Cancelar
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
                         </div>
                     </div>
                 )
@@ -954,14 +1013,13 @@ function ReviewCard({ item, onApprove, onReject, onStudio, onSendToStudio, onApp
             const blobUrl = URL.createObjectURL(blob)
             const a = document.createElement('a')
             a.href = blobUrl
-            a.download = `tvg_noticia_${item.id.slice(0, 6)}.jpg`
+            a.download = `tvg_noticia_${item.id.slice(0, 6)}.png`
             document.body.appendChild(a)
             a.click()
             document.body.removeChild(a)
             URL.revokeObjectURL(blobUrl)
         } catch (err) {
-            console.error('Erro forçado ao baixar:', err)
-            alert('Não foi possível baixar a imagem silenciocamente. Abrindo arquivo bruto.')
+            toast.info('Não foi possível baixar a imagem silenciocamente. Abrindo arquivo bruto.')
             window.open(url, '_blank')
         }
     }
@@ -987,6 +1045,9 @@ function ReviewCard({ item, onApprove, onReject, onStudio, onSendToStudio, onApp
                             ) : null}
                             {item.status !== 'pending_review' && <span>{item.status.replace(/_/g, ' ')} • </span>}
                             Score: {score ?? '—'}
+                            {item.content_type === 'reels' && (
+                                <span style={{ marginLeft: '6px', padding: '2px 6px', background: '#ede9fe', color: '#6d28d9', borderRadius: '4px', fontSize: '10px', fontWeight: 700, border: '1px solid #ddd6fe', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Video size={10} /> REELS</span>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -1104,9 +1165,10 @@ function ReviewCard({ item, onApprove, onReject, onStudio, onSendToStudio, onApp
                 </div>
             )}
 
-            {/* Ações de Aprovação (Rejeitar / Editar / Aprovar) */}
-            {item.status === 'pending_review' && (
-                <div className="ap-card-actions-wrap">
+            {/* Ações para matérias prontas ou em revisão */}
+            {/* Ações de Download/Cópia (Comum para Pronto ou Em Revisão) */}
+            {(item.status === 'ready_to_publish' || item.status === 'pending_review' || item.status === 'approved' || item.status === 'queued_for_posting') && (
+                <div className="ap-card-actions-wrap" style={{ paddingBottom: item.status === 'pending_review' ? '0' : '16px' }}>
                     <div className="ap-card-btn-row">
                         <button className="ap-card-btn-secondary" onClick={handleDownload} title="Baixar Arte">
                             <Download size={14} /> Baixar Arte
@@ -1114,12 +1176,20 @@ function ReviewCard({ item, onApprove, onReject, onStudio, onSendToStudio, onApp
                         <button
                             className={`ap-card-btn-copy${copied ? ' copied' : ''}`}
                             onClick={handleCopy}
-                            title="Copiar Texto"
+                            title="Copiar Legenda"
                         >
                             {copied ? <Check size={14} /> : <Copy size={14} />}
-                            {copied ? 'Copiado!' : 'Copiar Texto'}
+                            {copied ? 'Copiado!' : 'Copiar Legenda'}
                         </button>
                     </div>
+                </div>
+            )}
+
+
+            {/* Ações de Aprovação (Rejeitar / Editar / Aprovar) */}
+            {/* Ações de Aprovação (Exclusivo Revisão) */}
+            {item.status === 'pending_review' && (
+                <div className="ap-card-actions-wrap">
 
                     <div className="ap-card-btn-row">
                         <button className="ap-btn-reject" onClick={() => onReject(item)} title="Descartar" style={{ flexShrink: 0 }}>

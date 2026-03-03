@@ -50,7 +50,19 @@ Deno.serve(async (req: Request) => {
     const cutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     let query = supabase
         .schema("ap").from("candidate_news")
-        .select("id, cliente_id, headline, imagem_storage, imagem_url, categoria, patrocinador_id, context_tag")
+        .select(`
+            id, 
+            cliente_id, 
+            headline, 
+            imagem_storage, 
+            imagem_url, 
+            categoria, 
+            patrocinador_id, 
+            context_tag, 
+            placid_template_uuid, 
+            content_type, 
+            clientes!inner(empresa_id)
+        `)
         .eq("status", "pending_render");
 
     if (targetNewsId) {
@@ -69,10 +81,10 @@ Deno.serve(async (req: Request) => {
     const results: any[] = [];
 
     for (const item of items ?? []) {
-        // Lock
+        // Atomic Lock - set to 'processing' as per requirement
         const { data: lockData, error: lockErr } = await supabase
             .schema("ap").from("candidate_news")
-            .update({ processing_started_at: new Date().toISOString() })
+            .update({ processing_started_at: new Date().toISOString(), status: 'processing' })
             .eq("id", item.id)
             .eq("status", "pending_render")
             .select("id");
@@ -83,26 +95,45 @@ Deno.serve(async (req: Request) => {
         }
 
         try {
-            // Atomic sponsor selection (Sponsor Rotation Logic)
-            const { data: sponsorId } = await supabase.schema('ap').rpc("select_sponsor", {
-                p_cliente_id: item.cliente_id,
-            });
+            let activeTemplateId = item.placid_template_uuid;
+            let snapshotData = null;
 
-            let activeTemplateId = globalTemplateId;
-            if (sponsorId) {
-                const { data: sponsorData } = await supabase
-                    .schema("ap").from("patrocinadores")
-                    .select("template_id")
-                    .eq("id", sponsorId)
-                    .single();
-
-                if (sponsorData?.template_id) {
-                    activeTemplateId = sponsorData.template_id;
+            if (!activeTemplateId) {
+                // If not pre-assigned, consume from global queue
+                const empresaId = item.clientes?.empresa_id;
+                if (!empresaId) {
+                    throw new Error("Não foi possível resolver empresa_id do cliente.");
                 }
+
+                const queueType = item.content_type || 'feed';
+
+                // Get the template from the queue (must use Service Role and Atomic consumption)
+                const { data: templateData, error: templateErr } = await supabase
+                    .schema('ap')
+                    .rpc("get_and_advance_template", {
+                        p_empresa_id: empresaId,
+                        p_tipo: queueType
+                    });
+
+                if (templateErr || !templateData || !templateData.placid_template_uuid) {
+                    throw new Error(`Fila vazia ou erro ao buscar template: ${templateErr?.message || 'Nenhum template ativo'}`);
+                }
+
+                activeTemplateId = templateData.placid_template_uuid;
+                snapshotData = templateData; // save snapshot
+
+                // Update candidate_news with assigned template string and snapshot
+                await supabase.schema("ap").from("candidate_news")
+                    .update({
+                        placid_template_uuid: activeTemplateId,
+                        template_snapshot: templateData // salvando snapshot completo
+                    })
+                    .eq("id", item.id);
             }
 
             if (!activeTemplateId) {
-                throw new Error("No template_id found (neither sponsor nor global)");
+                activeTemplateId = globalTemplateId; // Fallback extremo se tudo falhar, mas logica pede erro.
+                if (!activeTemplateId) throw new Error("No template_id found");
             }
 
             // Build image URL
@@ -162,8 +193,7 @@ Deno.serve(async (req: Request) => {
                 if (finalUrl) {
                     await supabase.schema("ap").from("candidate_news").update({
                         render_url: finalUrl,
-                        patrocinador_id: sponsorId ?? null,
-                        status: "pending_review",
+                        status: "ready_to_publish",
                         processing_started_at: null,
                         completed_at: new Date().toISOString()
                     }).eq("id", item.id);
@@ -178,7 +208,12 @@ Deno.serve(async (req: Request) => {
         } catch (err: any) {
             console.error(`[ap-render-engine] item ${item.id}:`, err.message);
             results.push({ id: item.id, status: "error", error: err.message });
-            await supabase.schema("ap").from("candidate_news").update({ processing_started_at: null }).eq("id", item.id);
+            // Error handling matching instructions: never return to queue, set status = 'failed'
+            await supabase.schema("ap").from("candidate_news").update({
+                status: "failed",
+                error_log: err.message,
+                processing_started_at: null
+            }).eq("id", item.id);
         }
     }
 

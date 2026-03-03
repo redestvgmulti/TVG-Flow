@@ -12,11 +12,13 @@ const FIXED_CLIENT_ID = "cd287e6e-f273-4d0f-a72d-2a8c391e40e9";
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE",
 };
 
 Deno.serve(async (req: Request) => {
-    if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+    if (req.method === "OPTIONS") {
+        return new Response("ok", { headers: corsHeaders });
+    }
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -36,16 +38,19 @@ Deno.serve(async (req: Request) => {
 
         console.log("[ap-config] resource:", resource, "action:", action);
 
-        if (!resource || !["sources", "patrocinadores"].includes(resource)) {
-            throw new Error(`resource inválido: '${resource}'. Use 'sources' ou 'patrocinadores'`);
+        if (!resource || !["sources", "patrocinadores", "templates"].includes(resource)) {
+            throw new Error(`resource inválido: '${resource}'. Use 'sources', 'patrocinadores' ou 'templates'`);
         }
 
         const base = `${SUPABASE_URL}/rest/v1/${resource}`;
 
-        // ── LIST ──────────────────────────────────────────────────
+        // Handle tenant column name differences
+        const tenantCol = resource === 'templates' ? 'empresa_id' : 'cliente_id';
+
         if (action === "list") {
+            const orderCol = resource === 'templates' ? 'ordem.asc' : 'created_at.asc';
             const res = await fetch(
-                `${base}?cliente_id=eq.${FIXED_CLIENT_ID}&order=created_at.asc`,
+                `${base}?${tenantCol}=eq.${FIXED_CLIENT_ID}&order=${orderCol}`,
                 { method: "GET", headers: pgHeaders }
             );
             if (!res.ok) throw new Error(`PostgREST list error: ${await res.text()}`);
@@ -58,7 +63,7 @@ Deno.serve(async (req: Request) => {
         // ── INSERT ─────────────────────────────────────────────────
         if (action === "insert") {
             if (!payload) throw new Error("payload required for insert");
-            const row = { ...payload, cliente_id: FIXED_CLIENT_ID };
+            const row = { ...payload, [tenantCol]: FIXED_CLIENT_ID };
 
             const res = await fetch(base, {
                 method: "POST",
@@ -78,7 +83,7 @@ Deno.serve(async (req: Request) => {
             const { id, ...fields } = payload;
 
             const res = await fetch(
-                `${base}?id=eq.${id}&cliente_id=eq.${FIXED_CLIENT_ID}`,
+                `${base}?id=eq.${id}&${tenantCol}=eq.${FIXED_CLIENT_ID}`,
                 {
                     method: "PATCH",
                     headers: { ...pgHeaders, "Prefer": "return=representation" },
@@ -97,7 +102,7 @@ Deno.serve(async (req: Request) => {
             if (!payload?.id) throw new Error("payload.id required for delete");
 
             const res = await fetch(
-                `${base}?id=eq.${payload.id}&cliente_id=eq.${FIXED_CLIENT_ID}`,
+                `${base}?id=eq.${payload.id}&${tenantCol}=eq.${FIXED_CLIENT_ID}`,
                 { method: "DELETE", headers: pgHeaders }
             );
             if (!res.ok) throw new Error(`PostgREST delete error: ${await res.text()}`);

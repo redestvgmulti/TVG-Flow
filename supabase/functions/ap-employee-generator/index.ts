@@ -6,7 +6,6 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { buildEditorialPrompt } from "../_shared/editorialPromptBuilder.ts";
 import { callLLM } from "../_shared/llmClient.ts";
 
 const corsHeaders = {
@@ -39,7 +38,7 @@ Deno.serve(async (req: Request) => {
 
     try {
         const body = await req.json();
-        const { titulo, conteudo, imagem_url, empresa_id, auth_user_id, context_tag, url_original } = body;
+        const { titulo, conteudo, imagem_url, empresa_id, auth_user_id, context_tag, url_original, content_type = 'feed' } = body;
 
         if (!empresa_id) {
             return new Response(JSON.stringify({ error: "empresa_id obrigatório" }), { status: 400, headers: corsHeaders });
@@ -57,17 +56,18 @@ Deno.serve(async (req: Request) => {
         }
 
         // 1. Chamar RPC para obter o template da Fila Global (Transacional)
-        const { data: templateData, error: rpcError } = await supabase.rpc("get_and_advance_template", {
-            p_empresa_id: empresa_id
+        // IMPORTANT: get_and_advance_template lives in the 'ap' schema, must use schema('ap').rpc()
+        const { data: templateData, error: rpcError } = await supabase.schema("ap").rpc("get_and_advance_template", {
+            p_empresa_id: empresa_id,
+            p_tipo: content_type
         });
 
         if (rpcError || !templateData) {
             console.error("[ap-employee-generator] Falha ao recuperar/avançar template:", rpcError);
-            return new Response(JSON.stringify({ error: "Fila de Templates vazia ou erro: " + (rpcError?.message || 'Nenhum template ativo') }), { status: 400, headers: corsHeaders });
+            return new Response(JSON.stringify({ error: "Fila de Templates vazia ou erro: " + (rpcError?.message || 'Nenhum template ativo do tipo solicitado') }), { status: 400, headers: corsHeaders });
         }
 
-        // templateData retornado via JSONB: { id, placid_template_uuid, ordem, nome }
-        console.log(`[ap-employee-generator] Template Reservado: ${templateData.nome} (Ordem: ${templateData.ordem})`);
+        console.log(`[ap-employee-generator] Template Reservado: ${templateData.nome} (Ordem: ${templateData.ordem}, Tipo: ${content_type})`);
 
         // 2. Criar registro inicial (processing)
         const { data: newsItem, error: insertError } = await supabase.schema("ap").from("candidate_news")
@@ -80,7 +80,8 @@ Deno.serve(async (req: Request) => {
                 status: "processing",
                 source: "employee",
                 imagem_url: imagem_url || null,
-                criado_por_user_id: auth_user_id || null, // Recebido via payload
+                content_type: content_type,
+                criado_por_user_id: auth_user_id || null,
                 role_criador: "employee",
                 template_id: templateData.id,
                 template_ordem: templateData.ordem,
@@ -93,7 +94,7 @@ Deno.serve(async (req: Request) => {
 
         if (insertError || !newsItem) {
             console.error("[ap-employee-generator] Falha ao criar registro news:", insertError);
-            return new Response(JSON.stringify({ error: "Erro de Unicidade/Banco de Dados: " + insertError?.message }), { status: 400, headers: corsHeaders });
+            return new Response(JSON.stringify({ error: "Erro de Banco de Dados: " + insertError?.message }), { status: 400, headers: corsHeaders });
         }
 
         const newsId = newsItem.id;
@@ -105,188 +106,316 @@ Deno.serve(async (req: Request) => {
             return new Response(JSON.stringify({ error: msg }), { status: 400, headers: corsHeaders });
         };
 
-        // 3. Processar Texto via IA
-        // Criar config mínima ou buscar se quiser o RAG
-        const prompt = await buildEditorialPrompt(supabase, {
-            titulo: titulo || "Pauta OMNI",
-            conteudo: conteudo || "",
-            categoria: context_tag || "geral",
-            url_original: url_original || null,
-            settings: { cliente_id: empresa_id },
-            promptVersion: "Você é um assistente rápido para formatação de cards patrocinados. Gere um texto direto, jornalístico e limpo em Português. Formate obrigatóriamente em JSON com as chaves: 'headline' (título curto e chamativo para o card), 'caption' (o texto da legenda para redes sociais) e 'tag' (palavra-chave, max 15 caracteres).",
-            humanization: { formality_level: 50, creativity_level: 50, technical_level: 30 },
-            rules: [],
-            ragContext: [],
-            openaiKey: Deno.env.get("OPENAI_API_KEY") || ""
-        });
+        // 3. Build prompt inline (NOT using buildEditorialPrompt — it appends a conflicting JSON schema)
+        const safeTitulo = (titulo || "Pauta OMNI").slice(0, 500);
+        const safeConteudo = (conteudo || "").slice(0, 3000);
+        const safeTag = (context_tag || "DESTAQUE").toUpperCase();
 
-        // Ensure strict JSON return regardless of prompt overrides
-        const strictJsonInstructions = "\n\nCRÍTICO E OBRIGATÓRIO: Você deve e apenas deve retornar um objeto JSON estritamente válido. O JSON tem que conter obrigatoriamente três (3) chaves escritas em letras minúsculas: 'headline' (string, mínimo de 10 caracteres, máx 30), 'caption' (string, texto para post de instagram com várias linhas, emojis e a fonte, mínimo de 20 caracteres) e 'tag' (string, max 15 caracteres). NÃO COLOQUE bloco markdown, NÃO COLOQUE crases antes do JSON. A primeira resposta deve ser '{' e a última '}'.";
+        const inputBlock = `\n\nCONTEÚDO DA NOTÍCIA:\nTítulo: ${safeTitulo}\nCategoria: ${safeTag}\nURL Fonte: ${url_original || "N/A"}\nConteúdo:\n${safeConteudo || "Apenas título disponível."}`;
 
-        const promptArray = prompt + strictJsonInstructions;
+        let systemStr = "";
+        let strictJsonStr = "";
 
-        let parsedData: any = null;
-        let aiResultStr = "";
-        let attempt = 0;
-        const maxAttempts = 2; // Try once, and retry once if failure
-        let finalErrorMsg = "";
+        const strictFormattingNorms = `
+\n\n============================================================
+NORMAS TÉCNICAS SUPREMAS (ANULAM QUALQUER INSTRUÇÃO ANTERIOR):
+============================================================
 
-        while (attempt < maxAttempts) {
-            try {
-                let oaiKey = Deno.env.get("ANTHROPIC_API_KEY") || Deno.env.get("OPENAI_API_KEY") || "";
-                let baseUrl = Deno.env.get("OPENAI_BASE_URL") || "https://api.openai.com/v1";
-                let model = OPENAI_MODEL_G;
+1. HEADLINE (O TÍTULO DO CARD):
+- Deve ter NO MÁXIMO 3 LINHAS densas e informativas.
+- Mínimo 50 caracteres, máximo 150.
+- Não seja econômico. Use conectivos e detalhes para preencher as 3 linhas.
+- OBRIGATÓRIO: Use quebras de linha naturais (caractere \\n no JSON) para separar as 3 linhas. NÃO USE barras "/" ou qualquer outro marcador.
+- EXEMPLO DE DENSIDADE (FAÇA ASSIM):
+  "ESTADO DE EMERGÊNCIA:\\nGOVÊRNO CONFIRMA NOVAS MEDIDAS\\nPARA ENFRENTAR CRISE DE SAÚDE"
 
-                const { data: settingsData } = await supabase.schema('ap').from('editorial_settings').select('*').eq('cliente_id', empresa_id).single();
-                if (settingsData) {
-                    if (settingsData.vault_secret_id) {
-                        const { data: secretData } = await supabase.rpc('get_decrypted_secret', { secret_id: settingsData.vault_secret_id });
-                        if (secretData) oaiKey = secretData;
-                    }
-                    baseUrl = settingsData.api_base_url || baseUrl;
-                    model = settingsData.model_primary || model;
-                }
+2. TAG (A CATEGORIA DO TOPO):
+- Use APENAS UMA palavra da lista fixa: [Cinema, Esportes, Política, Saúde, Tecnologia, Geral, Justiça, Famosos, Economia, Goiás].
+- PROIBIÇÃO CRÍTICA: Nunca use nomes de pessoas (ex: Virginia, Vini Jr) ou marcas neste campo.
 
-                // Append retry prefix if attempt > 0
-                const finalPrompt = attempt === 0 ? promptArray : promptArray + "\n\nO RETORNO ANTERIOR FOI INVÁLIDO. Você deve retornar ÚNICA e EXCLUSIVAMENTE um objeto JSON válido, começando explicitamente por '{' e terminando por '}'. Sem texto em volta.";
+3. LEGENDA / CAPTION (O TEXTO DO POST):
+- Deve ser TEXTO LIMPO para redes sociais (Emojis e Hashtags liberados).
+- PROIBIÇÃO ABSOLUTA (NEGATIVE CONSTRAINT): Não use NENHUMA marcação técnica de roteiro ou script como [CENA], [GANCHO], [FALA], [CORTE], [ROTEIRO], [NARRAÇÃO], [VÍDEO], [IMAGEM], [BACKGROUND], etc.
+- O campo "legenda" (ou "caption") deve ser pronto para leitura, sem instruções de produção.
 
-                const { content } = await callLLM({
-                    apiKey: oaiKey,
-                    baseUrl: baseUrl,
-                    model: model,
-                    prompt: finalPrompt,
-                    temperature: 0.7,
-                    maxTokens: 1100
-                });
-                aiResultStr = content;
+4. ROTEIRO (APENAS PARA REELS):
+- O campo "roteiro" deve conter o roteiro técnico completo SEPARADO da legenda. Nunca misture marcações de script no campo "legenda".
+============================================================\n`;
 
-                // Strip potential markdown wrappers just in case
-                const m = aiResultStr.match(/<json>([\s\S]*?)<\/json>/);
-                let jsonContent = m ? m[1] : aiResultStr;
-
-                // Also strip markdown json ticks if they exist
-                jsonContent = jsonContent.replace(/^```json\s*/, '').replace(/```\s*$/, '').trim();
-
-                parsedData = JSON.parse(jsonContent);
-
-                // Validation rules
-                if (!parsedData.headline || typeof parsedData.headline !== 'string' || parsedData.headline.length < 10) {
-                    throw new Error("Invalid 'headline'. Must be a string of at least 10 chars.");
-                }
-                if (!parsedData.caption || typeof parsedData.caption !== 'string' || parsedData.caption.length < 20) {
-                    throw new Error("Invalid 'caption'. Must be a string of at least 20 chars.");
-                }
-                if (!parsedData.tag || typeof parsedData.tag !== 'string') {
-                    throw new Error("Invalid 'tag'.");
-                }
-
-                // If we got here, JSON is valid and required fields are present
-                break;
-            } catch (e: any) {
-                console.error(`[ap-employee-generator] Attempt ${attempt + 1} failed:`, e);
-                finalErrorMsg = e.message || "Parse/Validation Error";
-                parsedData = null; // reset
-            }
-            attempt++;
+        if (content_type === 'reels') {
+            systemStr = "Você é um Editor Jornalístico Sênior para Redes Sociais. Transforme a notícia em um conteúdo atraente para vídeo, mas com rigor informativo.";
+            strictJsonStr = `\nRetorne um JSON puro com: "headline", "tag", "legenda", "roteiro".\n${strictFormattingNorms}`;
+        } else {
+            systemStr = "Você é um Editor Jornalístico Sênior para Redes Sociais. Gere um texto direto e jornalístico.";
+            strictJsonStr = `\nRetorne um JSON puro com: "headline", "caption", "tag".\n${strictFormattingNorms}`;
         }
 
-        if (!parsedData) {
-            await supabase.schema("ap").from("candidate_news").update({ status: "failed_generation", caption: "Erro Crítico: " + finalErrorMsg }).eq("id", newsId);
-            return failProcess(`Falha extrema após ${maxAttempts} tentativas de geração de IA (Formato Inválido). Detalhe: ${finalErrorMsg}`);
-        }
 
-        const resolvedTag = parsedData.tag || context_tag || "DESTAQUE";
-        const headline = parsedData.headline || titulo || "Destaque OMNI";
-        const caption = parsedData.caption || titulo || "";
+        // 4. Configuração de IA — Integradada ao Motor Editorial
+        let baseUrl = "https://api.anthropic.com";
+        let model = "claude-3-5-sonnet-20240620"; // Default
+        let temperature = 0.7;
 
-        // 4.1. Prevent Broken Render Validation
-        if (!headline || headline.trim().length === 0 || !caption || caption.trim().length === 0) {
-            console.error("[ap-employee-generator] Empty headline/caption validation failed. Bailing Placid.");
-            await supabase.schema("ap").from("candidate_news")
-                .update({ status: "failed_generation", headline, caption, categoria: resolvedTag, context_tag: resolvedTag })
-                .eq("id", newsId);
-            return failProcess("Validação de conteúdo vazio. Abortando renderização.");
-        }
-
-        // Fallback de Imagem
-        const bgImage = imagem_url || "https://images.unsplash.com/photo-1504711434969-e33886168f5c?q=80&w=1000&auto=format&fit=crop";
-
-        // 5. Renderizar Imagem no Placid
-        const renderPayload = {
-            template_uuid: templateData.placid_template_uuid,
-            layers: {
-                "headline_news": { text: headline },
-                "tag_news": { text: resolvedTag.toUpperCase() },
-                "news-image": { image: bgImage }
-            },
-        };
-
-        let placidImageUrl = "";
         try {
-            const renderRes = await fetchWithTimeout("https://api.placid.app/api/rest/images", {
-                method: "POST",
-                headers: {
-                    "Authorization": `Bearer ${renderApiKey}`,
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(renderPayload),
-                timeout: 8000
-            });
+            const [settingsRes, humanizationRes, promptRes, rulesRes] = await Promise.all([
+                supabase.schema('ap').from('editorial_settings').select('*').eq('cliente_id', empresa_id).maybeSingle(),
+                supabase.schema('ap').from('editorial_humanization').select('*').eq('cliente_id', empresa_id).maybeSingle(),
+                supabase.schema('ap').from('editorial_prompt_versions').select('prompt_base').eq('cliente_id', empresa_id).eq('is_active', true).maybeSingle(),
+                supabase.schema('ap').from('editorial_rules').select('*').eq('cliente_id', empresa_id)
+            ]);
 
-            if (renderRes.ok) {
-                const data = await renderRes.json();
-                placidImageUrl = data.image_url;
-                const pollingUrl = data.polling_url;
+            const edSettings = settingsRes.data;
+            const edHumanization = humanizationRes.data;
+            const edPrompt = promptRes.data;
+            const edRules = rulesRes.data || [];
 
-                if (!placidImageUrl && pollingUrl) {
-                    for (let i = 0; i < 6; i++) {
-                        await new Promise(r => setTimeout(r, 2000));
-                        const pollRes = await fetch(pollingUrl, { headers: { "Authorization": `Bearer ${renderApiKey}` } });
-                        if (pollRes.ok) {
-                            const pollData = await pollRes.json();
-                            if (pollData.status === "finished" && pollData.image_url) {
-                                placidImageUrl = pollData.image_url;
-                                break;
+            if (edSettings) {
+                baseUrl = edSettings.api_base_url || baseUrl;
+                model = edSettings.model_primary || model;
+                temperature = edSettings.temperature ?? temperature;
+            }
+
+            // Determine the base system prompt from Editorial Engine
+            let baseSystemPrompt = "";
+            if (edSettings?.system_prompt_override && edSettings.override_prompt_text) {
+                baseSystemPrompt = edSettings.override_prompt_text;
+                console.log("[ap-employee-generator] Using Override Prompt from Editorial Engine.");
+            } else if (edPrompt?.prompt_base) {
+                baseSystemPrompt = edPrompt.prompt_base;
+                console.log("[ap-employee-generator] Using Versioned Prompt from Editorial Engine.");
+            } else {
+                baseSystemPrompt = systemStr;
+                console.log("[ap-employee-generator] Using Hardcoded Fallback Prompt.");
+            }
+
+            // Build additional editorial instructions
+            let editorialInstructions = "";
+            if (edRules.length > 0) {
+                editorialInstructions += "\n\nREGRAS EDITORIAIS INEGOCIÁVEIS:\n";
+                edRules.forEach((r: any) => {
+                    if (r.rule_type === 'forbidden') editorialInstructions += `- PROIBIDO usar o termo: "${r.value}"\n`;
+                    if (r.rule_type === 'mandatory') editorialInstructions += `- OBRIGATÓRIO incluir/considerar o termo: "${r.value}"\n`;
+                    if (r.rule_type === 'substitution') editorialInstructions += `- SUBSTITUIR "${r.value.split('->')[0].trim()}" por "${r.value.split('->')[1]?.trim() || ''}"\n`;
+                });
+            }
+
+            if (edHumanization) {
+                editorialInstructions += `\nESTILO E HUMANIZAÇÃO:\n- Nível de Formalidade: ${edHumanization.formality_level}% (0=muito informal, 100=muito formal)\n- Criatividade: ${edHumanization.creativity_level}% (0=fatos secos, 100=metáforas ricas)\n- Densidade Técnica: ${edHumanization.technical_level}% (0=leigo, 100=especializado)\n`;
+                if (edHumanization.anti_ai_variation) {
+                    editorialInstructions += "- OBRIGATÓRIO: Evite clichês de IA como 'mergulhe fundo', 'em resumo', 'é importante ressaltar'. Use linguagem humana e direta.\n";
+                }
+            }
+
+            const finalSystemStr = baseSystemPrompt + editorialInstructions;
+            const finalPromptBase = finalSystemStr + inputBlock + strictJsonStr;
+
+            // 5. API Key handling
+            const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY") || "";
+            const oaiKey = anthropicKey;
+
+            console.log("[ap-employee-generator] Using model:", model, "Temperature:", temperature);
+
+            if (!oaiKey) {
+                return failProcess("ANTHROPIC_API_KEY não configurada nos secrets da Edge Function.");
+            }
+
+            // 5. Chamar IA com retry
+            let parsedData: any = null;
+            let finalErrorMsg = "";
+            const maxAttempts = 2;
+
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                try {
+                    const retryAppend = attempt > 0 ? "\n\nO RETORNO ANTERIOR FOI INVÁLIDO. Retorne APENAS um objeto JSON puro, sem textos adicionais. Comece com '{' e termine com '}'." : "";
+                    const finalPrompt = finalPromptBase + retryAppend;
+
+                    console.log(`[ap-employee-generator] Tentativa ${attempt + 1}: model=${model}`);
+
+                    const { content } = await callLLM({
+                        apiKey: oaiKey,
+                        baseUrl: baseUrl,
+                        model: model,
+                        prompt: finalPrompt,
+                        temperature: temperature,
+                        maxTokens: 1100
+                    });
+
+                    // Strip markdown wrappers
+                    let jsonContent = content;
+                    const xmlMatch = jsonContent.match(/<json>([\s\S]*?)<\/json>/);
+                    if (xmlMatch) jsonContent = xmlMatch[1];
+                    jsonContent = jsonContent.replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/```\s*$/, '').trim();
+
+                    // Extract first JSON object if there's extra text around it
+                    const jsonStart = jsonContent.indexOf('{');
+                    const jsonEnd = jsonContent.lastIndexOf('}');
+                    if (jsonStart !== -1 && jsonEnd !== -1) {
+                        jsonContent = jsonContent.slice(jsonStart, jsonEnd + 1);
+                    }
+
+                    parsedData = JSON.parse(jsonContent);
+
+                    // Validation
+                    if (!parsedData.headline || typeof parsedData.headline !== 'string' || parsedData.headline.length < 3) {
+                        throw new Error("Invalid 'headline'.");
+                    }
+                    if (content_type === 'feed') {
+                        if (!parsedData.caption || typeof parsedData.caption !== 'string' || parsedData.caption.length < 10) {
+                            throw new Error("Invalid 'caption' for feed.");
+                        }
+                    } else {
+                        if (!parsedData.legenda || typeof parsedData.legenda !== 'string' || parsedData.legenda.length < 10) {
+                            throw new Error("Invalid 'legenda' for reels.");
+                        }
+                    }
+                    break; // Success
+                } catch (e: any) {
+                    console.error(`[ap-employee-generator] Attempt ${attempt + 1} failed:`, e.message);
+                    finalErrorMsg = e.message || "Parse error";
+                    parsedData = null;
+                }
+            }
+
+            if (!parsedData) {
+                return failProcess(`Falha na geração de IA após ${maxAttempts} tentativas. Detalhe: ${finalErrorMsg}`);
+            }
+
+            const resolvedTag = parsedData.tag || safeTag;
+            const headline = parsedData.headline || safeTitulo;
+
+            let finalCaption = "";
+            let finalRoteiro: string | null = null;
+
+            if (content_type === 'feed') {
+                finalCaption = parsedData.caption || safeTitulo;
+            } else {
+                finalCaption = parsedData.legenda || "";
+                finalRoteiro = parsedData.roteiro || "";
+            }
+
+            // 6. Prevent empty render
+            if (!headline?.trim() || !finalCaption?.trim()) {
+                await supabase.schema("ap").from("candidate_news")
+                    .update({ status: "failed_generation", headline, caption: finalCaption, categoria: resolvedTag })
+                    .eq("id", newsId);
+                return failProcess("Conteúdo vazio após geração de IA. Abortando renderização.");
+            }
+
+            // 7. Montar layers do Placid
+            const bgImage = imagem_url || "https://images.unsplash.com/photo-1504711434969-e33886168f5c?q=80&w=1000&auto=format&fit=crop";
+            const layers: any = {
+                "headline_news": { text: headline },
+                "tag_news": { text: resolvedTag.toUpperCase() }
+            };
+            if (content_type === 'feed') {
+                layers["news-image"] = { image: bgImage };
+            }
+
+            // 8. Renderizar no Placid
+            const renderPayload = {
+                template_uuid: templateData.placid_template_uuid,
+                layers: layers,
+                create_config: {
+                    image_format: "png",
+                    image_quality: 95
+                }
+            };
+
+            let placidImageUrl = "";
+            try {
+                const renderRes = await fetchWithTimeout("https://api.placid.app/api/rest/images", {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${renderApiKey}`,
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(renderPayload),
+                    timeout: 8000
+                });
+
+                if (renderRes.ok) {
+                    const data = await renderRes.json();
+                    placidImageUrl = data.image_url || "";
+                    const pollingUrl = data.polling_url;
+
+                    // Reels rendering takes longer → more polling attempts with longer intervals
+                    const maxPolls = content_type === 'reels' ? 10 : 6;
+                    const pollInterval = content_type === 'reels' ? 3000 : 2000;
+
+                    if (!placidImageUrl && pollingUrl) {
+                        console.log(`[ap-employee-generator] Placid queued, polling up to ${maxPolls}x${pollInterval}ms...`);
+                        for (let i = 0; i < maxPolls; i++) {
+                            await new Promise(r => setTimeout(r, pollInterval));
+                            const pollRes = await fetch(pollingUrl, { headers: { "Authorization": `Bearer ${renderApiKey}` } });
+                            if (pollRes.ok) {
+                                const pollData = await pollRes.json();
+                                console.log(`[ap-employee-generator] Poll ${i + 1}/${maxPolls}: status=${pollData.status}`);
+                                if (pollData.status === "finished" && pollData.image_url) {
+                                    placidImageUrl = pollData.image_url;
+                                    break;
+                                }
                             }
                         }
                     }
-                }
-            } else {
-                const errtxt = await renderRes.text();
-                return failProcess(`Placid API Erro: ${errtxt}`);
-            }
-        } catch (e) {
-            console.error("[ap-employee-generator] Render Error:", e);
-            return failProcess("Erro de timeout na renderização de Imagem.");
-        }
 
-        // 6. Atualizar status e URL da Imagem 
-        const { error: finalUpdErr } = await supabase.schema("ap").from("candidate_news")
-            .update({
+                    // If still empty after all polls → fail explicitly (never leave status='processing')
+                    if (!placidImageUrl) {
+                        console.error("[ap-employee-generator] Placid image not ready after polling. Marking as failed.");
+                        return failProcess("Renderização no Placid não concluída no tempo limite. Tente novamente.");
+                    }
+                } else {
+                    const errtxt = await renderRes.text();
+                    console.error("[ap-employee-generator] Placid error:", errtxt);
+                    return failProcess(`Placid API Erro: ${errtxt}`);
+                }
+            } catch (e) {
+                console.error("[ap-employee-generator] Render timeout:", e);
+                return failProcess("Erro de timeout na renderização.");
+            }
+
+            // 9. Update final status
+            // NOTE: `categoria` has CHECK constraint ['regional','nacional_relevante','engajamento_alto','global_contextual']
+            // so the AI-generated tag is stored only in `context_tag`, never in `categoria`.
+            const updPayload: any = {
                 status: "ready_to_publish",
                 render_url: placidImageUrl,
                 headline: headline,
-                caption: caption,
-                categoria: resolvedTag,
                 context_tag: resolvedTag
-            })
-            .eq("id", newsId);
+            };
 
-        if (finalUpdErr) {
-            console.error("[ap-employee-generator] Final update erro:", finalUpdErr);
+            if (content_type === 'reels') {
+                updPayload.caption = finalCaption;
+            } else {
+                updPayload.caption = finalCaption;
+            }
+
+            const { error: finalUpdErr } = await supabase.schema("ap").from("candidate_news")
+                .update(updPayload)
+                .eq("id", newsId);
+
+            if (finalUpdErr) {
+                // Throw so the global catch handles it and the status doesn't stay 'processing'
+                console.error("[ap-employee-generator] Final update error:", finalUpdErr);
+                throw new Error(`Falha ao salvar resultado: ${finalUpdErr.message}`);
+            }
+
+            // 10. Return
+            return new Response(JSON.stringify({
+                success: true,
+                news_id: newsId,
+                render_url: placidImageUrl,
+                caption: finalCaption,
+                roteiro: finalRoteiro,
+                headline: headline,
+                template_nome: templateData.nome,
+                content_type: content_type
+            }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+        } catch (error: any) {
+            console.error("[ap-employee-generator] Generation Error:", error);
+            return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: corsHeaders });
         }
-
-        // 7. Retornar payload síncrono para o cliente final
-        return new Response(JSON.stringify({
-            success: true,
-            news_id: newsId,
-            render_url: placidImageUrl,
-            caption: caption,
-            headline: headline,
-            template_nome: templateData.nome
-        }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-
-    } catch (error) {
+    } catch (error: any) {
         console.error("[ap-employee-generator] Global Error:", error);
         return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: corsHeaders });
     }

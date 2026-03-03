@@ -16,10 +16,11 @@ export interface EditorialInput {
     rules: any[];
     ragContext: any[];
     openaiKey: string;
+    contentType?: 'feed' | 'reels';
 }
 
 export async function buildEditorialPrompt(sbAdmin: SupabaseClient, data: EditorialInput): Promise<string> {
-    const { titulo, conteudo, categoria, url_original, settings, promptVersion, humanization, rules, openaiKey } = data;
+    const { titulo, conteudo, categoria, url_original, settings, promptVersion, humanization, rules, openaiKey, contentType } = data;
 
     // SANITIZAÇÃO (P0)
     const safeTitulo = titulo.slice(0, 500);
@@ -27,11 +28,15 @@ export async function buildEditorialPrompt(sbAdmin: SupabaseClient, data: Editor
     const safeCategoria = categoria ? categoria.slice(0, 100) : null;
 
     // 1. SYSTEM BASE (Limit to 10000 chars)
-    let systemPrompt = promptVersion || "Você é um editor sênior de jornalismo digital.";
+    let systemPrompt = promptVersion || "Você é um editor sênior de jornalismo digital especializado em curadoria de conteúdo para redes sociais.";
     if (settings.system_prompt_override && settings.override_prompt_text) {
         systemPrompt = settings.override_prompt_text.slice(0, 10000);
     } else {
         systemPrompt = systemPrompt.slice(0, 10000);
+    }
+
+    if (data.contentType === 'reels') {
+        systemPrompt += "\n\nVocê está criando conteúdo para REELS, mas mantenha o rigor informativo. Não use linguagem de 'produtor de vídeo', use linguagem de 'jornalista digital'.";
     }
 
     // 2. RULES (CONSTRAINTS - Limit rules processing to 50)
@@ -119,14 +124,14 @@ INSTRUÇÃO DE SEGURANÇA: Utilize este contexto APENAS indiretamente para melho
                         });
                     }
                 }
-            } // <-- Missing closing brace is added here
+            }
         } catch (e) {
             console.error("Failed to query RAG", e);
         }
     }
 
     // 5. INPUT CONTENT (Sanitized)
-    const inputSection = `\nCONTEÚDO BRUTO (FONTE RSS):\nTítulo: ${safeTitulo}\nCategoria: ${safeCategoria ?? "geral"}\nURL Fonte: ${url_original ?? "N/A"}\nConteúdo Original:\n${safeConteudo ?? "Apenas título disponível."}\n`;
+    const newsSection = `\nCONTEÚDO BRUTO (FONTE RSS):\nTítulo: ${safeTitulo}\nCategoria: ${safeCategoria ?? "geral"}\nURL Fonte: ${url_original ?? "N/A"}\nConteúdo Original:\n${safeConteudo ?? "Apenas título disponível."}\n`;
 
     // 6. EXPECTED FORMAT (JSON Schema Instructions - Strict)
     let sourceInstruction = "";
@@ -140,18 +145,48 @@ INSTRUÇÃO DE SEGURANÇA: Utilize este contexto APENAS indiretamente para melho
         } catch (e) { }
     }
 
-    const formatSection = `\nINSTRUÇÕES DE OUTPUT OBRIGATÓRIAS:${sourceInstruction}\nAo final, responda estritamente em um JSON válido (sem marcadores \`\`\`json) contendo os seguintes campos:
-- "headline": título impactante e direto
-- "caption": legenda para a rede social adequada ao estilo configurado, emojis se combinar
+    const strictFormattingNorms = `
+\n\n============================================================
+NORMAS TÉCNICAS SUPREMAS (ANULAM QUALQUER INSTRUÇÃO ANTERIOR):
+============================================================
+
+1. HEADLINE (O TÍTULO DO CARD):
+- Deve ter NO MÁXIMO 3 LINHAS densas e informativas.
+- Mínimo 50 caracteres, máximo 150.
+- Não seja econômico. Use conectivos e detalhes para preencher as 3 linhas.
+- OBRIGATÓRIO: Use quebras de linha naturais (caractere \\n no JSON) para separar as 3 linhas. NÃO USE barras "/" ou qualquer outro marcador lateral.
+- EXEMPLO DE DENSIDADE (FAÇA ASSIM):
+  "ESTADO DE EMERGÊNCIA:\\nGOVÊRNO CONFIRMA NOVAS MEDIDAS\\nPARA ENFRENTAR CRISE DE SAÚDE"
+
+2. TAG (A CATEGORIA DO TOPO):
+- Use APENAS UMA palavra da lista fixa: [Cinema, Esportes, Política, Saúde, Tecnologia, Geral, Justiça, Famosos, Economia, Goiás].
+- PROIBIÇÃO CRÍTICA: Nunca use nomes de pessoas (ex: Virginia, Vini Jr) ou marcas neste campo. Use a categoria genérica.
+
+3. CAPTION / LEGENDA (O TEXTO DO POST):
+- Deve ser TEXTO LIMPO para redes sociais (Emojis e Hashtags liberados).
+- PROIBIÇÃO ABSOLUTA (NEGATIVE CONSTRAINT): Não use NENHUMA marcação técnica de roteiro ou script como [CENA], [GANCHO], [FALA], [CORTE], [ROTEIRO], [NARRAÇÃO], [VÍDEO], [IMAGEM], [BACKGROUND], etc.
+- O campo "caption" (ou "legenda") deve ser pronto para leitura direta do usuário, sem instruções de produção.
+
+4. ROTEIRO (APENAS SE SOLICITADO):
+- O campo "roteiro" deve conter o roteiro técnico SEPARADO da legenda. Nunca misture marcações de script no campo "caption".
+============================================================\n`;
+
+    const captionLabel = data.contentType === 'reels' ? 'legenda' : 'caption';
+
+    const formatSection = `\nINSTRUÇÕES DE OUTPUT OBRIGATÓRIAS:${sourceInstruction}\nAo final, responda estritamente em um JSON puros (sem marcadores \`\`\`json) contendo os seguintes campos:
+- "headline": (Título do card conforme as Normas Supremas abaixo)
+- "${captionLabel}": (Texto limpo do post conforme as Normas Supremas abaixo)
 - "roteiro": array de 3 elementos string (exato: [abertura, desenvolvimento, fechamento_cta])
-- "visual_energy_level": exatamente "low", "medium" ou "high", dependendo do vigor da notícia
-- "has_face": booleano true se o assunto remete a uma pessoa nominal que deve ganhar capa
-- "context_tag": UMA única palavra ou expressão curta (máx 15 caracteres) em CAIXA ALTA que resuma o LOCAL ou ASSUNTO PRINCIPAL da notícia (ex: "CALDAS NOVAS", "FAMOSOS", "POLÍTICA", "GOIÁS", "SADIA"). Seja específico ao contexto da notícia.
-- "categoria_sugerida": escolha obrigatoriamente um valor exato: "regional", "nacional_relevante", "engajamento_alto" ou "global_contextual"
+- "visual_energy_level": "low", "medium" ou "high"
+- "has_face": booleano true/false
+- "context_tag": (Tag conforme as Normas Supremas abaixo)
+- "categoria_sugerida": "regional", "nacional_relevante", "engajamento_alto" ou "global_contextual"
+
+${strictFormattingNorms}
 `;
 
     // Assemble full prompt
-    return `${systemPrompt}\n${constraintsSection}${styleSection}${ragSection}${inputSection}${formatSection}`;
+    return `${systemPrompt}\n${constraintsSection}\n${styleSection}\n${ragSection}\n${newsSection}\n${formatSection}`;
 }
 
 // Helper to fetch entire editorial context for a given tenant

@@ -175,6 +175,13 @@
   margin-bottom: 2rem;
   border-bottom: 1px solid var(--color-border-light, #e2e8f0);
   padding: 0 0.5rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.ap-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .ap-tab {
@@ -642,14 +649,20 @@
 }
 
 /* ── Published grid ───────────────────────────────────────── */
+.ap-table-container {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--color-border-light, #e2e8f0);
+  border-radius: var(--radius-md, 8px);
+  background: #ffffff;
+}
+
 .ap-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.875rem;
   background: #ffffff;
-  border: 1px solid var(--color-border-light, #e2e8f0);
-  border-radius: var(--radius-md, 8px);
-  overflow: hidden;
 }
 
 .ap-table th {
