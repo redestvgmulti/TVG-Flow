@@ -151,12 +151,12 @@ NORMAS TÉCNICAS SUPREMAS (ANULAM QUALQUER INSTRUÇÃO ANTERIOR):
 ============================================================
 
 1. HEADLINE (O TÍTULO DO CARD):
-- Deve ter NO MÁXIMO 3 LINHAS densas e informativas.
-- Mínimo 50 caracteres, máximo 150.
-- Não seja econômico. Use conectivos e detalhes para preencher as 3 linhas.
-- OBRIGATÓRIO: Use quebras de linha naturais (caractere \\n no JSON) para separar as 3 linhas. NÃO USE barras "/" ou qualquer outro marcador lateral.
-- EXEMPLO DE DENSIDADE (FAÇA ASSIM):
-  "ESTADO DE EMERGÊNCIA:\\nGOVÊRNO CONFIRMA NOVAS MEDIDAS\\nPARA ENFRENTAR CRISE DE SAÚDE"
+- Deve ser CURTO, DIRETO e EXTREMAMENTE IMPACTANTE.
+- Mínimo 20 caracteres, máximo 90.
+- Evite encher linguíça. Vá direto ao ponto mais forte da notícia.
+- Use entre 1 e 2 linhas (caractere \n no JSON).
+- EXEMPLO (IMPACTO):
+  "CERCO FECHADO:\nPOLÍCIA PRENDE CHEFE DO TRÁFICO"
 
 2. TAG (A CATEGORIA DO TOPO):
 - Use APENAS UMA palavra da lista fixa: [Cinema, Esportes, Política, Saúde, Tecnologia, Geral, Justiça, Famosos, Economia, Goiás].

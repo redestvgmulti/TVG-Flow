@@ -60,8 +60,7 @@ Deno.serve(async (req: Request) => {
             patrocinador_id, 
             context_tag, 
             placid_template_uuid, 
-            content_type, 
-            clientes!inner(empresa_id)
+            content_type
         `)
         .eq("status", "pending_render");
 
@@ -100,9 +99,9 @@ Deno.serve(async (req: Request) => {
 
             if (!activeTemplateId) {
                 // If not pre-assigned, consume from global queue
-                const empresaId = item.clientes?.empresa_id;
+                const empresaId = item.cliente_id;
                 if (!empresaId) {
-                    throw new Error("Não foi possível resolver empresa_id do cliente.");
+                    throw new Error("Não foi possível resolver cliente_id da notícia.");
                 }
 
                 const queueType = item.content_type || 'feed';
