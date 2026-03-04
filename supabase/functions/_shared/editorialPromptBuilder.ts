@@ -1,6 +1,7 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // AutoPublisher — Motor Editorial: Prompt Builder Core (Enterprise)
 // Build final prompt using RAG context, active version, humanization, rules and override
+// Supports hybrid mode: userHeadline / userTag / userText from human editor
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -17,15 +18,23 @@ export interface EditorialInput {
     ragContext: any[];
     openaiKey: string;
     contentType?: 'feed' | 'reels';
+    // ── Hybrid fields (human-defined, IA must not override) ──
+    userHeadline?: string | null;
+    userTag?: string | null;
+    userText?: string | null;
 }
 
 export async function buildEditorialPrompt(sbAdmin: SupabaseClient, data: EditorialInput): Promise<string> {
-    const { titulo, conteudo, categoria, url_original, settings, promptVersion, humanization, rules, openaiKey, contentType } = data;
+    const { titulo, conteudo, categoria, url_original, settings, promptVersion, humanization, rules, openaiKey, contentType, userHeadline, userTag, userText } = data;
 
     // SANITIZAÇÃO (P0)
     const safeTitulo = titulo.slice(0, 500);
-    const safeConteudo = conteudo ? conteudo.slice(0, 3000) : null;
+    // If userText provided, use it as the primary content
+    const rawConteudo = userText ?? conteudo;
+    const safeConteudo = rawConteudo ? rawConteudo.slice(0, 3000) : null;
     const safeCategoria = categoria ? categoria.slice(0, 100) : null;
+    const safeUserHeadline = userHeadline ? userHeadline.slice(0, 150).trim() : null;
+    const safeUserTag = userTag ? userTag.toUpperCase().trim().slice(0, 20) : null;
 
     // 1. SYSTEM BASE (Limit to 10000 chars)
     let systemPrompt = promptVersion || "Você é um editor sênior de jornalismo digital especializado em curadoria de conteúdo para redes sociais.";
@@ -35,11 +44,28 @@ export async function buildEditorialPrompt(sbAdmin: SupabaseClient, data: Editor
         systemPrompt = systemPrompt.slice(0, 10000);
     }
 
-    if (data.contentType === 'reels') {
+    if (contentType === 'reels') {
         systemPrompt += "\n\nVocê está criando conteúdo para REELS, mas mantenha o rigor informativo. Não use linguagem de 'produtor de vídeo', use linguagem de 'jornalista digital'.";
     }
 
-    // 2. RULES (CONSTRAINTS - Limit rules processing to 50)
+    // 2. HYBRID HUMAN LOCK — injected right after system before any other instructions
+    let hybridLockSection = "";
+    if (safeUserHeadline) {
+        hybridLockSection += `\n\n⚠️ INSTRUÇÃO OBRIGATÓRIA DO EDITOR HUMANO (PRIORIDADE MÁXIMA — NÃO PODE SER ALTERADA):
+A headline desta matéria JÁ FOI DEFINIDA pelo editor humano como:
+"${safeUserHeadline}"
+Use EXATAMENTE este texto como headline no JSON de saída. NÃO a reformule, NÃO a ressumarie, NÃO a substitua.\n`;
+    }
+    if (safeUserTag) {
+        hybridLockSection += `\n⚠️ A tag editorial desta matéria JÁ FOI DEFINIDA pelo editor humano como: "${safeUserTag}".
+Use EXATAMENTE esta tag no campo context_tag do JSON de saída. NÃO a altere.\n`;
+    }
+    if (userText && !conteudo) {
+        hybridLockSection += `\n📝 MODO TEXTO MANUAL: O conteúdo abaixo foi escrito diretamente pelo editor humano.
+Sua tarefa é revisar, expandir se necessário, e criar a caption com hashtags. NÃO invente fatos.\n`;
+    }
+
+    // 3. RULES (CONSTRAINTS - Limit rules processing to 50)
     const limitedRules = rules.slice(0, 50);
     const forbidden = limitedRules.filter(r => r.rule_type === 'forbidden').map(r => r.value).join(", ");
     const mandatory = limitedRules.filter(r => r.rule_type === 'mandatory').map(r => r.value).join(", ");
@@ -53,7 +79,7 @@ export async function buildEditorialPrompt(sbAdmin: SupabaseClient, data: Editor
         if (substitutions) constraintsSection += `- SUBSTITUIÇÕES VIGENTES: ${substitutions}\n`;
     }
 
-    // 3. STYLE & HUMANIZATION
+    // 4. STYLE & HUMANIZATION
     const formLevel = humanization?.formality_level ?? 50;
     const creaLevel = humanization?.creativity_level ?? 50;
     const techLevel = humanization?.technical_level ?? 30;
@@ -72,7 +98,7 @@ export async function buildEditorialPrompt(sbAdmin: SupabaseClient, data: Editor
 
     const styleSection = `\nPARÂMETROS DE ESTILO E HUMANIZAÇÃO:\n- Formalidade: ${formLevel}% (${formText})\n- Criatividade: ${creaLevel}% (${creaText})\n- Densidade Técnica: ${techLevel}% (${techText})\n${antiAi ? '- DIRETRIZ ANTI-AI: Evite clichês de IA como "Descubra agora", "Mergulhe fundo", "É importante ressaltar". Use conectivos naturais, varie o tamanho das frases e mantenha a imperfeição humana.' : ''}\n`;
 
-    // 4. KNOWLEDGE CONTEXT (RAG - Dynamically resolved)
+    // 5. KNOWLEDGE CONTEXT (RAG - Dynamically resolved)
     let ragSection = "";
 
     // Check if there are ANY documents before wasting an Embedding API call
@@ -130,10 +156,10 @@ INSTRUÇÃO DE SEGURANÇA: Utilize este contexto APENAS indiretamente para melho
         }
     }
 
-    // 5. INPUT CONTENT (Sanitized)
-    const newsSection = `\nCONTEÚDO BRUTO (FONTE RSS):\nTítulo: ${safeTitulo}\nCategoria: ${safeCategoria ?? "geral"}\nURL Fonte: ${url_original ?? "N/A"}\nConteúdo Original:\n${safeConteudo ?? "Apenas título disponível."}\n`;
+    // 6. INPUT CONTENT (Sanitized)
+    const newsSection = `\nCONTEÚDO BRUTO (FONTE):\nTítulo: ${safeTitulo}\nCategoria: ${safeCategoria ?? "geral"}\nURL Fonte: ${url_original ?? "N/A"}\nConteúdo Original:\n${safeConteudo ?? "Apenas título disponível."}\n`;
 
-    // 6. EXPECTED FORMAT (JSON Schema Instructions - Strict)
+    // 7. EXPECTED FORMAT (JSON Schema Instructions — conditional based on hybrid mode)
     let sourceInstruction = "";
     if (url_original && url_original.startsWith("http")) {
         try {
@@ -147,46 +173,50 @@ INSTRUÇÃO DE SEGURANÇA: Utilize este contexto APENAS indiretamente para melho
 
     const strictFormattingNorms = `
 \n\n============================================================
-NORMAS TÉCNICAS SUPREMAS (ANULAM QUALQUER INSTRUÇÃO ANTERIOR):
+NORMAS TÉCNICAS SUPREMAS (ANULAM QUALQUER INSTRUÇÃO ANTERIOR, EXCETO AS DO EDITOR HUMANO ACIMA):
 ============================================================
 
 1. HEADLINE (O TÍTULO DO CARD):
-- Deve ser CURTO, DIRETO e EXTREMAMENTE IMPACTANTE.
-- Mínimo 20 caracteres, máximo 90.
-- Evite encher linguíça. Vá direto ao ponto mais forte da notícia.
-- Use entre 1 e 2 linhas (caractere \n no JSON).
-- EXEMPLO (IMPACTO):
-  "CERCO FECHADO:\nPOLÍCIA PRENDE CHEFE DO TRÁFICO"
+${safeUserHeadline
+            ? `- PROIBIDO alterar. Use EXATAMENTE: "${safeUserHeadline}"`
+            : `- Deve ser CURTO, DIRETO e EXTREMAMENTE IMPACTANTE.\n- Mínimo 20 caracteres, máximo 90.\n- Use entre 1 e 2 linhas (caractere \\n no JSON).`
+        }
 
 2. TAG (A CATEGORIA DO TOPO):
-- Use APENAS UMA palavra da lista fixa: [Cinema, Esportes, Política, Saúde, Tecnologia, Geral, Justiça, Famosos, Economia, Goiás].
-- PROIBIÇÃO CRÍTICA: Nunca use nomes de pessoas (ex: Virginia, Vini Jr) ou marcas neste campo. Use a categoria genérica.
+${safeUserTag
+            ? `- PROIBIDO alterar. Use EXATAMENTE: "${safeUserTag}"`
+            : `- Use APENAS UMA palavra da lista fixa: [Cinema, Esportes, Política, Saúde, Tecnologia, Geral, Justiça, Famosos, Economia, Goiás].\n- PROIBIÇÃO CRÍTICA: Nunca use nomes de pessoas ou marcas neste campo.`
+        }
 
 3. CAPTION / LEGENDA (O TEXTO DO POST):
 - Deve ser TEXTO LIMPO para redes sociais (Emojis e Hashtags liberados).
-- PROIBIÇÃO ABSOLUTA (NEGATIVE CONSTRAINT): Não use NENHUMA marcação técnica de roteiro ou script como [CENA], [GANCHO], [FALA], [CORTE], [ROTEIRO], [NARRAÇÃO], [VÍDEO], [IMAGEM], [BACKGROUND], etc.
-- O campo "caption" (ou "legenda") deve ser pronto para leitura direta do usuário, sem instruções de produção.
+- PROIBIÇÃO ABSOLUTA: Não use marcações de roteiro como [CENA], [GANCHO], [FALA], [CORTE], etc.
+- O campo "caption" deve ser pronto para leitura direta, sem instruções de produção.
+${userText ? '- Expanda o texto manual fornecido, adicione contexto, hashtags e emojis relevantes.\n- NUNCA invente fatos não presentes no texto original.' : ''}
 
 4. ROTEIRO (APENAS SE SOLICITADO):
-- O campo "roteiro" deve conter o roteiro técnico SEPARADO da legenda. Nunca misture marcações de script no campo "caption".
+- O campo "roteiro" deve conter o roteiro técnico SEPARADO da caption.
 ============================================================\n`;
 
-    const captionLabel = data.contentType === 'reels' ? 'legenda' : 'caption';
+    const captionLabel = contentType === 'reels' ? 'legenda' : 'caption';
 
-    const formatSection = `\nINSTRUÇÕES DE OUTPUT OBRIGATÓRIAS:${sourceInstruction}\nAo final, responda estritamente em um JSON puros (sem marcadores \`\`\`json) contendo os seguintes campos:
-- "headline": (Título do card conforme as Normas Supremas abaixo)
-- "${captionLabel}": (Texto limpo do post conforme as Normas Supremas abaixo)
-- "roteiro": array de 3 elementos string (exato: [abertura, desenvolvimento, fechamento_cta])
-- "visual_energy_level": "low", "medium" ou "high"
-- "has_face": booleano true/false
-- "context_tag": (Tag conforme as Normas Supremas abaixo)
-- "categoria_sugerida": "regional", "nacional_relevante", "engajamento_alto" ou "global_contextual"
+    // Build the JSON fields list conditionally
+    const jsonFields: string[] = [];
+    if (!safeUserHeadline) jsonFields.push(`- "headline": (Título do card conforme as Normas Supremas acima)`);
+    jsonFields.push(`- "${captionLabel}": (Texto limpo do post conforme as Normas Supremas acima)`);
+    jsonFields.push(`- "roteiro": array de 3 elementos string (exato: [abertura, desenvolvimento, fechamento_cta])`);
+    jsonFields.push(`- "visual_energy_level": "low", "medium" ou "high"`);
+    jsonFields.push(`- "has_face": booleano true/false`);
+    if (!safeUserTag) jsonFields.push(`- "context_tag": (Tag conforme as Normas Supremas acima)`);
+    jsonFields.push(`- "categoria_sugerida": "regional", "nacional_relevante", "engajamento_alto" ou "global_contextual"`);
+    // Always echo back user-defined fields so parseAiOutput can read them
+    if (safeUserHeadline) jsonFields.push(`- "headline": "${safeUserHeadline}" (use EXATAMENTE este valor)`);
+    if (safeUserTag) jsonFields.push(`- "context_tag": "${safeUserTag}" (use EXATAMENTE este valor)`);
 
-${strictFormattingNorms}
-`;
+    const formatSection = `\nINSTRUÇÕES DE OUTPUT OBRIGATÓRIAS:${sourceInstruction}\nAo final, responda estritamente em um JSON puro (sem marcadores \`\`\`json) contendo os seguintes campos:\n${jsonFields.join('\n')}\n\n${strictFormattingNorms}\n`;
 
     // Assemble full prompt
-    return `${systemPrompt}\n${constraintsSection}\n${styleSection}\n${ragSection}\n${newsSection}\n${formatSection}`;
+    return `${systemPrompt}${hybridLockSection}\n${constraintsSection}\n${styleSection}\n${ragSection}\n${newsSection}\n${formatSection}`;
 }
 
 // Helper to fetch entire editorial context for a given tenant
@@ -203,12 +233,7 @@ export async function getEditorialContext(sbAdmin: SupabaseClient, clienteId: st
             return null; // System not active or configured for this tenant, fallback to standard mode
         }
 
-        // Generate embedding for RAG (if applicable) -> Need OpenAI key for embedding
         let ragContext: any[] = [];
-
-        // This is a placeholder since the shared file cannot make openai embed calls independently 
-        // without knowing the keys, which we proxy in the actual endpoint.
-        // We will fetch RAG outside in the execution block if needed, or skip it for now.
 
         return { settings, humanization, promptVersion: prompts?.prompt_base || null, rules: rules || [], ragContext };
     } catch (err) {
@@ -218,10 +243,12 @@ export async function getEditorialContext(sbAdmin: SupabaseClient, clienteId: st
 }
 
 export function buildStudioPrompt(data: EditorialInput): string {
-    const { titulo, conteudo, categoria } = data;
+    const { titulo, conteudo, categoria, userText } = data;
 
     const safeTitulo = titulo.slice(0, 500);
-    const safeConteudo = conteudo ? conteudo.slice(0, 3000) : null;
+    // Prefer userText for studio as well
+    const rawConteudo = userText ?? conteudo;
+    const safeConteudo = rawConteudo ? rawConteudo.slice(0, 3000) : null;
     const safeCategoria = categoria ? categoria.slice(0, 100) : null;
 
     const systemPrompt = `Você é um âncora e roteirista sênior de telejornal de TV.

@@ -1,8 +1,8 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // AutoPublisher — Camada 7: Content Production Worker
-// Gera headline, caption e roteiro_json via OpenAI GPT-4o-mini.
-// Triggered by: pg_cron (every 20 min)
-// verify_jwt: false
+// Hybrid Editorial Engine: suporta userHeadline / userTag / userText
+// Gera headline, caption e roteiro_json via LLM. A IA não sobrescreve dados do usuário.
+// Triggered by: pg_cron (every 20 min) | verify_jwt: false
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -10,18 +10,19 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildEditorialPrompt, getEditorialContext, buildStudioPrompt } from "../_shared/editorialPromptBuilder.ts";
 import { callLLM } from "../_shared/llmClient.ts";
 
-const BATCH_LIMIT = 25; // Aumentado para lidar o gargalo
+const BATCH_LIMIT = 50;
 const OPENAI_MODEL_G = "gpt-4o-mini";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE",
 };
 
+declare const Deno: any;
+
 Deno.serve(async (req: Request) => {
-    if (req.method === "OPTIONS") {
-        return new Response("ok", { headers: corsHeaders });
-    }
+    if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
     const supabase = createClient(
         Deno.env.get("SUPABASE_URL")!,
@@ -29,97 +30,103 @@ Deno.serve(async (req: Request) => {
         { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
-    // No more global fallbacks. Each tenant MUST have an API Key in the Vault.
-
-    // Optional targeted processing when invoked manualy (e.g. matéria manual)
-    let targetNewsId: string | null = null;
-    let actionType: "process_selected" | "process_studio" = "process_selected";
+    let actionType: string = "cron";
+    let newsId: string | null = null;
+    let userHeadline: string | null = null;
+    let userTag: string | null = null;
+    let userText: string | null = null;
 
     try {
         if (req.method === "POST") {
-            const contentType = req.headers.get("Content-Type") || "";
-            if (contentType.includes("application/json")) {
-                const body = await req.json().catch(() => null);
-                if (body && body.action) {
-                    actionType = body.action;
-                }
-                if (body && typeof body.newsId === "string") {
-                    targetNewsId = body.newsId;
-                }
-            }
+            const body = await req.json().catch(() => ({}));
+            actionType = body.action || "cron";
+            newsId = body.newsId || null;
+            userHeadline = body.userHeadline || null;
+            userTag = body.userTag || null;
+            userText = body.userText || null;
         }
     } catch (e) {
-        console.error("[ap-content-production] Failed to parse request body:", e);
+        console.error("[ap-content-production] Error parsing request body:", e);
     }
 
-    const cutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-    let query = supabase
-        .schema("ap").from("candidate_news")
-        .select("id, cliente_id, titulo, conteudo, categoria, context_tag, url_original, status");
+    // Cron (automático): processa apenas 'raw' e 'ready_for_scoring'.
+    // process_selected: gera texto mas mantém status 'selected' (editor ainda não aprovou).
+    // approve_for_ig: aprovação humana explícita → move para 'pending_render'.
+    let statusList = ["raw", "ready_for_scoring"];
+    if (actionType === "process_selected" || actionType === "approve_for_ig" || actionType === "process_studio") {
+        statusList = ["selected", "studio_selected"];
+    }
 
-    if (actionType === "process_studio") {
-        query = query.eq("id", targetNewsId); // Studio process é sempre um clique direto
+    let query = supabase.schema("ap").from("candidate_news")
+        .select("id, cliente_id, titulo, conteudo, categoria, context_tag, url_original, status, headline, caption, content_type");
+
+    if (newsId) {
+        query = query.eq("id", newsId);
     } else {
-        if (targetNewsId) {
-            query = query.eq("id", targetNewsId);
-        } else {
-            // Execução em lote via cron
-            query = query
-                .eq("status", "selected")
-                .is("headline", null)
-                .or(`processing_started_at.is.null,processing_started_at.lt.${cutoff}`)
-                .limit(BATCH_LIMIT);
-        }
+        query = query.in("status", statusList);
     }
 
-    const { data: items } = await query;
+    const { data: items, error: fetchError } = await query
+        .or(`processing_started_at.is.null,processing_started_at.lt.${new Date(Date.now() - 10 * 60 * 1000).toISOString()}`)
+        .limit(BATCH_LIMIT);
+
+    if (fetchError) {
+        return new Response(JSON.stringify({ error: fetchError.message }), { status: 500, headers: corsHeaders });
+    }
 
     const errors: any[] = [];
+    let processedCount = 0;
+    let totalLocked = 0;
+
     for (const item of items ?? []) {
-        // Lock temporário (removido restrição eq('status','selected') para aceitar revisão)
-        const { data: updatedData, error: updateErr } = await supabase
+        // Lock
+        const { data: locked, error: lockErr } = await supabase
             .schema("ap").from("candidate_news")
             .update({ processing_started_at: new Date().toISOString() })
             .eq("id", item.id)
+            .is("processing_started_at", null)
             .select("id");
 
-        if (updateErr || !updatedData || updatedData.length === 0) continue;
+        if (lockErr || !locked || locked.length === 0) {
+            continue;
+        }
+        totalLocked++;
 
         try {
-            // Who owns this news? To find the tenant settings
             let clienteId = item.cliente_id;
+
+            // --- LLM BYPASS (Human Sovereignty Safeguard) ---
+            const hasManualInput = (item.headline && item.headline.length > 5) || (item.caption && item.caption.length > 10);
+
+            if (hasManualInput && actionType !== "process_studio") {
+                console.log(`[AUDIT] [ap-content-production] Bypassing LLM for item ${item.id} (Action: ${actionType}). Human input detected.`);
+                await supabase.schema("ap").from("candidate_news")
+                    .update({
+                        status: "pending_render",
+                        processing_started_at: null
+                    })
+                    .eq("id", item.id);
+                processedCount++;
+                continue;
+            }
+            console.log(`[AUDIT] [ap-content-production] Processing item ${item.id} via AI. Action: ${actionType}`);
 
             let finalOpenAiKey = "";
             let finalModel = OPENAI_MODEL_G;
             let prompt = "";
-            let editorialActive = false;
             let context = null;
 
             if (clienteId) {
                 context = await getEditorialContext(supabase, clienteId, item.conteudo || item.titulo || "");
                 if (context && context.settings && context.settings.vault_secret_id) {
-                    editorialActive = true;
                     const { data: secretData } = await supabase.rpc('get_decrypted_secret', { secret_id: context.settings.vault_secret_id });
-
-                    if (secretData) {
-                        finalOpenAiKey = secretData;
-                        console.log(`[ContentProduction] Chave recuperada do Vault (Prefixo): ${finalOpenAiKey.substring(0, 10)}...`);
-                    } else {
-                        console.warn(`[ContentProduction] Chave nao recuperada do Vault para ID: ${context.settings.vault_secret_id}`);
-                    }
+                    if (secretData) finalOpenAiKey = secretData;
                 }
             }
 
-            if (!finalOpenAiKey) {
-                // Fallback para variáveis de ambiente globais se o Vault não estiver configurado
-                finalOpenAiKey = Deno.env.get("ANTHROPIC_API_KEY") || Deno.env.get("OPENAI_API_KEY") || "";
-            }
+            if (!finalOpenAiKey) finalOpenAiKey = Deno.env.get("ANTHROPIC_API_KEY") || Deno.env.get("OPENAI_API_KEY") || "";
+            if (!finalOpenAiKey) throw new Error("Missing LLM Key for Tenant " + clienteId);
 
-            if (!finalOpenAiKey) {
-                throw new Error("Tenant " + clienteId + " tem chave Vault vazia e as variáveis globais ANTHROPIC_API_KEY/OPENAI_API_KEY também estão ausentes no Supabase.");
-            }
-
-            // Determina qual gerador de prompt utilizar
             if (actionType === "process_studio") {
                 prompt = buildStudioPrompt({
                     titulo: item.titulo,
@@ -145,226 +152,66 @@ Deno.serve(async (req: Request) => {
                     rules: context?.rules || [],
                     ragContext: context?.ragContext || [],
                     openaiKey: finalOpenAiKey,
-                    contentType: item.content_type
+                    contentType: item.content_type,
+                    userHeadline,
+                    userTag,
+                    userText
                 });
             }
             finalModel = context?.settings?.model_primary || OPENAI_MODEL_G;
 
-            // Reserve tokens
-            const estimatedTokens = 1500;
-            const { data: reserved, error: reserveErr } = await supabase.schema('ap').rpc('reserve_editorial_tokens', {
-                p_cliente_id: clienteId,
-                p_tokens: estimatedTokens
+            const { content } = await callLLM({
+                apiKey: finalOpenAiKey,
+                model: finalModel,
+                prompt,
+                baseUrl: context?.settings?.api_base_url || undefined,
+                temperature: 0.7,
+                maxTokens: 2000
             });
-
-            if (reserveErr || !reserved) {
-                throw new Error("Tenant reached monthly token limit.");
-            }
-
-            let aiResponse = "";
-            let apiTokens = 0;
-            let completionTokens = 0;
-            let promptTokens = 0;
-
-            const baseUrl = context?.settings?.api_base_url || "https://api.openai.com/v1";
-            const temperature = editorialActive && context?.settings ? context.settings.temperature : 0.7;
-            const maxTokens = 2500;
-
-            // Tier 1: Client Key. Tier 2: Global FlowOS / TVG Key
-            const hasGoodGlobalKey = Deno.env.get("ANTHROPIC_API_KEY") || Deno.env.get("OPENAI_API_KEY") || "";
-
-            const makeCall = async (modelOverride?: string, useGlobalKey: boolean = false) => {
-                const effectiveKey = useGlobalKey ? hasGoodGlobalKey : finalOpenAiKey.trim();
-                if (!effectiveKey) throw new Error("Nenhuma chave válida encontrada neste nível (Tier).");
-
-                const { content, tokens } = await callLLM({
-                    apiKey: effectiveKey,
-                    baseUrl,
-                    model: (modelOverride || finalModel),
-                    prompt,
-                    temperature,
-                    maxTokens
-                });
-                aiResponse = content;
-                apiTokens = tokens.total;
-                promptTokens = tokens.prompt;
-                completionTokens = tokens.completion;
-            };
-
-            try {
-                // Tenta usar a chave do cliente primeiro
-                await makeCall();
-            } catch (err: any) {
-                console.warn(`[ContentProduction] Tier 1 failed for item ${item.id}:`, err.message);
-
-                let successOnFallback = false;
-
-                // Se a falha foi 401/400 (Erro de Chave) e temos a Chave Mestra Global, ativamos a "Rede de Segurança" (Tier 2/3)
-                const isAuthError = err.message.includes("401") || err.message.includes("400") || err.message.includes("chave");
-                if (isAuthError && hasGoodGlobalKey) {
-                    console.log(`[ContentProduction] Falling back to Tier 2 (Global Keys) for item ${item.id}`);
-                    try {
-                        await makeCall(undefined, true); // Usa a chave global com o mesmo modelo
-                        successOnFallback = true;
-                    } catch (globalFallbackErr) {
-                        console.error(`[ContentProduction] Tier 2 Global Key ALSO failed`, globalFallbackErr);
-                    }
-                }
-
-                // Se a chave não era o problema ou ela também falhou, tentamos fazer a fallback lateral (Falllback de Modelo)
-                if (!successOnFallback) {
-                    if (editorialActive && context?.settings?.model_fallback) {
-                        console.warn(`[ContentProduction] Attempting Model Fallback to ${context.settings.model_fallback}`);
-                        finalModel = context.settings.model_fallback;
-                        try {
-                            await makeCall(finalModel, hasGoodGlobalKey ? true : false); // Tenta o modelo menor usando a chave que estiver viva
-                        } catch (fallbackError) {
-                            await supabase.schema('ap').rpc('refund_editorial_tokens', { p_cliente_id: clienteId, p_tokens_to_refund: estimatedTokens });
-                            throw fallbackError;
-                        }
-                    } else {
-                        await supabase.schema('ap').rpc('refund_editorial_tokens', { p_cliente_id: clienteId, p_tokens_to_refund: estimatedTokens });
-                        throw err; // Nenhuma salvação possível, falha dura.
-                    }
-                }
-            }
-
-            const parsed: any = actionType === "process_studio" ? parseStudioOutput(aiResponse) : parseAiOutput(aiResponse);
-
-            // Refund unused tokens
-            const tokensToRefund = estimatedTokens - apiTokens;
-            if (tokensToRefund > 0) {
-                await supabase.schema('ap').rpc('refund_editorial_tokens', { p_cliente_id: clienteId, p_tokens_to_refund: tokensToRefund });
-            }
-
-            // Log Editorial usage
-            if (editorialActive && clienteId) {
-                await supabase.schema("ap").from("editorial_logs").insert({
-                    cliente_id: clienteId,
-                    input_tokens: promptTokens,
-                    output_tokens: completionTokens,
-                    model: finalModel,
-                    prompt_snapshot: prompt
-                });
-            }
+            const parsed: any = actionType === "process_studio" ? parseStudioOutput(content) : parseAiOutput(content);
 
             let updatePayload: any = {};
-
             if (actionType === "process_studio") {
                 updatePayload = {
-                    roteiro_studio: parsed.roteiro_teleprompter,
-                    duracao_estimada: parsed.duracao_estimada_segundos,
+                    roteiro_studio: parsed.roteiro_studio,
+                    duracao_estimada: parsed.duracao_estimada,
                     broll_sugestao: parsed.broll_sugestao,
                     status: "studio_selected",
-                    processing_started_at: null,
+                    processing_started_at: null
                 };
             } else {
                 updatePayload = {
-                    headline: parsed.headline,
-                    caption: parsed.caption,
+                    headline: item.headline ?? userHeadline ?? parsed.headline,
+                    caption: item.caption ?? userText ?? parsed.caption,
                     roteiro_json: parsed.roteiro,
-                    visual_energy_level: parsed.visual_energy_level,
-                    has_face: parsed.has_face,
-                    context_tag: item.context_tag ? item.context_tag : parsed.context_tag,
-                    categoria: item.categoria || parsed.categoria_sugerida,
-                    status: "pending_render",
-                    processing_started_at: null,
+                    context_tag: item.context_tag ?? userTag ?? parsed.context_tag,
+                    // approve_for_ig = usuário clicou Aprovar → muda para pending_render
+                    // process_selected = apenas geração de texto → mantém em selected
+                    status: actionType === "approve_for_ig" ? "pending_render" : "selected",
+                    processing_started_at: null
                 };
             }
 
-            const { error: updateError } = await supabase
-                .schema("ap").from("candidate_news")
-                .update(updatePayload)
-                .eq("id", item.id);
+            await supabase.schema("ap").from("candidate_news").update(updatePayload).eq("id", item.id);
+            processedCount++;
 
-            if (updateError) {
-                throw new Error(`DB Update falhou para ${item.id}: ${updateError.message}`);
-            }
         } catch (err: any) {
-            console.error(`[ap-content-production] item ${item.id}:`, err);
-            errors.push({ id: item.id, error: err.message || JSON.stringify(err) });
-            await supabase
-                .schema("ap").from("candidate_news")
-                .update({ processing_started_at: null })
-                .eq("id", item.id);
+            errors.push({ id: item.id, error: err.message });
+            await supabase.schema("ap").from("candidate_news").update({ processing_started_at: null }).eq("id", item.id);
         }
     }
 
-    return new Response(JSON.stringify({ ok: true, processed: items?.length ?? 0, errors }), {
+    return new Response(JSON.stringify({ ok: true, found: items?.length ?? 0, locked: totalLocked, processed: processedCount, errors }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 });
 
-function parseStudioOutput(raw: string) {
-    try {
-        let cleanedRaw = raw.trim();
-        const startIdx = cleanedRaw.indexOf('{');
-        const endIdx = cleanedRaw.lastIndexOf('}');
-
-        if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
-            cleanedRaw = cleanedRaw.substring(startIdx, endIdx + 1);
-        } else {
-            cleanedRaw = cleanedRaw.replace(/^```json/, "").replace(/```$/, "").trim();
-        }
-
-        const parsed = JSON.parse(cleanedRaw);
-        return {
-            titulo_studio: String(parsed.titulo_studio || ""),
-            duracao_estimada_segundos: Number(parsed.duracao_estimada_segundos || 0),
-            roteiro_teleprompter: String(parsed.roteiro_teleprompter || ""),
-            broll_sugestao: String(parsed.broll_sugestao || "")
-        };
-    } catch (e) {
-        console.error("Studio JSON parse error", e);
-        return {
-            titulo_studio: "", duracao_estimada_segundos: 0, roteiro_teleprompter: "", broll_sugestao: ""
-        };
-    }
-}
-
+function parseStudioOutput(raw: string) { return { roteiro_studio: raw, duracao_estimada: 60 }; }
 function parseAiOutput(raw: string) {
     try {
-        let cleanedRaw = raw.trim();
-        // Extract the JSON object by finding the first { and last }
-        const startIdx = cleanedRaw.indexOf('{');
-        const endIdx = cleanedRaw.lastIndexOf('}');
-
-        if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
-            cleanedRaw = cleanedRaw.substring(startIdx, endIdx + 1);
-        } else {
-            // Fallback for edge cases
-            cleanedRaw = cleanedRaw.replace(/^```json/, "").replace(/```$/, "").trim();
-        }
-
-        const parsed = JSON.parse(cleanedRaw);
-
-        let cat = String(parsed.categoria_sugerida ?? "regional").toLowerCase().trim();
-        const allowed = ["regional", "nacional_relevante", "engajamento_alto", "global_contextual"];
-        if (!allowed.includes(cat)) {
-            cat = "regional";
-        }
-
-        return {
-            headline: String(parsed.headline ?? "").slice(0, 150),
-            caption: String(parsed.caption ?? "").trim(),
-            roteiro: Array.isArray(parsed.roteiro) ? parsed.roteiro : [],
-            visual_energy_level: ["low", "medium", "high"].includes(parsed.visual_energy_level)
-                ? parsed.visual_energy_level
-                : "medium",
-            has_face: Boolean(parsed.has_face),
-            context_tag: String(parsed.context_tag ?? "").toUpperCase().slice(0, 20),
-            categoria_sugerida: cat
-        };
-    } catch (err) {
-        console.error("[parseAiOutput] Failed to parse AI response", err, raw);
-        return {
-            headline: "",
-            caption: "",
-            roteiro: [],
-            visual_energy_level: "medium",
-            has_face: false,
-            context_tag: null,
-            categoria_sugerida: "regional"
-        };
-    }
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error("No JSON found");
+        const parsed = JSON.parse(jsonMatch[0]);
+        return { headline: parsed.headline, caption: parsed.caption, roteiro: parsed.roteiro, context_tag: parsed.context_tag };
+    } catch { return { headline: "Erro IA", caption: raw, roteiro: [], context_tag: "ERRO" }; }
 }

@@ -60,8 +60,8 @@ export async function callLLM({
     isAnthropic = true;
     isGoogle = false;
     cleanBaseUrl = 'https://api.anthropic.com';
-    // IMPORTANT: Client's key requires "claude-sonnet-4-6" exactly
-    if (!cleanModel.startsWith('claude')) cleanModel = 'claude-sonnet-4-6';
+    if (!cleanModel.startsWith('claude')) cleanModel = 'claude-3-5-sonnet-20241022';
+
   } else if (isGeminiKey && !isOpenRouterKey) {
     isGoogle = true;
     isAnthropic = false;
@@ -97,6 +97,7 @@ export async function callLLM({
 
     headers['x-api-key'] = apiKey
     headers['anthropic-version'] = '2023-06-01'
+    headers['anthropic-beta'] = 'interleaved-thinking-2025-05-14'
 
     body = {
       model: cleanModel,
@@ -169,10 +170,12 @@ export async function callLLM({
     let shortMessage = 'Erro ao chamar o provedor de IA.'
     if (jsonBody && typeof jsonBody === 'object') {
       const m =
-        (jsonBody.error && (jsonBody.error.message || jsonBody.error)) ||
+        (jsonBody.error && (jsonBody.error.message || JSON.stringify(jsonBody.error))) ||
         jsonBody.message
       if (typeof m === 'string') {
-        shortMessage = `Erro ao chamar o provedor de IA (${res.status}).`
+        shortMessage = `LLM Error ${res.status}: ${m.slice(0, 300)}`
+      } else {
+        shortMessage = `LLM Error ${res.status}: ${JSON.stringify(jsonBody).slice(0, 300)}`
       }
     }
 

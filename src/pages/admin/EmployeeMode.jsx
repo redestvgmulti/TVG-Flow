@@ -11,12 +11,16 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
     const { user: ctxUser, professionalId, role } = useAuth();
     const user = propUser || ctxUser;
 
+    const [selectedFlow, setSelectedFlow] = useState(1); // 1 | 2 | 3
     const [form, setForm] = useState({
-        titulo: '',
-        conteudo: '',
+        url_original: '',
+        tag: '',
+        headline: '',
+        texto: '',
         imagem_url: '',
-        url_original: ''
     });
+
+    const TAGS_FIXAS = ['Cinema', 'Esportes', 'Política', 'Saúde', 'Tecnologia', 'Geral', 'Justiça', 'Famosos', 'Economia', 'Goiás'];
 
     const [contentType, setContentType] = useState('feed'); // 'feed' | 'reels'
 
@@ -88,8 +92,15 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
 
     const handleGenerate = async (e) => {
         e.preventDefault();
-        if (!form.titulo && !form.conteudo && !form.url_original) {
-            setErrorMsg("Preencha o Título, Conteúdo ou insira um Link Externo.");
+        const { url_original, tag, headline, texto, imagem_url } = form;
+
+        // Per-flow validation
+        if (!tag) { setErrorMsg('Tag de editoria é obrigatória.'); return; }
+        if (selectedFlow === 1 && !url_original) { setErrorMsg('Link é obrigatório no Fluxo 1.'); return; }
+        if (selectedFlow === 2 && (!url_original || !headline)) { setErrorMsg('Link e Headline obrigatórios no Fluxo 2.'); return; }
+        if (selectedFlow === 3 && (!headline || !texto)) { setErrorMsg('Headline e Texto obrigatórios no Fluxo 3.'); return; }
+        if (selectedFlow === 3 && !url_original && !imagem_url && !selectedFile && contentType === 'feed') {
+            setErrorMsg('Imagem obrigatória para matérias manuais sem link (Fluxo 3).');
             return;
         }
 
@@ -98,55 +109,68 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
         setSuccessData(null);
 
         try {
-            let finalTitulo = form.titulo;
-            let finalConteudo = form.conteudo;
-            let finalImageUrl = form.imagem_url;
-
-            if (form.url_original) {
-                // Check for duplicates first using the complete view to get more details if needed
+            if (url_original) {
+                // Check for duplicates
                 const { data: existingNews, error: searchError } = await supabase
                     .from('ap_candidate_news')
                     .select('id')
-                    .eq('url_original', form.url_original)
+                    .eq('url_original', url_original)
+                    .eq('cliente_id', clienteId)
                     .limit(1);
 
                 if (!searchError && existingNews && existingNews.length > 0) {
                     throw new Error(`Esta matéria já foi gerada no sistema por outro usuário. Pautas duplicadas não são permitidas.`);
                 }
+            } else if (headline) {
+                const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+                const { data: existingNews, error: searchError } = await supabase
+                    .from('ap_candidate_news')
+                    .select('id')
+                    .eq('cliente_id', clienteId)
+                    .ilike('headline', headline)
+                    .gte('created_at', twentyFourHoursAgo)
+                    .limit(1);
+
+                if (!searchError && existingNews && existingNews.length > 0) {
+                    throw new Error('Uma matéria com este headline já foi gerada nas últimas 24h para sua conta.');
+                }
             }
 
-            // Auto-Scraping Logic (If URL is provided but content is missing)
-            if (form.url_original && (!finalTitulo || !finalConteudo)) {
+            let scrapedTitle = '';
+            let scrapedConteudo = '';
+            let scrapedImage = '';
+
+            // Auto-Scraping Logic (Fluxo 1 e 2)
+            if (url_original && selectedFlow !== 3) {
                 const { data, error } = await supabase.functions.invoke('ap-link-scraper', {
-                    body: { url: form.url_original }
+                    body: { url: url_original }
                 });
 
                 if (error) {
-                    console.error('[EmployeeMode] Auto-Scrape error:', error);
-                    throw new Error('A IA falhou ao extrair dados do link. Verifique se a URL é suportada ou preencha o texto manualmente.');
+                    throw new Error('Falha ao extrair dados do link. Tente preencher manualmente.');
                 }
-
-                finalTitulo = data.title || finalTitulo;
-                finalConteudo = data.content || finalConteudo;
-                finalImageUrl = data.image_url || finalImageUrl;
+                scrapedTitle = data.title || '';
+                scrapedConteudo = data.content || '';
+                scrapedImage = data.image_url || '';
             }
 
-            if (!finalTitulo || !finalConteudo) {
-                throw new Error('Não foi possível obter Título e Conteúdo. Preencha manualmente ou tente outro link.');
-            }
-
+            let finalImageUrl = imagem_url || scrapedImage || null;
             if (selectedFile && contentType === 'feed') {
                 finalImageUrl = await handleFileUpload(selectedFile);
             }
 
             const payload = {
                 empresa_id: clienteId,
-                titulo: finalTitulo,
-                conteudo: finalConteudo,
-                url_original: form.url_original || null,
+                titulo: headline || scrapedTitle || 'Pauta OMNI',
+                conteudo: texto || scrapedConteudo || '',
+                url_original: url_original || null,
                 imagem_url: contentType === 'feed' ? finalImageUrl : null,
                 content_type: contentType,
-                auth_user_id: professionalId || user?.id
+                auth_user_id: professionalId || user?.id,
+                // Hybrid fields
+                userTag: tag.toUpperCase(),
+                userHeadline: selectedFlow >= 2 ? (headline || null) : null,
+                userText: selectedFlow === 3 ? (texto || null) : null,
             };
 
             const { data, error } = await supabase.functions.invoke('ap-employee-generator', {
@@ -399,6 +423,30 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                         ) : (
                             <form onSubmit={handleGenerate} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
+                                <div style={{ display: 'flex', gap: '8px', background: '#f1f5f9', padding: '6px', borderRadius: '16px', overflowX: 'auto', marginBottom: '16px' }}>
+                                    {[
+                                        { id: 1, label: 'Link + Tag' },
+                                        { id: 2, label: 'Link + Tag + Headline' },
+                                        { id: 3, label: 'Manual' }
+                                    ].map(flow => (
+                                        <button
+                                            key={flow.id}
+                                            type="button"
+                                            onClick={() => setSelectedFlow(flow.id)}
+                                            style={{
+                                                flex: 1, padding: '10px 8px', borderRadius: '12px', border: 'none',
+                                                background: selectedFlow === flow.id ? '#fff' : 'transparent',
+                                                color: selectedFlow === flow.id ? '#0f172a' : '#64748b',
+                                                fontWeight: 600, fontSize: '13px', whiteSpace: 'nowrap',
+                                                boxShadow: selectedFlow === flow.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                                cursor: 'pointer', transition: 'all 0.2s'
+                                            }}
+                                        >
+                                            {flow.label}
+                                        </button>
+                                    ))}
+                                </div>
+
                                 {/* Formato Selector */}
                                 <div style={{ display: 'flex', gap: '12px', background: '#f1f5f9', padding: '6px', borderRadius: '16px' }}>
                                     <button
@@ -417,49 +465,61 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                     </button>
                                 </div>
 
-                                <div style={{ padding: '16px', background: '#e0f2fe', border: '1px solid #bae6fd', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px', width: '100%', boxSizing: 'border-box' }}>
-                                    <label style={{ fontSize: '14px', fontWeight: 700, color: '#0284c7', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Motor de IA (Link)</label>
-                                    <p style={{ margin: 0, fontSize: '13px', color: '#0369a1' }}>Cole um link para a IA extrair todo o contexto e gerar os textos e {contentType === 'reels' ? 'o roteiro' : 'títulos'} automaticamente.</p>
-                                    <input
-                                        value={form.url_original || ''}
-                                        onChange={e => setForm({ ...form, url_original: e.target.value })}
-                                        placeholder="https://globo.com/noticia..."
-                                        style={{ width: '100%', padding: '14px', borderRadius: '10px', border: '1px solid #7dd3fc', fontSize: '15px', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' }}
-                                        onFocus={e => e.target.style.borderColor = '#0284c7'}
-                                        onBlur={e => e.target.style.borderColor = '#7dd3fc'}
-                                    />
-                                </div>
-
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', opacity: 0.6, marginTop: '-4px', marginBottom: '-4px' }}>
-                                    <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
-                                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Ou faça manualmente</span>
-                                    <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
-                                </div>
-
+                                {/* Tag Obrigatória */}
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
-                                    <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Título Principal</label>
-                                    <input
-                                        value={form.titulo}
-                                        onChange={e => setForm({ ...form, titulo: e.target.value })}
-                                        placeholder="Escreva a manchete aqui..."
-                                        style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', appearance: 'none', boxSizing: 'border-box' }}
-                                        onFocus={e => e.target.style.borderColor = '#94a3b8'}
-                                        onBlur={e => e.target.style.borderColor = '#cbd5e1'}
-                                    />
+                                    <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Editoria (Tag) <span style={{ color: '#ef4444' }}>*</span></label>
+                                    <select
+                                        value={form.tag}
+                                        onChange={e => setForm({ ...form, tag: e.target.value })}
+                                        style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' }}
+                                    >
+                                        <option value="">Selecione a categoria...</option>
+                                        {TAGS_FIXAS.map(t => <option key={t} value={t}>{t}</option>)}
+                                    </select>
                                 </div>
 
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
-                                    <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Detalhes Adicionais</label>
-                                    <textarea
-                                        value={form.conteudo}
-                                        onChange={e => setForm({ ...form, conteudo: e.target.value })}
-                                        placeholder="Informações para complementar o conteúdo ou instruir a IA..."
-                                        rows={3}
-                                        style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', resize: 'vertical', minHeight: '80px', appearance: 'none', boxSizing: 'border-box' }}
-                                        onFocus={e => e.target.style.borderColor = '#94a3b8'}
-                                        onBlur={e => e.target.style.borderColor = '#cbd5e1'}
-                                    />
-                                </div>
+                                {/* Link */}
+                                {(selectedFlow === 1 || selectedFlow === 2) && (
+                                    <div style={{ padding: '16px', background: '#e0f2fe', border: '1px solid #bae6fd', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px', width: '100%', boxSizing: 'border-box' }}>
+                                        <label style={{ fontSize: '14px', fontWeight: 700, color: '#0284c7', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Link Origem <span style={{ color: '#ef4444' }}>*</span></label>
+                                        <p style={{ margin: 0, fontSize: '13px', color: '#0369a1' }}>A IA irá extrair o conteúdo desta URL.</p>
+                                        <input
+                                            value={form.url_original || ''}
+                                            onChange={e => setForm({ ...form, url_original: e.target.value })}
+                                            placeholder="https://globo.com/noticia..."
+                                            style={{ width: '100%', padding: '14px', borderRadius: '10px', border: '1px solid #7dd3fc', fontSize: '15px', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' }}
+                                        />
+                                    </div>
+                                )}
+
+                                {/* Headline (Opcional/Obrigatório) */}
+                                {(selectedFlow === 2 || selectedFlow === 3) && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
+                                        <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>
+                                            Headline Maior <span style={{ color: '#ef4444' }}>*</span>
+                                        </label>
+                                        <input
+                                            value={form.headline}
+                                            onChange={e => setForm({ ...form, headline: e.target.value })}
+                                            placeholder="Ex: Novo viaduto é inaugurado..."
+                                            style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' }}
+                                        />
+                                    </div>
+                                )}
+
+                                {/* Texto Base */}
+                                {selectedFlow === 3 && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
+                                        <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Texto Base da Matéria <span style={{ color: '#ef4444' }}>*</span></label>
+                                        <textarea
+                                            value={form.texto}
+                                            onChange={e => setForm({ ...form, texto: e.target.value })}
+                                            placeholder="Escreva a notícia base. A IA revisará e criará a caption com hashtags..."
+                                            rows={4}
+                                            style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', resize: 'vertical', minHeight: '80px', boxSizing: 'border-box' }}
+                                        />
+                                    </div>
+                                )}
 
                                 {contentType === 'feed' && (
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
@@ -636,7 +696,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                 {/* Sticky Bottom Bar for Action */}
                 {activeTab === 'create' && !successData && (
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', padding: '20px', borderTop: '1px solid #f0f0f0', background: '#ffffff', width: '100%', boxSizing: 'border-box' }}>
-                        <button type="submit" onClick={handleGenerate} disabled={isSubmitting || isUploading || (!form.titulo && !form.url_original)} style={{ width: '100%', boxSizing: 'border-box', background: (isSubmitting || isUploading || (!form.titulo && !form.url_original)) ? '#cbd5e1' : '#2563eb', color: '#fff', border: 'none', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', boxShadow: (isSubmitting || isUploading || (!form.titulo && !form.url_original)) ? 'none' : '0 4px 6px -1px rgba(37, 99, 235, 0.2), 0 2px 4px -1px rgba(37, 99, 235, 0.1)', cursor: (isSubmitting || isUploading || (!form.titulo && !form.url_original)) ? 'not-allowed' : 'pointer', transition: 'all 0.2s' }}>
+                        <button type="submit" onClick={handleGenerate} disabled={isSubmitting || isUploading || (!form.tag || (selectedFlow === 1 && !form.url_original))} style={{ width: '100%', boxSizing: 'border-box', background: (isSubmitting || isUploading) ? '#cbd5e1' : '#2563eb', color: '#fff', border: 'none', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', boxShadow: (isSubmitting || isUploading) ? 'none' : '0 4px 6px -1px rgba(37, 99, 235, 0.2), 0 2px 4px -1px rgba(37, 99, 235, 0.1)', cursor: (isSubmitting || isUploading) ? 'not-allowed' : 'pointer', transition: 'all 0.2s' }}>
                             {isSubmitting || isUploading ? (
                                 <>
                                     <div style={{ width: '18px', height: '18px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>

@@ -14,6 +14,7 @@ Deno.serve(async (req: Request) => {
 
     try {
         const { url } = await req.json();
+        console.log(`[AUDIT] [ap-link-scraper] Scraping URL: ${url}`);
 
         if (!url) {
             return new Response(JSON.stringify({ error: "URL é obrigatória" }), {
@@ -47,7 +48,7 @@ Deno.serve(async (req: Request) => {
         let image_url = $('meta[property="og:image"]').attr('content') ||
             $('meta[name="twitter:image"]').attr('content') ||
             $('article img').first().attr('src');
-            
+
         let video_url = $('meta[property="og:video"]').attr('content') ||
             $('meta[property="og:video:url"]').attr('content') ||
             $('meta[property="og:video:secure_url"]').attr('content') || null;

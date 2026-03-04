@@ -4,7 +4,7 @@ import '../../styles/AutoPublisher.css'
 import {
     Rss, RefreshCcw, Check, X, Copy, Download,
     ImageIcon, Zap, Info, MoreVertical, Brain, Heart, MessageCircle, Send, Bookmark, Plus, UploadCloud, Link2,
-    Video, CheckCircle2, ChevronDown, ChevronUp
+    Video, CheckCircle2, ChevronDown, ChevronUp, Pencil, Loader2
 } from 'lucide-react'
 import AutoPublisherSettings from './AutoPublisherSettings'
 import EditorialEngine from '../../features/editorial/EditorialEngine'
@@ -30,8 +30,8 @@ const STATUS_TAB = {
     ready_for_scoring: 'coletadas',
     scored: 'coletadas',
     selected: 'pendentes',
-    pending_render: 'pendentes',
-    processing: 'pendentes',
+    pending_render: 'aprovadas',
+    processing: 'coletadas',
     pending_review: 'aprovadas',
     ready_to_publish: 'aprovadas',
     approved: 'aprovadas',
@@ -56,10 +56,44 @@ export default function AutoPublisher() {
 
     // Manual Input State
     const [isManualModalOpen, setManualModalOpen] = useState(false)
-    const [manualForm, setManualForm] = useState({ titulo: '', conteudo: '', imagem_url: '', context_tag: '', url_original: '', content_type: 'feed' })
+    const [selectedFlow, setSelectedFlow] = useState(1) // 1 | 2 | 3
+    const [formData, setFormData] = useState({
+        url_original: '',
+        titulo: '',
+        conteudo: '',
+        context_tag: '',
+        image_url: '',
+        content_type: 'feed'
+    })
+    const [manualFormErrors, setManualFormErrors] = useState({})
     const [isSubmittingManual, setIsSubmittingManual] = useState(false)
     const [selectedFile, setSelectedFile] = useState(null)
     const [isDragging, setIsDragging] = useState(false)
+
+    // Edit Item State
+    const [editingItem, setEditingItem] = useState(null)
+    const [editModalOpen, setEditModalOpen] = useState(false)
+    const [editForm, setEditForm] = useState({ context_tag: '', headline: '', caption: '', imagem_url: '' })
+    const [isSavingEdit, setIsSavingEdit] = useState(false)
+    const [editSelectedFile, setEditSelectedFile] = useState(null)
+    const [isEditDragging, setIsEditDragging] = useState(false)
+
+    const TAGS_FIXAS = ['Cinema', 'Esportes', 'Política', 'Saúde', 'Tecnologia', 'Geral', 'Justiça', 'Famosos', 'Economia', 'Goiás']
+
+    function resetManualModal() {
+        setManualModalOpen(false)
+        setSelectedFlow(1)
+        setFormData({
+            url_original: '',
+            titulo: '',
+            conteudo: '',
+            context_tag: '',
+            image_url: '',
+            content_type: 'feed'
+        })
+        setSelectedFile(null)
+        setManualFormErrors({})
+    }
 
     // ── Fetch system config
     const fetchSystemConfig = useCallback(async () => {
@@ -92,9 +126,9 @@ export default function AutoPublisher() {
         setLoading(true)
 
         let statuses = []
-        if (currentTab === 'coletadas') statuses = ['raw', 'ready_for_scoring', 'scored', 'failed', 'rejected']
-        if (currentTab === 'pendentes') statuses = ['selected', 'pending_render', 'processing', 'studio_selected', 'studio_ready']
-        if (currentTab === 'aprovadas') statuses = ['pending_review', 'ready_to_publish', 'approved', 'queued_for_posting']
+        if (currentTab === 'coletadas') statuses = ['raw', 'ready_for_scoring', 'scored', 'failed', 'rejected', 'processing']
+        if (currentTab === 'pendentes') statuses = ['selected', 'studio_selected', 'studio_ready']
+        if (currentTab === 'aprovadas') statuses = ['pending_render', 'pending_review', 'ready_to_publish', 'approved', 'queued_for_posting']
         if (currentTab === 'publicadas') statuses = ['posted']
 
         if (statuses.length === 0) {
@@ -113,9 +147,9 @@ export default function AutoPublisher() {
                      instagram_post_id, horario_agendado`)
             .eq('cliente_id', clienteId)
             .in('status', statuses)
-            .order('created_at', { ascending: false })
+            .order('updated_at', { ascending: false })
 
-        if (error) console.error('[AutoPublisher] fetchItems error:', error)
+        if (error) { toast.error("Erro ao carregar itens.") }
         setItems(data ?? [])
         setLoading(false)
     }, [clienteId])
@@ -140,8 +174,17 @@ export default function AutoPublisher() {
 
     // ── Actions
     async function handleReject(item) {
-        await supabase.schema('ap').from('candidate_news').update({ status: 'rejected' }).eq('id', item.id)
-        fetchItems(tab); fetchCounts()
+        // Optimistic UI update for instant feedback
+        setItems(prev => prev.filter(i => i.id !== item.id))
+
+        try {
+            const { error } = await supabase.schema('ap').from('candidate_news').update({ status: 'rejected' }).eq('id', item.id)
+            if (error) throw error
+            fetchCounts()
+        } catch (err) {
+            toast.error("Falha ao excluir matéria.")
+            fetchItems(tab) // revert/refresh on error
+        }
     }
 
     async function handleStudio(item) {
@@ -160,11 +203,21 @@ export default function AutoPublisher() {
     }
 
     async function handleApproveSelected(item) {
-        if (item.status !== 'selected') return
+        if (item.status !== 'selected' && item.status !== 'studio_ready') return
         setIsProcessing(true)
         try {
+            // 'approve_for_ig' = aprovação humana explícita.
+            // O worker usa os dados já salvos no banco (headline/caption/context_tag)
+            // e move o status para pending_render antes de chamar o render engine.
             const { error: prodError } = await supabase.functions.invoke('ap-content-production', {
-                body: { action: 'process_selected', newsId: item.id }
+                body: {
+                    action: 'approve_for_ig',
+                    newsId: item.id,
+                    // Passa os dados atuais do item para garantir soberania humana
+                    userHeadline: item.headline || null,
+                    userTag: item.context_tag || null,
+                    userText: item.caption || null
+                }
             })
             if (prodError) throw prodError
 
@@ -172,16 +225,66 @@ export default function AutoPublisher() {
                 body: { action: 'render_one', newsId: item.id }
             })
             if (renderError) {
-                toast.info("Texto gerado, arte entrou na fila de renderização automática.")
+                toast.info("Aprovado! Arte entrando na fila de renderização.")
             } else {
-                toast.success("Texto e Arte enviados para renderização!")
+                toast.success("Aprovado e enviado para renderização!")
             }
         } catch (err) {
-            console.error('[AutoPublisher] handleApproveSelected error:', err)
             toast.error("Falha ao aprovar matéria.")
         }
         setIsProcessing(false)
         fetchItems(tab); fetchCounts()
+    }
+
+    function handleEditOpen(item) {
+        setEditingItem(item)
+        setEditForm({
+            context_tag: item.context_tag || '',
+            headline: item.headline || item.titulo || '',
+            caption: item.caption || '',
+            imagem_url: item.imagem_url || item.render_url || ''
+        })
+        setEditSelectedFile(null)
+        setEditModalOpen(true)
+    }
+
+    async function handleSaveEdit(e) {
+        e.preventDefault()
+        if (!editingItem) return
+        setIsSavingEdit(true)
+        try {
+            const normalizedTag = (editForm.context_tag || '').trim().toUpperCase().slice(0, 20)
+
+            let finalImageUrl = editForm.imagem_url.trim()
+            if (editSelectedFile) {
+                const ext = editSelectedFile.name.split('.').pop()
+                const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`
+                const { error: uploadError } = await supabase.storage.from('ap-images').upload(`admin_uploads/${fileName}`, editSelectedFile)
+                if (uploadError) throw uploadError
+                const { data: pubData } = supabase.storage.from('ap-images').getPublicUrl(`admin_uploads/${fileName}`)
+                finalImageUrl = pubData.publicUrl
+            }
+
+            const payload = {
+                context_tag: normalizedTag,
+                headline: editForm.headline.trim(),
+                caption: editForm.caption.trim(),
+                imagem_url: finalImageUrl
+            }
+            const { error } = await supabase.schema('ap').from('candidate_news').update(payload).eq('id', editingItem.id)
+            if (error) throw error
+
+            // Optimistic UI update
+            setItems(prev => prev.map(i => i.id === editingItem.id ? { ...i, ...payload } : i))
+
+            toast.success("Edição salva com sucesso!")
+            setEditModalOpen(false)
+            setEditingItem(null)
+            fetchCounts()
+        } catch (err) {
+            toast.error("Erro ao salvar edição.")
+        }
+        setIsSavingEdit(false)
     }
 
     async function handlePublish(item) {
@@ -205,84 +308,128 @@ export default function AutoPublisher() {
         }
     }
 
-    // ── Manual submission
+    // ── Manual submission (Hybrid Editorial Engine)
     async function submitManualNews(e) {
         e.preventDefault()
-        if (!manualForm.titulo && !manualForm.url_original) {
-            toast.error('Preencha o título OU cole um link válido.')
+
+        // 1. Validation Logic
+        const newErrors = {}
+        const isLinkMode = !!formData.url_original
+
+        if (!formData.context_tag) {
+            newErrors.context_tag = 'Tag é obrigatória.'
+        }
+
+        if (!isLinkMode) {
+            // Manual Mode Requirements
+            if (!formData.titulo) newErrors.titulo = 'Título obrigatório em modo manual.'
+            if (!formData.conteudo) newErrors.conteudo = 'Conteúdo obrigatório em modo manual.'
+            if (!formData.image_url && !selectedFile) {
+                newErrors.image_url = 'Imagem obrigatória em modo manual.'
+            }
+        } else {
+            // Link Mode Requirements
+            if (selectedFlow === 2 && !formData.titulo) newErrors.titulo = 'Título obrigatório no Fluxo 2.'
+            if (selectedFlow === 3 && (!formData.titulo || !formData.conteudo)) {
+                newErrors.titulo = 'Título e Conteúdo obrigatórios no Fluxo 3.'
+            }
+        }
+
+        if (Object.keys(newErrors).length > 0) {
+            setManualFormErrors(newErrors)
+            toast.error("Preencha os campos obrigatórios.")
             return
         }
+
+        setManualFormErrors({})
         setIsSubmittingManual(true)
 
-        if (manualForm.url_original) {
-            const { data: existing } = await supabase.from('ap_candidate_news').select('id').eq('url_original', manualForm.url_original).limit(1)
+        // 2. Duplicate check
+        if (formData.url_original) {
+            const { data: existing } = await supabase.schema('ap').from('candidate_news')
+                .select('id').eq('url_original', formData.url_original).eq('cliente_id', clienteId).limit(1)
             if (existing && existing.length > 0) {
-                toast.error('Esta matéria já foi enviada ao sistema.')
+                setManualFormErrors({ url_original: 'Esta matéria já foi enviada ao sistema.' })
+                setIsSubmittingManual(false)
+                return
+            }
+        } else if (formData.titulo) { // Check for duplicate headlines if no URL
+            const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+            const { data: existing } = await supabase.schema('ap').from('candidate_news')
+                .select('id')
+                .eq('cliente_id', clienteId)
+                .ilike('headline', formData.titulo)
+                .gte('created_at', twentyFourHoursAgo)
+                .limit(1);
+            if (existing && existing.length > 0) {
+                setManualFormErrors({ titulo: 'Matéria duplicada gerada nas últimas 24h.' })
                 setIsSubmittingManual(false)
                 return
             }
         }
 
-        let finalTitulo = manualForm.titulo
-        let finalConteudo = manualForm.conteudo
-        let finalImageUrl = manualForm.imagem_url || null
+        let scrapedTitle = ''
+        let scrapedConteudo = ''
+        let scrapedImage = ''
 
-        if (manualForm.url_original && (!finalTitulo || !finalConteudo)) {
+        // 3. Scraping (only if link provided and needed)
+        if (isLinkMode && selectedFlow !== 3) {
             try {
-                const { data, error } = await supabase.functions.invoke('ap-link-scraper', { body: { url: manualForm.url_original } })
+                const { data, error } = await supabase.functions.invoke('ap-link-scraper', { body: { url: formData.url_original } })
                 if (error) throw error
-                finalTitulo = data.title || finalTitulo
-                finalConteudo = data.content || finalConteudo
-                finalImageUrl = data.image_url || finalImageUrl
+                scrapedTitle = data.title || ''
+                scrapedConteudo = data.content || ''
+                scrapedImage = data.image_url || ''
             } catch {
-                toast.error('Falha ao extrair dados do link. Preencha manualmente.')
+                setManualFormErrors({ url_original: 'Falha ao extrair dados do link. Verifique a URL.' })
                 setIsSubmittingManual(false)
                 return
             }
         }
 
-        if (!finalTitulo || !finalConteudo) {
-            toast.error('Não foi possível obter Título e Conteúdo. Preencha manualmente.')
-            setIsSubmittingManual(false)
-            return
+        // 4. Image upload
+        let finalImageUrl = formData.image_url || scrapedImage || null
+        if (selectedFile) {
+            try {
+                const fileExt = selectedFile.name.split('.').pop()
+                const fileName = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`
+                const { error: uploadError } = await supabase.storage.from('ap-images').upload(`admin_uploads/${fileName}`, selectedFile)
+                if (uploadError) throw uploadError
+
+                const { data: pubData } = supabase.storage.from('ap-images').getPublicUrl(`admin_uploads/${fileName}`)
+                finalImageUrl = pubData.publicUrl
+            } catch (err) {
+                toast.error("Erro ao subir imagem.")
+            }
         }
 
-        if (selectedFile) {
-            const fileExt = selectedFile.name.split('.').pop()
-            const fileName = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`
-            const { error: uploadError } = await supabase.storage.from('ap_media').upload(fileName, selectedFile)
-            if (!uploadError) {
-                const { data: pubData } = supabase.storage.from('ap_media').getPublicUrl(fileName)
-                finalImageUrl = pubData.publicUrl
-            }
+        // 5. Standardized Payload
+        const payload = {
+            empresa_id: clienteId,
+            url_original: formData.url_original || null,
+            titulo: formData.titulo || scrapedTitle || 'Pauta OMNI',
+            conteudo: formData.conteudo || scrapedConteudo || '',
+            context_tag: formData.context_tag,
+            image_url: finalImageUrl,
+            content_type: formData.content_type || 'feed',
+            // Legacy/Hybrid field support
+            userHeadline: formData.titulo || null,
+            userText: formData.conteudo || null,
+            userTag: formData.context_tag.toUpperCase()
         }
 
         try {
-            const { data, error } = await supabase.functions.invoke('ap-employee-generator', {
-                body: {
-                    empresa_id: clienteId,
-                    titulo: finalTitulo,
-                    conteudo: finalConteudo,
-                    imagem_url: finalImageUrl,
-                    context_tag: manualForm.context_tag ? manualForm.context_tag.trim().toUpperCase() : null,
-                    url_original: manualForm.url_original || null,
-                    content_type: manualForm.content_type || 'feed'
-                }
-            })
+            const { data, error } = await supabase.functions.invoke('ap-employee-generator', { body: payload })
             if (error) throw error
-            if (data?.error) throw new Error(data.error)
-            toast.success("Matéria enviada para processamento!")
-        } catch (fnErr) {
-            console.error('[AutoPublisher] pipeline manual error:', fnErr)
-            toast.error(fnErr.message || 'Falha ao gerar matéria. Verifique os templates configurados.')
-        }
 
-        setIsSubmittingManual(false)
-        setManualModalOpen(false)
-        setManualForm({ titulo: '', conteudo: '', imagem_url: '', context_tag: '', url_original: '', content_type: 'feed' })
-        setSelectedFile(null)
-        setTab('pendentes')
-        fetchCounts(); fetchItems('pendentes')
+            toast.success("Matéria enviada para processamento!")
+            resetManualModal()
+            fetchItems(tab)
+        } catch (err) {
+            toast.error(err.message || "Erro ao gerar matéria.")
+        } finally {
+            setIsSubmittingManual(false)
+        }
     }
 
     return (
@@ -399,6 +546,7 @@ export default function AutoPublisher() {
                                     onReject={handleReject}
                                     onStudio={handleStudio}
                                     onApproveSelected={handleApproveSelected}
+                                    onEdit={handleEditOpen}
                                     isProcessing={isProcessing}
                                 />
                             ))}
@@ -420,6 +568,8 @@ export default function AutoPublisher() {
                                     item={item}
                                     onPublish={handlePublish}
                                     onReject={handleReject}
+                                    onEdit={handleEditOpen}
+                                    isProcessing={isProcessing}
                                 />
                             ))}
                         </div>
@@ -486,7 +636,7 @@ export default function AutoPublisher() {
                                 <div style={{ background: '#eff6ff', color: '#3b82f6', padding: '8px', borderRadius: '10px', display: 'flex' }}><Brain size={18} /></div>
                                 Nova Matéria
                             </h2>
-                            <button onClick={() => { setManualModalOpen(false); setSelectedFile(null); setManualForm({ titulo: '', conteudo: '', imagem_url: '', context_tag: '', url_original: '', content_type: 'feed' }) }} style={{ background: '#f3f4f6', border: 'none', cursor: 'pointer', color: '#6b7280', width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <button onClick={() => { setManualModalOpen(false); setSelectedFile(null); setFormData({ url_original: '', titulo: '', conteudo: '', image_url: '', context_tag: '', content_type: 'feed' }) }} style={{ background: '#f3f4f6', border: 'none', cursor: 'pointer', color: '#6b7280', width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                 <X size={18} />
                             </button>
                         </div>
@@ -496,8 +646,8 @@ export default function AutoPublisher() {
                                 {/* Formato */}
                                 <div style={{ display: 'flex', gap: '12px', background: '#f1f5f9', padding: '6px', borderRadius: '16px' }}>
                                     {[['feed', 'Estático (Feed)', <ImageIcon size={18} />], ['reels', 'Vídeo (Reels)', <Video size={18} />]].map(([val, lbl, icon]) => (
-                                        <button key={val} type="button" onClick={() => setManualForm({ ...manualForm, content_type: val })}
-                                            style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', background: manualForm.content_type === val ? '#fff' : 'transparent', color: manualForm.content_type === val ? '#0f172a' : '#64748b', fontWeight: 600, fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: manualForm.content_type === val ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', cursor: 'pointer' }}>
+                                        <button key={val} type="button" onClick={() => setFormData({ ...formData, content_type: val })}
+                                            style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', background: formData.content_type === val ? '#fff' : 'transparent', color: formData.content_type === val ? '#0f172a' : '#64748b', fontWeight: 600, fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: formData.content_type === val ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', cursor: 'pointer' }}>
                                             {icon} {lbl}
                                         </button>
                                     ))}
@@ -507,7 +657,27 @@ export default function AutoPublisher() {
                                 <div style={{ padding: '16px', background: '#e0f2fe', border: '1px solid #bae6fd', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px', boxSizing: 'border-box' }}>
                                     <label style={{ fontSize: '14px', fontWeight: 700, color: '#0284c7', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Motor de IA (Link)</label>
                                     <p style={{ margin: 0, fontSize: '13px', color: '#0369a1' }}>Cole um link para a IA extrair o contexto e gerar os textos automaticamente.</p>
-                                    <input value={manualForm.url_original || ''} onChange={e => setManualForm({ ...manualForm, url_original: e.target.value })} placeholder="https://g1.globo.com/exemplo..." style={{ width: '100%', padding: '14px', borderRadius: '10px', border: '1px solid #7dd3fc', fontSize: '15px', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' }} />
+                                    <input
+                                        value={formData.url_original}
+                                        onChange={e => {
+                                            setFormData({ ...formData, url_original: e.target.value });
+                                            if (manualFormErrors.url_original) setManualFormErrors({ ...manualFormErrors, url_original: null });
+                                        }}
+                                        placeholder="https://g1.globo.com/exemplo..."
+                                        style={{
+                                            width: '100%',
+                                            padding: '14px',
+                                            borderRadius: '10px',
+                                            border: manualFormErrors.url_original ? '1px solid #ef4444' : '1px solid #7dd3fc',
+                                            boxShadow: manualFormErrors.url_original ? '0 0 0 2px rgba(239, 68, 68, 0.2)' : 'none',
+                                            fontSize: '15px',
+                                            outline: 'none',
+                                            backgroundColor: '#fff',
+                                            boxSizing: 'border-box',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    />
+                                    {manualFormErrors.url_original && <span style={{ color: '#ef4444', fontSize: '12px', fontWeight: 600 }}>{manualFormErrors.url_original}</span>}
                                 </div>
 
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', opacity: 0.6 }}>
@@ -519,33 +689,96 @@ export default function AutoPublisher() {
                                 {/* Título */}
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', boxSizing: 'border-box' }}>
                                     <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Título Principal</label>
-                                    <input value={manualForm.titulo} onChange={e => setManualForm({ ...manualForm, titulo: e.target.value })} placeholder="Prefeito anuncia nova ponte na cidade..." style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' }} />
+                                    <input
+                                        value={formData.titulo}
+                                        onChange={e => {
+                                            setFormData({ ...formData, titulo: e.target.value });
+                                            if (manualFormErrors.titulo) setManualFormErrors({ ...manualFormErrors, titulo: null });
+                                        }}
+                                        placeholder="Prefeito anuncia nova ponte na cidade..."
+                                        style={{
+                                            width: '100%',
+                                            padding: '14px',
+                                            borderRadius: '12px',
+                                            border: manualFormErrors.titulo ? '1px solid #ef4444' : '1px solid #cbd5e1',
+                                            boxShadow: manualFormErrors.titulo ? '0 0 0 2px rgba(239, 68, 68, 0.2)' : 'none',
+                                            fontSize: '15px',
+                                            outline: 'none',
+                                            backgroundColor: '#fff',
+                                            boxSizing: 'border-box',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    />
+                                    {manualFormErrors.titulo && <span style={{ color: '#ef4444', fontSize: '12px', fontWeight: 600 }}>{manualFormErrors.titulo}</span>}
                                 </div>
 
                                 {/* Conteúdo */}
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', boxSizing: 'border-box' }}>
                                     <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Detalhes Adicionais</label>
-                                    <textarea value={manualForm.conteudo} onChange={e => setManualForm({ ...manualForm, conteudo: e.target.value })} placeholder="Cole o release ou o corpo do texto aqui..." rows={4} style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', resize: 'vertical', minHeight: '80px', boxSizing: 'border-box' }} />
+                                    <textarea
+                                        value={formData.conteudo}
+                                        onChange={e => {
+                                            setFormData({ ...formData, conteudo: e.target.value });
+                                            if (manualFormErrors.conteudo) setManualFormErrors({ ...manualFormErrors, conteudo: null });
+                                        }}
+                                        placeholder="Cole o release ou o corpo do texto aqui..."
+                                        rows={4}
+                                        style={{
+                                            width: '100%',
+                                            padding: '14px',
+                                            borderRadius: '12px',
+                                            border: manualFormErrors.conteudo ? '1px solid #ef4444' : '1px solid #cbd5e1',
+                                            boxShadow: manualFormErrors.conteudo ? '0 0 0 2px rgba(239, 68, 68, 0.2)' : 'none',
+                                            fontSize: '15px',
+                                            outline: 'none',
+                                            resize: 'vertical',
+                                            minHeight: '80px',
+                                            boxSizing: 'border-box',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    />
+                                    {manualFormErrors.conteudo && <span style={{ color: '#ef4444', fontSize: '12px', fontWeight: 600 }}>{manualFormErrors.conteudo}</span>}
                                 </div>
 
                                 {/* Tag */}
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', boxSizing: 'border-box' }}>
                                     <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Tag de Editoria</label>
-                                    <input value={manualForm.context_tag || ''} onChange={e => setManualForm({ ...manualForm, context_tag: e.target.value.toUpperCase() })} maxLength={20} placeholder="Ex: URGENTE" style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' }} />
+                                    <input
+                                        value={formData.context_tag}
+                                        onChange={e => {
+                                            setFormData({ ...formData, context_tag: e.target.value.toUpperCase() });
+                                            if (manualFormErrors.context_tag) setManualFormErrors({ ...manualFormErrors, context_tag: null });
+                                        }}
+                                        maxLength={20}
+                                        placeholder="Ex: URGENTE"
+                                        style={{
+                                            width: '100%',
+                                            padding: '14px',
+                                            borderRadius: '12px',
+                                            border: manualFormErrors.context_tag ? '1px solid #ef4444' : '1px solid #cbd5e1',
+                                            boxShadow: manualFormErrors.context_tag ? '0 0 0 2px rgba(239, 68, 68, 0.2)' : 'none',
+                                            fontSize: '15px',
+                                            outline: 'none',
+                                            backgroundColor: '#fff',
+                                            boxSizing: 'border-box',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    />
+                                    {manualFormErrors.context_tag && <span style={{ color: '#ef4444', fontSize: '12px', fontWeight: 600 }}>{manualFormErrors.context_tag}</span>}
                                 </div>
 
                                 {/* Foto (feed only) */}
-                                {manualForm.content_type === 'feed' && (
+                                {formData.content_type === 'feed' && (
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', boxSizing: 'border-box' }}>
                                         <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Foto (Fundo do Card)</label>
                                         <div
                                             onDragOver={e => { e.preventDefault(); setIsDragging(true) }}
                                             onDragLeave={() => setIsDragging(false)}
-                                            onDrop={e => { e.preventDefault(); setIsDragging(false); if (e.dataTransfer.files && e.dataTransfer.files[0]) { setSelectedFile(e.dataTransfer.files[0]); setManualForm({ ...manualForm, imagem_url: '' }) } }}
+                                            onDrop={e => { e.preventDefault(); setIsDragging(false); if (e.dataTransfer.files && e.dataTransfer.files[0]) { setSelectedFile(e.dataTransfer.files[0]); setFormData({ ...formData, image_url: '' }) } }}
                                             style={{ border: isDragging ? '2px dashed #3b82f6' : '2px dashed #cbd5e1', borderRadius: '12px', padding: '20px 16px', textAlign: 'center', background: isDragging ? '#eff6ff' : '#f8fafc', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}
                                             onClick={() => document.getElementById('manual-file-upload').click()}
                                         >
-                                            <input id="manual-file-upload" type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { if (e.target.files && e.target.files[0]) { setSelectedFile(e.target.files[0]); setManualForm({ ...manualForm, imagem_url: '' }) } }} />
+                                            <input id="manual-file-upload" type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { if (e.target.files && e.target.files[0]) { setSelectedFile(e.target.files[0]); setFormData({ ...formData, image_url: '' }) } }} />
                                             {selectedFile ? (
                                                 <div style={{ background: '#dcfce7', color: '#166534', padding: '8px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                     <CheckCircle2 size={16} /> {selectedFile.name}
@@ -564,7 +797,28 @@ export default function AutoPublisher() {
                                             <span style={{ fontSize: '11px', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase' }}>OU URL</span>
                                             <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
                                         </div>
-                                        <input value={manualForm.imagem_url || ''} onChange={e => { setManualForm({ ...manualForm, imagem_url: e.target.value }); if (e.target.value) setSelectedFile(null) }} placeholder="https://exemplo.com/foto.jpg" style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' }} />
+                                        <input
+                                            value={formData.image_url}
+                                            onChange={e => {
+                                                setFormData({ ...formData, image_url: e.target.value });
+                                                if (e.target.value) setSelectedFile(null);
+                                                if (manualFormErrors.image_url) setManualFormErrors({ ...manualFormErrors, image_url: null });
+                                            }}
+                                            placeholder="https://exemplo.com/foto.jpg"
+                                            style={{
+                                                width: '100%',
+                                                padding: '14px',
+                                                borderRadius: '12px',
+                                                border: manualFormErrors.image_url ? '1px solid #ef4444' : '1px solid #cbd5e1',
+                                                boxShadow: manualFormErrors.image_url ? '0 0 0 2px rgba(239, 68, 68, 0.2)' : 'none',
+                                                fontSize: '15px',
+                                                outline: 'none',
+                                                backgroundColor: '#fff',
+                                                boxSizing: 'border-box',
+                                                transition: 'all 0.2s'
+                                            }}
+                                        />
+                                        {manualFormErrors.image_url && <span style={{ color: '#ef4444', fontSize: '12px', fontWeight: 600 }}>{manualFormErrors.image_url}</span>}
                                     </div>
                                 )}
 
@@ -581,6 +835,84 @@ export default function AutoPublisher() {
                     </div>
                 </div>
             )}
+
+            {/* ── Modal Edição de Matéria */}
+            {editModalOpen && editingItem && (
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+                    <div className="ap-modal-content" style={{ background: '#ffffff', padding: '0', borderRadius: '20px', width: '560px', maxWidth: '100%', boxShadow: '0 24px 48px rgba(0,0,0,0.15)', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #f0f0f0', background: '#fafafa', flexShrink: 0 }}>
+                            <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#111827', margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <div style={{ background: '#f5f3ff', color: '#8b5cf6', padding: '8px', borderRadius: '10px', display: 'flex' }}><Pencil size={18} /></div>
+                                Editar Matéria
+                            </h2>
+                            <button onClick={() => { setEditModalOpen(false); setEditingItem(null) }} style={{ background: '#f3f4f6', border: 'none', cursor: 'pointer', color: '#6b7280', width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', padding: '20px', gap: '20px', overflowY: 'auto', flex: 1, maxHeight: '75vh', boxSizing: 'border-box' }}>
+                            <form onSubmit={handleSaveEdit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', boxSizing: 'border-box' }}>
+                                    <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Tag de Editoria</label>
+                                    <input value={editForm.context_tag} onChange={e => setEditForm({ ...editForm, context_tag: e.target.value.toUpperCase() })} maxLength={20} required style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' }} />
+                                </div>
+
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', boxSizing: 'border-box' }}>
+                                    <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Headline (Texto do Card)</label>
+                                    <input value={editForm.headline} onChange={e => setEditForm({ ...editForm, headline: e.target.value })} required style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' }} />
+                                </div>
+
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', boxSizing: 'border-box' }}>
+                                    <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Legenda (Caption)</label>
+                                    <textarea value={editForm.caption} onChange={e => setEditForm({ ...editForm, caption: e.target.value })} rows={5} required style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', resize: 'vertical', minHeight: '100px', boxSizing: 'border-box' }} />
+                                </div>
+
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', boxSizing: 'border-box' }}>
+                                    <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Foto (Upload ou URL)</label>
+                                    <div
+                                        onDragOver={e => { e.preventDefault(); setIsEditDragging(true) }}
+                                        onDragLeave={() => setIsEditDragging(false)}
+                                        onDrop={e => { e.preventDefault(); setIsEditDragging(false); if (e.dataTransfer.files && e.dataTransfer.files[0]) { setEditSelectedFile(e.dataTransfer.files[0]); setEditForm({ ...editForm, imagem_url: '' }) } }}
+                                        style={{ border: isEditDragging ? '2px dashed #8b5cf6' : '2px dashed #cbd5e1', borderRadius: '12px', padding: '16px', textAlign: 'center', background: isEditDragging ? '#f5f3ff' : '#f8fafc', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}
+                                        onClick={() => document.getElementById('edit-file-upload').click()}
+                                    >
+                                        <input id="edit-file-upload" type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { if (e.target.files && e.target.files[0]) { setEditSelectedFile(e.target.files[0]); setEditForm({ ...editForm, imagem_url: '' }) } }} />
+                                        {editSelectedFile ? (
+                                            <div style={{ background: '#dcfce7', color: '#166534', padding: '8px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <CheckCircle2 size={16} /> {editSelectedFile.name}
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <div style={{ background: '#e2e8f0', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                    <UploadCloud size={18} color="#64748b" />
+                                                </div>
+                                                <span style={{ fontSize: '13px', color: '#475569', fontWeight: 500 }}>Upload de Arquivo (Clique ou Arraste)</span>
+                                            </>
+                                        )}
+                                    </div>
+
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', opacity: 0.6 }}>
+                                        <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
+                                        <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>OU</span>
+                                        <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
+                                    </div>
+
+                                    {!editSelectedFile && (
+                                        <input value={editForm.imagem_url} onChange={e => setEditForm({ ...editForm, imagem_url: e.target.value })} placeholder="URL da imagem (ex: https://site.com/foto.jpg)" style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' }} />
+                                    )}
+                                </div>
+
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #e2e8f0' }}>
+                                    <button type="submit" disabled={isSavingEdit} style={{ width: '100%', background: '#8b5cf6', color: '#fff', border: 'none', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: isSavingEdit ? 'not-allowed' : 'pointer', opacity: isSavingEdit ? 0.7 : 1 }}>
+                                        {isSavingEdit ? 'Salvando...' : 'Salvar Alterações'}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            )}
         </>
     )
 }
@@ -588,11 +920,20 @@ export default function AutoPublisher() {
 // ──────────────────────────────────────────────────────────
 // PendenteCard — Matérias em "selected" aguardando aprovação
 // ──────────────────────────────────────────────────────────
-function PendenteCard({ item, onReject, onStudio, onApproveSelected, isProcessing }) {
+function PendenteCard({ item, onReject, onStudio, onApproveSelected, onEdit, isProcessing }) {
     const [isExpanded, setIsExpanded] = useState(false)
+    const [isApprovingLocal, setIsApprovingLocal] = useState(false)
 
-    const isRendering = item.status === 'pending_render' || item.status === 'processing'
     const isStudio = item.status === 'studio_selected' || item.status === 'studio_ready'
+
+    const handleApprove = async () => {
+        setIsApprovingLocal(true)
+        try {
+            await onApproveSelected(item)
+        } finally {
+            setIsApprovingLocal(false)
+        }
+    }
 
     return (
         <div className="ap-review-card insta-mock" style={{ maxWidth: '400px', margin: '0 auto', paddingBottom: '16px' }}>
@@ -623,7 +964,6 @@ function PendenteCard({ item, onReject, onStudio, onApproveSelected, isProcessin
                 ) : (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 8 }}>
                         <ImageIcon size={32} color="#dbdbdb" />
-                        {isRendering && <span style={{ fontSize: 12, color: '#94a3b8' }}>Renderizando...</span>}
                     </div>
                 )}
             </div>
@@ -671,29 +1011,24 @@ function PendenteCard({ item, onReject, onStudio, onApproveSelected, isProcessin
                 )}
             </div>
 
-            {/* Botões de ação — somente para "selected" */}
-            {item.status === 'selected' && (
-                <div className="ap-card-actions-wrap">
-                    <div className="ap-card-btn-row">
-                        <button className="ap-btn-reject" onClick={() => onReject(item)} title="Descartar" style={{ flexShrink: 0 }}>
-                            <X size={16} />
-                        </button>
-                        <button className="ap-card-btn-black" onClick={() => onStudio(item)} disabled={isProcessing}>
-                            <Video size={14} /> Studio
-                        </button>
-                        <button className="ap-card-btn-primary" onClick={() => onApproveSelected(item)} disabled={isProcessing}>
-                            Aprovar p/ IG
-                        </button>
-                    </div>
+            {/* Botões de ação */}
+            <div className="ap-card-actions-wrap">
+                <div className="ap-card-btn-row">
+                    <button className="ap-btn-reject" onClick={() => onReject(item)} title="Descartar" style={{ flexShrink: 0 }}>
+                        <X size={16} />
+                    </button>
+                    <button onClick={() => onEdit(item)} disabled={isProcessing} title="Editar Matéria" style={{ padding: '0 12px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '8px', color: '#475569', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '13px' }}>
+                        <Pencil size={14} /> Editar
+                    </button>
+                    <button className="ap-card-btn-black" onClick={() => onStudio(item)} disabled={isProcessing}>
+                        <Video size={14} /> Studio
+                    </button>
+                    <button className="ap-card-btn-primary" onClick={handleApprove} disabled={isProcessing || isApprovingLocal}>
+                        {isApprovingLocal ? <Loader2 size={14} className="ap-spin-icon" /> : null}
+                        {isApprovingLocal ? 'Aprovando...' : 'Aprovar'}
+                    </button>
                 </div>
-            )}
-
-            {/* Status rendering / studio (sem ações) */}
-            {isRendering && (
-                <div style={{ margin: '12px 16px 0', padding: '10px', background: '#fef9c3', borderRadius: '8px', fontSize: '12px', color: '#854d0e', fontWeight: 600, textAlign: 'center' }}>
-                    ⏳ Em renderização — aguarde a arte ficar pronta
-                </div>
-            )}
+            </div>
         </div>
     )
 }
@@ -701,9 +1036,12 @@ function PendenteCard({ item, onReject, onStudio, onApproveSelected, isProcessin
 // ──────────────────────────────────────────────────────────
 // AprovadaCard — Matérias prontas, aguardam publicação manual
 // ──────────────────────────────────────────────────────────
-function AprovadaCard({ item, onPublish, onReject }) {
+function AprovadaCard({ item, onPublish, onReject, onEdit, isProcessing }) {
     const [copied, setCopied] = useState(false)
     const [isExpanded, setIsExpanded] = useState(false)
+
+    // True if Placid hasn't returned the URL yet
+    const isRendering = item.status === 'pending_render' || (item.status === 'pending_review' && !item.render_url)
 
     const handleCopy = () => {
         const text = `${item.headline ?? item.titulo}\n\n${item.caption ?? ''}`
@@ -717,17 +1055,48 @@ function AprovadaCard({ item, onPublish, onReject }) {
         const url = item.render_url ?? item.imagem_url
         try {
             let response
-            try { response = await fetch(url) } catch { response = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`) }
+            try {
+                response = await fetch(url)
+                if (!response.ok) throw new Error('Not OK')
+            } catch (e1) {
+                try {
+                    response = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`)
+                    if (!response.ok) throw new Error('Not OK')
+                } catch (e2) {
+                    try {
+                        response = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`)
+                        if (!response.ok) throw new Error('Not OK')
+                    } catch (e3) {
+                        response = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`)
+                        if (!response.ok) throw new Error('Not OK')
+                    }
+                }
+            }
             const blob = await response.blob()
+
+            // force correct extension based on type
+            let ext = '.png'
+            if (blob.type === 'image/jpeg') ext = '.jpg'
+            else if (blob.type === 'video/mp4') ext = '.mp4'
+
             const blobUrl = URL.createObjectURL(blob)
             const a = document.createElement('a')
             a.href = blobUrl
+            a.download = `tvg_noticia_${item.id.slice(0, 6)}${ext}`
+            document.body.appendChild(a)
+            a.click()
+            document.body.removeChild(a)
+            setTimeout(() => URL.revokeObjectURL(blobUrl), 1000)
+        } catch (err) {
+            toast.info('Forçando o download alternativo...')
+            const fallbackUrl = url.includes('?') ? `${url}&ext=.png` : `${url}?ext=.png`
+            const a = document.createElement('a')
+            a.href = fallbackUrl
+            a.target = '_blank'
             a.download = `tvg_noticia_${item.id.slice(0, 6)}.png`
-            document.body.appendChild(a); a.click(); document.body.removeChild(a)
-            URL.revokeObjectURL(blobUrl)
-        } catch {
-            toast.info('Não foi possível baixar. Abrindo arquivo bruto.')
-            window.open(url, '_blank')
+            document.body.appendChild(a)
+            a.click()
+            document.body.removeChild(a)
         }
     }
 
@@ -758,9 +1127,11 @@ function AprovadaCard({ item, onPublish, onReject }) {
                 {(item.render_url || item.imagem_url) ? (
                     <img className="ap-card-img" src={item.render_url ?? item.imagem_url} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 ) : (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 8 }}>
                         <ImageIcon size={32} color="#dbdbdb" />
+                        {isRendering && <span style={{ fontSize: 12, color: '#94a3b8' }}>Renderizando...</span>}
                     </div>
+
                 )}
             </div>
 
@@ -794,15 +1165,28 @@ function AprovadaCard({ item, onPublish, onReject }) {
                 )}
             </div>
 
+            {/* Alerta de Renderização */}
+            {isRendering && (
+                <div style={{ margin: '12px 16px', padding: '10px', background: '#fef9c3', borderRadius: '8px', fontSize: '12px', color: '#854d0e', fontWeight: 600, textAlign: 'center', border: '1px solid #fde047' }}>
+                    ⏳ Em renderização — aguarde a arte ficar pronta
+                </div>
+            )}
+
             {/* Botões: Baixar Arte + Copiar Legenda */}
             <div className="ap-card-actions-wrap">
                 <div className="ap-card-btn-row">
-                    <button className="ap-card-btn-secondary" onClick={handleDownload} title="Baixar Arte">
-                        <Download size={14} /> Baixar Arte
+                    <button className="ap-btn-reject" onClick={() => onReject(item)} title="Descartar" disabled={isRendering || isProcessing} style={{ flexShrink: 0, padding: '8px' }}>
+                        <X size={16} />
                     </button>
-                    <button className={`ap-card-btn-copy${copied ? ' copied' : ''}`} onClick={handleCopy} title="Copiar Legenda">
-                        {copied ? <Check size={14} /> : <Copy size={14} />}
-                        {copied ? 'Copiado!' : 'Copiar Legenda'}
+                    <button onClick={() => onEdit(item)} disabled={isRendering || isProcessing} title="Editar Matéria" style={{ padding: '0 12px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '8px', color: '#475569', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '12px' }}>
+                        <Pencil size={12} /> Editar
+                    </button>
+                    <button className="ap-card-btn-secondary" onClick={handleDownload} disabled={isRendering} title="Baixar Arte" style={{ fontSize: '12px', padding: '0 10px' }}>
+                        <Download size={12} /> Baixar
+                    </button>
+                    <button className={`ap-card-btn-copy${copied ? ' copied' : ''}`} onClick={handleCopy} title="Copiar Legenda" style={{ fontSize: '12px', padding: '0 10px' }}>
+                        {copied ? <Check size={12} /> : <Copy size={12} />}
+                        {copied ? 'Copiar' : 'Copiar'}
                     </button>
                 </div>
             </div>
@@ -811,7 +1195,8 @@ function AprovadaCard({ item, onPublish, onReject }) {
             <div className="ap-card-actions-wrap" style={{ paddingTop: 0 }}>
                 <button
                     onClick={() => onPublish(item)}
-                    style={{ width: '100%', margin: '0 16px', boxSizing: 'border-box', padding: '12px', borderRadius: '10px', border: 'none', background: '#111827', color: '#fff', fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', transition: 'opacity 0.2s' }}
+                    disabled={isRendering}
+                    style={{ width: '100%', margin: '0 16px', boxSizing: 'border-box', padding: '12px', borderRadius: '10px', border: 'none', background: '#111827', color: '#fff', fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: isRendering ? 'not-allowed' : 'pointer', opacity: isRendering ? 0.5 : 1, transition: 'opacity 0.2s' }}
                 >
                     <Check size={16} /> Publicar
                 </button>
@@ -830,7 +1215,7 @@ function StatusBadge({ status, small }) {
         scored: { label: 'Analisada', bg: '#dbeafe', color: '#1e40af' },
         selected: { label: 'Selecionada', bg: '#ede9fe', color: '#6d28d9' },
         pending_render: { label: 'Renderizando', bg: '#fef9c3', color: '#854d0e' },
-        processing: { label: 'Renderizando', bg: '#fef9c3', color: '#854d0e' },
+        processing: { label: 'IA Gerando', bg: '#f5f3ff', color: '#6d28d9' },
         pending_review: { label: 'Pronta', bg: '#dcfce7', color: '#166534' },
         ready_to_publish: { label: 'Pronta', bg: '#dcfce7', color: '#166534' },
         approved: { label: 'Aprovada', bg: '#dcfce7', color: '#166534' },

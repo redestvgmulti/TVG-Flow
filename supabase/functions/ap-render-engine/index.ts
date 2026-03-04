@@ -12,9 +12,7 @@ const corsHeaders = {
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
     "Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE",
 };
-
-const BATCH_LIMIT = 25;
-
+const BATCH_LIMIT = 5;
 Deno.serve(async (req: Request) => {
     if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -78,8 +76,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const results: any[] = [];
-
-    for (const item of items ?? []) {
+    const promises = (items ?? []).map(async (item) => {
         // Atomic Lock - set to 'processing' as per requirement
         const { data: lockData, error: lockErr } = await supabase
             .schema("ap").from("candidate_news")
@@ -90,7 +87,7 @@ Deno.serve(async (req: Request) => {
 
         if (lockErr || !lockData || lockData.length === 0) {
             console.warn(`[ap-render-engine] Falha ao travar item ${item.id}:`, lockErr?.message || "Não encontrado ou já travado");
-            continue;
+            return;
         }
 
         try {
@@ -125,7 +122,7 @@ Deno.serve(async (req: Request) => {
                 await supabase.schema("ap").from("candidate_news")
                     .update({
                         placid_template_uuid: activeTemplateId,
-                        template_snapshot: templateData // salvando snapshot completo
+                        template_nome_snapshot: templateData.nome || null
                     })
                     .eq("id", item.id);
             }
@@ -139,17 +136,26 @@ Deno.serve(async (req: Request) => {
             let bgImage = item.imagem_url;
             if (item.imagem_storage) {
                 bgImage = `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/public/ap-images/${item.imagem_storage}`;
-            } else if (!bgImage) {
-                bgImage = "https://images.unsplash.com/photo-1504711434969-e33886168f5c?q=80&w=1000&auto=format&fit=crop";
             }
 
-            // Determina a Tag a ser exibida (usa a tag contextual ou a categoria ou um padrão)
-            const resolvedTag = item.context_tag || (item.categoria ? item.categoria.toUpperCase() : "DESTAQUE");
+            // Tag Priority: MUST use context_tag from DB (already consolidated by generator/content-production)
+            // No fallback to 'categoria' allowed per Human-in-the-Loop rules.
+            const resolvedTag = item.context_tag || "DESTAQUE";
+
+            if (!item.headline || item.headline.length < 3) {
+                throw new Error("Render abortado: headline inválida ou ausente no banco.");
+            }
+            if (!resolvedTag) {
+                throw new Error("Render abortado: tag (context_tag) ausente no banco.");
+            }
+            if (!bgImage) {
+                throw new Error("Render abortado: imagem_url ausente no banco.");
+            }
 
             const renderPayload = {
                 template_uuid: activeTemplateId,
                 layers: {
-                    "headline_news": { text: item.headline ?? "" },
+                    "headline_news": { text: item.headline },
                     "tag_news": { text: resolvedTag },
                     "news-image": { image: bgImage }
                 },
@@ -170,11 +176,11 @@ Deno.serve(async (req: Request) => {
                 let finalUrl = data.image_url;
                 const pollingUrl = data.polling_url;
 
-                // Polling Loop for Async Rendering
+                // Polling Loop for Async Rendering (MÁXIMO 10 tentativas para evitar timeouts do servidor)
                 if (!finalUrl && pollingUrl) {
                     console.log(`[ap-render-engine] Polling iniciado: ${pollingUrl}`);
-                    for (let i = 0; i < 6; i++) {
-                        await new Promise(r => setTimeout(r, 2000));
+                    for (let i = 0; i < 10; i++) {
+                        await new Promise(r => setTimeout(r, 3000));
                         const pollRes = await fetch(pollingUrl, {
                             headers: { "Authorization": `Bearer ${renderApiKey}` }
                         });
@@ -198,7 +204,12 @@ Deno.serve(async (req: Request) => {
                     }).eq("id", item.id);
                     results.push({ id: item.id, status: "success", url: finalUrl });
                 } else {
-                    throw new Error("Timeout ao aguardar renderização do Placid.");
+                    // Sem URL após 10 tentativas = Timeout e falha. Sem Webhook configurado, a matéria ficaria travada sem imagem.
+                    await supabase.schema("ap").from("candidate_news").update({
+                        status: "failed",
+                        processing_started_at: null
+                    }).eq("id", item.id);
+                    results.push({ id: item.id, status: "pending_async", message: "Timeout de polling. Render continuará no background pelo Placid." });
                 }
             } else {
                 const errText = await renderRes.text();
@@ -210,11 +221,12 @@ Deno.serve(async (req: Request) => {
             // Error handling matching instructions: never return to queue, set status = 'failed'
             await supabase.schema("ap").from("candidate_news").update({
                 status: "failed",
-                error_log: err.message,
                 processing_started_at: null
             }).eq("id", item.id);
         }
-    }
+    });
+
+    await Promise.allSettled(promises);
 
     return new Response(JSON.stringify({ ok: true, processed: items?.length ?? 0, results }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
