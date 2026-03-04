@@ -2,9 +2,9 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../services/supabase'
 import '../../styles/AutoPublisher.css'
 import {
-    Rss, RefreshCcw, Check, X, Pencil, Copy, Download,
-    ImageIcon, Clock, Zap, Info, Filter, MoreVertical, Brain, Heart, MessageCircle, Send, Bookmark, Plus, UploadCloud, Link2,
-    Video, CheckCircle2
+    Rss, RefreshCcw, Check, X, Copy, Download,
+    ImageIcon, Zap, Info, MoreVertical, Brain, Heart, MessageCircle, Send, Bookmark, Plus, UploadCloud, Link2,
+    Video, CheckCircle2, ChevronDown, ChevronUp
 } from 'lucide-react'
 import AutoPublisherSettings from './AutoPublisherSettings'
 import EditorialEngine from '../../features/editorial/EditorialEngine'
@@ -14,33 +14,43 @@ import { toast } from 'sonner'
 const FIXED_CLIENT_ID = 'cd287e6e-f273-4d0f-a72d-2a8c391e40e9'
 
 // ──────────────────────────────────────────────────────────
-// Pipeline stage config (FlowOS V2 Standard)
-// ──────────────────────────────────────────────────────────
-const STAGES = [
-    { key: 'raw', label: 'Ingerido' },
-    { key: 'scored', label: 'Analisado' },
-    { key: 'selected', label: 'Selecionado' },
-    { key: 'pending_render', label: 'Em Renderização' },
-    { key: 'pending_review', label: 'Revisão Editorial' },
-    { key: 'studio', label: 'Gravação' },
-    { key: 'posted', label: 'Publicado' },
+// Tab config
+const TABS = [
+    { key: 'coletadas', label: 'Coletadas' },
+    { key: 'pendentes', label: 'Pendentes' },
+    { key: 'aprovadas', label: 'Aprovadas' },
+    { key: 'publicadas', label: 'Publicadas' },
+    { key: 'editorial', label: 'Motor Editorial' },
+    { key: 'settings', label: 'Configurações' },
 ]
 
-// ──────────────────────────────────────────────────────────
-// Main Page — Newsroom Control Center (V2)
+// Status DB → tab mapping
+const STATUS_TAB = {
+    raw: 'coletadas',
+    ready_for_scoring: 'coletadas',
+    scored: 'coletadas',
+    selected: 'pendentes',
+    pending_render: 'pendentes',
+    processing: 'pendentes',
+    pending_review: 'aprovadas',
+    ready_to_publish: 'aprovadas',
+    approved: 'aprovadas',
+    queued_for_posting: 'aprovadas',
+    studio_selected: 'pendentes',
+    studio_ready: 'pendentes',
+    posted: 'publicadas',
+    failed: 'coletadas',
+    rejected: 'coletadas',
+}
+
 // ──────────────────────────────────────────────────────────
 export default function AutoPublisher() {
     const clienteId = FIXED_CLIENT_ID
 
-
-    const [tab, setTab] = useState('review')
-    const [stageFilter, setStageFilter] = useState(null)
-    const [stageCounts, setStageCounts] = useState({})
-    const [reviewItems, setReviewItems] = useState([])
-    const [publishedItems, setPublishedItems] = useState([])
-    const [employeeItems, setEmployeeItems] = useState([])
+    const [tab, setTab] = useState('pendentes')
+    const [tabCounts, setTabCounts] = useState({})
+    const [items, setItems] = useState([])
     const [loading, setLoading] = useState(false)
-    const [metrics, setMetrics] = useState({ ingeridas: 0, processadas: 0, revisao: 0, agendadas: 0, publicadas: 0 })
     const [ingestionEnabled, setIngestionEnabled] = useState(true)
     const [isProcessing, setIsProcessing] = useState(false)
 
@@ -51,6 +61,7 @@ export default function AutoPublisher() {
     const [selectedFile, setSelectedFile] = useState(null)
     const [isDragging, setIsDragging] = useState(false)
 
+    // ── Fetch system config
     const fetchSystemConfig = useCallback(async () => {
         if (!clienteId) return
         const { data } = await supabase.schema('ap').from('system_config').select('ingestion_enabled').eq('cliente_id', clienteId).single()
@@ -63,336 +74,189 @@ export default function AutoPublisher() {
         await supabase.schema('ap').from('system_config').upsert({ cliente_id: clienteId, ingestion_enabled: newVal })
     }
 
+    // ── Fetch counts per tab
     const fetchCounts = useCallback(async () => {
         if (!clienteId) return
-        const { data, error } = await supabase.schema('ap').from('candidate_news').select('id, status, created_at').eq('cliente_id', clienteId)
-        if (error) console.error('[AutoPublisher] fetchCounts error:', error)
-
-        const counts = {}
+        const { data } = await supabase.schema('ap').from('candidate_news').select('status').eq('cliente_id', clienteId)
+        const counts = { coletadas: 0, pendentes: 0, aprovadas: 0, publicadas: 0 }
         for (const row of data ?? []) {
-            let mappedStatus = row.status
-            // Agrupar statuses equivalentes para a esteira visual
-            if (row.status === 'ready_to_publish') mappedStatus = 'pending_review'
-            if (row.status === 'processing') mappedStatus = 'pending_render'
-            if (row.status === 'studio_selected' || row.status === 'studio_ready') mappedStatus = 'studio'
-            if (row.status === 'approved' || row.status === 'queued_for_posting') mappedStatus = 'posted'
-
-            counts[mappedStatus] = (counts[mappedStatus] ?? 0) + 1
+            const mapped = STATUS_TAB[row.status] || 'coletadas'
+            counts[mapped] = (counts[mapped] ?? 0) + 1
         }
-        setStageCounts(counts)
-
-        const today = new Date(); today.setHours(0, 0, 0, 0)
-        let ingeridasCount = 0
-        for (const row of data ?? []) {
-            if (new Date(row.created_at) >= today) ingeridasCount++
-        }
-
-        setMetrics({
-            ingeridas: ingeridasCount,
-            processadas: (counts['scored'] ?? 0) + (counts['selected'] ?? 0),
-            revisao: (counts['pending_review'] ?? 0) + (counts['ready_to_publish'] ?? 0),
-            agendadas: counts['queued_for_posting'] ?? 0,
-            publicadas: counts['posted'] ?? 0,
-        })
+        setTabCounts(counts)
     }, [clienteId])
 
-    const fetchReview = useCallback(async () => {
+    // ── Fetch items for current tab
+    const fetchItems = useCallback(async (currentTab) => {
         if (!clienteId) return
         setLoading(true)
+
+        let statuses = []
+        if (currentTab === 'coletadas') statuses = ['raw', 'ready_for_scoring', 'scored', 'failed', 'rejected']
+        if (currentTab === 'pendentes') statuses = ['selected', 'pending_render', 'processing', 'studio_selected', 'studio_ready']
+        if (currentTab === 'aprovadas') statuses = ['pending_review', 'ready_to_publish', 'approved', 'queued_for_posting']
+        if (currentTab === 'publicadas') statuses = ['posted']
+
+        if (statuses.length === 0) {
+            setItems([])
+            setLoading(false)
+            return
+        }
+
         const { data, error } = await supabase
             .schema('ap')
             .from('candidate_news')
-            .select(`
-        id, titulo, headline, caption, render_url, imagem_url,
-        status, created_at, context_tag, content_type,
-        template_nome_snapshot
-      `)
+            .select(`id, titulo, headline, caption, render_url, imagem_url,
+                     status, created_at, context_tag, content_type,
+                     template_nome_snapshot, roteiro_studio, duracao_estimada, broll_sugestao,
+                     imagem_url, studio_media_image_url, studio_media_video_url, enviado_para_studio,
+                     instagram_post_id, horario_agendado`)
             .eq('cliente_id', clienteId)
-            .in('status', ['raw', 'scored', 'selected', 'pending_render', 'pending_review', 'approved', 'queued_for_posting', 'studio_selected', 'studio_ready', 'ready_to_publish', 'processing'])
+            .in('status', statuses)
             .order('created_at', { ascending: false })
-        if (error) console.error('[AutoPublisher] fetchReview error:', error)
-        else {
-            console.log('[AutoPublisher] Fetched review items:', data?.length)
-            if (data?.length > 0) {
-                console.log('[AutoPublisher] Review statuses:', data.map(i => i.status))
-            }
-        }
-        setReviewItems(data ?? [])
+
+        if (error) console.error('[AutoPublisher] fetchItems error:', error)
+        setItems(data ?? [])
         setLoading(false)
     }, [clienteId])
 
-    const fetchPublished = useCallback(async () => {
-        if (!clienteId) return
-        setLoading(true)
-        const { data } = await supabase
-            .from('ap_candidate_news')
-            .select('id, titulo, headline, caption, render_url, instagram_post_id, horario_agendado, status, content_type')
-            .eq('cliente_id', clienteId)
-            .in('status', ['posted', 'rejected'])
-            .order('created_at', { ascending: false })
-            .limit(30)
-        setPublishedItems(data ?? [])
-        setLoading(false)
-    }, [clienteId])
-
-    const fetchEmployeeItems = useCallback(async () => {
-        if (!clienteId) return
-        setLoading(true)
-
-        try {
-            // 1. Fetch news items
-            const { data: newsData, error: newsError } = await supabase
-                .from('ap_candidate_news_complete')
-                .select(`id, titulo, headline, caption, render_url, imagem_url, status, gerado_em, created_at, template_nome_snapshot, template_ordem, criado_por_user_id, context_tag, content_type`)
-                .eq('cliente_id', clienteId)
-                .eq('role_criador', 'employee')
-                .order('created_at', { ascending: false })
-                .limit(50)
-
-            if (newsError) throw newsError;
-
-            // 2. Fetch user emails mapping
-            const { data: usersData, error: usersError } = await supabase.rpc('get_user_emails_for_ap');
-
-            if (usersError) {
-                console.warn("Could not fetch user emails", usersError);
-                setEmployeeItems(newsData || []);
-            } else {
-                // Create a map of id -> email
-                const userMap = {};
-                if (usersData) {
-                    usersData.forEach(u => userMap[u.id] = { nome: u.nome, email: u.email });
-                }
-
-                // Map nome and email back to the news items
-                const mappedData = (newsData || []).map(item => ({
-                    ...item,
-                    criado_por_nome: userMap[item.criado_por_user_id]?.nome || null,
-                    criado_por_email: userMap[item.criado_por_user_id]?.email || null
-                }));
-
-                setEmployeeItems(mappedData);
-            }
-        } catch (err) {
-            console.error('[AutoPublisher] fetchEmployeeItems error:', err);
-            setEmployeeItems([]);
-        } finally {
-            setLoading(false);
-        }
-    }, [clienteId])
-
-    async function handleForceProcess() {
-        if (isProcessing) return
-        setIsProcessing(true)
-        try {
-            // 1. Produção de Conteúdo (AI)
-            await supabase.functions.invoke('ap-content-production', {
-                body: { action: 'process_selected' }
-            })
-            // 2. Renderização de Imagem
-            await supabase.functions.invoke('ap-render-engine')
-
-            // Sucesso
-            fetchCounts()
-            fetchReview()
-        } catch (err) {
-            console.error('[AutoPublisher] handleForceProcess error:', err)
-        } finally {
-            setIsProcessing(false)
-        }
-    }
-
+    // ── Load on tab change + realtime
     useEffect(() => {
         if (!clienteId) return
         fetchSystemConfig()
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         fetchCounts()
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        if (tab === 'review') fetchReview()
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        if (tab === 'published') fetchPublished()
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        if (tab === 'employee') fetchEmployeeItems()
+        fetchItems(tab)
 
-        // 🌟 Supabase Realtime Subscription para Autorefresh 🌟
         const channel = supabase
-            .channel('autopublisher-realtime-updates')
-            .on(
-                'postgres_changes',
-                {
-                    event: '*', // Escuta INSERT, UPDATE, DELETE
-                    schema: 'ap',
-                    table: 'candidate_news',
-                    // Idealmente filter: `cliente_id=eq.${clienteId}` mas RLS cuidará ou filtramos localmente
-                },
-                (payload) => {
-                    console.log('[AutoPublisher] Realtime event recebido:', payload)
-                    // Qualquer mudança de status/inserção roda recount:
-                    fetchCounts()
-
-                    // Se eu estiver na aba de revisão e o status do item afetar a revisão, eu recarrego os cards
-                    if (tab === 'review') {
-                        fetchReview()
-                    }
-
-                    // Se eu estiver na aba de publicados e o status for posted, recarrega a tabela de publicações
-                    if (tab === 'published') {
-                        fetchPublished()
-                    }
-                }
-            )
-            .subscribe((status) => {
-                console.log('[AutoPublisher] Status da Inscrição Realtime:', status)
+            .channel('autopublisher-realtime')
+            .on('postgres_changes', { event: '*', schema: 'ap', table: 'candidate_news' }, () => {
+                fetchCounts()
+                fetchItems(tab)
             })
+            .subscribe()
 
-        return () => {
-            // Limpa o canal quando o componente desmontar (ou mudar de tenant)
-            supabase.removeChannel(channel)
-        }
-    }, [clienteId, tab, fetchCounts, fetchReview, fetchPublished, fetchEmployeeItems, fetchSystemConfig])
+        return () => supabase.removeChannel(channel)
+    }, [clienteId, tab, fetchCounts, fetchItems, fetchSystemConfig])
 
-    async function handleApprove(item) {
-        if (item.status !== 'pending_review' && item.status !== 'ready_to_publish') return
-        await supabase.schema('ap').from('candidate_news').update({ status: 'posted' }).eq('id', item.id)
-
-        await supabase.from('ap_learning_history').insert({
-            cliente_id: clienteId, news_id: item.id, categoria: item.categoria, fonte_id: item.fonte_id, acao: 'approved', score_delta: 1,
-        })
-        fetchReview(); fetchCounts()
-    }
-
+    // ── Actions
     async function handleReject(item) {
         await supabase.schema('ap').from('candidate_news').update({ status: 'rejected' }).eq('id', item.id)
-        await supabase.from('ap_learning_history').insert({
-            cliente_id: clienteId, news_id: item.id, categoria: item.categoria, fonte_id: item.fonte_id, acao: 'rejected', score_delta: -1,
-        })
-        fetchReview(); fetchCounts()
+        fetchItems(tab); fetchCounts()
     }
 
     async function handleStudio(item) {
-        if (item.status !== 'pending_review') return
-        setIsProcessing(true) // Mostrar loading visual
+        setIsProcessing(true)
         try {
-            const { data, error } = await supabase.functions.invoke('ap-content-production', {
+            const { error } = await supabase.functions.invoke('ap-content-production', {
                 body: { action: 'process_studio', newsId: item.id }
             })
             if (error) throw error
             toast.success("Roteiro de Estúdio gerado com sucesso!")
         } catch (err) {
-            console.error('[AutoPublisher] handleStudioProcess error:', err)
-            toast.error("Falha ao gerar roteiro do estúdio pela IA.")
+            toast.error("Falha ao gerar roteiro do estúdio.")
         }
         setIsProcessing(false)
-        fetchReview(); fetchCounts()
-    }
-
-    async function handleSendToStudio(item) {
-        if (item.enviado_para_studio) return
-        const ok = confirm("Confirma o envio do roteiro e ativos para o Estúdio?");
-        if (!ok) return;
-
-        try {
-            const { error: updErr } = await supabase.from('ap_candidate_news').update({ status: 'studio_ready' }).eq('id', item.id)
-            if (updErr) throw updErr
-            toast.success("Enviado para gravação com sucesso!");
-        } catch (err) {
-            console.error('[AutoPublisher] approveToStudio error:', err)
-            toast.error("Falha ao sincronizar com o Estúdio.")
-        }
-        fetchReview(); fetchCounts()
+        fetchItems(tab); fetchCounts()
     }
 
     async function handleApproveSelected(item) {
         if (item.status !== 'selected') return
-        setIsProcessing(true) // Mostrar loading visual
+        setIsProcessing(true)
         try {
-            // Repassa para a IA, forçando formatação
-            const { data, error } = await supabase.functions.invoke('ap-content-production', {
+            const { error: prodError } = await supabase.functions.invoke('ap-content-production', {
                 body: { action: 'process_selected', newsId: item.id }
             })
-            if (error) throw error
-            toast.success("Texto e Arte gerados com sucesso e enviados para Revisão Editorial!")
+            if (prodError) throw prodError
+
+            const { error: renderError } = await supabase.functions.invoke('ap-render-engine', {
+                body: { action: 'render_one', newsId: item.id }
+            })
+            if (renderError) {
+                toast.info("Texto gerado, arte entrou na fila de renderização automática.")
+            } else {
+                toast.success("Texto e Arte enviados para renderização!")
+            }
         } catch (err) {
             console.error('[AutoPublisher] handleApproveSelected error:', err)
-            toast.error("Falha ao aprovar matéria selecionada.")
+            toast.error("Falha ao aprovar matéria.")
         }
         setIsProcessing(false)
-        fetchReview(); fetchCounts()
+        fetchItems(tab); fetchCounts()
     }
 
+    async function handlePublish(item) {
+        await supabase.schema('ap').from('candidate_news').update({ status: 'posted' }).eq('id', item.id)
+        toast.success("Matéria marcada como publicada!")
+        fetchItems(tab); fetchCounts()
+    }
+
+    async function handleForceProcess() {
+        if (isProcessing) return
+        setIsProcessing(true)
+        try {
+            await supabase.functions.invoke('ap-content-production', { body: { action: 'process_selected' } })
+            await supabase.functions.invoke('ap-render-engine')
+            toast.success("Processamento forçado concluído.")
+            fetchCounts(); fetchItems(tab)
+        } catch (err) {
+            toast.error("Erro ao processar.")
+        } finally {
+            setIsProcessing(false)
+        }
+    }
+
+    // ── Manual submission
     async function submitManualNews(e) {
         e.preventDefault()
-
         if (!manualForm.titulo && !manualForm.url_original) {
-            toast.error('Você precisa preencher o título da matéria OU colar um link válido.');
-            return;
+            toast.error('Preencha o título OU cole um link válido.')
+            return
         }
-
         setIsSubmittingManual(true)
 
         if (manualForm.url_original) {
-            // Check for duplicates first using the complete view to get more details if needed
-            const { data: existingNews, error: searchError } = await supabase
-                .from('ap_candidate_news')
-                .select('id')
-                .eq('url_original', manualForm.url_original)
-                .limit(1);
-
-            if (!searchError && existingNews && existingNews.length > 0) {
-                toast.error(`Esta matéria já foi enviada ao sistema por outro usuário. Pautas duplicadas não são permitidas.`);
-                setIsSubmittingManual(false);
-                return;
+            const { data: existing } = await supabase.from('ap_candidate_news').select('id').eq('url_original', manualForm.url_original).limit(1)
+            if (existing && existing.length > 0) {
+                toast.error('Esta matéria já foi enviada ao sistema.')
+                setIsSubmittingManual(false)
+                return
             }
         }
 
-        let finalTitulo = manualForm.titulo;
-        let finalConteudo = manualForm.conteudo;
-        let finalImageUrl = manualForm.imagem_url || null;
+        let finalTitulo = manualForm.titulo
+        let finalConteudo = manualForm.conteudo
+        let finalImageUrl = manualForm.imagem_url || null
 
-        // Auto-Scraping Logic (If URL is provided but content is missing)
         if (manualForm.url_original && (!finalTitulo || !finalConteudo)) {
             try {
-                const { data, error } = await supabase.functions.invoke('ap-link-scraper', {
-                    body: { url: manualForm.url_original }
-                });
-                if (error) throw error;
-
-                finalTitulo = data.title || finalTitulo;
-                finalConteudo = data.content || finalConteudo;
-                finalImageUrl = data.image_url || finalImageUrl;
-            } catch (err) {
-                console.error('[AutoPublisher] Auto-Scrape error:', err);
-                toast.error('A IA tentou extrair os dados do link, mas falhou. Verifique se a URL é suportada ou preencha o texto manualmente.');
-                setIsSubmittingManual(false);
-                return;
+                const { data, error } = await supabase.functions.invoke('ap-link-scraper', { body: { url: manualForm.url_original } })
+                if (error) throw error
+                finalTitulo = data.title || finalTitulo
+                finalConteudo = data.content || finalConteudo
+                finalImageUrl = data.image_url || finalImageUrl
+            } catch {
+                toast.error('Falha ao extrair dados do link. Preencha manualmente.')
+                setIsSubmittingManual(false)
+                return
             }
         }
 
         if (!finalTitulo || !finalConteudo) {
-            toast.error('Não foi possível obter Título e Conteúdo. Preencha manualmente ou tente outro link.');
-            setIsSubmittingManual(false);
-            return;
+            toast.error('Não foi possível obter Título e Conteúdo. Preencha manualmente.')
+            setIsSubmittingManual(false)
+            return
         }
 
-        // 1. Upload File se existir
         if (selectedFile) {
             const fileExt = selectedFile.name.split('.').pop()
             const fileName = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`
-
-            const { error: uploadError } = await supabase.storage
-                .from('ap_media')
-                .upload(fileName, selectedFile)
-
-            if (uploadError) {
-                console.error('[AutoPublisher] Img Upload Error:', uploadError)
-                toast.error('Erro ao fazer upload da imagem.')
-            } else {
+            const { error: uploadError } = await supabase.storage.from('ap_media').upload(fileName, selectedFile)
+            if (!uploadError) {
                 const { data: pubData } = supabase.storage.from('ap_media').getPublicUrl(fileName)
                 finalImageUrl = pubData.publicUrl
             }
         }
 
-        // 2. Chamar o Edge Function unificado (ap-employee-generator) para processamento completo (Fila -> IA -> Placid)
         try {
             const { data, error } = await supabase.functions.invoke('ap-employee-generator', {
                 body: {
@@ -405,44 +269,27 @@ export default function AutoPublisher() {
                     content_type: manualForm.content_type || 'feed'
                 }
             })
-
-            if (error) throw error;
-            if (data?.error) throw new Error(data.error);
-
+            if (error) throw error
+            if (data?.error) throw new Error(data.error)
+            toast.success("Matéria enviada para processamento!")
         } catch (fnErr) {
-            console.error('[AutoPublisher] pipeline manual error:', fnErr);
-            toast.error('Falha ao gerar matéria. Verifique se há Templates configurados ou tente novamente.');
+            console.error('[AutoPublisher] pipeline manual error:', fnErr)
+            toast.error(fnErr.message || 'Falha ao gerar matéria. Verifique os templates configurados.')
         }
 
         setIsSubmittingManual(false)
         setManualModalOpen(false)
-        setManualForm({ titulo: '', conteudo: '', imagem_url: '', context_tag: '' })
+        setManualForm({ titulo: '', conteudo: '', imagem_url: '', context_tag: '', url_original: '', content_type: 'feed' })
         setSelectedFile(null)
-        setTab('review')
-        fetchCounts()
-        fetchReview()
+        setTab('pendentes')
+        fetchCounts(); fetchItems('pendentes')
     }
-
-    const displayedReview = stageFilter
-        ? reviewItems.filter(i => {
-            if (stageFilter === 'pending_review') {
-                const match = i.status === 'pending_review' || i.status === 'ready_to_publish'
-                return match
-            }
-            if (stageFilter === 'pending_render') return i.status === 'pending_render' || i.status === 'processing'
-            if (stageFilter === 'studio') return i.status === 'studio_selected' || i.status === 'studio_ready'
-            if (stageFilter === 'posted') return i.status === 'posted' || i.status === 'approved' || i.status === 'queued_for_posting'
-            return i.status === stageFilter
-        })
-        : reviewItems.filter(i => i.status === 'pending_review' || i.status === 'ready_to_publish' || i.status === 'processing')
-
-    console.log('[AutoPublisher] Rendering Review tab. StageFilter:', stageFilter, 'Items count:', reviewItems.length, 'Displayed:', displayedReview.length)
 
     return (
         <>
             <div className="ap-page">
                 <div className="ap-main">
-                    {/* ── Page Header ─────────────────────────── */}
+                    {/* ── Page Header */}
                     <div className="ap-header">
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                             <Rss size={20} style={{ color: 'var(--color-primary)' }} />
@@ -450,543 +297,411 @@ export default function AutoPublisher() {
                             <span className="ap-badge-live" style={{ background: ingestionEnabled ? 'var(--color-success-bg)' : '#f3f4f6', color: ingestionEnabled ? 'var(--color-success-text)' : '#6b7280' }}>
                                 {ingestionEnabled ? 'Motor Ativo' : 'Desativado'}
                             </span>
-                            {/* Toggle Switch */}
-                            <div
-                                style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '8px',
-                                    marginLeft: '12px',
-                                    padding: '4px 12px',
-                                    background: '#fff',
-                                    border: '1px solid #dbdbdb',
-                                    borderRadius: '20px'
-                                }}
-                            >
-                                <div
-                                    onClick={toggleIngestion}
-                                    style={{
-                                        width: '36px', height: '20px',
-                                        background: ingestionEnabled ? '#0095f6' : '#e5e7eb',
-                                        borderRadius: '10px', position: 'relative',
-                                        transition: 'background 0.2s', cursor: 'pointer'
-                                    }}
-                                >
-                                    <div style={{
-                                        width: '16px', height: '16px', background: '#fff', borderRadius: '50%',
-                                        position: 'absolute', top: '2px', left: ingestionEnabled ? '18px' : '2px',
-                                        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)', boxShadow: '0 1px 2px rgba(0,0,0,0.2)'
-                                    }} />
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '12px', padding: '4px 12px', background: '#fff', border: '1px solid #dbdbdb', borderRadius: '20px' }}>
+                                <div onClick={toggleIngestion} style={{ width: '36px', height: '20px', background: ingestionEnabled ? '#0095f6' : '#e5e7eb', borderRadius: '10px', position: 'relative', transition: 'background 0.2s', cursor: 'pointer' }}>
+                                    <div style={{ width: '16px', height: '16px', background: '#fff', borderRadius: '50%', position: 'absolute', top: '2px', left: ingestionEnabled ? '18px' : '2px', transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)', boxShadow: '0 1px 2px rgba(0,0,0,0.2)' }} />
                                 </div>
-                                <span
-                                    style={{ fontSize: '13px', fontWeight: 600, color: '#262626', cursor: 'pointer' }}
-                                    onClick={toggleIngestion}
-                                >
-                                    Pausar Ingestão
-                                </span>
+                                <span style={{ fontSize: '13px', fontWeight: 600, color: '#262626', cursor: 'pointer' }} onClick={toggleIngestion}>Pausar Ingestão</span>
                             </div>
                         </div>
                         <div style={{ display: 'flex', gap: '8px' }}>
-                            <button
-                                className="ap-btn-refresh"
-                                style={{ background: 'var(--color-primary)', color: '#fff', border: 'none' }}
-                                onClick={() => setManualModalOpen(true)}
-                            >
+                            <button className="ap-btn-refresh" style={{ background: 'var(--color-primary)', color: '#fff', border: 'none' }} onClick={() => setManualModalOpen(true)}>
                                 <Plus size={14} /> Nova Matéria
                             </button>
                             <button
                                 className="ap-btn-refresh"
-                                style={{
-                                    background: isProcessing ? '#f3f4f6' : 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
-                                    color: isProcessing ? '#9ca3af' : '#fff',
-                                    border: 'none',
-                                    opacity: isProcessing ? 0.7 : 1,
-                                    cursor: isProcessing ? 'not-allowed' : 'pointer'
-                                }}
+                                style={{ background: isProcessing ? '#f3f4f6' : 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)', color: isProcessing ? '#9ca3af' : '#fff', border: 'none', opacity: isProcessing ? 0.7 : 1, cursor: isProcessing ? 'not-allowed' : 'pointer' }}
                                 onClick={handleForceProcess}
                                 disabled={isProcessing}
                             >
                                 <Zap size={14} className={isProcessing ? 'spin-anim' : ''} />
                                 {isProcessing ? 'Processando...' : 'Processar Tudo'}
                             </button>
-                            <button className="ap-btn-refresh" onClick={() => { fetchCounts(); if (tab === 'review') fetchReview(); else fetchPublished(); }}>
+                            <button className="ap-btn-refresh" onClick={() => { fetchCounts(); fetchItems(tab) }}>
                                 <RefreshCcw size={14} /> Atualizar
                             </button>
                         </div>
                     </div>
 
-                    {/* ── Metric Cards ─────────────────────────── */}
-                    <div className="ap-metrics">
-                        {[
-                            { label: 'Ingeridas Hoje', val: metrics.ingeridas },
-                            { label: 'Selecionadas para IA', val: metrics.processadas },
-                            { label: 'Aguardando Aprovação', val: metrics.revisao },
-                            { label: 'Agendadas p/ Postagem', val: metrics.agendadas },
-                            { label: 'Publicações Feitas', val: metrics.publicadas },
-                        ].map((m, i) => (
-                            <div key={i} className="ap-metric-card">
-                                <span className="ap-metric-value">{m.val}</span>
-                                <span className="ap-metric-label">{m.label}</span>
-                            </div>
-                        ))}
-                    </div>
-
-                    {/* ── Pipeline Visual ──────────────────────── */}
+                    {/* ── Tabs com contadores */}
                     <div className="ap-pipeline">
-                        {STAGES.map(({ key, label }) => (
+                        {TABS.filter(t => ['coletadas', 'pendentes', 'aprovadas', 'publicadas'].includes(t.key)).map(({ key, label }) => (
                             <button
                                 key={key}
-                                className={`ap-stage${stageFilter === key ? ' active' : ''}`}
-                                onClick={() => {
-                                    setStageFilter(p => p === key ? null : key)
-                                    if (key === 'posted') setTab('published')
-                                    else if (key !== 'settings') setTab('review')
-                                }}
+                                className={`ap-stage${tab === key ? ' active' : ''}`}
+                                onClick={() => setTab(key)}
                             >
-                                <span className="ap-stage-count">{stageCounts[key] ?? 0}</span>
+                                <span className="ap-stage-count">{tabCounts[key] ?? 0}</span>
                                 <span className="ap-stage-label">{label}</span>
                             </button>
                         ))}
                     </div>
 
-                    {/* ── Tabs ─────────────────────────────────── */}
+                    {/* ── Sub tabs (Motor / Configurações) */}
                     <div className="ap-tabs">
-                        {[
-                            ['review', 'Fila de Revisão'],
-                            ['published', 'Publicados'],
-                            ['editorial', 'Motor Editorial'],
-                            ['employee', 'Auditoria'],
-                            ['settings', 'Configurações']
-                        ].map(([key, label]) => (
+                        {['coletadas', 'pendentes', 'aprovadas', 'publicadas'].map(key => (
                             <button key={key} className={`ap-tab${tab === key ? ' active' : ''}`} onClick={() => setTab(key)}>
-                                {label}
+                                {TABS.find(t => t.key === key)?.label}
                             </button>
                         ))}
+                        <button className={`ap-tab${tab === 'editorial' ? ' active' : ''}`} onClick={() => setTab('editorial')}>Motor Editorial</button>
+                        <button className={`ap-tab${tab === 'settings' ? ' active' : ''}`} onClick={() => setTab('settings')}>Configurações</button>
                     </div>
-
                 </div>
 
-                {/* ── Content Area ─────────────────────────── */}
-                {tab === 'employee' && (
-                    <div style={{ padding: '20px', background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', marginBottom: '20px' }}>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                            <h2 style={{ fontSize: '18px', fontWeight: 600, margin: 0, color: '#0f172a' }}>Histórico de Geração (Funcionários)</h2>
-                            <button
-                                onClick={async () => {
-                                    if (!confirm('Tem certeza que deseja forçar o reinício da Fila de Templates? O próximo post gerado usará o Primeiro Template (Ordem 1).')) return;
-                                    await supabase.schema('ap').from('template_queue_state').upsert({ empresa_id: clienteId, current_index: 1 });
-                                    toast.success('Fila de templates reiniciada (Próximo será o Template #1).');
-                                }}
-                                style={{ padding: '8px 16px', background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}
-                            >
-                                <RefreshCcw size={16} /> Resetar Fila Global
-                            </button>
-                        </div>
+                {/* ── Content */}
+                {tab === 'editorial' && <EditorialEngine clienteId={clienteId} />}
+                {tab === 'settings' && <AutoPublisherSettings clienteId={clienteId} />}
 
-                        {loading ? (
-                            <SkeletonTable />
-                        ) : employeeItems.length === 0 ? (
-                            <div style={{ padding: '60px', textAlign: 'center', color: '#94a3b8' }}>
-                                <ImageIcon size={40} style={{ marginBottom: '12px', opacity: 0.4 }} />
-                                <p style={{ margin: 0, fontWeight: 500 }}>Nenhuma matéria gerada por funcionários ainda.</p>
+                {/* ── Coletadas (leitura-only, tabela simples) */}
+                {tab === 'coletadas' && (
+                    loading ? <SkeletonTable rows={5} cols={4} /> :
+                        items.length === 0 ? <EmptyStatePremium /> : (
+                            <div className="ap-table-container">
+                                <table className="ap-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Matéria</th>
+                                            <th style={{ width: 130 }}>Status</th>
+                                            <th style={{ width: 100 }}>Formato</th>
+                                            <th style={{ width: 150 }}>Coletada em</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {items.map(item => (
+                                            <tr key={item.id}>
+                                                <td style={{ fontWeight: 500, color: '#0f172a' }}>{item.titulo}</td>
+                                                <td><StatusBadge status={item.status} /></td>
+                                                <td><FormatBadge type={item.content_type} /></td>
+                                                <td style={{ fontSize: 12, color: '#94a3b8' }}>
+                                                    {new Date(item.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
                             </div>
-                        ) : (
-                            <div style={{ display: 'grid', gap: '12px' }}>
-                                {employeeItems.map(item => {
-                                    const STATUS_PTBR = {
-                                        processing: { label: 'Processando', bg: '#fef9c3', color: '#854d0e' },
-                                        ready_to_publish: { label: 'Pronto', bg: '#dcfce7', color: '#166534' },
-                                        published: { label: 'Publicado', bg: '#dbeafe', color: '#1e40af' },
-                                        failed: { label: 'Falhou', bg: '#fee2e2', color: '#991b1b' },
-                                        failed_generation: { label: 'Falhou', bg: '#fee2e2', color: '#991b1b' },
-                                    };
-                                    const badge = STATUS_PTBR[item.status] || { label: item.status || 'Desconhecido', bg: '#f1f5f9', color: '#475569' };
-                                    const titleText = item.headline || item.titulo || 'Sem título';
-                                    const thumb = item.render_url || item.imagem_url;
-                                    return (
-                                        <div key={item.id} style={{ display: 'flex', gap: '16px', padding: '16px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0', alignItems: 'flex-start', transition: 'box-shadow 0.2s' }}>
-                                            {/* Thumbnail */}
-                                            <div style={{ flexShrink: 0 }}>
-                                                {thumb ? (
-                                                    <a href={thumb} target="_blank" rel="noreferrer">
-                                                        <img
-                                                            src={thumb}
-                                                            alt=""
-                                                            style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '10px', border: '2px solid #e2e8f0', display: 'block' }}
-                                                        />
-                                                    </a>
-                                                ) : (
-                                                    <div style={{ width: '80px', height: '80px', background: '#e2e8f0', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                        <ImageIcon size={24} color="#94a3b8" />
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            {/* Content */}
-                                            <div style={{ flex: 1, minWidth: 0 }}>
-                                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap' }}>
-                                                    <span style={{ padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 700, background: badge.bg, color: badge.color, letterSpacing: '0.03em' }}>
-                                                        {badge.label}
-                                                    </span>
-                                                    {item.context_tag && (
-                                                        <span style={{ padding: '3px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: 600, background: '#e0e7ff', color: '#3730a3' }}>
-                                                            {item.context_tag}
-                                                        </span>
-                                                    )}
-                                                    {item.template_nome_snapshot && (
-                                                        <span style={{ padding: '3px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: 600, background: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0' }}>
-                                                            #{item.template_ordem} {item.template_nome_snapshot}
-                                                        </span>
-                                                    )}
-                                                    <span style={{ padding: '3px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: 600, background: item.content_type === 'reels' ? '#ede9fe' : '#f1f5f9', color: item.content_type === 'reels' ? '#6d28d9' : '#475569', border: item.content_type === 'reels' ? '1px solid #ddd6fe' : '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                        {item.content_type === 'reels' ? <><Video size={10} /> Reels</> : <><ImageIcon size={10} /> Feed</>}
-                                                    </span>
-                                                </div>
-
-                                                <div style={{ fontSize: '15px', fontWeight: 600, color: '#0f172a', lineHeight: 1.4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', marginBottom: '8px' }}>
-                                                    {titleText}
-                                                </div>
-
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '8px' }}>
-                                                    {/* Creator */}
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                        <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '12px', fontWeight: 700, flexShrink: 0 }}>
-                                                            {(item.criado_por_nome || item.criado_por_email || 'A').charAt(0).toUpperCase()}
-                                                        </div>
-                                                        <div>
-                                                            <div style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>{item.criado_por_nome || item.criado_por_email?.split('@')[0] || 'Anônimo'}</div>
-                                                            <div style={{ fontSize: '11px', color: '#94a3b8' }}>{item.criado_por_email || '—'}</div>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Date + Actions */}
-                                                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                                        <span style={{ fontSize: '12px', color: '#94a3b8' }}>
-                                                            {item.gerado_em ? new Date(item.gerado_em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—'}
-                                                        </span>
-                                                        <button
-                                                            onClick={() => { navigator.clipboard.writeText(item.caption || ''); }}
-                                                            style={{ fontSize: '12px', padding: '5px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', color: '#475569', fontWeight: 500 }}
-                                                            title="Copiar legenda"
-                                                        >
-                                                            <Copy size={12} /> Legenda
-                                                        </button>
-                                                        {item.render_url && (
-                                                            <button
-                                                                onClick={() => window.open(item.render_url, '_blank')}
-                                                                style={{ fontSize: '12px', padding: '5px 10px', borderRadius: '6px', border: 'none', background: '#0f172a', color: '#fff', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
-                                                                title="Baixar arte"
-                                                            >
-                                                                <Download size={12} /> Arte
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-                    </div>
+                        )
                 )}
 
-                {tab === 'review' && (
+                {/* ── Pendentes (cards com Studio + Aprovar p/IG) */}
+                {tab === 'pendentes' && (
                     loading ? (
                         <div className="ap-cards-grid">
                             {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
                         </div>
-                    ) : displayedReview.length === 0 ? <EmptyStatePremium /> : (
+                    ) : items.length === 0 ? <EmptyStatePremium /> : (
                         <div className="ap-cards-grid">
-                            {displayedReview.map(item => (
-                                <ReviewCard
+                            {items.map(item => (
+                                <PendenteCard
                                     key={item.id}
                                     item={item}
-                                    onApprove={handleApprove}
                                     onReject={handleReject}
                                     onStudio={handleStudio}
-                                    onSendToStudio={handleSendToStudio}
                                     onApproveSelected={handleApproveSelected}
+                                    isProcessing={isProcessing}
                                 />
                             ))}
                         </div>
                     )
                 )}
 
-                {tab === 'published' && (
-                    loading ? <SkeletonTable rows={5} cols={5} /> : publishedItems.length === 0 ? <EmptyStatePremium /> : (
-                        <div className="ap-table-container">
-                            <table className="ap-table">
-                                <thead>
-                                    <tr>
-                                        <th style={{ width: '120px' }}>Imagem</th>
-                                        <th>Notícia</th>
-                                        <th style={{ width: '150px' }}>Status</th>
-                                        <th style={{ width: '150px' }}>Data</th>
-                                        <th style={{ width: '80px', textAlign: 'center' }}><MoreVertical size={14} /></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {publishedItems.map(item => (
-                                        <tr key={item.id}>
-                                            <td>
-                                                {item.render_url ? (
-                                                    <div style={{ width: 100, height: 56, borderRadius: 4, overflow: 'hidden', background: 'var(--color-bg-secondary)' }}>
-                                                        <img src={item.render_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} lazy="true" />
-                                                    </div>
-                                                ) : <span style={{ color: 'var(--color-text-tertiary)', fontSize: 12 }}>Sem Imagem</span>}
-                                            </td>
-                                            <td>
-                                                <div style={{ fontWeight: 500, color: 'var(--color-text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                    {item.headline ?? item.titulo}
-                                                    {item.content_type === 'reels' && (
-                                                        <span style={{ padding: '2px 6px', background: '#ede9fe', color: '#6d28d9', borderRadius: '4px', fontSize: '10px', fontWeight: 700, border: '1px solid #ddd6fe', display: 'flex', alignItems: 'center', gap: '4px' }}><Video size={10} /> REELS</span>
-                                                    )}
-                                                </div>
-                                                <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 4 }}>
-                                                    {item.caption ? (item.caption.length > 80 ? item.caption.slice(0, 80) + '...' : item.caption) : '—'}
-                                                </div>
-                                            </td>
-                                            <td><span className={`ap-status ${item.status}`}>{item.status}</span></td>
-                                            <td style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
-                                                {item.horario_agendado ? new Date(item.horario_agendado).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—'}
-                                            </td>
-                                            <td style={{ textAlign: 'center' }}>
-                                                {item.instagram_post_id && (
-                                                    <a href={`https://www.instagram.com/p/${item.instagram_post_id}`} target="_blank" rel="noreferrer" style={{ color: 'var(--color-primary)' }}>
-                                                        <Rss size={14} />
-                                                    </a>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                {/* ── Aprovadas (cards com Baixar Arte, Copiar Legenda, Publicar) */}
+                {tab === 'aprovadas' && (
+                    loading ? (
+                        <div className="ap-cards-grid">
+                            {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
+                        </div>
+                    ) : items.length === 0 ? <EmptyStatePremium /> : (
+                        <div className="ap-cards-grid">
+                            {items.map(item => (
+                                <AprovadaCard
+                                    key={item.id}
+                                    item={item}
+                                    onPublish={handlePublish}
+                                    onReject={handleReject}
+                                />
+                            ))}
                         </div>
                     )
                 )}
 
-                {tab === 'editorial' && <EditorialEngine clienteId={clienteId} />}
-                {tab === 'settings' && <AutoPublisherSettings clienteId={clienteId} />}
+                {/* ── Publicadas (tabela somente leitura) */}
+                {tab === 'publicadas' && (
+                    loading ? <SkeletonTable rows={5} cols={4} /> :
+                        items.length === 0 ? <EmptyStatePremium /> : (
+                            <div className="ap-table-container">
+                                <table className="ap-table">
+                                    <thead>
+                                        <tr>
+                                            <th style={{ width: 100 }}>Arte</th>
+                                            <th>Matéria</th>
+                                            <th style={{ width: 100 }}>Formato</th>
+                                            <th style={{ width: 160 }}>Publicada em</th>
+                                            <th style={{ width: 60, textAlign: 'center' }}>IG</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {items.map(item => (
+                                            <tr key={item.id}>
+                                                <td>
+                                                    {item.render_url ? (
+                                                        <a href={item.render_url} target="_blank" rel="noreferrer">
+                                                            <img src={item.render_url} alt="" style={{ width: 80, height: 45, objectFit: 'cover', borderRadius: 6, border: '1px solid #e2e8f0' }} />
+                                                        </a>
+                                                    ) : <span style={{ color: '#94a3b8', fontSize: 12 }}>Sem arte</span>}
+                                                </td>
+                                                <td>
+                                                    <div style={{ fontWeight: 500, color: '#0f172a' }}>{item.headline ?? item.titulo}</div>
+                                                    {item.caption && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{item.caption}</div>}
+                                                </td>
+                                                <td><FormatBadge type={item.content_type} /></td>
+                                                <td style={{ fontSize: 12, color: '#94a3b8' }}>
+                                                    {item.horario_agendado
+                                                        ? new Date(item.horario_agendado).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+                                                        : new Date(item.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+                                                </td>
+                                                <td style={{ textAlign: 'center' }}>
+                                                    {item.instagram_post_id ? (
+                                                        <a href={`https://www.instagram.com/p/${item.instagram_post_id}`} target="_blank" rel="noreferrer" style={{ color: 'var(--color-primary)' }}>
+                                                            <Rss size={14} />
+                                                        </a>
+                                                    ) : '—'}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )
+                )}
             </div>
 
-            {/* Modal de Inserção Automática/Manual */}
-            {
-                isManualModalOpen && (
-                    <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-                        <div className="ap-modal-content" style={{ background: '#ffffff', padding: '0', borderRadius: '20px', width: '560px', maxWidth: '100%', boxShadow: '0 24px 48px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05)', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
-                            {/* Header */}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #f0f0f0', background: '#fafafa', flexShrink: 0 }}>
-                                <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#111827', margin: 0, display: 'flex', alignItems: 'center', gap: '10px', letterSpacing: '-0.02em' }}>
-                                    <div style={{ background: '#eff6ff', color: '#3b82f6', padding: '8px', borderRadius: '10px', display: 'flex' }}><Brain size={18} /></div>
-                                    Nova Matéria
-                                </h2>
-                                <button onClick={() => {
-                                    setManualModalOpen(false);
-                                    setSelectedFile(null);
-                                    setManualForm({ titulo: '', conteudo: '', imagem_url: '', context_tag: '', url_original: '', content_type: 'feed' });
-                                }} style={{ background: '#f3f4f6', border: 'none', cursor: 'pointer', color: '#6b7280', width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}>
-                                    <X size={18} />
-                                </button>
-                            </div>
+            {/* ── Modal Nova Matéria */}
+            {isManualModalOpen && (
+                <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+                    <div className="ap-modal-content" style={{ background: '#ffffff', padding: '0', borderRadius: '20px', width: '560px', maxWidth: '100%', boxShadow: '0 24px 48px rgba(0,0,0,0.15)', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #f0f0f0', background: '#fafafa', flexShrink: 0 }}>
+                            <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#111827', margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <div style={{ background: '#eff6ff', color: '#3b82f6', padding: '8px', borderRadius: '10px', display: 'flex' }}><Brain size={18} /></div>
+                                Nova Matéria
+                            </h2>
+                            <button onClick={() => { setManualModalOpen(false); setSelectedFile(null); setManualForm({ titulo: '', conteudo: '', imagem_url: '', context_tag: '', url_original: '', content_type: 'feed' }) }} style={{ background: '#f3f4f6', border: 'none', cursor: 'pointer', color: '#6b7280', width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <X size={18} />
+                            </button>
+                        </div>
 
-                            {/* Body */}
-                            <div style={{ display: 'flex', flexDirection: 'column', padding: '20px', gap: '20px', overflowY: 'auto', flex: 1, WebkitOverflowScrolling: 'touch', width: '100%', boxSizing: 'border-box', maxHeight: '75vh' }}>
-                                <form onSubmit={submitManualNews} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-
-                                    {/* Formato Selector */}
-                                    <div style={{ display: 'flex', gap: '12px', background: '#f1f5f9', padding: '6px', borderRadius: '16px' }}>
-                                        <button
-                                            type="button"
-                                            onClick={() => setManualForm({ ...manualForm, content_type: 'feed' })}
-                                            style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', background: manualForm.content_type === 'feed' ? '#fff' : 'transparent', color: manualForm.content_type === 'feed' ? '#0f172a' : '#64748b', fontWeight: 600, fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: manualForm.content_type === 'feed' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', cursor: 'pointer', transition: 'all 0.2s' }}
-                                        >
-                                            <ImageIcon size={18} /> Estático (Feed)
+                        <div style={{ display: 'flex', flexDirection: 'column', padding: '20px', gap: '20px', overflowY: 'auto', flex: 1, maxHeight: '75vh', boxSizing: 'border-box' }}>
+                            <form onSubmit={submitManualNews} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                                {/* Formato */}
+                                <div style={{ display: 'flex', gap: '12px', background: '#f1f5f9', padding: '6px', borderRadius: '16px' }}>
+                                    {[['feed', 'Estático (Feed)', <ImageIcon size={18} />], ['reels', 'Vídeo (Reels)', <Video size={18} />]].map(([val, lbl, icon]) => (
+                                        <button key={val} type="button" onClick={() => setManualForm({ ...manualForm, content_type: val })}
+                                            style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', background: manualForm.content_type === val ? '#fff' : 'transparent', color: manualForm.content_type === val ? '#0f172a' : '#64748b', fontWeight: 600, fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: manualForm.content_type === val ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', cursor: 'pointer' }}>
+                                            {icon} {lbl}
                                         </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setManualForm({ ...manualForm, content_type: 'reels' })}
-                                            style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', background: manualForm.content_type === 'reels' ? '#fff' : 'transparent', color: manualForm.content_type === 'reels' ? '#0f172a' : '#64748b', fontWeight: 600, fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: manualForm.content_type === 'reels' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', cursor: 'pointer', transition: 'all 0.2s' }}
+                                    ))}
+                                </div>
+
+                                {/* Link */}
+                                <div style={{ padding: '16px', background: '#e0f2fe', border: '1px solid #bae6fd', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px', boxSizing: 'border-box' }}>
+                                    <label style={{ fontSize: '14px', fontWeight: 700, color: '#0284c7', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Motor de IA (Link)</label>
+                                    <p style={{ margin: 0, fontSize: '13px', color: '#0369a1' }}>Cole um link para a IA extrair o contexto e gerar os textos automaticamente.</p>
+                                    <input value={manualForm.url_original || ''} onChange={e => setManualForm({ ...manualForm, url_original: e.target.value })} placeholder="https://g1.globo.com/exemplo..." style={{ width: '100%', padding: '14px', borderRadius: '10px', border: '1px solid #7dd3fc', fontSize: '15px', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' }} />
+                                </div>
+
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', opacity: 0.6 }}>
+                                    <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
+                                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Ou crie manualmente</span>
+                                    <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
+                                </div>
+
+                                {/* Título */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', boxSizing: 'border-box' }}>
+                                    <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Título Principal</label>
+                                    <input value={manualForm.titulo} onChange={e => setManualForm({ ...manualForm, titulo: e.target.value })} placeholder="Prefeito anuncia nova ponte na cidade..." style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' }} />
+                                </div>
+
+                                {/* Conteúdo */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', boxSizing: 'border-box' }}>
+                                    <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Detalhes Adicionais</label>
+                                    <textarea value={manualForm.conteudo} onChange={e => setManualForm({ ...manualForm, conteudo: e.target.value })} placeholder="Cole o release ou o corpo do texto aqui..." rows={4} style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', resize: 'vertical', minHeight: '80px', boxSizing: 'border-box' }} />
+                                </div>
+
+                                {/* Tag */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', boxSizing: 'border-box' }}>
+                                    <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Tag de Editoria</label>
+                                    <input value={manualForm.context_tag || ''} onChange={e => setManualForm({ ...manualForm, context_tag: e.target.value.toUpperCase() })} maxLength={20} placeholder="Ex: URGENTE" style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' }} />
+                                </div>
+
+                                {/* Foto (feed only) */}
+                                {manualForm.content_type === 'feed' && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', boxSizing: 'border-box' }}>
+                                        <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Foto (Fundo do Card)</label>
+                                        <div
+                                            onDragOver={e => { e.preventDefault(); setIsDragging(true) }}
+                                            onDragLeave={() => setIsDragging(false)}
+                                            onDrop={e => { e.preventDefault(); setIsDragging(false); if (e.dataTransfer.files && e.dataTransfer.files[0]) { setSelectedFile(e.dataTransfer.files[0]); setManualForm({ ...manualForm, imagem_url: '' }) } }}
+                                            style={{ border: isDragging ? '2px dashed #3b82f6' : '2px dashed #cbd5e1', borderRadius: '12px', padding: '20px 16px', textAlign: 'center', background: isDragging ? '#eff6ff' : '#f8fafc', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}
+                                            onClick={() => document.getElementById('manual-file-upload').click()}
                                         >
-                                            <Video size={18} /> Vídeo (Reels)
-                                        </button>
-                                    </div>
-
-                                    {/* Link Source - Highlighted Block */}
-                                    <div style={{ padding: '16px', background: '#e0f2fe', border: '1px solid #bae6fd', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px', width: '100%', boxSizing: 'border-box' }}>
-                                        <label style={{ fontSize: '14px', fontWeight: 700, color: '#0284c7', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Motor de IA (Link)</label>
-                                        <p style={{ margin: 0, fontSize: '13px', color: '#0369a1' }}>Cole um link para a IA extrair todo o contexto e gerar os textos automaticamente.</p>
-                                        <input
-                                            value={manualForm.url_original || ''}
-                                            onChange={e => setManualForm({ ...manualForm, url_original: e.target.value })}
-                                            placeholder="https://g1.globo.com/exemplo..."
-                                            style={{ width: '100%', padding: '14px', borderRadius: '10px', border: '1px solid #7dd3fc', fontSize: '15px', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' }}
-                                            onFocus={e => e.target.style.borderColor = '#0284c7'}
-                                            onBlur={e => e.target.style.borderColor = '#7dd3fc'}
-                                        />
-                                    </div>
-
-                                    {/* Separator */}
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', opacity: 0.6, marginTop: '-4px', marginBottom: '-4px' }}>
-                                        <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
-                                        <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Ou crie manualmente</span>
-                                        <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
-                                    </div>
-
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
-                                        <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Título Principal</label>
-                                        <input
-                                            value={manualForm.titulo}
-                                            onChange={e => setManualForm({ ...manualForm, titulo: e.target.value })}
-                                            placeholder="Prefeito anuncia nova ponte na cidade..."
-                                            style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', appearance: 'none', boxSizing: 'border-box' }}
-                                            onFocus={e => e.target.style.borderColor = '#94a3b8'}
-                                            onBlur={e => e.target.style.borderColor = '#cbd5e1'}
-                                        />
-                                    </div>
-
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
-                                        <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Detalhes Adicionais (Texto Bruto)</label>
-                                        <textarea
-                                            value={manualForm.conteudo}
-                                            onChange={e => setManualForm({ ...manualForm, conteudo: e.target.value })}
-                                            placeholder="Cole o release da ascom ou o corpo do texto aqui..."
-                                            rows={4}
-                                            style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', resize: 'vertical', minHeight: '80px', appearance: 'none', boxSizing: 'border-box' }}
-                                            onFocus={e => e.target.style.borderColor = '#94a3b8'}
-                                            onBlur={e => e.target.style.borderColor = '#cbd5e1'}
-                                        />
-                                    </div>
-
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
-                                        <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Tag de Editoria</label>
-                                        <input
-                                            value={manualForm.context_tag || ''}
-                                            onChange={e => setManualForm({ ...manualForm, context_tag: e.target.value.toUpperCase() })}
-                                            maxLength={20}
-                                            placeholder="Ex: URGENTE"
-                                            style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', appearance: 'none', boxSizing: 'border-box' }}
-                                            onFocus={e => e.target.style.borderColor = '#94a3b8'}
-                                            onBlur={e => e.target.style.borderColor = '#cbd5e1'}
-                                        />
-                                    </div>
-
-                                    {manualForm.content_type === 'feed' && (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
-                                            <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Foto (Fundo do Card)</label>
-                                            <div
-                                                onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
-                                                onDragLeave={() => setIsDragging(false)}
-                                                onDrop={e => {
-                                                    e.preventDefault();
-                                                    setIsDragging(false);
-                                                    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-                                                        setSelectedFile(e.dataTransfer.files[0]);
-                                                        setManualForm({ ...manualForm, imagem_url: '' });
-                                                    }
-                                                }}
-                                                style={{
-                                                    border: isDragging ? '2px dashed #3b82f6' : '2px dashed #cbd5e1',
-                                                    borderRadius: '12px',
-                                                    padding: '20px 16px',
-                                                    textAlign: 'center',
-                                                    background: isDragging ? '#eff6ff' : '#f8fafc',
-                                                    cursor: 'pointer',
-                                                    transition: 'all 0.2s',
-                                                    display: 'flex',
-                                                    flexDirection: 'column',
-                                                    alignItems: 'center',
-                                                    gap: '8px'
-                                                }}
-                                                onClick={() => document.getElementById('manual-file-upload').click()}
-                                            >
-                                                <input
-                                                    id="manual-file-upload"
-                                                    type="file"
-                                                    accept="image/*"
-                                                    style={{ display: 'none' }}
-                                                    onChange={e => {
-                                                        if (e.target.files && e.target.files[0]) {
-                                                            setSelectedFile(e.target.files[0]);
-                                                            setManualForm({ ...manualForm, imagem_url: '' });
-                                                        }
-                                                    }}
-                                                />
-                                                {selectedFile ? (
-                                                    <>
-                                                        <div style={{ background: '#dcfce7', color: '#166534', padding: '8px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                            <CheckCircle2 size={16} /> Arquivo Anexado: {selectedFile.name}
-                                                        </div>
-                                                        <span style={{ fontSize: '12px', color: '#64748b' }}>Clique para alterar</span>
-                                                    </>
-                                                ) : manualForm.imagem_url ? (
-                                                    <>
-                                                        <div style={{ width: 100, height: 60, borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-                                                            <img src={manualForm.imagem_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Preview AI" />
-                                                        </div>
-                                                        <div style={{ background: '#eff6ff', color: '#1e40af', padding: '8px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
-                                                            <CheckCircle2 size={16} /> Imagem Extraída
-                                                        </div>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <div style={{ background: '#e2e8f0', width: '40px', height: '40px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                            <UploadCloud size={20} color="#64748b" />
-                                                        </div>
-                                                        <span style={{ fontSize: '14px', color: '#475569', fontWeight: 500 }}>
-                                                            Clique ou arraste a imagem original aqui
-                                                        </span>
-                                                    </>
-                                                )}
-                                            </div>
-
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '8px 0' }}>
-                                                <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
-                                                <span style={{ fontSize: '11px', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase' }}>OU URL</span>
-                                                <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
-                                            </div>
-
-                                            <input
-                                                value={manualForm.imagem_url || ''}
-                                                onChange={e => {
-                                                    setManualForm({ ...manualForm, imagem_url: e.target.value });
-                                                    if (e.target.value) setSelectedFile(null);
-                                                }}
-                                                placeholder="https://exemplo.com/foto.jpg"
-                                                style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', appearance: 'none', boxSizing: 'border-box' }}
-                                                onFocus={e => e.target.style.borderColor = '#94a3b8'}
-                                                onBlur={e => e.target.style.borderColor = '#cbd5e1'}
-                                            />
+                                            <input id="manual-file-upload" type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { if (e.target.files && e.target.files[0]) { setSelectedFile(e.target.files[0]); setManualForm({ ...manualForm, imagem_url: '' }) } }} />
+                                            {selectedFile ? (
+                                                <div style={{ background: '#dcfce7', color: '#166534', padding: '8px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                    <CheckCircle2 size={16} /> {selectedFile.name}
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <div style={{ background: '#e2e8f0', width: '40px', height: '40px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                        <UploadCloud size={20} color="#64748b" />
+                                                    </div>
+                                                    <span style={{ fontSize: '14px', color: '#475569', fontWeight: 500 }}>Clique ou arraste a imagem aqui</span>
+                                                </>
+                                            )}
                                         </div>
-                                    )}
-
-                                    {/* Action Buttons */}
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #e2e8f0' }}>
-                                        <button type="submit" disabled={isSubmittingManual} style={{ width: '100%', background: '#111827', color: '#fff', border: 'none', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', boxShadow: '0 4px 6px -1px rgba(17, 24, 39, 0.1)', cursor: isSubmittingManual ? 'not-allowed' : 'pointer', transition: 'all 0.2s', opacity: isSubmittingManual ? 0.7 : 1 }}>
-                                            {isSubmittingManual ? 'Carregando Motor...' : <>Gerar Matéria</>}
-                                        </button>
-                                        <button type="button" onClick={() => { setManualModalOpen(false); setSelectedFile(null); }} style={{ background: 'transparent', color: '#64748b', border: 'none', padding: '16px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>
-                                            Cancelar
-                                        </button>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', opacity: 0.6 }}>
+                                            <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
+                                            <span style={{ fontSize: '11px', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase' }}>OU URL</span>
+                                            <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
+                                        </div>
+                                        <input value={manualForm.imagem_url || ''} onChange={e => { setManualForm({ ...manualForm, imagem_url: e.target.value }); if (e.target.value) setSelectedFile(null) }} placeholder="https://exemplo.com/foto.jpg" style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' }} />
                                     </div>
-                                </form>
-                            </div>
+                                )}
+
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #e2e8f0' }}>
+                                    <button type="submit" disabled={isSubmittingManual} style={{ width: '100%', background: '#111827', color: '#fff', border: 'none', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: isSubmittingManual ? 'not-allowed' : 'pointer', opacity: isSubmittingManual ? 0.7 : 1 }}>
+                                        {isSubmittingManual ? 'Gerando...' : 'Gerar Matéria'}
+                                    </button>
+                                    <button type="button" onClick={() => { setManualModalOpen(false); setSelectedFile(null) }} style={{ background: 'transparent', color: '#64748b', border: 'none', padding: '16px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>
+                                        Cancelar
+                                    </button>
+                                </div>
+                            </form>
                         </div>
                     </div>
-                )
-            }
+                </div>
+            )}
         </>
     )
 }
 
 // ──────────────────────────────────────────────────────────
-// Components
+// PendenteCard — Matérias em "selected" aguardando aprovação
 // ──────────────────────────────────────────────────────────
+function PendenteCard({ item, onReject, onStudio, onApproveSelected, isProcessing }) {
+    const [isExpanded, setIsExpanded] = useState(false)
 
+    const isRendering = item.status === 'pending_render' || item.status === 'processing'
+    const isStudio = item.status === 'studio_selected' || item.status === 'studio_ready'
 
-function ReviewCard({ item, onApprove, onReject, onStudio, onSendToStudio, onApproveSelected }) {
-    const rawScore = item.candidate_scores?.score_total
-    const score = rawScore != null ? Math.round(rawScore * 10) : null
+    return (
+        <div className="ap-review-card insta-mock" style={{ maxWidth: '400px', margin: '0 auto', paddingBottom: '16px' }}>
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid #efefef' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(45deg, #f09433 0%,#e6683c 25%,#dc2743 50%,#cc2366 75%,#bc1888 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <img src="/tvgmulti-logo.jpg" style={{ width: 24, height: 24, borderRadius: '50%' }} alt="Avatar" />
+                        </div>
+                    </div>
+                    <div>
+                        <span style={{ fontSize: '13px', fontWeight: 600, color: '#262626' }}>tvgmulti</span>
+                        <div style={{ fontSize: '11px', color: '#8e8e8e', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                            {item.context_tag && <span style={{ color: 'var(--color-primary)', fontWeight: 600 }}>{item.context_tag} •</span>}
+                            <StatusBadge status={item.status} small />
+                            {item.content_type === 'reels' && <span style={{ marginLeft: '4px', padding: '1px 5px', background: '#ede9fe', color: '#6d28d9', borderRadius: '4px', fontSize: '10px', fontWeight: 700, border: '1px solid #ddd6fe', display: 'inline-flex', alignItems: 'center', gap: '3px' }}><Video size={9} />REELS</span>}
+                        </div>
+                    </div>
+                </div>
+                <MoreVertical size={16} color="#262626" />
+            </div>
+
+            {/* Imagem */}
+            <div className="ap-card-img-wrap" style={{ aspectRatio: '4/5', width: '100%', background: '#fafafa', position: 'relative' }}>
+                {(item.render_url || item.imagem_url) ? (
+                    <img className="ap-card-img" src={item.render_url ?? item.imagem_url} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 8 }}>
+                        <ImageIcon size={32} color="#dbdbdb" />
+                        {isRendering && <span style={{ fontSize: 12, color: '#94a3b8' }}>Renderizando...</span>}
+                    </div>
+                )}
+            </div>
+
+            {/* Ações Insta */}
+            <div style={{ padding: '12px 16px 8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: '16px' }}>
+                    <Heart size={24} color="#262626" />
+                    <MessageCircle size={24} color="#262626" />
+                    <Send size={24} color="#262626" />
+                </div>
+                <Bookmark size={24} color="#262626" />
+            </div>
+
+            {/* Caption */}
+            <div className="ap-card-body" style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
+                <p style={{ fontSize: '13px', margin: 0 }}>
+                    <span style={{ fontWeight: 600, color: '#262626', marginRight: '6px' }}>tvgmulti</span>
+                    {item.headline ?? item.titulo}
+                </p>
+
+                {/* Roteiro Studio */}
+                {isStudio && item.roteiro_studio && (
+                    <div style={{ marginTop: '8px', fontSize: '12px', color: '#262626', background: '#f5f5f5', padding: '12px', borderRadius: '4px', borderLeft: '3px solid #1c1c1e' }}>
+                        <div style={{ fontWeight: 600, marginBottom: '4px', display: 'flex', justifyContent: 'space-between' }}>
+                            <span>Roteiro Teleprompter:</span><span>~{item.duracao_estimada}s</span>
+                        </div>
+                        <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.4' }}>{item.roteiro_studio}</div>
+                        {item.broll_sugestao && <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #e0e0e0', color: '#555', fontStyle: 'italic' }}><span style={{ fontWeight: 600, color: '#000' }}>B-Roll:</span> {item.broll_sugestao}</div>}
+                    </div>
+                )}
+
+                {/* Caption */}
+                {item.caption && !isStudio && (
+                    <>
+                        <p style={{ fontSize: '13px', color: '#262626', margin: '4px 0 0 0', display: isExpanded ? 'block' : '-webkit-box', WebkitLineClamp: isExpanded ? 'initial' : 3, WebkitBoxOrient: 'vertical', overflow: isExpanded ? 'visible' : 'hidden' }}>
+                            {item.caption}
+                        </p>
+                        {item.caption.length > 100 && (
+                            <button onClick={() => setIsExpanded(!isExpanded)} style={{ background: 'none', border: 'none', padding: 0, color: '#8e8e8e', fontSize: '12px', fontWeight: 600, cursor: 'pointer', textAlign: 'left', marginTop: '2px' }}>
+                                {isExpanded ? 'Ver menos' : '... mais'}
+                            </button>
+                        )}
+                    </>
+                )}
+            </div>
+
+            {/* Botões de ação — somente para "selected" */}
+            {item.status === 'selected' && (
+                <div className="ap-card-actions-wrap">
+                    <div className="ap-card-btn-row">
+                        <button className="ap-btn-reject" onClick={() => onReject(item)} title="Descartar" style={{ flexShrink: 0 }}>
+                            <X size={16} />
+                        </button>
+                        <button className="ap-card-btn-black" onClick={() => onStudio(item)} disabled={isProcessing}>
+                            <Video size={14} /> Studio
+                        </button>
+                        <button className="ap-card-btn-primary" onClick={() => onApproveSelected(item)} disabled={isProcessing}>
+                            Aprovar p/ IG
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Status rendering / studio (sem ações) */}
+            {isRendering && (
+                <div style={{ margin: '12px 16px 0', padding: '10px', background: '#fef9c3', borderRadius: '8px', fontSize: '12px', color: '#854d0e', fontWeight: 600, textAlign: 'center' }}>
+                    ⏳ Em renderização — aguarde a arte ficar pronta
+                </div>
+            )}
+        </div>
+    )
+}
+
+// ──────────────────────────────────────────────────────────
+// AprovadaCard — Matérias prontas, aguardam publicação manual
+// ──────────────────────────────────────────────────────────
+function AprovadaCard({ item, onPublish, onReject }) {
     const [copied, setCopied] = useState(false)
     const [isExpanded, setIsExpanded] = useState(false)
 
@@ -1002,81 +717,54 @@ function ReviewCard({ item, onApprove, onReject, onStudio, onSendToStudio, onApp
         const url = item.render_url ?? item.imagem_url
         try {
             let response
-            try {
-                response = await fetch(url)
-            } catch (e) {
-                // Fallback (Proxy de CORS): Puxa a imagem engarrafada por um túnel se o Placid barrar
-                response = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`)
-            }
-
+            try { response = await fetch(url) } catch { response = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`) }
             const blob = await response.blob()
             const blobUrl = URL.createObjectURL(blob)
             const a = document.createElement('a')
             a.href = blobUrl
             a.download = `tvg_noticia_${item.id.slice(0, 6)}.png`
-            document.body.appendChild(a)
-            a.click()
-            document.body.removeChild(a)
+            document.body.appendChild(a); a.click(); document.body.removeChild(a)
             URL.revokeObjectURL(blobUrl)
-        } catch (err) {
-            toast.info('Não foi possível baixar a imagem silenciocamente. Abrindo arquivo bruto.')
+        } catch {
+            toast.info('Não foi possível baixar. Abrindo arquivo bruto.')
             window.open(url, '_blank')
         }
     }
 
     return (
         <div className="ap-review-card insta-mock" style={{ maxWidth: '400px', margin: '0 auto', paddingBottom: '16px' }}>
-
-            {/* Header (Score / Confiança / Fake Header Insta) */}
+            {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid #efefef' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(45deg, #f09433 0%,#e6683c 25%,#dc2743 50%,#cc2366 75%,#bc1888 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <img src="/tvgmulti-logo.jpg" style={{ width: 24, height: 24, borderRadius: '50%' }} alt="Avatar" />
                         </div>
                     </div>
                     <div>
                         <span style={{ fontSize: '13px', fontWeight: 600, color: '#262626' }}>tvgmulti</span>
-                        <div style={{ fontSize: '11px', color: '#8e8e8e', marginTop: '2px' }}>
-                            {item.context_tag ? (
-                                <span style={{ color: 'var(--color-primary)', fontWeight: 600 }}>{item.context_tag} • </span>
-                            ) : item.categoria ? (
-                                <span>{item.categoria} • </span>
-                            ) : null}
-                            {item.status !== 'pending_review' && <span>{item.status.replace(/_/g, ' ')} • </span>}
-                            Score: {score ?? '—'}
-                            {item.content_type === 'reels' && (
-                                <span style={{ marginLeft: '6px', padding: '2px 6px', background: '#ede9fe', color: '#6d28d9', borderRadius: '4px', fontSize: '10px', fontWeight: 700, border: '1px solid #ddd6fe', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Video size={10} /> REELS</span>
-                            )}
+                        <div style={{ fontSize: '11px', color: '#8e8e8e', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            {item.context_tag && <span style={{ color: 'var(--color-primary)', fontWeight: 600 }}>{item.context_tag} •</span>}
+                            <span style={{ padding: '1px 6px', borderRadius: '4px', background: '#dcfce7', color: '#166534', fontSize: '10px', fontWeight: 700 }}>PRONTA</span>
+                            {item.content_type === 'reels' && <span style={{ padding: '1px 5px', background: '#ede9fe', color: '#6d28d9', borderRadius: '4px', fontSize: '10px', fontWeight: 700, border: '1px solid #ddd6fe', display: 'inline-flex', alignItems: 'center', gap: '3px' }}><Video size={9} />REELS</span>}
                         </div>
                     </div>
                 </div>
                 <MoreVertical size={16} color="#262626" />
             </div>
 
-            {/* Imagem (1:1 ou 4:5 aspect ratio) */}
+            {/* Imagem */}
             <div className="ap-card-img-wrap" style={{ aspectRatio: '4/5', width: '100%', background: '#fafafa', position: 'relative' }}>
-                {item.render_url || item.imagem_url ? (
-                    <img
-                        className="ap-card-img"
-                        src={item.render_url ?? item.imagem_url}
-                        onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
-                        alt=""
-                        loading="lazy"
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    />
-                ) : null}
-
-                {/* Fallback View (mostrada se não tiver imagem, ou se a imagem falhar no onError) */}
-                <div
-                    className="ap-card-img-placeholder"
-                    style={{ display: (item.render_url || item.imagem_url) ? 'none' : 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', width: '100%', position: 'absolute', top: 0, left: 0, background: '#fafafa' }}
-                >
-                    <ImageIcon size={32} color="#dbdbdb" />
-                </div>
+                {(item.render_url || item.imagem_url) ? (
+                    <img className="ap-card-img" src={item.render_url ?? item.imagem_url} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                        <ImageIcon size={32} color="#dbdbdb" />
+                    </div>
+                )}
             </div>
 
-            {/* Ações Insta (Like, Comment, Share, Save) */}
+            {/* Ações Insta */}
             <div style={{ padding: '12px 16px 8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', gap: '16px' }}>
                     <Heart size={24} color="#262626" />
@@ -1086,155 +774,85 @@ function ReviewCard({ item, onApprove, onReject, onStudio, onSendToStudio, onApp
                 <Bookmark size={24} color="#262626" />
             </div>
 
-            {/* Body (Caption / Roteiro) */}
+            {/* Caption */}
             <div className="ap-card-body" style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
-                <p className="ap-card-headline" style={{ fontSize: '13px', margin: 0 }}>
+                <p style={{ fontSize: '13px', margin: 0 }}>
                     <span style={{ fontWeight: 600, color: '#262626', marginRight: '6px' }}>tvgmulti</span>
                     {item.headline ?? item.titulo}
                 </p>
-                {(item.status === 'studio_selected' || item.status === 'studio_ready') ? (
-                    item.roteiro_studio && (
-                        <div style={{ marginTop: '8px', fontSize: '12px', color: '#262626', background: '#f5f5f5', padding: '12px', borderRadius: '4px', borderLeft: '3px solid #1c1c1e' }}>
-                            <div style={{ fontWeight: 600, marginBottom: '4px', display: 'flex', justifyContent: 'space-between' }}>
-                                <span>Roteiro Teleprompter:</span>
-                                <span>~{item.duracao_estimada}s</span>
-                            </div>
-                            <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.4' }}>{item.roteiro_studio}</div>
-                            {item.broll_sugestao && (
-                                <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #e0e0e0', color: '#555', fontStyle: 'italic' }}>
-                                    <span style={{ fontWeight: 600, color: '#000' }}>B-Roll/Edição:</span> {item.broll_sugestao}
-                                </div>
-                            )}
-                        </div>
-                    )
-                ) : item.caption && (
+                {item.caption && (
                     <>
-                        <p className="ap-card-caption" style={{
-                            fontSize: '13px',
-                            color: '#262626',
-                            margin: '4px 0 0 0',
-                            display: isExpanded ? 'block' : '-webkit-box',
-                            WebkitLineClamp: isExpanded ? 'initial' : 3,
-                            WebkitBoxOrient: 'vertical',
-                            overflow: isExpanded ? 'visible' : 'hidden'
-                        }}>
+                        <p style={{ fontSize: '13px', color: '#262626', margin: '4px 0 0 0', display: isExpanded ? 'block' : '-webkit-box', WebkitLineClamp: isExpanded ? 'initial' : 3, WebkitBoxOrient: 'vertical', overflow: isExpanded ? 'visible' : 'hidden' }}>
                             {item.caption}
                         </p>
                         {item.caption.length > 100 && (
-                            <button
-                                onClick={() => setIsExpanded(!isExpanded)}
-                                style={{
-                                    background: 'none',
-                                    border: 'none',
-                                    padding: 0,
-                                    color: '#8e8e8e',
-                                    fontSize: '12px',
-                                    fontWeight: 600,
-                                    cursor: 'pointer',
-                                    textAlign: 'left',
-                                    marginTop: '2px'
-                                }}
-                            >
+                            <button onClick={() => setIsExpanded(!isExpanded)} style={{ background: 'none', border: 'none', padding: 0, color: '#8e8e8e', fontSize: '12px', fontWeight: 600, cursor: 'pointer', textAlign: 'left', marginTop: '2px' }}>
                                 {isExpanded ? 'Ver menos' : '... mais'}
                             </button>
                         )}
                     </>
                 )}
-
-                {item.horario_agendado && (
-                    <div style={{ fontSize: '11px', color: '#8e8e8e', marginTop: '6px', textTransform: 'uppercase' }}>
-                        Agendado para: {new Date(item.horario_agendado).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
-                    </div>
-                )}
             </div>
 
-            {/* Ações de Triagem na Fila SELECIONADOS */}
-            {item.status === 'selected' && (
-                <div className="ap-card-actions-wrap">
-                    <div className="ap-card-btn-row">
-                        <button className="ap-btn-reject" onClick={() => onReject(item)} title="Descartar" style={{ flexShrink: 0 }}>
-                            <X size={16} />
-                        </button>
-                        <button className="ap-card-btn-black" onClick={() => onStudio(item)}>
-                            <Video size={14} /> Studio
-                        </button>
-                        <button className="ap-card-btn-primary" onClick={() => onApproveSelected(item)}>
-                            Aprovar p/ IG
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {/* Ações para matérias prontas ou em revisão */}
-            {/* Ações de Download/Cópia (Comum para Pronto ou Em Revisão) */}
-            {(item.status === 'ready_to_publish' || item.status === 'pending_review' || item.status === 'approved' || item.status === 'queued_for_posting') && (
-                <div className="ap-card-actions-wrap" style={{ paddingBottom: item.status === 'pending_review' ? '0' : '16px' }}>
-                    <div className="ap-card-btn-row">
-                        <button className="ap-card-btn-secondary" onClick={handleDownload} title="Baixar Arte">
-                            <Download size={14} /> Baixar Arte
-                        </button>
-                        <button
-                            className={`ap-card-btn-copy${copied ? ' copied' : ''}`}
-                            onClick={handleCopy}
-                            title="Copiar Legenda"
-                        >
-                            {copied ? <Check size={14} /> : <Copy size={14} />}
-                            {copied ? 'Copiado!' : 'Copiar Legenda'}
-                        </button>
-                    </div>
-                </div>
-            )}
-
-
-            {/* Ações de Aprovação (Rejeitar / Editar / Aprovar) */}
-            {/* Ações de Aprovação (Exclusivo Revisão) */}
-            {item.status === 'pending_review' && (
-                <div className="ap-card-actions-wrap">
-
-                    <div className="ap-card-btn-row">
-                        <button className="ap-btn-reject" onClick={() => onReject(item)} title="Descartar" style={{ flexShrink: 0 }}>
-                            <X size={16} />
-                        </button>
-                        <button className="ap-card-btn-black" onClick={() => onStudio(item)}>
-                            <Video size={14} /> Studio
-                        </button>
-                        <button className="ap-card-btn-primary" onClick={() => onApprove(item)}>
-                            Aprovar <Check size={16} />
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {/* Ações da Gravação Mode */}
-            {(item.status === 'studio_selected' || item.status === 'studio_ready') && (
-                <div className="ap-card-actions-wrap">
-                    {(item.studio_media_image_url || item.studio_media_video_url) && (
-                        <div className="ap-card-btn-row" style={{ marginBottom: '4px' }}>
-                            {item.studio_media_image_url && (
-                                <button className="ap-card-btn-secondary" onClick={() => window.open(item.studio_media_image_url, '_blank')}>
-                                    <Download size={14} /> Imagem
-                                </button>
-                            )}
-                            {item.studio_media_video_url && (
-                                <button className="ap-card-btn-secondary" onClick={() => window.open(item.studio_media_video_url, '_blank')}>
-                                    <Download size={14} /> Vídeo
-                                </button>
-                            )}
-                        </div>
-                    )}
-
-                    <button
-                        className={`ap-card-btn-full ${item.enviado_para_studio ? 'sent' : 'unsent'}`}
-                        onClick={() => onSendToStudio(item)}
-                        disabled={item.enviado_para_studio}
-                    >
-                        {item.enviado_para_studio
-                            ? <><CheckCircle2 size={15} /> Enviado para Gravação</>
-                            : <><Video size={15} /> Enviar para Studio</>}
+            {/* Botões: Baixar Arte + Copiar Legenda */}
+            <div className="ap-card-actions-wrap">
+                <div className="ap-card-btn-row">
+                    <button className="ap-card-btn-secondary" onClick={handleDownload} title="Baixar Arte">
+                        <Download size={14} /> Baixar Arte
+                    </button>
+                    <button className={`ap-card-btn-copy${copied ? ' copied' : ''}`} onClick={handleCopy} title="Copiar Legenda">
+                        {copied ? <Check size={14} /> : <Copy size={14} />}
+                        {copied ? 'Copiado!' : 'Copiar Legenda'}
                     </button>
                 </div>
-            )}
+            </div>
+
+            {/* Botão Publicar */}
+            <div className="ap-card-actions-wrap" style={{ paddingTop: 0 }}>
+                <button
+                    onClick={() => onPublish(item)}
+                    style={{ width: '100%', margin: '0 16px', boxSizing: 'border-box', padding: '12px', borderRadius: '10px', border: 'none', background: '#111827', color: '#fff', fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', transition: 'opacity 0.2s' }}
+                >
+                    <Check size={16} /> Publicar
+                </button>
+            </div>
         </div>
+    )
+}
+
+// ──────────────────────────────────────────────────────────
+// Helpers
+// ──────────────────────────────────────────────────────────
+function StatusBadge({ status, small }) {
+    const map = {
+        raw: { label: 'Ingerida', bg: '#f1f5f9', color: '#475569' },
+        ready_for_scoring: { label: 'Aguardando Score', bg: '#fef9c3', color: '#854d0e' },
+        scored: { label: 'Analisada', bg: '#dbeafe', color: '#1e40af' },
+        selected: { label: 'Selecionada', bg: '#ede9fe', color: '#6d28d9' },
+        pending_render: { label: 'Renderizando', bg: '#fef9c3', color: '#854d0e' },
+        processing: { label: 'Renderizando', bg: '#fef9c3', color: '#854d0e' },
+        pending_review: { label: 'Pronta', bg: '#dcfce7', color: '#166534' },
+        ready_to_publish: { label: 'Pronta', bg: '#dcfce7', color: '#166534' },
+        approved: { label: 'Aprovada', bg: '#dcfce7', color: '#166534' },
+        queued_for_posting: { label: 'Na Fila', bg: '#e0f2fe', color: '#0369a1' },
+        posted: { label: 'Publicada', bg: '#dcfce7', color: '#166534' },
+        failed: { label: 'Falhou', bg: '#fee2e2', color: '#991b1b' },
+        rejected: { label: 'Descartada', bg: '#f1f5f9', color: '#6b7280' },
+    }
+    const { label, bg, color } = map[status] || { label: status, bg: '#f1f5f9', color: '#475569' }
+    return (
+        <span style={{ padding: small ? '1px 6px' : '3px 10px', borderRadius: '20px', fontSize: small ? '10px' : '11px', fontWeight: 700, background: bg, color, letterSpacing: '0.03em', whiteSpace: 'nowrap' }}>
+            {label}
+        </span>
+    )
+}
+
+function FormatBadge({ type }) {
+    const isReels = type === 'reels'
+    return (
+        <span style={{ padding: '3px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: 600, background: isReels ? '#ede9fe' : '#f1f5f9', color: isReels ? '#6d28d9' : '#475569', border: isReels ? '1px solid #ddd6fe' : '1px solid #e2e8f0', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+            {isReels ? <><Video size={10} />Reels</> : <><ImageIcon size={10} />Feed</>}
+        </span>
     )
 }
 
@@ -1243,7 +861,7 @@ function EmptyStatePremium() {
         <div className="ap-empty">
             <div className="ap-empty-icon"><Info size={20} /></div>
             <p className="ap-empty-title">Nenhum Registro</p>
-            <p className="ap-empty-sub">A fila de processos se encontra vazia no momento.</p>
+            <p className="ap-empty-sub">A fila se encontra vazia no momento.</p>
         </div>
     )
 }

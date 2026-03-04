@@ -64,7 +64,8 @@ Deno.serve(async (req: Request) => {
 
         if (rpcError || !templateData) {
             console.error("[ap-employee-generator] Falha ao recuperar/avançar template:", rpcError);
-            return new Response(JSON.stringify({ error: "Fila de Templates vazia ou erro: " + (rpcError?.message || 'Nenhum template ativo do tipo solicitado') }), { status: 400, headers: corsHeaders });
+            const userMsg = "Nenhum template cadastrado para este tipo de conteúdo (Feed/Reels). Por favor, configure os templates antes de criar matérias manuais.";
+            return new Response(JSON.stringify({ error: userMsg }), { status: 400, headers: corsHeaders });
         }
 
         console.log(`[ap-employee-generator] Template Reservado: ${templateData.nome} (Ordem: ${templateData.ordem}, Tipo: ${content_type})`);

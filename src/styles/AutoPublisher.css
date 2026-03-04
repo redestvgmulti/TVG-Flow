@@ -115,7 +115,7 @@
 /* ── Pipeline Stages ──────────────────────────────────────── */
 .ap-pipeline {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 0;
   margin-bottom: 2.5rem;
   background: #ffffff;
