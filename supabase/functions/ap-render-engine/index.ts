@@ -148,17 +148,23 @@ Deno.serve(async (req: Request) => {
             if (!resolvedTag) {
                 throw new Error("Render abortado: tag (context_tag) ausente no banco.");
             }
-            if (!bgImage) {
+            // Imagem obrigatória apenas para feed; Reels pode usar o template sem background
+            if (!bgImage && item.content_type !== 'reels') {
                 throw new Error("Render abortado: imagem_url ausente no banco.");
+            }
+
+            // Build layers object — only include news-image when an image is available
+            const layers: Record<string, any> = {
+                "headline_news": { text: item.headline },
+                "tag_news": { text: resolvedTag },
+            };
+            if (bgImage) {
+                layers["news-image"] = { image: bgImage };
             }
 
             const renderPayload = {
                 template_uuid: activeTemplateId,
-                layers: {
-                    "headline_news": { text: item.headline },
-                    "tag_news": { text: resolvedTag },
-                    "news-image": { image: bgImage }
-                },
+                layers,
             };
 
             // Call Placid REST API
