@@ -268,29 +268,49 @@ Deno.serve(async (req: Request) => {
 
         console.log(`[AUDIT] [ap-employee-generator] Merge Final: Tag=${resolvedTag}, Headline=${resolvedHeadline}`);
 
-        // 6. Salvamento Final em Status 'selected' (MUITO IMPORTANTE!)
+        // 6. Salvamento Final — Employee items vão direto para 'pending_render' (sem aprovação admin)
         const { error: finalUpdErr } = await supabase.schema("ap").from("candidate_news")
             .update({
-                status: "selected",
+                status: "pending_render",
                 headline: resolvedHeadline,
                 caption: finalCaption,
                 context_tag: resolvedTag,
                 roteiro_json: parsedData.roteiro || null,
-                processing_started_at: null // Libera lock
+                processing_started_at: null // Libera lock para render engine
             })
             .eq("id", newsId);
 
         if (finalUpdErr) throw finalUpdErr;
 
-        console.log(`[AUDIT] [ap-employee-generator] Sucesso! Item ID: ${newsId} agora está 'selected'.`);
+        console.log(`[AUDIT] [ap-employee-generator] Item ${newsId} -> pending_render. Disparando render imediato...`);
+
+        // 7. Disparar ap-render-engine imediatamente (fire-and-forget, não bloqueia resposta)
+        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+        const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+        const renderEngineUrl = `${supabaseUrl}/functions/v1/ap-render-engine`;
+
+        // Fire-and-forget: não aguardamos para não estourar timeout do employee-generator
+        fetch(renderEngineUrl, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${serviceKey}`
+            },
+            body: JSON.stringify({ action: "render_one", newsId })
+        }).then(res => {
+            console.log(`[AUDIT] [ap-employee-generator] Render engine invocado para ${newsId}: ${res.status}`);
+        }).catch(err => {
+            console.error(`[AUDIT] [ap-employee-generator] Falha ao invocar render engine para ${newsId}:`, err.message);
+        });
 
         return new Response(JSON.stringify({
             success: true,
             news_id: newsId,
-            status: "selected",
+            status: "pending_render",
             headline: resolvedHeadline,
             caption: finalCaption,
-            context_tag: resolvedTag
+            context_tag: resolvedTag,
+            render_pending: true // Signal to frontend to start polling
         }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     } catch (e: any) {

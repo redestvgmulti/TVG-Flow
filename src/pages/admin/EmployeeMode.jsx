@@ -26,6 +26,8 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
 
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [successData, setSuccessData] = useState(null);
+    const [renderUrl, setRenderUrl] = useState(null); // Polled render result
+    const [isPollingRender, setIsPollingRender] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
     const [copied, setCopied] = useState(false);
     // Publication tracking per generated article
@@ -48,6 +50,39 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
             });
         }
     }, [isOpen, professionalId, empresaId]);
+
+    // Poll for render_url after employee submits — render runs async in background
+    useEffect(() => {
+        if (!isPollingRender || !successData?.news_id) return;
+
+        let attempts = 0;
+        const MAX_ATTEMPTS = 20; // ~60 seconds
+
+        const interval = setInterval(async () => {
+            attempts++;
+            try {
+                const { data } = await supabase
+                    .schema('ap')
+                    .from('candidate_news')
+                    .select('render_url, status')
+                    .eq('id', successData.news_id)
+                    .single();
+
+                if (data?.render_url) {
+                    setRenderUrl(data.render_url);
+                    setIsPollingRender(false);
+                    clearInterval(interval);
+                } else if (attempts >= MAX_ATTEMPTS || data?.status === 'failed') {
+                    setIsPollingRender(false);
+                    clearInterval(interval);
+                }
+            } catch (e) {
+                console.error('[EmployeeMode] Polling error:', e);
+            }
+        }, 3000);
+
+        return () => clearInterval(interval);
+    }, [isPollingRender, successData?.news_id]);
 
     // Tab state: 'create' | 'history'
     const [activeTab, setActiveTab] = useState('create');
@@ -203,9 +238,15 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
             if (parsedData?.error) throw new Error(parsedData.error);
 
             setSuccessData(parsedData);
+            setRenderUrl(null);
             setActionBaixou(false);
             setActionCopiou(false);
             setIsPublished(false);
+
+            // If render is pending (employee flow), start polling
+            if (parsedData?.render_pending && parsedData?.news_id) {
+                setIsPollingRender(true);
+            }
         } catch (err) {
             setErrorMsg(err.message || 'Erro ao gerar matéria. Verifique os templates ativos.');
         } finally {
@@ -267,7 +308,8 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
     };
 
     const handleDownload = async () => {
-        await handleDownloadUrl(successData?.render_url, successData?.content_type);
+        const url = renderUrl || successData?.render_url;
+        await handleDownloadUrl(url, successData?.content_type);
         const newBaixou = true;
         setActionBaixou(newBaixou);
         if (successData?.news_id) {
@@ -371,14 +413,28 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                     </div>
                                 </div>
 
-                                {/* Render Placeholder — art is generated after admin approval */}
-                                <div style={{ width: '100%', borderRadius: '16px', overflow: 'hidden', border: '1px dashed #e2e8f0', background: '#f8fafc', padding: '28px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', boxSizing: 'border-box' }}>
-                                    <div style={{ width: 48, height: 48, background: '#eff6ff', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="m21 15-5-5L5 21" /><circle cx="8.5" cy="8.5" r="1.5" /></svg>
+                                {/* Render Zone — shows spinner while polling, card when ready */}
+                                {renderUrl ? (
+                                    <div style={{ width: '100%', borderRadius: '16px', overflow: 'hidden', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', animation: 'fadeIn 0.5s ease-out' }}>
+                                        <img src={renderUrl} alt="Arte Final" style={{ width: '100%', display: 'block', objectFit: 'cover' }} />
                                     </div>
-                                    <p style={{ margin: 0, fontSize: '14px', color: '#475569', fontWeight: 600, textAlign: 'center' }}>Arte será gerada após aprovação do administrador.</p>
-                                    <p style={{ margin: 0, fontSize: '12px', color: '#94a3b8', textAlign: 'center' }}>O card visual aparecerá no painel de Aprovadas.</p>
-                                </div>
+                                ) : isPollingRender ? (
+                                    <div style={{ width: '100%', borderRadius: '16px', border: '1px dashed #bae6fd', background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)', padding: '32px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px', boxSizing: 'border-box' }}>
+                                        <div style={{ width: 48, height: 48, background: '#3b82f6', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'spin 1.5s linear infinite' }}>
+                                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" /></svg>
+                                        </div>
+                                        <p style={{ margin: 0, fontSize: '14px', color: '#0284c7', fontWeight: 700, textAlign: 'center' }}>Gerando arte...</p>
+                                        <p style={{ margin: 0, fontSize: '12px', color: '#38bdf8', textAlign: 'center' }}>O Placid está renderizando seu card. Aguarde alguns segundos.</p>
+                                    </div>
+                                ) : (
+                                    <div style={{ width: '100%', borderRadius: '16px', border: '1px dashed #e2e8f0', background: '#f8fafc', padding: '28px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', boxSizing: 'border-box' }}>
+                                        <div style={{ width: 48, height: 48, background: '#fee2e2', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+                                        </div>
+                                        <p style={{ margin: 0, fontSize: '14px', color: '#475569', fontWeight: 600, textAlign: 'center' }}>Arte não disponível.</p>
+                                        <p style={{ margin: 0, fontSize: '12px', color: '#94a3b8', textAlign: 'center' }}>O render pode ter falhado. Tente novamente ou contate o administrador.</p>
+                                    </div>
+                                )}
 
                                 {/* Content Results */}
                                 {successData.content_type === 'reels' && successData.roteiro && (
@@ -412,8 +468,8 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
 
                                 {/* Action Buttons */}
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '10px' }}>
-                                    <button onClick={handleDownload} style={{ width: '100%', background: actionBaixou ? '#16a34a' : '#111827', color: '#fff', border: 'none', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', boxShadow: '0 4px 6px -1px rgba(17, 24, 39, 0.1)', cursor: 'pointer', transition: 'all 0.2s' }}>
-                                        {actionBaixou ? <CheckCircle2 size={18} /> : <Download size={18} />} {actionBaixou ? 'Frame/Resumo Baixado!' : 'Baixar Imagem/Moldura'}
+                                    <button onClick={handleDownload} disabled={isPollingRender && !renderUrl} style={{ width: '100%', background: actionBaixou ? '#16a34a' : (isPollingRender && !renderUrl) ? '#94a3b8' : '#111827', color: '#fff', border: 'none', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', boxShadow: '0 4px 6px -1px rgba(17, 24, 39, 0.1)', cursor: (isPollingRender && !renderUrl) ? 'not-allowed' : 'pointer', transition: 'all 0.2s' }}>
+                                        {actionBaixou ? <CheckCircle2 size={18} /> : <Download size={18} />} {actionBaixou ? 'Frame/Resumo Baixado!' : (isPollingRender && !renderUrl) ? 'Aguardando arte...' : 'Baixar Imagem/Moldura'}
                                     </button>
                                     <button onClick={handleCopy} style={{ width: '100%', background: '#fff', color: actionCopiou ? '#16a34a' : '#111827', border: actionCopiou ? '2px solid #16a34a' : '1px solid #e2e8f0', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: 'pointer', transition: 'all 0.2s' }}>
                                         {actionCopiou ? <><CheckCircle2 size={18} color="#16a34a" /> Copiado!</> : <><Copy size={18} /> Copiar {successData.content_type === 'reels' ? 'Roteiro e Legenda' : 'Legenda'}</>}
