@@ -324,8 +324,8 @@ export default function AutoPublisher() {
             // Manual Mode Requirements
             if (!formData.titulo) newErrors.titulo = 'Título obrigatório em modo manual.'
             if (!formData.conteudo) newErrors.conteudo = 'Conteúdo obrigatório em modo manual.'
-            if (!formData.image_url && !selectedFile) {
-                newErrors.image_url = 'Imagem obrigatória em modo manual.'
+            if (formData.content_type === 'feed' && !formData.image_url && !selectedFile) {
+                newErrors.image_url = 'Imagem obrigatória para posts de feed.'
             }
         } else {
             // Link Mode Requirements
