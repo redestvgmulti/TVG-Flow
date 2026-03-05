@@ -959,12 +959,14 @@ function PendenteCard({ item, onReject, onStudio, onApproveSelected, onEdit, isP
 
             {/* Imagem */}
             <div className="ap-card-img-wrap" style={{ aspectRatio: '4/5', width: '100%', background: '#fafafa', position: 'relative' }}>
-                {(item.render_url || item.imagem_storage || item.imagem_url) ? (
+                {(item.render_url || item.imagem_storage || item.imagem_url || item.studio_media_image_url) ? (
                     <img
                         className="ap-card-img"
                         src={
                             item.render_url ??
-                            (item.imagem_storage ? supabase.storage.from('ap-images').getPublicUrl(item.imagem_storage).data.publicUrl : item.imagem_url)
+                            (item.imagem_storage ? supabase.storage.from('ap-images').getPublicUrl(item.imagem_storage).data.publicUrl : null) ??
+                            item.imagem_url ??
+                            item.studio_media_image_url
                         }
                         alt=""
                         loading="lazy"
@@ -1117,8 +1119,8 @@ function AprovadaCard({ item, onPublish, onReject, onEdit, isProcessing }) {
 
             {/* Imagem */}
             <div className="ap-card-img-wrap" style={{ aspectRatio: '4/5', width: '100%', background: '#fafafa', position: 'relative' }}>
-                {(item.render_url || item.imagem_storage || item.imagem_url) ? (
-                    <img className="ap-card-img" src={item.render_url ?? (item.imagem_storage ? supabase.storage.from('ap-images').getPublicUrl(item.imagem_storage).data.publicUrl : item.imagem_url)} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                {(item.render_url || item.imagem_storage || item.imagem_url || item.studio_media_image_url) ? (
+                    <img className="ap-card-img" src={item.render_url ?? (item.imagem_storage ? supabase.storage.from('ap-images').getPublicUrl(item.imagem_storage).data.publicUrl : null) ?? item.imagem_url ?? item.studio_media_image_url} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 ) : (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 8 }}>
                         <ImageIcon size={32} color="#dbdbdb" />

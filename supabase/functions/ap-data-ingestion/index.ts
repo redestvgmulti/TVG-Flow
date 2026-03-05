@@ -7,6 +7,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import * as cheerio from "https://esm.sh/cheerio@1.0.0-rc.12";
 
 const BATCH_LIMIT = 50;
 const MAX_AGE_HOURS = 24;
@@ -90,15 +91,45 @@ Deno.serve(async (_req: Request) => {
 
         try {
           const ab = new AbortController();
-          const timer = setTimeout(() => ab.abort(), 2000);
-          const r = await fetch(item.link, { signal: ab.signal, headers: { "User-Agent": "FlowOS/1.0" } }).catch(() => null);
+          const timer = setTimeout(() => ab.abort(), 8000);
+          const r = await fetch(item.link, {
+            signal: ab.signal,
+            headers: {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/114",
+              "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+              "Referer": "https://google.com"
+            }
+          }).catch(() => null);
           clearTimeout(timer);
+
           if (r?.ok) {
-            const sample = (await r.text()).slice(0, 50000);
-            const ogImage = sample.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i)?.[1];
-            const ogVideo = sample.match(/<meta[^>]*property=["']og:video(:url|:secure_url)?["'][^>]*content=["']([^"']+)["']/i)?.[2];
-            if (ogImage && !ogVideo) studio_media_image_url = ogImage;
-            if (ogVideo) studio_media_video_url = ogVideo;
+            const html = await r.text();
+            const $ = cheerio.load(html);
+
+            const ogImage = $('meta[property="og:image"]').attr('content') ||
+              $('meta[name="twitter:image"]').attr('content') ||
+              $('article img').first().attr('src');
+
+            const ogVideo = $('meta[property="og:video"]').attr('content') ||
+              $('meta[property="og:video:url"]').attr('content') ||
+              $('meta[property="og:video:secure_url"]').attr('content');
+
+            if (ogImage) {
+              let imgUrl = ogImage;
+              if (imgUrl.startsWith('/')) {
+                const urlObj = new URL(item.link);
+                imgUrl = `${urlObj.protocol}//${urlObj.host}${imgUrl}`;
+              }
+              if (!ogVideo) studio_media_image_url = imgUrl;
+            }
+            if (ogVideo) {
+              let vidUrl = ogVideo;
+              if (vidUrl.startsWith('/')) {
+                const urlObj = new URL(item.link);
+                vidUrl = `${urlObj.protocol}//${urlObj.host}${vidUrl}`;
+              }
+              studio_media_video_url = vidUrl;
+            }
           }
         } catch (_e) { /* silently ignore */ }
 
@@ -118,7 +149,7 @@ Deno.serve(async (_req: Request) => {
           studio_media_image_url: item.studio_media_image_url,
           studio_media_video_url: item.studio_media_video_url,
           published_at: item.pubDate ? new Date(item.pubDate).toISOString() : null,
-          status: "ready_for_scoring",
+          status: "raw",
           source: "rss"
         });
 

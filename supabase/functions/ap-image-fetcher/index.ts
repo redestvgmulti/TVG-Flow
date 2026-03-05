@@ -183,28 +183,28 @@ Deno.serve(async (_req: Request) => {
             // 3. Strategy Result
             imageExternal = (storagePath === null && targetImgUrl !== null);
 
-            // 4. Status Advancement Rule: Only advance if we have at least one valid source
-            if (storagePath || targetImgUrl) {
-                await supabase
-                    .schema("ap").from("candidate_news")
-                    .update({
-                        imagem_storage: storagePath,
-                        imagem_url: targetImgUrl, // Ensure scraped URLs are saved
-                        image_external: imageExternal,
-                        status: "ready_for_scoring",
-                        processing_started_at: null
-                    })
-                    .eq("id", item.id)
-                    .eq("status", "raw");
-                processed.push(item.id);
-            } else {
-                console.error(`[ap-image-fetcher] item ${item.id} aborted: No image source found.`);
-                await supabase.schema("ap").from("candidate_news").update({ processing_started_at: null }).eq("id", item.id);
+            // 4. Status Advancement Rule: Always advance to ready_for_scoring to prevent getting stuck
+            await supabase
+                .schema("ap").from("candidate_news")
+                .update({
+                    imagem_storage: storagePath,
+                    imagem_url: targetImgUrl, // Ensure scraped URLs are saved
+                    image_external: imageExternal,
+                    status: "ready_for_scoring",
+                    processing_started_at: null
+                })
+                .eq("id", item.id)
+                .eq("status", "raw");
+
+            processed.push(item.id);
+
+            if (!storagePath && !targetImgUrl) {
+                console.error(`[ap-image-fetcher] item ${item.id} advanced without image source.`);
             }
 
         } catch (err) {
             console.error(`[ap-image-fetcher] item ${item.id} error:`, err);
-            await supabase.schema("ap").from("candidate_news").update({ processing_started_at: null }).eq("id", item.id);
+            await supabase.schema("ap").from("candidate_news").update({ processing_started_at: null, status: "ready_for_scoring" }).eq("id", item.id);
         }
     }
 
