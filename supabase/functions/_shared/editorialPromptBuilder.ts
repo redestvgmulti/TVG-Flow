@@ -60,9 +60,8 @@ Use EXATAMENTE este texto como headline no JSON de saída. NÃO a reformule, NÃ
         hybridLockSection += `\n⚠️ A tag editorial desta matéria JÁ FOI DEFINIDA pelo editor humano como: "${safeUserTag}".
 Use EXATAMENTE esta tag no campo context_tag do JSON de saída. NÃO a altere.\n`;
     }
-    if (userText && !conteudo) {
-        hybridLockSection += `\n📝 MODO TEXTO MANUAL: O conteúdo abaixo foi escrito diretamente pelo editor humano.
-Sua tarefa é revisar, expandir se necessário, e criar a caption com hashtags. NÃO invente fatos.\n`;
+    if (userText) {
+        hybridLockSection += `\n📝 MODO TEXTO MANUAL: O conteúdo abaixo foi escrito diretamente pelo editor humano.\nSua tarefa é revisar, expandir com informações contextuais quando necessário, melhorar a legibilidade e gerar uma caption completa com hashtags relevantes. NUNCA invente fatos não presentes no texto original.\n`;
     }
 
     // 3. RULES (CONSTRAINTS - Limit rules processing to 50)
@@ -213,7 +212,26 @@ ${userText ? '- Expanda o texto manual fornecido, adicione contexto, hashtags e 
     if (safeUserHeadline) jsonFields.push(`- "headline": "${safeUserHeadline}" (use EXATAMENTE este valor)`);
     if (safeUserTag) jsonFields.push(`- "context_tag": "${safeUserTag}" (use EXATAMENTE este valor)`);
 
-    const formatSection = `\nINSTRUÇÕES DE OUTPUT OBRIGATÓRIAS:${sourceInstruction}\nAo final, responda estritamente em um JSON puro (sem marcadores \`\`\`json) contendo os seguintes campos:\n${jsonFields.join('\n')}\n\n${strictFormattingNorms}\n`;
+    const formatSection = `\nINSTRUÇÕES DE OUTPUT OBRIGATÓRIAS (CRITICAL):
+${sourceInstruction}
+Return ONLY valid JSON. Do not include explanations, markdown blocks, or conversational text. 
+The output MUST be a single, valid JSON object following this schema exactly:
+
+{
+  "headline": "...",
+  "${captionLabel}": "...",
+  "roteiro": ["...", "...", "..."],
+  "visual_energy_level": "low/medium/high",
+  "has_face": true/false,
+  "context_tag": "...",
+  "categoria_sugerida": "..."
+}
+
+JSON Fields Reference:
+${jsonFields.join('\n')}
+
+${strictFormattingNorms}
+`;
 
     // Assemble full prompt
     return `${systemPrompt}${hybridLockSection}\n${constraintsSection}\n${styleSection}\n${ragSection}\n${newsSection}\n${formatSection}`;
@@ -267,12 +285,22 @@ REGRAS OBRIGATÓRIAS (P0 - INEGOCIÁVEIS):
 
     const inputSection = `\nMATÉRIA ORIGINAL:\nTítulo: ${safeTitulo}\nCategoria: ${safeCategoria ?? "geral"}\nConteúdo:\n${safeConteudo ?? "Apenas título disponível."}\n`;
 
-    const formatSection = `\nINSTRUÇÕES DE SAÍDA:
-Você DEVE OBRIGATORIAMENTE retornar um JSON válido e estruturado, sem nenhum markdown envolvendo-o (sem \`\`\`json). O JSON deve ter as seguintes chaves exatas:
+    const formatSection = `\nINSTRUÇÕES DE SAÍDA OBRIGATÓRIAS (CRITICAL):
+Return ONLY valid JSON. Do not include explanations, markdown blocks, or conversational text.
+The output MUST be a single, valid JSON object following this schema exactly:
+
+{
+  "titulo_studio": "...",
+  "duracao_estimada_segundos": 60,
+  "roteiro_teleprompter": "...",
+  "broll_sugestao": "..."
+}
+
+JSON Fields Reference:
 - "titulo_studio": (string) Título interno para o estúdio identificar o script
 - "duracao_estimada_segundos": (number) Tempo estimado de leitura falada profissionalmente em segundos
 - "roteiro_teleprompter": (string) O texto final adaptado e fluído para leitura no teleprompter. Pode conter formatação de parágrafos normais (\\n).
-- "broll_sugestao": (string) Ideias curtas de imagens ou vídeos de cobertura que o editor de vídeo deveria colocar na tela enquanto o âncora lê (ex: "imagens de apoio do trânsito na rodovia XYZ", ou "foto do político Y discursando").
+- "broll_sugestao": (string) Ideias curtas de imagens ou vídeos de cobertura.
 `;
 
     return `${systemPrompt}\n${mandatoryRules}${inputSection}${formatSection}`;

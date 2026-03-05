@@ -53,13 +53,14 @@ Deno.serve(async (_req: Request) => {
         try {
             let storagePath = null;
             let targetImgUrl = item.imagem_url;
+            let imageExternal = false;
 
-            // Fallback: If no image_url provided by RSS, try fetching it from the original URL's OpenGraph tags
+            // 1. Fallback: If no image_url provided, try scraping OG Image
             if (!targetImgUrl && item.url_original) {
                 try {
                     const pageRes = await fetch(item.url_original, {
                         headers: {
-                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
+                            "User-Agent": "Mozilla/5.0",
                             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
                         }
                     });
@@ -77,64 +78,74 @@ Deno.serve(async (_req: Request) => {
                 }
             }
 
+            // 2. Internalization Attempt
             if (targetImgUrl) {
                 let imgRes: Response | null = null;
-                const userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36";
                 const baseHeaders: Record<string, string> = {
-                    "User-Agent": userAgent,
-                    "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+                    "User-Agent": "Mozilla/5.0",
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
                     "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
-                    "Sec-Fetch-Dest": "image",
-                    "Sec-Fetch-Mode": "no-cors",
-                    "Sec-Fetch-Site": "cross-site"
+                    "Referer": "https://g1.globo.com"
                 };
 
-                // Retry strategy
-                for (let attempt = 0; attempt < 3; attempt++) {
-                    try {
-                        const headers = { ...baseHeaders };
-                        if (attempt === 1) headers["Referer"] = new URL(targetImgUrl).origin + "/";
-                        if (attempt === 2) {
-                            headers["Cache-Control"] = "no-cache";
-                            headers["Pragma"] = "no-cache";
-                        }
+                const urlsToTry = [targetImgUrl];
 
-                        imgRes = await fetch(targetImgUrl, { headers });
-                        if (imgRes.ok) break;
-                    } catch (e) {
-                        console.warn(`[ap-image-fetcher] item ${item.id} fetch attempt ${attempt + 1} failed:`, e);
+                // G1/Globo URL Cleaning: if it's a transformed Globo URL, extract the direct origin version if embedded
+                if (targetImgUrl.includes(".glbimg.com")) {
+                    const urlParts = targetImgUrl.split("https://");
+                    if (urlParts.length > 2) {
+                        const directUrl = "https://" + urlParts[urlParts.length - 1];
+                        if (directUrl.includes(".glbimg.com")) {
+                            urlsToTry.push(directUrl);
+                        }
+                    } else {
+                        // Fallback for http split
+                        const httpParts = targetImgUrl.split("http://");
+                        if (httpParts.length > 2) {
+                            const directUrl = "http://" + httpParts[httpParts.length - 1];
+                            if (directUrl.includes(".glbimg.com")) {
+                                urlsToTry.push(directUrl);
+                            }
+                        }
                     }
+                }
+
+                for (const url of urlsToTry) {
+                    for (let attempt = 0; attempt < 2; attempt++) {
+                        try {
+                            imgRes = await fetch(url, { headers: baseHeaders });
+                            if (imgRes.ok) break;
+                        } catch (e) {
+                            console.warn(`[ap-image-fetcher] item ${item.id} fetch failed for ${url}:`, e);
+                        }
+                    }
+                    if (imgRes && imgRes.ok) break;
                 }
 
                 if (imgRes && imgRes.ok) {
                     const contentType = (imgRes.headers.get("content-type") || "").toLowerCase();
                     const contentLength = parseInt(imgRes.headers.get("content-length") || "0", 10);
 
-                    if (contentType.includes("text/html")) {
-                        console.error(`[ap-image-fetcher] item ${item.id} blocked: HTML content-type`);
-                    } else if (contentLength > 10 * 1024 * 1024) { // Limite estrito de 10MB
-                        console.error(`[ap-image-fetcher] item ${item.id} blocked: File too large (${contentLength} bytes)`);
+                    if (contentType.includes("text/html") || (contentLength > 10 * 1024 * 1024)) {
+                        console.error(`[ap-image-fetcher] item ${item.id} rejected: Wrong type or size`);
                     } else {
                         const reader = imgRes.body?.getReader();
                         if (reader) {
-                            const { value: firstChunk, done } = await reader.read();
+                            const { value: firstChunk } = await reader.read();
                             if (firstChunk && firstChunk.length >= 4) {
                                 const hex = Array.from(firstChunk.slice(0, 4)).map(b => b.toString(16).padStart(2, '0')).join('');
-                                // Bloquear HTML disfarçado (<!DO ou <htm ou <)
                                 if (hex.startsWith('3c')) {
-                                    console.error(`[ap-image-fetcher] item ${item.id} blocked: HTML magic bytes detected`);
+                                    console.error(`[ap-image-fetcher] item ${item.id} blocked: HTML detected`);
                                     reader.cancel();
                                 } else {
                                     let ext = "jpg";
                                     if (hex.startsWith('ffd8')) ext = 'jpg';
                                     else if (hex.startsWith('89504e47')) ext = 'png';
                                     else if (hex.startsWith('47494638')) ext = 'gif';
-                                    else if (hex === '52494646') ext = 'webp'; // RIFF
+                                    else if (hex === '52494646') ext = 'webp';
                                     else ext = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
 
                                     storagePath = `${item.id}.${ext}`;
-
-                                    // Ler o restante da imagem para a memória (limitado a 10MB)
                                     const chunks = [firstChunk];
                                     let totalLength = firstChunk.length;
                                     let exceeded = false;
@@ -145,37 +156,20 @@ Deno.serve(async (_req: Request) => {
                                             chunks.push(value);
                                             totalLength += value.length;
                                         }
-                                        if (totalLength > 10 * 1024 * 1024) {
-                                            exceeded = true;
-                                            reader.cancel();
-                                            break;
-                                        }
+                                        if (totalLength > 10 * 1024 * 1024) { exceeded = true; reader.cancel(); break; }
                                     }
 
-                                    if (exceeded) {
-                                        console.error(`[ap-image-fetcher] item ${item.id} blocked: Stream size exceeded 10MB limit during read`);
-                                        storagePath = null;
-                                    } else {
+                                    if (!exceeded) {
                                         const buffer = new Uint8Array(totalLength);
                                         let offset = 0;
-                                        for (const chunk of chunks) {
-                                            buffer.set(chunk, offset);
-                                            offset += chunk.length;
-                                        }
-
-                                        try {
-                                            const { error: uploadError } = await supabase.storage
-                                                .from(BUCKET)
-                                                .upload(storagePath, buffer, { contentType, upsert: true });
-
-                                            if (uploadError) {
-                                                console.error(`[ap-image-fetcher] item ${item.id} image upload error:`, uploadError);
-                                                storagePath = null;
-                                            }
-                                        } catch (e) {
-                                            console.error(`[ap-image-fetcher] item ${item.id} stream upload exception:`, e);
+                                        for (const chunk of chunks) { buffer.set(chunk, offset); offset += chunk.length; }
+                                        const { error: uploadError } = await supabase.storage.from(BUCKET).upload(storagePath, buffer, { contentType, upsert: true });
+                                        if (uploadError) {
+                                            console.error(`[ap-image-fetcher] upload error:`, uploadError);
                                             storagePath = null;
                                         }
+                                    } else {
+                                        storagePath = null;
                                     }
                                 }
                             } else {
@@ -183,26 +177,34 @@ Deno.serve(async (_req: Request) => {
                             }
                         }
                     }
-                } else {
-                    console.error(`[ap-image-fetcher] item ${item.id} image fetch failed: HTTP ${imgRes?.status || "unknown"}`);
                 }
             }
 
-            // Advance status — idempotent: WHERE status = 'raw'
-            await supabase
-                .schema("ap").from("candidate_news")
-                .update({ imagem_storage: storagePath, status: "ready_for_scoring", processing_started_at: null })
-                .eq("id", item.id)
-                .eq("status", "raw");
+            // 3. Strategy Result
+            imageExternal = (storagePath === null && targetImgUrl !== null);
 
-            processed.push(item.id);
+            // 4. Status Advancement Rule: Only advance if we have at least one valid source
+            if (storagePath || targetImgUrl) {
+                await supabase
+                    .schema("ap").from("candidate_news")
+                    .update({
+                        imagem_storage: storagePath,
+                        imagem_url: targetImgUrl, // Ensure scraped URLs are saved
+                        image_external: imageExternal,
+                        status: "ready_for_scoring",
+                        processing_started_at: null
+                    })
+                    .eq("id", item.id)
+                    .eq("status", "raw");
+                processed.push(item.id);
+            } else {
+                console.error(`[ap-image-fetcher] item ${item.id} aborted: No image source found.`);
+                await supabase.schema("ap").from("candidate_news").update({ processing_started_at: null }).eq("id", item.id);
+            }
+
         } catch (err) {
             console.error(`[ap-image-fetcher] item ${item.id} error:`, err);
-            // Clear processing lock so self-healing can retry after 10min
-            await supabase
-                .schema("ap").from("candidate_news")
-                .update({ processing_started_at: null })
-                .eq("id", item.id);
+            await supabase.schema("ap").from("candidate_news").update({ processing_started_at: null }).eq("id", item.id);
         }
     }
 

@@ -170,7 +170,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                 // Hybrid fields
                 userTag: tag.toUpperCase(),
                 userHeadline: selectedFlow >= 2 ? (headline || null) : null,
-                userText: selectedFlow === 3 ? (texto || null) : null,
+                userText: texto ? texto : null, // Fix 1: send userText whenever texto exists
             };
 
             const { data, error } = await supabase.functions.invoke('ap-employee-generator', {
@@ -371,9 +371,13 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                     </div>
                                 </div>
 
-                                {/* Rendering Result */}
-                                <div style={{ width: '100%', borderRadius: '16px', overflow: 'hidden', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}>
-                                    <img src={successData.render_url} alt="Arte Final" style={{ width: '100%', display: 'block', objectFit: 'cover' }} />
+                                {/* Render Placeholder — art is generated after admin approval */}
+                                <div style={{ width: '100%', borderRadius: '16px', overflow: 'hidden', border: '1px dashed #e2e8f0', background: '#f8fafc', padding: '28px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', boxSizing: 'border-box' }}>
+                                    <div style={{ width: 48, height: 48, background: '#eff6ff', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="m21 15-5-5L5 21" /><circle cx="8.5" cy="8.5" r="1.5" /></svg>
+                                    </div>
+                                    <p style={{ margin: 0, fontSize: '14px', color: '#475569', fontWeight: 600, textAlign: 'center' }}>Arte será gerada após aprovação do administrador.</p>
+                                    <p style={{ margin: 0, fontSize: '12px', color: '#94a3b8', textAlign: 'center' }}>O card visual aparecerá no painel de Aprovadas.</p>
                                 </div>
 
                                 {/* Content Results */}
@@ -414,7 +418,8 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                     <button onClick={handleCopy} style={{ width: '100%', background: '#fff', color: actionCopiou ? '#16a34a' : '#111827', border: actionCopiou ? '2px solid #16a34a' : '1px solid #e2e8f0', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: 'pointer', transition: 'all 0.2s' }}>
                                         {actionCopiou ? <><CheckCircle2 size={18} color="#16a34a" /> Copiado!</> : <><Copy size={18} /> Copiar {successData.content_type === 'reels' ? 'Roteiro e Legenda' : 'Legenda'}</>}
                                     </button>
-                                    <button onClick={() => { setSuccessData(null); setForm({ titulo: '', conteudo: '', imagem_url: '', url_original: '' }); setSelectedFile(null); }} style={{ background: 'transparent', color: '#64748b', border: 'none', padding: '16px', fontSize: '14px', fontWeight: 600, marginTop: '4px', cursor: 'pointer' }}>
+                                    <button onClick={() => { setSuccessData(null); setForm({ url_original: '', tag: '', headline: '', texto: '', imagem_url: '' }); setSelectedFile(null); }} style={{ background: 'transparent', color: '#64748b', border: 'none', padding: '16px', fontSize: '14px', fontWeight: 600, marginTop: '4px', cursor: 'pointer' }}>
+
                                         Novo Conteúdo
                                     </button>
                                 </div>

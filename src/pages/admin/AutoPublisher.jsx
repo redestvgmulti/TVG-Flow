@@ -140,10 +140,10 @@ export default function AutoPublisher() {
         const { data, error } = await supabase
             .schema('ap')
             .from('candidate_news')
-            .select(`id, titulo, headline, caption, render_url, imagem_url,
+            .select(`id, titulo, headline, caption, render_url, imagem_url, imagem_storage, image_external,
                      status, created_at, context_tag, content_type,
                      template_nome_snapshot, roteiro_studio, duracao_estimada, broll_sugestao,
-                     imagem_url, studio_media_image_url, studio_media_video_url, enviado_para_studio,
+                     studio_media_image_url, studio_media_video_url, enviado_para_studio,
                      instagram_post_id, horario_agendado`)
             .eq('cliente_id', clienteId)
             .in('status', statuses)
@@ -959,8 +959,17 @@ function PendenteCard({ item, onReject, onStudio, onApproveSelected, onEdit, isP
 
             {/* Imagem */}
             <div className="ap-card-img-wrap" style={{ aspectRatio: '4/5', width: '100%', background: '#fafafa', position: 'relative' }}>
-                {(item.render_url || item.imagem_url) ? (
-                    <img className="ap-card-img" src={item.render_url ?? item.imagem_url} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                {(item.render_url || item.imagem_storage || item.imagem_url) ? (
+                    <img
+                        className="ap-card-img"
+                        src={
+                            item.render_url ??
+                            (item.imagem_storage ? supabase.storage.from('ap-images').getPublicUrl(item.imagem_storage).data.publicUrl : item.imagem_url)
+                        }
+                        alt=""
+                        loading="lazy"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
                 ) : (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 8 }}>
                         <ImageIcon size={32} color="#dbdbdb" />
@@ -1108,8 +1117,8 @@ function AprovadaCard({ item, onPublish, onReject, onEdit, isProcessing }) {
 
             {/* Imagem */}
             <div className="ap-card-img-wrap" style={{ aspectRatio: '4/5', width: '100%', background: '#fafafa', position: 'relative' }}>
-                {(item.render_url || item.imagem_url) ? (
-                    <img className="ap-card-img" src={item.render_url ?? item.imagem_url} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                {(item.render_url || item.imagem_storage || item.imagem_url) ? (
+                    <img className="ap-card-img" src={item.render_url ?? (item.imagem_storage ? supabase.storage.from('ap-images').getPublicUrl(item.imagem_storage).data.publicUrl : item.imagem_url)} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 ) : (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 8 }}>
                         <ImageIcon size={32} color="#dbdbdb" />

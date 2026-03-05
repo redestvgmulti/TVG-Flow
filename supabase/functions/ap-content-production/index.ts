@@ -96,10 +96,14 @@ Deno.serve(async (req: Request) => {
             let clienteId = item.cliente_id;
 
             // --- LLM BYPASS (Human Sovereignty Safeguard) ---
+            // Only bypass if the item was MANUALLY EDITED by an admin, NOT if it was created
+            // by ap-employee-generator (which already has AI-generated content at creation time).
+            // Employee-sourced items must still go through expansion here when being approved.
+            const isEmployeeGenerated = item.source === "employee";
             const hasManualInput = (item.headline && item.headline.length > 5) || (item.caption && item.caption.length > 10);
 
-            if (hasManualInput && actionType !== "process_studio") {
-                console.log(`[AUDIT] [ap-content-production] Bypassing LLM for item ${item.id} (Action: ${actionType}). Human input detected.`);
+            if (hasManualInput && !isEmployeeGenerated && actionType !== "process_studio") {
+                console.log(`[AUDIT] [ap-content-production] Bypassing LLM for item ${item.id} (Action: ${actionType}). Admin manually edited — bypass active.`);
                 await supabase.schema("ap").from("candidate_news")
                     .update({
                         status: "pending_render",
@@ -109,7 +113,8 @@ Deno.serve(async (req: Request) => {
                 processedCount++;
                 continue;
             }
-            console.log(`[AUDIT] [ap-content-production] Processing item ${item.id} via AI. Action: ${actionType}`);
+            console.log(`[AUDIT] [ap-content-production] Processing item ${item.id} via AI. Action: ${actionType}. Employee: ${isEmployeeGenerated}`);
+
 
             let finalOpenAiKey = "";
             let finalModel = OPENAI_MODEL_G;
@@ -168,25 +173,36 @@ Deno.serve(async (req: Request) => {
                 temperature: 0.7,
                 maxTokens: 2000
             });
-            const parsed: any = actionType === "process_studio" ? parseStudioOutput(content) : parseAiOutput(content);
+
+            // 5. Robust Parsing & Fallback
+            let parsed: any = null;
+            try {
+                parsed = actionType === "process_studio" ? parseStudioOutput(content) : parseAiOutput(content);
+            } catch (err) {
+                console.error(`[AUDIT] [ap-content-production] Parsing failed for ${item.id}:`, err.message);
+                // No return here — we'll use fallback below
+            }
 
             let updatePayload: any = {};
             if (actionType === "process_studio") {
                 updatePayload = {
-                    roteiro_studio: parsed.roteiro_studio,
-                    duracao_estimada: parsed.duracao_estimada,
-                    broll_sugestao: parsed.broll_sugestao,
+                    roteiro_studio: parsed?.roteiro_studio || content,
+                    duracao_estimada: parsed?.duracao_estimada || 60,
+                    broll_sugestao: parsed?.broll_sugestao || "N/A",
                     status: "studio_selected",
                     processing_started_at: null
                 };
             } else {
+                // Fallback Priority Logic (Sovereignty)
+                const finalHeadline = userHeadline || item.headline || parsed?.headline || item.titulo || "Pauta OMNI";
+                const finalCaption = userText || item.caption || parsed?.caption || "";
+                const finalTag = userTag || item.context_tag || parsed?.context_tag || item.categoria || "DESTAQUE";
+
                 updatePayload = {
-                    headline: item.headline ?? userHeadline ?? parsed.headline,
-                    caption: item.caption ?? userText ?? parsed.caption,
-                    roteiro_json: parsed.roteiro,
-                    context_tag: item.context_tag ?? userTag ?? parsed.context_tag,
-                    // approve_for_ig = usuário clicou Aprovar → muda para pending_render
-                    // process_selected = apenas geração de texto → mantém em selected
+                    headline: finalHeadline,
+                    caption: finalCaption,
+                    roteiro_json: parsed?.roteiro || [],
+                    context_tag: finalTag,
                     status: actionType === "approve_for_ig" ? "pending_render" : "selected",
                     processing_started_at: null
                 };
@@ -206,12 +222,25 @@ Deno.serve(async (req: Request) => {
     });
 });
 
-function parseStudioOutput(raw: string) { return { roteiro_studio: raw, duracao_estimada: 60 }; }
+function parseStudioOutput(raw: string) {
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error("No JSON found");
+    const parsed = JSON.parse(jsonMatch[0]);
+    return {
+        roteiro_studio: parsed.roteiro_teleprompter || parsed.roteiro_studio,
+        duracao_estimada: parsed.duracao_estimada_segundos || 60,
+        broll_sugestao: parsed.broll_sugestao
+    };
+}
+
 function parseAiOutput(raw: string) {
-    try {
-        const jsonMatch = raw.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) throw new Error("No JSON found");
-        const parsed = JSON.parse(jsonMatch[0]);
-        return { headline: parsed.headline, caption: parsed.caption, roteiro: parsed.roteiro, context_tag: parsed.context_tag };
-    } catch { return { headline: "Erro IA", caption: raw, roteiro: [], context_tag: "ERRO" }; }
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error("No JSON found");
+    const parsed = JSON.parse(jsonMatch[0]);
+    return {
+        headline: parsed.headline,
+        caption: parsed.caption || parsed.legenda,
+        roteiro: parsed.roteiro,
+        context_tag: parsed.context_tag
+    };
 }

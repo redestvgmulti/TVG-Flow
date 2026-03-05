@@ -108,10 +108,15 @@ Deno.serve(async (req: Request) => {
         const newsId = newsItem.id;
         console.log(`[AUDIT] [ap-employee-generator] Registro criado! ID: ${newsId}`);
 
-        // 3. Backend Scraping Fallback
+        // 3. Backend Scraping Fallback & Internalization
         let finalImage = imagem_url;
+        let storagePath = null;
+        let imageExternal = false;
+        const BUCKET = "ap-images";
+
+        // a) Scraping Fallback (if no image)
         if (!finalImage && url_original) {
-            console.log(`[AUDIT] [ap-employee-generator] Tentando scraping de imagem para: ${url_original}`);
+            console.log(`[AUDIT] [ap-employee-generator] Scraping fallback for: ${url_original}`);
             try {
                 const scrapeRes = await fetchWithTimeout(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ap-link-scraper`, {
                     method: "POST",
@@ -124,18 +129,68 @@ Deno.serve(async (req: Request) => {
                 });
                 if (scrapeRes.ok) {
                     const scrapeData = await scrapeRes.json();
-                    if (scrapeData.image_url) {
-                        finalImage = scrapeData.image_url;
-                        console.log(`[AUDIT] [ap-employee-generator] Scraping sucesso: ${finalImage}`);
-                        await supabase.schema("ap").from("candidate_news")
-                            .update({ imagem_url: finalImage })
-                            .eq("id", newsId);
+                    if (scrapeData.image_url) finalImage = scrapeData.image_url;
+                }
+            } catch (e: any) { console.warn("[AUDIT] Scraping falhou:", e.message); }
+        }
+
+        // b) Internalization (Production Grade)
+        if (finalImage) {
+            try {
+                const baseHeaders = {
+                    "User-Agent": "Mozilla/5.0",
+                    "Referer": "https://g1.globo.com",
+                    "Accept": "image/avif,image/webp,*/*;q=0.8"
+                };
+                const urlsToTry = [finalImage];
+                if (finalImage.includes(".glbimg.com")) {
+                    const urlParts = finalImage.split("https://");
+                    if (urlParts.length > 2) {
+                        const directUrl = "https://" + urlParts[urlParts.length - 1];
+                        if (directUrl.includes(".glbimg.com")) {
+                            urlsToTry.push(directUrl);
+                        }
+                    } else {
+                        const httpParts = finalImage.split("http://");
+                        if (httpParts.length > 2) {
+                            const directUrl = "http://" + httpParts[httpParts.length - 1];
+                            if (directUrl.includes(".glbimg.com")) {
+                                urlsToTry.push(directUrl);
+                            }
+                        }
                     }
                 }
-            } catch (e: any) {
-                console.warn("[AUDIT] [ap-employee-generator] Scraping falhou:", e.message);
-            }
+
+                let imgRes: Response | null = null;
+                for (const url of urlsToTry) {
+                    try {
+                        imgRes = await fetch(url, { headers: baseHeaders });
+                        if (imgRes.ok) break;
+                    } catch (e) { console.warn(`[AUDIT] Fetch fail: ${url}`); }
+                }
+
+                if (imgRes && imgRes.ok) {
+                    const contentType = imgRes.headers.get("content-type") || "image/jpeg";
+                    const buffer = new Uint8Array(await imgRes.arrayBuffer());
+
+                    if (buffer.length < 10 * 1024 * 1024) {
+                        const hex = Array.from(buffer.slice(0, 4)).map(b => b.toString(16).padStart(2, '0')).join('');
+                        if (!hex.startsWith('3c')) { // Not HTML
+                            let ext = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
+                            storagePath = `${newsId}.${ext}`;
+                            const { error: upErr } = await supabase.storage.from(BUCKET).upload(storagePath, buffer, { contentType, upsert: true });
+                            if (upErr) storagePath = null;
+                        }
+                    }
+                }
+            } catch (e) { console.error("[AUDIT] Internalization failed", e); }
         }
+
+        imageExternal = (storagePath === null && finalImage !== null);
+        // Atualiza imagem_url e storage antes de ir pra IA
+        await supabase.schema("ap").from("candidate_news")
+            .update({ imagem_url: finalImage, imagem_storage: storagePath, image_external: imageExternal })
+            .eq("id", newsId);
 
         const failProcess = async (msg: string) => {
             console.error(`[AUDIT] [ap-employee-generator] Falha: ${msg}`);
@@ -189,19 +244,27 @@ Deno.serve(async (req: Request) => {
             maxTokens: 1500
         });
 
-        let parsedData: any;
+        let parsedData: any = null;
         try {
-            const jsonMatch = content.match(/\{[\s\S]*\}/);
-            parsedData = JSON.parse(jsonMatch ? jsonMatch[0] : content);
+            // Robust extraction: try multiple JSON block patterns
+            const jsonMatch = content.match(/```json\s*([\s\S]*?)```/) ||
+                content.match(/```([\s\S]*?)```/) ||
+                content.match(/(\{[\s\S]*\})/);
+            const jsonStr = jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : content;
+            parsedData = JSON.parse(jsonStr.trim());
         } catch (e) {
-            console.error("[AUDIT] [ap-employee-generator] JSON Parse Error:", content);
-            return failProcess("Erro ao processar resposta da IA.");
+            console.warn("[AUDIT] [ap-employee-generator] JSON Parse falhou — usando fallback humano.", content.slice(0, 200));
+            parsedData = {}; // Will use human data fallback below
         }
 
         // 5. Merge de Prioridade Humana
-        const resolvedHeadline = userHeadline ?? parsedData.headline;
-        const resolvedTag = userTag ?? parsedData.context_tag;
-        const finalCaption = userText ?? (parsedData.caption || parsedData.legenda);
+        // Caption: AI expands userText → use parsed.caption as the final expanded version.
+        // Only fall back to userText/conteudo if AI failed to return a valid caption.
+        const resolvedHeadline = userHeadline ?? parsedData.headline ?? titulo ?? "Pauta OMNI";
+        const resolvedTag = userTag ?? parsedData.context_tag ?? "DESTAQUE";
+        const finalCaption = (parsedData.caption || parsedData.legenda) ?? userText ?? conteudo ?? "";
+
+        if (!resolvedHeadline) return failProcess("Headline ausente após merge.");
 
         console.log(`[AUDIT] [ap-employee-generator] Merge Final: Tag=${resolvedTag}, Headline=${resolvedHeadline}`);
 
