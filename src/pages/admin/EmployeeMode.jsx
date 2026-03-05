@@ -62,11 +62,10 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
             attempts++;
             try {
                 const { data } = await supabase
-                    .schema('ap')
-                    .from('candidate_news')
+                    .from('ap_candidate_news_complete')
                     .select('render_url, status')
                     .eq('id', successData.news_id)
-                    .single();
+                    .maybeSingle();
 
                 if (data?.render_url) {
                     setRenderUrl(data.render_url);
