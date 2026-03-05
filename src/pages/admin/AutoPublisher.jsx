@@ -1053,31 +1053,22 @@ function AprovadaCard({ item, onPublish, onReject, onEdit, isProcessing }) {
     const handleDownload = async () => {
         if (!item.render_url && !item.imagem_url) return
         const url = item.render_url ?? item.imagem_url
-        try {
-            let response
-            try {
-                response = await fetch(url)
-                if (!response.ok) throw new Error('Not OK')
-            } catch (e1) {
-                try {
-                    response = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`)
-                    if (!response.ok) throw new Error('Not OK')
-                } catch (e2) {
-                    try {
-                        response = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`)
-                        if (!response.ok) throw new Error('Not OK')
-                    } catch (e3) {
-                        response = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`)
-                        if (!response.ok) throw new Error('Not OK')
-                    }
-                }
-            }
-            const blob = await response.blob()
 
-            // force correct extension based on type
+        // Ensure its internal Supabase URL. If external, fallback to opening window
+        if (!url.includes('supabase.co')) {
+            window.open(url, '_blank');
+            return;
+        }
+
+        try {
+            const response = await fetch(url)
+            if (!response.ok) throw new Error('Falha ao baixar do storage interno')
+
+            const blob = await response.blob()
             let ext = '.png'
             if (blob.type === 'image/jpeg') ext = '.jpg'
             else if (blob.type === 'video/mp4') ext = '.mp4'
+            else if (blob.type === 'image/webp') ext = '.webp'
 
             const blobUrl = URL.createObjectURL(blob)
             const a = document.createElement('a')
@@ -1088,15 +1079,8 @@ function AprovadaCard({ item, onPublish, onReject, onEdit, isProcessing }) {
             document.body.removeChild(a)
             setTimeout(() => URL.revokeObjectURL(blobUrl), 1000)
         } catch (err) {
-            toast.info('Forçando o download alternativo...')
-            const fallbackUrl = url.includes('?') ? `${url}&ext=.png` : `${url}?ext=.png`
-            const a = document.createElement('a')
-            a.href = fallbackUrl
-            a.target = '_blank'
-            a.download = `tvg_noticia_${item.id.slice(0, 6)}.png`
-            document.body.appendChild(a)
-            a.click()
-            document.body.removeChild(a)
+            toast.error('Erro ao baixar mídia. Abrindo link...')
+            window.open(url, '_blank')
         }
     }
 

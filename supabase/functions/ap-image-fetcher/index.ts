@@ -57,7 +57,12 @@ Deno.serve(async (_req: Request) => {
             // Fallback: If no image_url provided by RSS, try fetching it from the original URL's OpenGraph tags
             if (!targetImgUrl && item.url_original) {
                 try {
-                    const pageRes = await fetch(item.url_original, { headers: { "User-Agent": "FlowOS AutoPublisher Bot/1.0" } });
+                    const pageRes = await fetch(item.url_original, {
+                        headers: {
+                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
+                            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
+                        }
+                    });
                     if (pageRes.ok) {
                         const html = await pageRes.text();
                         const ogImageMatch = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["'][^>]*>/i)
@@ -73,24 +78,113 @@ Deno.serve(async (_req: Request) => {
             }
 
             if (targetImgUrl) {
-                const imgRes = await fetch(targetImgUrl, { headers: { "User-Agent": "FlowOS AutoPublisher/1.0" } });
-                if (imgRes.ok) {
-                    const blob = await imgRes.arrayBuffer();
-                    const contentType = imgRes.headers.get("content-type") || "image/jpeg";
-                    const ext = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
-                    storagePath = `${item.id}.${ext}`;
+                let imgRes: Response | null = null;
+                const userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36";
+                const baseHeaders: Record<string, string> = {
+                    "User-Agent": userAgent,
+                    "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+                    "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+                    "Sec-Fetch-Dest": "image",
+                    "Sec-Fetch-Mode": "no-cors",
+                    "Sec-Fetch-Site": "cross-site"
+                };
 
-                    const { error: uploadError } = await supabase.storage
-                        .from(BUCKET)
-                        .upload(storagePath, blob, { contentType, upsert: true });
+                // Retry strategy
+                for (let attempt = 0; attempt < 3; attempt++) {
+                    try {
+                        const headers = { ...baseHeaders };
+                        if (attempt === 1) headers["Referer"] = new URL(targetImgUrl).origin + "/";
+                        if (attempt === 2) {
+                            headers["Cache-Control"] = "no-cache";
+                            headers["Pragma"] = "no-cache";
+                        }
 
-                    if (uploadError) {
-                        console.error(`[ap-image-fetcher] item ${item.id} image upload error:`, uploadError);
-                        storagePath = null; // Proceed without image if upload fails
+                        imgRes = await fetch(targetImgUrl, { headers });
+                        if (imgRes.ok) break;
+                    } catch (e) {
+                        console.warn(`[ap-image-fetcher] item ${item.id} fetch attempt ${attempt + 1} failed:`, e);
+                    }
+                }
+
+                if (imgRes && imgRes.ok) {
+                    const contentType = (imgRes.headers.get("content-type") || "").toLowerCase();
+                    const contentLength = parseInt(imgRes.headers.get("content-length") || "0", 10);
+
+                    if (contentType.includes("text/html")) {
+                        console.error(`[ap-image-fetcher] item ${item.id} blocked: HTML content-type`);
+                    } else if (contentLength > 10 * 1024 * 1024) { // Limite estrito de 10MB
+                        console.error(`[ap-image-fetcher] item ${item.id} blocked: File too large (${contentLength} bytes)`);
+                    } else {
+                        const reader = imgRes.body?.getReader();
+                        if (reader) {
+                            const { value: firstChunk, done } = await reader.read();
+                            if (firstChunk && firstChunk.length >= 4) {
+                                const hex = Array.from(firstChunk.slice(0, 4)).map(b => b.toString(16).padStart(2, '0')).join('');
+                                // Bloquear HTML disfarçado (<!DO ou <htm ou <)
+                                if (hex.startsWith('3c')) {
+                                    console.error(`[ap-image-fetcher] item ${item.id} blocked: HTML magic bytes detected`);
+                                    reader.cancel();
+                                } else {
+                                    let ext = "jpg";
+                                    if (hex.startsWith('ffd8')) ext = 'jpg';
+                                    else if (hex.startsWith('89504e47')) ext = 'png';
+                                    else if (hex.startsWith('47494638')) ext = 'gif';
+                                    else if (hex === '52494646') ext = 'webp'; // RIFF
+                                    else ext = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
+
+                                    storagePath = `${item.id}.${ext}`;
+
+                                    // Ler o restante da imagem para a memória (limitado a 10MB)
+                                    const chunks = [firstChunk];
+                                    let totalLength = firstChunk.length;
+                                    let exceeded = false;
+                                    while (true) {
+                                        const { value, done } = await reader.read();
+                                        if (done) break;
+                                        if (value) {
+                                            chunks.push(value);
+                                            totalLength += value.length;
+                                        }
+                                        if (totalLength > 10 * 1024 * 1024) {
+                                            exceeded = true;
+                                            reader.cancel();
+                                            break;
+                                        }
+                                    }
+
+                                    if (exceeded) {
+                                        console.error(`[ap-image-fetcher] item ${item.id} blocked: Stream size exceeded 10MB limit during read`);
+                                        storagePath = null;
+                                    } else {
+                                        const buffer = new Uint8Array(totalLength);
+                                        let offset = 0;
+                                        for (const chunk of chunks) {
+                                            buffer.set(chunk, offset);
+                                            offset += chunk.length;
+                                        }
+
+                                        try {
+                                            const { error: uploadError } = await supabase.storage
+                                                .from(BUCKET)
+                                                .upload(storagePath, buffer, { contentType, upsert: true });
+
+                                            if (uploadError) {
+                                                console.error(`[ap-image-fetcher] item ${item.id} image upload error:`, uploadError);
+                                                storagePath = null;
+                                            }
+                                        } catch (e) {
+                                            console.error(`[ap-image-fetcher] item ${item.id} stream upload exception:`, e);
+                                            storagePath = null;
+                                        }
+                                    }
+                                }
+                            } else {
+                                reader.cancel();
+                            }
+                        }
                     }
                 } else {
-                    console.error(`[ap-image-fetcher] item ${item.id} image fetch failed: HTTP ${imgRes.status}`);
-                    // Proceed without image
+                    console.error(`[ap-image-fetcher] item ${item.id} image fetch failed: HTTP ${imgRes?.status || "unknown"}`);
                 }
             }
 

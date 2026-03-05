@@ -196,13 +196,43 @@ Deno.serve(async (req: Request) => {
                 }
 
                 if (finalUrl) {
-                    await supabase.schema("ap").from("candidate_news").update({
-                        render_url: finalUrl,
-                        status: "ready_to_publish",
-                        processing_started_at: null,
-                        completed_at: new Date().toISOString()
-                    }).eq("id", item.id);
-                    results.push({ id: item.id, status: "success", url: finalUrl });
+                    try {
+                        console.log(`[ap-render-engine] Internalizando render final a partir de: ${finalUrl}`);
+                        const renderDlRes = await fetch(finalUrl);
+                        if (!renderDlRes.ok) throw new Error("HTTP Status " + renderDlRes.status);
+
+                        const contentType = renderDlRes.headers.get("content-type") || "image/jpeg";
+                        // Save in structure ap-renders/{empresa_id}/{item_id}.jpg
+                        const empresaId = item.cliente_id;
+                        const ext = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
+                        const internalPath = `${empresaId}/${item.id}.${ext}`;
+
+                        const arrayBuffer = await renderDlRes.arrayBuffer();
+                        const buffer = new Uint8Array(arrayBuffer);
+
+                        const { error: uploadError } = await supabase.storage
+                            .from("ap-renders")
+                            .upload(internalPath, buffer, { contentType, upsert: true });
+
+                        if (uploadError) throw new Error("Supabase Storage Upload falhou: " + uploadError.message);
+
+                        const publicRenderUrl = `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/public/ap-renders/${internalPath}`;
+
+                        await supabase.schema("ap").from("candidate_news").update({
+                            render_url: publicRenderUrl,
+                            status: "ready_to_publish",
+                            processing_started_at: null,
+                            completed_at: new Date().toISOString()
+                        }).eq("id", item.id);
+                        results.push({ id: item.id, status: "success", url: publicRenderUrl });
+                    } catch (dlErr: any) {
+                        console.error(`[ap-render-engine] Falha ao internalizar imagem de ${item.id}:`, dlErr);
+                        await supabase.schema("ap").from("candidate_news").update({
+                            status: "failed",
+                            processing_started_at: null
+                        }).eq("id", item.id);
+                        results.push({ id: item.id, status: "error", error: dlErr.message });
+                    }
                 } else {
                     // Sem URL após 10 tentativas = Timeout e falha. Sem Webhook configurado, a matéria ficaria travada sem imagem.
                     await supabase.schema("ap").from("candidate_news").update({
