@@ -66,7 +66,13 @@ Deno.serve(async (_req: Request) => {
         if (match?.[1]) fetchUrl = `https://rsshub.anyat.icu/instagram/user/${match[1]}`;
       }
 
-      const res = await fetch(fetchUrl, { headers: { "User-Agent": "FlowOS AutoPublisher/1.0" } });
+      const res = await fetch(fetchUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
+          "Accept": "application/rss+xml, application/xml, text/xml, */*",
+          "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7"
+        }
+      });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
       const xml = await res.text();
@@ -95,8 +101,9 @@ Deno.serve(async (_req: Request) => {
           const r = await fetch(item.link, {
             signal: ab.signal,
             headers: {
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/114",
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
               "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+              "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
               "Referer": "https://google.com"
             }
           }).catch(() => null);
@@ -115,12 +122,13 @@ Deno.serve(async (_req: Request) => {
               $('meta[property="og:video:secure_url"]').attr('content');
 
             if (ogImage) {
-              let imgUrl = ogImage;
+              let imgUrl = ogImage.trim();
               if (imgUrl.startsWith('/')) {
                 const urlObj = new URL(item.link);
                 imgUrl = `${urlObj.protocol}//${urlObj.host}${imgUrl}`;
               }
-              if (!ogVideo) studio_media_image_url = imgUrl;
+              // Always store to studio_media_image_url; also set as main image if no video
+              studio_media_image_url = imgUrl;
             }
             if (ogVideo) {
               let vidUrl = ogVideo;
@@ -139,13 +147,16 @@ Deno.serve(async (_req: Request) => {
       for (const item of items) {
         // We use ON CONFLICT because of the uq_candidate_news_url_cliente constraint
         // But in Edge Function client we just insert and ignore duplicated errors if they happen
+        // Determine imagem_url: prefer RSS-provided image, fall back to scraped OG image
+        const finalImageUrl = item.imageUrl?.trim() || item.studio_media_image_url || null;
+
         const { error: insertErr } = await supabase.schema("ap").from("candidate_news").insert({
           cliente_id: source.cliente_id,
           fonte_id: source.id,
           titulo: item.title,
           conteudo: item.description,
           url_original: item.link,
-          imagem_url: item.imageUrl ?? null,
+          imagem_url: finalImageUrl,
           studio_media_image_url: item.studio_media_image_url,
           studio_media_video_url: item.studio_media_video_url,
           published_at: item.pubDate ? new Date(item.pubDate).toISOString() : null,
