@@ -78,7 +78,7 @@ export default function AutoPublisher() {
     const [editSelectedFile, setEditSelectedFile] = useState(null)
     const [isEditDragging, setIsEditDragging] = useState(false)
 
-    const TAGS_FIXAS = ['Cinema', 'Esportes', 'Política', 'Saúde', 'Tecnologia', 'Geral', 'Justiça', 'Famosos', 'Economia', 'Goiás']
+
 
     function resetManualModal() {
         setManualModalOpen(false)
@@ -1065,21 +1065,20 @@ function AprovadaCard({ item, onPublish, onReject, onEdit, isProcessing }) {
         if (!item.render_url && !item.imagem_url) return
         const url = item.render_url ?? item.imagem_url
 
-        // Ensure its internal Supabase URL. If external, fallback to opening window
-        if (!url.includes('supabase.co')) {
-            window.open(url, '_blank');
-            return;
-        }
-
         try {
             const response = await fetch(url)
-            if (!response.ok) throw new Error('Falha ao baixar do storage interno')
+            if (!response.ok) throw new Error('Falha HTTP ao baixar')
 
             const blob = await response.blob()
-            let ext = '.png'
+            let ext = '.bin'
             if (blob.type === 'image/jpeg') ext = '.jpg'
+            else if (blob.type === 'image/png') ext = '.png'
             else if (blob.type === 'video/mp4') ext = '.mp4'
             else if (blob.type === 'image/webp') ext = '.webp'
+            else {
+                const match = url.match(/\.([a-z0-9]+)(?:[\?#]|$)/i);
+                if (match) ext = `.${match[1].toLowerCase()}`;
+            }
 
             const blobUrl = URL.createObjectURL(blob)
             const a = document.createElement('a')
@@ -1090,8 +1089,20 @@ function AprovadaCard({ item, onPublish, onReject, onEdit, isProcessing }) {
             document.body.removeChild(a)
             setTimeout(() => URL.revokeObjectURL(blobUrl), 1000)
         } catch (err) {
-            toast.error('Erro ao baixar mídia. Abrindo link...')
-            window.open(url, '_blank')
+            if (url.includes('/storage/v1/object/')) {
+                toast.success('Forçando download direto...')
+                const separator = url.includes('?') ? '&' : '?';
+                const downloadUrl = `${url}${separator}download=`;
+                const a = document.createElement('a');
+                a.href = downloadUrl;
+                a.download = '';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            } else {
+                toast.error('Erro ao baixar mídia. Abrindo link...')
+                window.open(url, '_blank')
+            }
         }
     }
 

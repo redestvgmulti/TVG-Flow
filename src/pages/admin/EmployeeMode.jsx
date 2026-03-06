@@ -20,7 +20,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
         imagem_url: '',
     });
 
-    const TAGS_FIXAS = ['Cinema', 'Esportes', 'Política', 'Saúde', 'Tecnologia', 'Geral', 'Justiça', 'Famosos', 'Economia', 'Goiás'];
+
 
     const [contentType, setContentType] = useState('feed'); // 'feed' | 'reels'
 
@@ -292,17 +292,38 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
         try {
             const response = await fetch(url);
             const blob = await response.blob();
+            let ext = '.bin';
+            if (blob.type === 'image/jpeg') ext = '.jpg';
+            else if (blob.type === 'image/png') ext = '.png';
+            else if (blob.type === 'video/mp4') ext = '.mp4';
+            else if (blob.type === 'image/webp') ext = '.webp';
+            else {
+                const match = url.match(/\.([a-z0-9]+)(?:[\?#]|$)/i);
+                if (match) ext = `.${match[1].toLowerCase()}`;
+            }
+
             const objUrl = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = objUrl;
-            link.download = type === 'reels' ? `frame_${Date.now()}.png` : `materia_${Date.now()}.png`;
+            link.download = type === 'reels' ? `frame_${Date.now()}${ext}` : `materia_${Date.now()}${ext}`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
             window.URL.revokeObjectURL(objUrl);
         } catch (e) {
             console.error("Erro ao baixar:", e);
-            window.open(url, '_blank');
+            if (url.includes('/storage/v1/object/')) {
+                const separator = url.includes('?') ? '&' : '?';
+                const downloadUrl = `${url}${separator}download=`;
+                const link = document.createElement('a');
+                link.href = downloadUrl;
+                link.download = '';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            } else {
+                window.open(url, '_blank');
+            }
         }
     };
 
@@ -528,14 +549,12 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                 {/* Tag Obrigatória */}
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
                                     <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Editoria (Tag) <span style={{ color: '#ef4444' }}>*</span></label>
-                                    <select
+                                    <input
                                         value={form.tag}
-                                        onChange={e => setForm({ ...form, tag: e.target.value })}
+                                        onChange={e => setForm({ ...form, tag: e.target.value.toUpperCase() })}
+                                        placeholder="Ex: URGENTE"
                                         style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' }}
-                                    >
-                                        <option value="">Selecione a categoria...</option>
-                                        {TAGS_FIXAS.map(t => <option key={t} value={t}>{t}</option>)}
-                                    </select>
+                                    />
                                 </div>
 
                                 {/* Link */}
