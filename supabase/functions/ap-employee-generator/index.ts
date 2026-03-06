@@ -44,6 +44,7 @@ Deno.serve(async (req: Request) => {
             userTag: rawUserTag,
             context_tag: rawContextTag,
             userText: rawUserText,
+            template_set = 'default',
         } = body;
 
         console.log(`[AUDIT] [ap-employee-generator] Invocado para Empresa: ${empresa_id}, Link: ${url_original}`);
@@ -67,7 +68,8 @@ Deno.serve(async (req: Request) => {
         // 1. Reservar template
         const { data: templateData, error: rpcError } = await supabase.schema("ap").rpc("get_and_advance_template", {
             p_empresa_id: empresa_id,
-            p_tipo: content_type
+            p_tipo: content_type,
+            p_template_set: template_set
         });
 
         if (rpcError || !templateData) {
@@ -95,6 +97,7 @@ Deno.serve(async (req: Request) => {
                 template_ordem: templateData.ordem,
                 placid_template_uuid: templateData.placid_template_uuid,
                 template_nome_snapshot: templateData.nome,
+                template_set: templateData.template_set || template_set,
                 gerado_em: new Date().toISOString()
             })
             .select("id")

@@ -63,7 +63,8 @@ export default function AutoPublisher() {
         conteudo: '',
         context_tag: '',
         image_url: '',
-        content_type: 'feed'
+        content_type: 'feed',
+        template_set: 'default'
     })
     const [manualFormErrors, setManualFormErrors] = useState({})
     const [isSubmittingManual, setIsSubmittingManual] = useState(false)
@@ -89,7 +90,8 @@ export default function AutoPublisher() {
             conteudo: '',
             context_tag: '',
             image_url: '',
-            content_type: 'feed'
+            content_type: 'feed',
+            template_set: 'default'
         })
         setSelectedFile(null)
         setManualFormErrors({})
@@ -412,6 +414,7 @@ export default function AutoPublisher() {
             context_tag: formData.context_tag,
             image_url: finalImageUrl,
             content_type: formData.content_type || 'feed',
+            template_set: formData.template_set || 'default',
             // Legacy/Hybrid field support
             userHeadline: formData.titulo || null,
             userText: formData.conteudo || null,
@@ -636,7 +639,7 @@ export default function AutoPublisher() {
                                 <div style={{ background: '#eff6ff', color: '#3b82f6', padding: '8px', borderRadius: '10px', display: 'flex' }}><Brain size={18} /></div>
                                 Nova Matéria
                             </h2>
-                            <button onClick={() => { setManualModalOpen(false); setSelectedFile(null); setFormData({ url_original: '', titulo: '', conteudo: '', image_url: '', context_tag: '', content_type: 'feed' }) }} style={{ background: '#f3f4f6', border: 'none', cursor: 'pointer', color: '#6b7280', width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <button onClick={() => { setManualModalOpen(false); setSelectedFile(null); setFormData({ url_original: '', titulo: '', conteudo: '', image_url: '', context_tag: '', content_type: 'feed', template_set: 'default' }) }} style={{ background: '#f3f4f6', border: 'none', cursor: 'pointer', color: '#6b7280', width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                 <X size={18} />
                             </button>
                         </div>
@@ -651,6 +654,23 @@ export default function AutoPublisher() {
                                             {icon} {lbl}
                                         </button>
                                     ))}
+                                </div>
+
+                                {/* Campanha */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Campanha</label>
+                                    <select
+                                        value={formData.template_set || 'default'}
+                                        onChange={(e) => setFormData({ ...formData, template_set: e.target.value })}
+                                        style={{ width: '100%', padding: '12px 16px', borderRadius: '12px', border: '1px solid #e2e8f0', background: '#f8fafc', fontSize: '14px', color: '#0f172a', fontWeight: 500, outline: 'none', transition: 'all 0.2s', appearance: 'none' }}
+                                    >
+                                        <option value="default">Padrão</option>
+                                        <option value="individuais">Individuais</option>
+                                        <option value="natal">Natal</option>
+                                        <option value="ano_novo">Ano Novo</option>
+                                        <option value="dia_das_mulheres">Dia das Mulheres</option>
+                                        <option value="dia_dos_pais">Dia dos Pais</option>
+                                    </select>
                                 </div>
 
                                 {/* Link */}

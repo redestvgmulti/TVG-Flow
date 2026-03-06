@@ -58,7 +58,8 @@ Deno.serve(async (req: Request) => {
             patrocinador_id, 
             context_tag, 
             placid_template_uuid, 
-            content_type
+            content_type,
+            template_set
         `)
         .eq("status", "pending_render");
 
@@ -108,7 +109,8 @@ Deno.serve(async (req: Request) => {
                     .schema('ap')
                     .rpc("get_and_advance_template", {
                         p_empresa_id: empresaId,
-                        p_tipo: queueType
+                        p_tipo: queueType,
+                        p_template_set: item.template_set || 'default'
                     });
 
                 if (templateErr || !templateData || !templateData.placid_template_uuid) {
