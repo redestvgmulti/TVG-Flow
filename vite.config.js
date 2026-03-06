@@ -98,7 +98,8 @@ export default defineConfig({
               }
             }
           }
-        ]
+        ],
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024 // 5MB limit for precaching
       },
       devOptions: {
         enabled: process.env.VITE_SW_DEV === 'true', // Enable with: VITE_SW_DEV=true npm run dev
