@@ -66,8 +66,10 @@ export default function AutoPublisher() {
         context_tag: '',
         image_url: '',
         content_type: 'feed',
-        template_set: 'default'
+        template_set: 'default',
+        placid_template_uuid: null
     })
+    const [availableTemplates, setAvailableTemplates] = useState([])
     const [manualFormErrors, setManualFormErrors] = useState({})
     const [isSubmittingManual, setIsSubmittingManual] = useState(false)
     const [selectedFile, setSelectedFile] = useState(null)
@@ -93,8 +95,10 @@ export default function AutoPublisher() {
             context_tag: '',
             image_url: '',
             content_type: 'feed',
-            template_set: 'default'
+            template_set: 'default',
+            placid_template_uuid: null
         })
+        setAvailableTemplates([])
         setSelectedFile(null)
         setManualFormErrors({})
     }
@@ -157,6 +161,54 @@ export default function AutoPublisher() {
         setItems(data ?? [])
         setLoading(false)
     }, [clienteId])
+
+    // ── Load available templates for "individuais"
+    useEffect(() => {
+        if (formData.template_set === 'individuais' && formData.content_type) {
+            async function loadTemplates() {
+                console.log("[AutoPublisher] Fetching templates via edge function for:", {
+                    template_set: 'individuais',
+                    tipo: formData.content_type
+                });
+
+                try {
+                    const { data, error } = await supabase.functions.invoke('ap-config', {
+                        method: 'POST',
+                        body: { resource: 'templates', action: 'list' }
+                    })
+
+                    if (error) {
+                        console.error("[AutoPublisher] Edge function query error:", error);
+                        toast.error("Erro ao carregar templates.");
+                        return;
+                    }
+
+                    if (!data || data.has_error) {
+                        console.error("[AutoPublisher] Edge function data error:", data?.error);
+                        toast.error("Erro ao processar templates.");
+                        return;
+                    }
+
+                    // Filter locally to match campaign, type and active status
+                    const filtered = data.filter(t =>
+                        (t.template_set === 'individuais') &&
+                        (t.tipo === formData.content_type) &&
+                        t.ativo
+                    ).sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
+
+                    console.log("[AutoPublisher] [EDGE] Templates found (filtered):", filtered.length);
+                    setAvailableTemplates(filtered)
+                } catch (err) {
+                    console.error("[AutoPublisher] Failed to load templates:", err);
+                    toast.error("Erro de conexão ao carregar templates.");
+                }
+            }
+            loadTemplates()
+        } else {
+            setAvailableTemplates([])
+            setFormData(prev => ({ ...prev, placid_template_uuid: null }))
+        }
+    }, [formData.template_set, formData.content_type])
 
     // ── Load on tab change + realtime
     useEffect(() => {
@@ -324,6 +376,10 @@ export default function AutoPublisher() {
             newErrors.context_tag = 'Tag é obrigatória.'
         }
 
+        if (formData.template_set === 'individuais' && !formData.placid_template_uuid) {
+            newErrors.placid_template_uuid = 'Selecione um template para a campanha individual.'
+        }
+
         if (!isLinkMode) {
             // Manual Mode Requirements
             if (!formData.titulo) newErrors.titulo = 'Título obrigatório em modo manual.'
@@ -417,6 +473,7 @@ export default function AutoPublisher() {
             image_url: finalImageUrl,
             content_type: formData.content_type || 'feed',
             template_set: formData.template_set || 'default',
+            placid_template_uuid: formData.placid_template_uuid || null,
             // Legacy/Hybrid field support
             userHeadline: formData.titulo || null,
             userText: formData.conteudo || null,
@@ -676,6 +733,40 @@ export default function AutoPublisher() {
                                         <option value="dia_dos_pais">Dia dos Pais</option>
                                     </select>
                                 </div>
+
+                                {/* Template Individual */}
+                                {formData.template_set === 'individuais' && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Template Individual</label>
+                                        <select
+                                            value={formData.placid_template_uuid || ''}
+                                            onChange={(e) => {
+                                                setFormData({ ...formData, placid_template_uuid: e.target.value });
+                                                if (manualFormErrors.placid_template_uuid) setManualFormErrors({ ...manualFormErrors, placid_template_uuid: null });
+                                            }}
+                                            style={{
+                                                width: '100%',
+                                                padding: '12px 16px',
+                                                borderRadius: '12px',
+                                                border: manualFormErrors.placid_template_uuid ? '1px solid #ef4444' : '1px solid #e2e8f0',
+                                                background: '#f8fafc',
+                                                fontSize: '14px',
+                                                color: '#0f172a',
+                                                fontWeight: 500,
+                                                outline: 'none',
+                                                transition: 'all 0.2s',
+                                                appearance: 'none',
+                                                boxShadow: manualFormErrors.placid_template_uuid ? '0 0 0 2px rgba(239, 68, 68, 0.2)' : 'none'
+                                            }}
+                                        >
+                                            <option value="">Selecione um template...</option>
+                                            {availableTemplates.map(t => (
+                                                <option key={t.id} value={t.placid_template_uuid}>{t.nome}</option>
+                                            ))}
+                                        </select>
+                                        {manualFormErrors.placid_template_uuid && <span style={{ color: '#ef4444', fontSize: '12px', fontWeight: 600 }}>{manualFormErrors.placid_template_uuid}</span>}
+                                    </div>
+                                )}
 
                                 {/* Link */}
                                 <div style={{ padding: '16px', background: '#e0f2fe', border: '1px solid #bae6fd', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px', boxSizing: 'border-box' }}>

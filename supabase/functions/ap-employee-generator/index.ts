@@ -44,7 +44,8 @@ Deno.serve(async (req: Request) => {
             userTag: rawUserTag,
             context_tag: rawContextTag,
             userText: rawUserText,
-            template_set = 'default',
+            template_set: raw_template_set = 'default',
+            placid_template_uuid: raw_placid_uuid = null
         } = body;
 
         console.log(`[AUDIT] [ap-employee-generator] Invocado para Empresa: ${empresa_id}, Link: ${url_original}`);
@@ -65,19 +66,29 @@ Deno.serve(async (req: Request) => {
 
         const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-        // 1. Reservar template
-        const { data: templateData, error: rpcError } = await supabase.schema("ap").rpc("get_and_advance_template", {
-            p_empresa_id: empresa_id,
-            p_tipo: content_type,
-            p_template_set: template_set
-        });
+        // 1. Resolver Template (Manual ou Automático via Render Engine)
+        let template_id = null;
+        let template_ordem = null;
+        let placid_template_uuid = raw_placid_uuid;
+        let template_nome_snapshot = null;
+        const template_set = raw_template_set || 'default';
 
-        if (rpcError || !templateData) {
-            console.error("[AUDIT] [ap-employee-generator] RPC Template Error:", rpcError);
-            throw new Error("Nenhum template ativo cadastrado.");
+        if (placid_template_uuid) {
+            console.log(`[AUDIT] [ap-employee-generator] Template Manual detectado: ${placid_template_uuid}`);
+            const { data: tData } = await supabase.schema("ap").from("templates")
+                .select("id, nome, ordem")
+                .eq("placid_template_uuid", placid_template_uuid)
+                .limit(1)
+                .single();
+
+            if (tData) {
+                template_id = tData.id;
+                template_ordem = tData.ordem;
+                template_nome_snapshot = tData.nome;
+            }
+        } else {
+            console.log(`[AUDIT] [ap-employee-generator] Rotação automática solicitada (UUID nulo).`);
         }
-
-        console.log(`[AUDIT] [ap-employee-generator] Template: ${templateData.nome}`);
 
         // 2. Criar registro inicial como 'processing' para esconder do UI e travar
         const { data: newsItem, error: insertError } = await supabase.schema("ap").from("candidate_news")
@@ -93,11 +104,11 @@ Deno.serve(async (req: Request) => {
                 content_type: content_type,
                 criado_por_user_id: auth_user_id || null,
                 role_criador: "employee",
-                template_id: templateData.id,
-                template_ordem: templateData.ordem,
-                placid_template_uuid: templateData.placid_template_uuid,
-                template_nome_snapshot: templateData.nome,
-                template_set: templateData.template_set || template_set,
+                template_id: template_id,
+                template_ordem: template_ordem,
+                placid_template_uuid: placid_template_uuid,
+                template_nome_snapshot: template_nome_snapshot,
+                template_set: template_set,
                 gerado_em: new Date().toISOString()
             })
             .select("id")
