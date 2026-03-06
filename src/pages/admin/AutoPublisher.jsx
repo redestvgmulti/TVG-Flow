@@ -7,6 +7,7 @@ import {
     Video, CheckCircle2, ChevronDown, ChevronUp, Pencil, Loader2
 } from 'lucide-react'
 import AutoPublisherSettings from './AutoPublisherSettings'
+import AutoPublisherTemplates from './AutoPublisherTemplates'
 import EditorialEngine from '../../features/editorial/EditorialEngine'
 import { SkeletonCard, SkeletonTable } from '../../components/Skeleton'
 import { toast } from 'sonner'
@@ -21,6 +22,7 @@ const TABS = [
     { key: 'aprovadas', label: 'Aprovadas' },
     { key: 'publicadas', label: 'Publicadas' },
     { key: 'editorial', label: 'Motor Editorial' },
+    { key: 'templates', label: 'Templates' },
     { key: 'settings', label: 'Configurações' },
 ]
 
@@ -495,12 +497,14 @@ export default function AutoPublisher() {
                             </button>
                         ))}
                         <button className={`ap-tab${tab === 'editorial' ? ' active' : ''}`} onClick={() => setTab('editorial')}>Motor Editorial</button>
+                        <button className={`ap-tab${tab === 'templates' ? ' active' : ''}`} onClick={() => setTab('templates')}>Templates</button>
                         <button className={`ap-tab${tab === 'settings' ? ' active' : ''}`} onClick={() => setTab('settings')}>Configurações</button>
                     </div>
                 </div>
 
                 {/* ── Content */}
                 {tab === 'editorial' && <EditorialEngine clienteId={clienteId} />}
+                {tab === 'templates' && <AutoPublisherTemplates clienteId={clienteId} />}
                 {tab === 'settings' && <AutoPublisherSettings clienteId={clienteId} />}
 
                 {/* ── Coletadas (leitura-only, tabela simples) */}

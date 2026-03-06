@@ -38,14 +38,14 @@ Deno.serve(async (req: Request) => {
 
         console.log("[ap-config] resource:", resource, "action:", action);
 
-        if (!resource || !["sources", "patrocinadores", "templates"].includes(resource)) {
-            throw new Error(`resource inválido: '${resource}'. Use 'sources', 'patrocinadores' ou 'templates'`);
+        if (!resource || !["sources", "patrocinadores", "templates", "template_sets"].includes(resource)) {
+            throw new Error(`resource inválido: '${resource}'. Use 'sources', 'patrocinadores', 'templates' ou 'template_sets'`);
         }
 
         const base = `${SUPABASE_URL}/rest/v1/${resource}`;
 
         // Handle tenant column name differences
-        const tenantCol = resource === 'templates' ? 'empresa_id' : 'cliente_id';
+        const tenantCol = ['templates', 'template_sets'].includes(resource) ? 'empresa_id' : 'cliente_id';
 
         if (action === "list") {
             const orderCol = resource === 'templates' ? 'ordem.asc' : 'created_at.asc';
