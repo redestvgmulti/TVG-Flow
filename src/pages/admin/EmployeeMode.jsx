@@ -91,7 +91,17 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
     const [historyPage, setHistoryPage] = useState(0);
     const [hasMoreHistory, setHasMoreHistory] = useState(true);
+    const [copiedHistoryItems, setCopiedHistoryItems] = useState({});
     const ITEMS_PER_PAGE = 20;
+
+    const handleCopyHistory = (item) => {
+        if (!item.caption) return;
+        navigator.clipboard.writeText(item.caption);
+        setCopiedHistoryItems(prev => ({ ...prev, [item.id]: true }));
+        setTimeout(() => {
+            setCopiedHistoryItems(prev => ({ ...prev, [item.id]: false }));
+        }, 2000);
+    };
 
     // File Upload State
     const [selectedFile, setSelectedFile] = useState(null);
@@ -289,6 +299,20 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
 
     const handleDownloadUrl = async (url, type = 'feed') => {
         if (!url) return;
+
+        // Evita erro de CORS (net::ERR_FAILED) no fetch e avisos do SW no console
+        if (url.includes('/storage/v1/object/')) {
+            const separator = url.includes('?') ? '&' : '?';
+            const downloadUrl = `${url}${separator}download=`;
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = '';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            return;
+        }
+
         try {
             const response = await fetch(url);
             const blob = await response.blob();
@@ -312,18 +336,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
             window.URL.revokeObjectURL(objUrl);
         } catch (e) {
             console.error("Erro ao baixar:", e);
-            if (url.includes('/storage/v1/object/')) {
-                const separator = url.includes('?') ? '&' : '?';
-                const downloadUrl = `${url}${separator}download=`;
-                const link = document.createElement('a');
-                link.href = downloadUrl;
-                link.download = '';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            } else {
-                window.open(url, '_blank');
-            }
+            window.open(url, '_blank');
         }
     };
 
@@ -729,9 +742,15 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                             )}
 
                                             <div style={{ display: 'flex', gap: '8px' }}>
-                                                <button onClick={() => { navigator.clipboard.writeText(item.caption); alert("Textos copiados!") }} style={{ flex: 1, padding: '10px', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '13px', fontWeight: 600, color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: 'pointer' }}>
-                                                    <Copy size={16} /> Textos
-                                                </button>
+                                                {copiedHistoryItems[item.id] ? (
+                                                    <button disabled style={{ flex: 1, padding: '10px', background: '#16a34a', border: '1px solid #16a34a', borderRadius: '8px', fontSize: '13px', fontWeight: 600, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: 'default' }}>
+                                                        <CheckCircle2 size={16} /> Texto copiado
+                                                    </button>
+                                                ) : (
+                                                    <button onClick={() => handleCopyHistory(item)} style={{ flex: 1, padding: '10px', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '8px', fontSize: '13px', fontWeight: 600, color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: 'pointer' }}>
+                                                        <Copy size={16} /> Textos
+                                                    </button>
+                                                )}
                                                 <button onClick={() => handleDownloadUrl(item.render_url)} style={{ flex: 1, padding: '10px', background: '#1e293b', border: '1px solid #1e293b', borderRadius: '8px', fontSize: '13px', fontWeight: 600, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: 'pointer' }}>
                                                     <Download size={16} /> Cópia (Frame/Arte)
                                                 </button>

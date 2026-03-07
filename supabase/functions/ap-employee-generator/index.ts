@@ -298,24 +298,21 @@ Deno.serve(async (req: Request) => {
 
         console.log(`[AUDIT] [ap-employee-generator] Item ${newsId} -> pending_render. Disparando render imediato...`);
 
-        // 7. Disparar ap-render-engine imediatamente (fire-and-forget, não bloqueia resposta)
-        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-        const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-        const renderEngineUrl = `${supabaseUrl}/functions/v1/ap-render-engine`;
-
-        // Fire-and-forget: não aguardamos para não estourar timeout do employee-generator
-        fetch(renderEngineUrl, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${serviceKey}`
-            },
-            body: JSON.stringify({ action: "render_one", newsId })
-        }).then(res => {
-            console.log(`[AUDIT] [ap-employee-generator] Render engine invocado para ${newsId}: ${res.status}`);
+        // 7. Disparar ap-render-engine imediatamente (background)
+        const renderPromise = supabase.functions.invoke("ap-render-engine", {
+            body: { action: "render_one", newsId }
+        }).then(({ data, error }) => {
+            if (error) console.error(`[AUDIT] [ap-employee-generator] Falha ao invocar render engine para ${newsId}:`, error);
+            else console.log(`[AUDIT] [ap-employee-generator] Render engine invocado para ${newsId}: sucesso`);
         }).catch(err => {
-            console.error(`[AUDIT] [ap-employee-generator] Falha ao invocar render engine para ${newsId}:`, err.message);
+            console.error(`[AUDIT] [ap-employee-generator] Exceção ao invocar render engine para ${newsId}:`, err.message);
         });
+
+        // @ts-ignore
+        if (typeof EdgeRuntime !== 'undefined' && typeof EdgeRuntime.waitUntil === 'function') {
+            // @ts-ignore
+            EdgeRuntime.waitUntil(renderPromise);
+        }
 
         return new Response(JSON.stringify({
             success: true,
