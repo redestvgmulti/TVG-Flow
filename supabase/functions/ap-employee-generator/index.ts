@@ -300,6 +300,9 @@ Deno.serve(async (req: Request) => {
 
         // 7. Disparar ap-render-engine imediatamente (background)
         const renderPromise = supabase.functions.invoke("ap-render-engine", {
+            headers: {
+                "x-internal-secret": Deno.env.get("RENDER_ENGINE_SECRET") || ""
+            },
             body: { action: "render_one", newsId }
         }).then(({ data, error }) => {
             if (error) console.error(`[AUDIT] [ap-employee-generator] Falha ao invocar render engine para ${newsId}:`, error);

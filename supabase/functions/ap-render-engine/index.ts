@@ -16,6 +16,19 @@ const BATCH_LIMIT = 5;
 Deno.serve(async (req: Request) => {
     if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
+    // --- INTERNAL AUTHENTICATION CHECK ---
+    const internalSecret = req.headers.get("x-internal-secret");
+    const expectedSecret = Deno.env.get("RENDER_ENGINE_SECRET");
+
+    if (expectedSecret && internalSecret !== expectedSecret) {
+        console.warn("[ap-render-engine] Unauthorized access attempt: invalid internal secret.");
+        return new Response(JSON.stringify({ error: "Unauthorized: Invalid internal secret" }), {
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+    }
+    // --- END INTERNAL AUTH ---
+
     const supabase = createClient(
         Deno.env.get("SUPABASE_URL")!,
         Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
