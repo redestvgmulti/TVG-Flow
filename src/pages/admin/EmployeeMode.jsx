@@ -113,7 +113,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
         setIsUploading(true);
         try {
             const fileExt = file.name.split('.').pop();
-            const fileName = `${Math.random()}.${fileExt}`;
+            const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
             const filePath = `employee_uploads/${fileName}`;
 
             const { error: uploadError } = await supabase.storage
