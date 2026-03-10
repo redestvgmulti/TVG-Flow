@@ -7,7 +7,6 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import * as cheerio from "https://esm.sh/cheerio@1.0.0-rc.12";
 
 const BATCH_LIMIT = 50;
 const MAX_AGE_HOURS = 24;
@@ -59,6 +58,7 @@ Deno.serve(async (_req: Request) => {
     let errors = 0;
 
     try {
+      console.log(`[ap-data-ingestion] processing source ${source.id}: ${source.url}`);
       let fetchUrl = source.url;
 
       if (fetchUrl.includes("instagram.com")) {
@@ -66,13 +66,18 @@ Deno.serve(async (_req: Request) => {
         if (match?.[1]) fetchUrl = `https://rsshub.anyat.icu/instagram/user/${match[1]}`;
       }
 
+      // Add 10s timeout to source fetch
+      const abSource = new AbortController();
+      const timerSource = setTimeout(() => abSource.abort(), 10000);
       const res = await fetch(fetchUrl, {
+        signal: abSource.signal,
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
           "Accept": "application/rss+xml, application/xml, text/xml, */*",
           "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7"
         }
-      });
+      }).finally(() => clearTimeout(timerSource));
+      
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
       const xml = await res.text();
@@ -91,63 +96,62 @@ Deno.serve(async (_req: Request) => {
         console.log(`[ap-data-ingestion] source ${source.id}: skipped ${skipped_old} items older than ${MAX_AGE_HOURS}h`);
       }
 
-      const items = await Promise.all(recentItems.map(async (item) => {
-        let studio_media_video_url = null;
-        let studio_media_image_url = item.imageUrl ?? null;
+      // Process up to 10 items per source to balance freshness and resources
+      const itemsToProcess = recentItems.slice(0, 10);
 
-        try {
-          const ab = new AbortController();
-          const timer = setTimeout(() => ab.abort(), 8000);
-          const r = await fetch(item.link, {
-            signal: ab.signal,
-            headers: {
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
-              "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-              "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
-              "Referer": "https://google.com"
-            }
-          }).catch(() => null);
-          clearTimeout(timer);
+      const items = [];
+      for (const item of itemsToProcess) {
+          let studio_media_video_url = null;
+          let studio_media_image_url = item.imageUrl ?? null;
 
-          if (r?.ok) {
-            const html = await r.text();
-            const $ = cheerio.load(html);
-
-            const ogImage = $('meta[property="og:image"]').attr('content') ||
-              $('meta[name="twitter:image"]').attr('content') ||
-              $('article img').first().attr('src');
-
-            const ogVideo = $('meta[property="og:video"]').attr('content') ||
-              $('meta[property="og:video:url"]').attr('content') ||
-              $('meta[property="og:video:secure_url"]').attr('content');
-
-            if (ogImage) {
-              let imgUrl = ogImage.trim();
-              if (imgUrl.startsWith('/')) {
-                const urlObj = new URL(item.link);
-                imgUrl = `${urlObj.protocol}//${urlObj.host}${imgUrl}`;
+          try {
+            console.log(`[ap-data-ingestion] fetching item: ${item.link}`);
+            const ab = new AbortController();
+            const timer = setTimeout(() => ab.abort(), 10000);
+            const r = await fetch(item.link, {
+              signal: ab.signal,
+              headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
+                "Accept": "text/html,*/*"
               }
-              // Always store to studio_media_image_url; also set as main image if no video
-              studio_media_image_url = imgUrl;
-            }
-            if (ogVideo) {
-              let vidUrl = ogVideo;
-              if (vidUrl.startsWith('/')) {
-                const urlObj = new URL(item.link);
-                vidUrl = `${urlObj.protocol}//${urlObj.host}${vidUrl}`;
+            }).finally(() => clearTimeout(timer));
+
+            if (r?.ok) {
+              const html = await r.text();
+              
+              // Simple regex instead of Cheerio to save memory and CPU
+              const ogImage = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i)?.[1] ||
+                              html.match(/<meta[^>]*name=["']twitter:image["'][^>]*content=["']([^"']+)["']/i)?.[1];
+              
+              const ogVideo = html.match(/<meta[^>]*property=["']og:video["'][^>]*content=["']([^"']+)["']/i)?.[1];
+
+              if (ogImage) {
+                let imgUrl = ogImage.trim();
+                if (imgUrl.match(/^\/\/[^\/]/)) {
+                  imgUrl = `https:${imgUrl}`;
+                } else if (imgUrl.startsWith('/')) {
+                  const urlObj = new URL(item.link);
+                  imgUrl = `${urlObj.protocol}//${urlObj.host}${imgUrl}`;
+                }
+                studio_media_image_url = imgUrl;
               }
-              studio_media_video_url = vidUrl;
+              if (ogVideo) {
+                let vidUrl = ogVideo;
+                if (vidUrl.startsWith('/')) {
+                  const urlObj = new URL(item.link);
+                  vidUrl = `${urlObj.protocol}//${urlObj.host}${vidUrl}`;
+                }
+                studio_media_video_url = vidUrl;
+              }
             }
+          } catch (e: any) { 
+              console.error(`[ap-data-ingestion] item fetch error: ${e.message}`);
           }
-        } catch (_e) { /* silently ignore */ }
 
-        return { ...item, studio_media_image_url, studio_media_video_url };
-      }));
+          items.push({ ...item, studio_media_image_url, studio_media_video_url });
+      }
 
       for (const item of items) {
-        // We use ON CONFLICT because of the uq_candidate_news_url_cliente constraint
-        // But in Edge Function client we just insert and ignore duplicated errors if they happen
-        // Determine imagem_url: prefer RSS-provided image, fall back to scraped OG image
         const finalImageUrl = item.imageUrl?.trim() || item.studio_media_image_url || null;
 
         const { error: insertErr } = await supabase.schema("ap").from("candidate_news").insert({
@@ -165,10 +169,7 @@ Deno.serve(async (_req: Request) => {
         });
 
         if (insertErr) {
-          // Check if it's a duplication error (code 23505)
-          if (insertErr.code === '23505') {
-            // Silently skip
-          } else {
+          if (insertErr.code !== '23505') {
             console.error(`[ap-data-ingestion] insert error for ${item.link}:`, insertErr.message);
             errors++;
           }
