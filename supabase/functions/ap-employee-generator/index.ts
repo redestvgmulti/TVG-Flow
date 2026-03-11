@@ -282,49 +282,32 @@ Deno.serve(async (req: Request) => {
 
         console.log(`[AUDIT] [ap-employee-generator] Merge Final: Tag=${resolvedTag}, Headline=${resolvedHeadline}`);
 
-        // 6. Salvamento Final — Employee items vão direto para 'pending_render' (sem aprovação admin)
+        // 6. Salvamento Final — Employee items vão para 'pending_review' (aguarda revisão humana)
         const { error: finalUpdErr } = await supabase.schema("ap").from("candidate_news")
             .update({
-                status: "pending_render",
+                status: "pending_review",  // Human must approve before render
                 headline: resolvedHeadline,
                 caption: finalCaption,
                 context_tag: resolvedTag,
                 roteiro_json: parsedData.roteiro || null,
-                processing_started_at: null // Libera lock para render engine
+                processing_started_at: null
             })
             .eq("id", newsId);
 
         if (finalUpdErr) throw finalUpdErr;
 
-        console.log(`[AUDIT] [ap-employee-generator] Item ${newsId} -> pending_render. Disparando render imediato...`);
+        console.log(`[FLOW] [ap-employee-generator] Item ${newsId} -> pending_review. Awaiting human approval before render.`);
 
-        // 7. Disparar ap-render-engine imediatamente (background)
-        const renderPromise = supabase.functions.invoke("ap-render-engine", {
-            headers: {
-                "x-internal-secret": Deno.env.get("RENDER_ENGINE_SECRET") || ""
-            },
-            body: { action: "render_one", newsId }
-        }).then(({ data, error }) => {
-            if (error) console.error(`[AUDIT] [ap-employee-generator] Falha ao invocar render engine para ${newsId}:`, error);
-            else console.log(`[AUDIT] [ap-employee-generator] Render engine invocado para ${newsId}: sucesso`);
-        }).catch(err => {
-            console.error(`[AUDIT] [ap-employee-generator] Exceção ao invocar render engine para ${newsId}:`, err.message);
-        });
-
-        // @ts-ignore
-        if (typeof EdgeRuntime !== 'undefined' && typeof EdgeRuntime.waitUntil === 'function') {
-            // @ts-ignore
-            EdgeRuntime.waitUntil(renderPromise);
-        }
+        // Render will be triggered by the human approval action (approve_for_ig) in the frontend
 
         return new Response(JSON.stringify({
             success: true,
             news_id: newsId,
-            status: "pending_render",
+            status: "pending_review",
             headline: resolvedHeadline,
             caption: finalCaption,
             context_tag: resolvedTag,
-            render_pending: true // Signal to frontend to start polling
+            pending_review: true // Signal to frontend that human review is required
         }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     } catch (e: any) {

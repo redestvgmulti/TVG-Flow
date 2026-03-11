@@ -181,7 +181,11 @@ Deno.serve(async (req: Request) => {
                 "tag_news": { text: resolvedTag },
             };
             if (bgImage) {
-                layers["news-image"] = { image: bgImage };
+                layers["news-image"] = {
+                    image: bgImage,
+                    fit: "contain",      // Preserve proportions, avoid aggressive crop
+                    anchor: "top",       // Prioritize top of image where faces/heads appear
+                };
             }
 
             const renderPayload = {

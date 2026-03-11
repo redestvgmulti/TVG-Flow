@@ -135,7 +135,7 @@ export default function AutoPublisher() {
 
         let statuses = []
         if (currentTab === 'coletadas') statuses = ['raw', 'ready_for_scoring', 'scored', 'failed', 'rejected', 'processing']
-        if (currentTab === 'pendentes') statuses = ['selected', 'studio_selected', 'studio_ready']
+        if (currentTab === 'pendentes') statuses = ['selected', 'studio_selected', 'studio_ready', 'pending_review']
         if (currentTab === 'aprovadas') statuses = ['pending_render', 'pending_review', 'ready_to_publish', 'approved', 'queued_for_posting']
         if (currentTab === 'publicadas') statuses = ['posted']
 
@@ -162,12 +162,12 @@ export default function AutoPublisher() {
         setLoading(false)
     }, [clienteId])
 
-    // ── Load available templates for "individuais"
+    // ── Load available templates for any non-default campaign
     useEffect(() => {
-        if (formData.template_set === 'individuais' && formData.content_type) {
+        if (formData.template_set && formData.template_set !== 'default' && formData.content_type) {
             async function loadTemplates() {
                 console.log("[AutoPublisher] Fetching templates via edge function for:", {
-                    template_set: 'individuais',
+                    template_set: formData.template_set,
                     tipo: formData.content_type
                 });
 
@@ -191,7 +191,7 @@ export default function AutoPublisher() {
 
                     // Filter locally to match campaign, type and active status
                     const filtered = data.filter(t =>
-                        (t.template_set === 'individuais') &&
+                        (t.template_set === formData.template_set) &&
                         (t.tipo === formData.content_type) &&
                         t.ativo
                     ).sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
@@ -734,10 +734,10 @@ export default function AutoPublisher() {
                                     </select>
                                 </div>
 
-                                {/* Template Individual */}
-                                {formData.template_set === 'individuais' && (
+                                {/* Template de Campanha (para qualquer set não-padrão) */}
+                                {formData.template_set && formData.template_set !== 'default' && (
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                        <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Template Individual</label>
+                                        <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Template</label>
                                         <select
                                             value={formData.placid_template_uuid || ''}
                                             onChange={(e) => {

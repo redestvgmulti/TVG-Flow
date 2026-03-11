@@ -103,13 +103,14 @@ Deno.serve(async (req: Request) => {
             const hasManualInput = (item.headline && item.headline.length > 5) || (item.caption && item.caption.length > 10);
 
             if (hasManualInput && !isEmployeeGenerated && actionType !== "process_studio") {
-                console.log(`[AUDIT] [ap-content-production] Bypassing LLM for item ${item.id} (Action: ${actionType}). Admin manually edited — bypass active.`);
+                console.log(`[FLOW] [ap-content-production] Manual edit detected — item ${item.id} moved to pending_review (Action: ${actionType}). Awaiting human approval.`);
                 await supabase.schema("ap").from("candidate_news")
                     .update({
-                        status: "pending_render",
+                        status: "pending_review",  // Human must approve before render
                         processing_started_at: null
                     })
-                    .eq("id", item.id);
+                    .eq("id", item.id)
+                    .in("status", ["raw", "ready_for_scoring", "scored", "selected"]); // Race-condition guard
                 processedCount++;
                 continue;
             }
