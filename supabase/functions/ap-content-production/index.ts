@@ -35,10 +35,11 @@ Deno.serve(async (req: Request) => {
     let userHeadline: string | null = null;
     let userTag: string | null = null;
     let userText: string | null = null;
+    let body: any = {};
 
     try {
         if (req.method === "POST") {
-            const body = await req.json().catch(() => ({}));
+            body = await req.json().catch(() => ({}));
             actionType = body.action || "cron";
             newsId = body.newsId || null;
             userHeadline = body.userHeadline || null;
@@ -207,9 +208,27 @@ Deno.serve(async (req: Request) => {
                     status: actionType === "approve_for_ig" ? "pending_render" : "selected",
                     processing_started_at: null
                 };
+
+                if (actionType === "approve_for_ig" && typeof body?.approved_by_id === "string") {
+                    updatePayload.approved_by = body.approved_by_id;
+                    updatePayload.approved_by_name = body.approved_by_name || "Editor";
+                    updatePayload.approved_at = new Date().toISOString();
+                }
             }
 
             await supabase.schema("ap").from("candidate_news").update(updatePayload).eq("id", item.id);
+
+            // Log de Evento Editorial se for aprovação
+            if (actionType === "approve_for_ig" && typeof body?.approved_by_id === "string") {
+                await supabase.schema("ap").from("editorial_events").insert({
+                    worker: "ap-content-production",
+                    action: "approve_news",
+                    news_id: item.id,
+                    user_id: body.approved_by_id,
+                    payload: updatePayload
+                });
+            }
+
             processedCount++;
 
         } catch (err: any) {

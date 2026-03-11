@@ -34,7 +34,7 @@ const STATUS_TAB = {
     selected: 'pendentes',
     pending_render: 'aprovadas',
     processing: 'coletadas',
-    pending_review: 'aprovadas',
+    pending_review: 'pendentes',
     ready_to_publish: 'aprovadas',
     approved: 'aprovadas',
     queued_for_posting: 'aprovadas',
@@ -136,7 +136,7 @@ export default function AutoPublisher() {
         let statuses = []
         if (currentTab === 'coletadas') statuses = ['raw', 'ready_for_scoring', 'scored', 'failed', 'rejected', 'processing']
         if (currentTab === 'pendentes') statuses = ['selected', 'studio_selected', 'studio_ready', 'pending_review']
-        if (currentTab === 'aprovadas') statuses = ['pending_render', 'pending_review', 'ready_to_publish', 'approved', 'queued_for_posting']
+        if (currentTab === 'aprovadas') statuses = ['pending_render', 'ready_to_publish', 'approved', 'queued_for_posting']
         if (currentTab === 'publicadas') statuses = ['posted']
 
         if (statuses.length === 0) {
@@ -265,14 +265,19 @@ export default function AutoPublisher() {
             // 'approve_for_ig' = aprovação humana explícita.
             // O worker usa os dados já salvos no banco (headline/caption/context_tag)
             // e move o status para pending_render antes de chamar o render engine.
+            const authUser = await supabase.auth.getUser()
+            const user = authUser.data?.user
+            const userName = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email || 'Editor'
+
             const { error: prodError } = await supabase.functions.invoke('ap-content-production', {
                 body: {
                     action: 'approve_for_ig',
                     newsId: item.id,
-                    // Passa os dados atuais do item para garantir soberania humana
                     userHeadline: item.headline || null,
                     userTag: item.context_tag || null,
-                    userText: item.caption || null
+                    userText: item.caption || null,
+                    approved_by_id: user?.id || null,
+                    approved_by_name: userName
                 }
             })
             if (prodError) throw prodError
@@ -327,7 +332,10 @@ export default function AutoPublisher() {
                 caption: editForm.caption.trim(),
                 imagem_url: finalImageUrl
             }
-            const { error } = await supabase.schema('ap').from('candidate_news').update(payload).eq('id', editingItem.id)
+            const { error } = await supabase.schema('ap').from('candidate_news')
+                .update(payload)
+                .eq('id', editingItem.id)
+                .in('status', ['raw', 'ready_for_scoring', 'scored', 'selected', 'pending_review'])
             if (error) throw error
 
             // Optimistic UI update
@@ -1292,15 +1300,18 @@ function AprovadaCard({ item, onPublish, onReject, onEdit, isProcessing }) {
                     ⏳ Em renderização — aguarde a arte ficar pronta
                 </div>
             )}
+            
+            {item.approved_by_name && ['ready_to_publish', 'approved', 'queued_for_posting', 'posted'].includes(item.status) && (
+                <div style={{ padding: '0 16px', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: '#16a34a', fontWeight: 'bold' }}>
+                    <Check size={12} /> Aprovado por {item.approved_by_name}
+                </div>
+            )}
 
             {/* Botões: Baixar Arte + Copiar Legenda */}
             <div className="ap-card-actions-wrap">
                 <div className="ap-card-btn-row">
                     <button className="ap-btn-reject" onClick={() => onReject(item)} title="Descartar" disabled={isRendering || isProcessing} style={{ flexShrink: 0, padding: '8px' }}>
                         <X size={16} />
-                    </button>
-                    <button onClick={() => onEdit(item)} disabled={isRendering || isProcessing} title="Editar Matéria" style={{ padding: '0 12px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '8px', color: '#475569', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '12px' }}>
-                        <Pencil size={12} /> Editar
                     </button>
                     <button className="ap-card-btn-secondary" onClick={handleDownload} disabled={isRendering} title="Baixar Arte" style={{ fontSize: '12px', padding: '0 10px' }}>
                         <Download size={12} /> Baixar
