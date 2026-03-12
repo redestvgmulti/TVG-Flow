@@ -51,8 +51,20 @@ import TenantErrorBoundary from './components/TenantErrorBoundary'
 
 
 import { UpdateBanner } from './components/UpdateBanner'
+import { useServiceWorkerUpdater } from './hooks/useServiceWorkerUpdater'
+import { useVersionGate } from './hooks/useVersionGate'
+import { checkPendingUpdate } from './utils/checkPendingUpdate'
 
 function App() {
+  // PWA Update System
+  useServiceWorkerUpdater()
+  useVersionGate()
+  
+  // Safe reload on startup if update was pending
+  useEffect(() => {
+    checkPendingUpdate()
+  }, [])
+
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AuthProvider>

@@ -8,19 +8,22 @@ const commitHash = (() => {
   try {
     return execSync('git rev-parse --short HEAD').toString().trim()
   } catch {
-    return Date.now().toString()
+    return 'dev'
   }
 })()
+
+const pkg = JSON.parse(await import('node:fs/promises').then(f => f.readFile('./package.json', 'utf-8')))
+const APP_VERSION = `${pkg.version}+${commitHash}`
 
 // https://vite.dev/config/
 export default defineConfig({
   define: {
-    __APP_VERSION__: JSON.stringify(commitHash),
+    __APP_VERSION__: JSON.stringify(APP_VERSION),
   },
   plugins: [
     react(),
     VitePWA({
-      registerType: 'prompt', // User requirement: "New version available. Update now?"
+      registerType: 'autoUpdate', // Definitive fix: PWA updates automatically
       includeAssets: ['icons/*.png', 'offline.html'],
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}']
@@ -31,7 +34,7 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         cleanupOutdatedCaches: true,
         clientsClaim: true, // Part 8 - Service Worker Improvement
-        skipWaiting: true, // Force new SW to take control immediately (fixes hidden alerts)
+        skipWaiting: true, // Force new SW to take control immediately
         navigateFallback: '/index.html', // Offline fallback for navigation requests
         navigateFallbackDenylist: [
           /^\/api\//,  // Never fallback for API routes

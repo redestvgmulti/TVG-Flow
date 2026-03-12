@@ -441,7 +441,9 @@ export default function AutoPublisher() {
                 .gte('created_at', twentyFourHoursAgo)
                 .limit(1);
             if (existing && existing.length > 0) {
-                setManualFormErrors({ titulo: 'Matéria duplicada gerada nas últimas 24h.' })
+                const dupError = 'Esta headline já foi gerada nas últimas 24h para esta empresa.'
+                setManualFormErrors({ titulo: dupError })
+                toast.error(dupError)
                 setIsSubmittingManual(false)
                 return
             }
