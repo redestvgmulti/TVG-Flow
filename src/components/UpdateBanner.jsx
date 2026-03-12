@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { RefreshCw } from 'lucide-react'
-import { useUpdateCheck } from '../hooks/useUpdateCheck'
+import { useVersionCheck } from '../hooks/useVersionCheck'
 import LoadingScreen from './LoadingScreen'
 import '../styles/update-banner.css'
 
@@ -29,7 +29,7 @@ const ACK_KEY = 'tvgflow:last_acknowledged_version'
  * 6. Fallback: window.location.reload()
  */
 export function UpdateBanner() {
-    const { hasUpdate, updateServiceWorker: swUpdate } = useUpdateCheck()
+    const { hasUpdate, performUpdate } = useVersionCheck()
     const [isUpdating, setIsUpdating] = useState(false)
     const [shouldShowBanner, setShouldShowBanner] = useState(false)
 
@@ -44,9 +44,7 @@ export function UpdateBanner() {
             return
         }
 
-        const lastAckVersion = localStorage.getItem(ACK_KEY)
-        const showBanner = hasUpdate && CURRENT_VERSION !== lastAckVersion
-        setShouldShowBanner(showBanner)
+        setShouldShowBanner(hasUpdate)
     }, [hasUpdate])
 
     /**
@@ -65,43 +63,7 @@ export function UpdateBanner() {
         // Small delay to ensure LoadingScreen renders before destructive ops
         await new Promise(resolve => setTimeout(resolve, 100))
 
-        try {
-            // Step 2: Persist acknowledged version BEFORE reload
-            localStorage.setItem(ACK_KEY, CURRENT_VERSION)
-
-            // Step 3: Activate new Service Worker
-            await swUpdate(true)
-
-            // Step 4: Unregister ALL Service Workers (hard cleanup)
-            if ('serviceWorker' in navigator) {
-                const registrations = await navigator.serviceWorker.getRegistrations()
-                for (const registration of registrations) {
-                    await registration.unregister()
-                }
-            }
-
-            // Step 5: Clear ALL caches
-            if ('caches' in window) {
-                const cacheNames = await caches.keys()
-                await Promise.all(
-                    cacheNames.map(cacheName => caches.delete(cacheName))
-                )
-            }
-
-            // Step 6: Hard reload (forces re-fetch from server)
-            // Delay to ensure LoadingScreen is visible
-            setTimeout(() => {
-                window.location.href = window.location.href
-            }, 500)
-
-        } catch (error) {
-            console.error('[PWA] Update failed, using fallback reload:', error)
-
-            // Fallback: Simple reload if hard reload fails
-            setTimeout(() => {
-                window.location.reload()
-            }, 500)
-        }
+        await performUpdate()
     }
 
     // Don't render if update is not available or already acknowledged

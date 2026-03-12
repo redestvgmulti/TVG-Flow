@@ -107,6 +107,10 @@ Deno.serve(async (req: Request) => {
                 console.log(`[FLOW] Explicit human approval for ${item.id}. Moving directly to pending_render.`);
                 const finalHeadline = userHeadline || item.headline || item.titulo || "Pauta OMNI";
                 const finalCaption = userText || item.caption || "";
+                if (item.content_type === "feed" && !item.imagem_url && !item.imagem_storage && !item.render_url) {
+                    // Part 1 - Backend Guardrail
+                    throw new Error("Feed posts require imagem_url before approval");
+                }
                 const finalTag = userTag || item.context_tag || item.categoria || "DESTAQUE";
 
                 const updatePayload: any = {

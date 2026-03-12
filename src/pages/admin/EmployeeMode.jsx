@@ -18,12 +18,26 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
         headline: '',
         texto: '',
         imagem_url: '',
+        template_set: 'default',
+        placid_template_uuid: null,
     });
 
 
 
     const [contentType, setContentType] = useState('feed'); // 'feed' | 'reels'
 
+    const [availableTemplates, setAvailableTemplates] = useState([]);
+
+    useEffect(() => {
+        if (!clienteId) return;
+        async function fetchTemplates() {
+            try {
+                const { data } = await supabase.schema('ap').from('templates').select('*').eq('cliente_id', clienteId).eq('ativo', true);
+                if (data) setAvailableTemplates(data);
+            } catch (err) { console.error("[EmployeeMode] Error fetching templates:", err); }
+        }
+        fetchTemplates();
+    }, [clienteId]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [successData, setSuccessData] = useState(null);
     const [renderUrl, setRenderUrl] = useState(null); // Polled render result
@@ -140,6 +154,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
 
         // Per-flow validation
         if (!tag) { setErrorMsg('Tag de editoria é obrigatória.'); return; }
+        if (form.template_set === 'individuais' && !form.placid_template_uuid) { setErrorMsg('Selecione um template para a campanha individual.'); return; }
         if (selectedFlow === 1 && !url_original) { setErrorMsg('Link é obrigatório no Fluxo 1.'); return; }
         if (selectedFlow === 2 && (!url_original || !headline)) { setErrorMsg('Link e Headline obrigatórios no Fluxo 2.'); return; }
         if (selectedFlow === 3 && (!headline || !texto)) { setErrorMsg('Headline e Texto obrigatórios no Fluxo 3.'); return; }
@@ -215,6 +230,8 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                 userTag: tag.toUpperCase(),
                 userHeadline: selectedFlow >= 2 ? (headline || null) : null,
                 userText: texto ? texto : null, // Fix 1: send userText whenever texto exists
+                template_set: form.template_set || 'default',
+                placid_template_uuid: form.placid_template_uuid || null,
             };
 
             const { data, error } = await supabase.functions.invoke('ap-employee-generator', {
@@ -557,6 +574,36 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                     >
                                         <Video size={18} /> Vídeo (Reels)
                                     </button>
+                                </div>
+
+                                {/* Part 4 - Template Selector */}
+                                <div style={{ display: 'flex', gap: '16px', background: '#f8fafc', padding: '16px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
+                                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        <label style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>Campanha Visual</label>
+                                        <select
+                                            value={form.template_set}
+                                            onChange={e => setForm({ ...form, template_set: e.target.value, placid_template_uuid: null })}
+                                            style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '14px', outline: 'none', backgroundColor: '#fff', cursor: 'pointer' }}
+                                        >
+                                            <option value="default">Padrão OMNI (Automático)</option>
+                                            <option value="individuais">Templates Manuais</option>
+                                        </select>
+                                    </div>
+                                    {form.template_set === 'individuais' && (
+                                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px', animation: 'fadeIn 0.2s ease-out' }}>
+                                            <label style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>Selecionar Template</label>
+                                            <select
+                                                value={form.placid_template_uuid || ''}
+                                                onChange={e => setForm({ ...form, placid_template_uuid: e.target.value })}
+                                                style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '14px', outline: 'none', backgroundColor: '#fff', cursor: 'pointer' }}
+                                            >
+                                                <option value="" disabled>Escolha um template...</option>
+                                                {availableTemplates.filter(t => t.formato === contentType).map(t => (
+                                                    <option key={t.id} value={t.placid_template_uuid}>{t.nome}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Tag Obrigatória */}

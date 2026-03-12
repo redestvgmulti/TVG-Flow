@@ -261,6 +261,13 @@ export default function AutoPublisher() {
     async function handleApproveSelected(item) {
         const approvableStatuses = ['selected', 'pending_review', 'studio_selected', 'studio_ready']
         if (!approvableStatuses.includes(item.status)) return
+
+        // Part 2 - Frontend Validation
+        if (item.content_type === 'feed' && !item.imagem_url && !item.imagem_storage && !item.render_url) {
+            toast.error("Erro: Matérias de Feed exigem uma imagem antes da aprovação.");
+            return;
+        }
+
         setIsProcessing(true)
         try {
             // 'approve_for_ig' = aprovação humana explícita.
@@ -1061,7 +1068,7 @@ function PendenteCard({ item, onReject, onStudio, onApproveSelected, onEdit, isP
     }
 
     return (
-        <div className="ap-review-card insta-mock" style={{ maxWidth: '400px', margin: '0 auto', paddingBottom: '16px' }}>
+        <div className="ap-review-card insta-mock" style={{ maxWidth: '400px', margin: '0 auto', paddingBottom: '16px', border: (item.content_type === 'feed' && !item.imagem_url && !item.imagem_storage && !item.render_url) ? '2px solid #ef4444' : '' }}>
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid #efefef' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1081,6 +1088,13 @@ function PendenteCard({ item, onReject, onStudio, onApproveSelected, onEdit, isP
                 </div>
                 <MoreVertical size={16} color="#262626" />
             </div>
+
+            {/* Part 3 - Dashboard Visual Alert */}
+            {(item.content_type === 'feed' && !item.imagem_url && !item.imagem_storage && !item.render_url) && (
+                <div style={{ padding: '6px 12px', background: '#fee2e2', color: '#ef4444', fontSize: '11px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', borderBottom: '1px solid #fca5a5' }}>
+                    <AlertTriangle size={14} /> Erro: Post de Feed sem Imagem
+                </div>
+            )}
 
             {/* Imagem */}
             <div className="ap-card-img-wrap" style={{ aspectRatio: '4/5', width: '100%', background: '#fafafa', position: 'relative' }}>

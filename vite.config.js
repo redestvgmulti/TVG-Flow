@@ -30,7 +30,7 @@ export default defineConfig({
         importScripts: ['/push-sw.js'], // Import push notification logic
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         cleanupOutdatedCaches: true,
-        clientsClaim: false, // Prevent auto-takeover to avoid auth race conditions
+        clientsClaim: true, // Part 8 - Service Worker Improvement
         skipWaiting: true, // Force new SW to take control immediately (fixes hidden alerts)
         navigateFallback: '/index.html', // Offline fallback for navigation requests
         navigateFallbackDenylist: [
