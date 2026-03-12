@@ -3,47 +3,34 @@ import { createPortal } from 'react-dom';
 import { supabase } from '../../services/supabase';
 import { CheckCircle2, Copy, Download, X, AlertCircle, RefreshCcw, ImageIcon, Brain, Search, SearchCode, Video, Image as ImageIconLucide } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import ArticleForm from '../../components/editorial/ArticleForm';
 
 // Fallback provider client
 const FALLBACK_CLIENT_ID = 'cd287e6e-f273-4d0f-a72d-2a8c391e40e9';
 
 export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaId }) {
-    const { user: ctxUser, professionalId, role } = useAuth();
+    const { user: ctxUser, professionalId } = useAuth();
     const user = propUser || ctxUser;
 
-    const [selectedFlow, setSelectedFlow] = useState(1); // 1 | 2 | 3
-    const [form, setForm] = useState({
+    const [formData, setFormData] = useState({
         url_original: '',
-        tag: '',
-        headline: '',
-        texto: '',
-        imagem_url: '',
+        titulo: '',
+        conteudo: '',
+        context_tag: '',
+        content_type: 'feed',
+        image_url: '',
         template_set: 'default',
         placid_template_uuid: null,
     });
 
-
-
-    const [contentType, setContentType] = useState('feed'); // 'feed' | 'reels'
-
     const [availableTemplates, setAvailableTemplates] = useState([]);
 
-    useEffect(() => {
-        if (!clienteId) return;
-        async function fetchTemplates() {
-            try {
-                const { data } = await supabase.schema('ap').from('templates').select('*').eq('cliente_id', clienteId).eq('ativo', true);
-                if (data) setAvailableTemplates(data);
-            } catch (err) { console.error("[EmployeeMode] Error fetching templates:", err); }
-        }
-        fetchTemplates();
-    }, [clienteId]);
+
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [successData, setSuccessData] = useState(null);
     const [renderUrl, setRenderUrl] = useState(null); // Polled render result
     const [isPollingRender, setIsPollingRender] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
-    const [copied, setCopied] = useState(false);
     // Publication tracking per generated article
     const [actionBaixou, setActionBaixou] = useState(false);
     const [actionCopiou, setActionCopiou] = useState(false);
@@ -64,6 +51,40 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
             });
         }
     }, [isOpen, professionalId, empresaId]);
+
+    // ── Load available templates for any non-default campaign (Unified with AutoPublisher)
+    useEffect(() => {
+        if (formData.template_set && formData.template_set !== 'default' && formData.content_type) {
+            async function loadTemplates() {
+                try {
+                    const { data, error } = await supabase.functions.invoke('ap-config', {
+                        method: 'POST',
+                        body: { resource: 'templates', action: 'list' }
+                    });
+
+                    if (error || !data || data.has_error) {
+                        console.error("[EmployeeMode] Error loading templates:", error || data?.error);
+                        return;
+                    }
+
+                    // Filter locally to match campaign, type and active status
+                    const filtered = data.filter(t =>
+                        (t.template_set === formData.template_set) &&
+                        (t.tipo === formData.content_type) &&
+                        t.ativo
+                    ).sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
+
+                    setAvailableTemplates(filtered);
+                } catch (err) {
+                    console.error("[EmployeeMode] Failed to load templates:", err);
+                }
+            }
+            loadTemplates();
+        } else {
+            setAvailableTemplates([]);
+            setFormData(prev => ({ ...prev, placid_template_uuid: null }));
+        }
+    }, [formData.template_set, formData.content_type]);
 
     // Poll for render_url after employee submits — render runs async in background
     useEffect(() => {
@@ -120,8 +141,6 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
     // File Upload State
     const [selectedFile, setSelectedFile] = useState(null);
     const [isUploading, setIsUploading] = useState(false);
-    const [isDragging, setIsDragging] = useState(false);
-
     // Upload image to Supabase if file is selected
     const handleFileUpload = async (file) => {
         setIsUploading(true);
@@ -149,17 +168,16 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
     };
 
     const handleGenerate = async (e) => {
-        e.preventDefault();
-        const { url_original, tag, headline, texto, imagem_url } = form;
+        if (e) e.preventDefault();
+        if (isSubmitting) return;
 
-        // Per-flow validation
-        if (!tag) { setErrorMsg('Tag de editoria é obrigatória.'); return; }
-        if (form.template_set === 'individuais' && !form.placid_template_uuid) { setErrorMsg('Selecione um template para a campanha individual.'); return; }
-        if (selectedFlow === 1 && !url_original) { setErrorMsg('Link é obrigatório no Fluxo 1.'); return; }
-        if (selectedFlow === 2 && (!url_original || !headline)) { setErrorMsg('Link e Headline obrigatórios no Fluxo 2.'); return; }
-        if (selectedFlow === 3 && (!headline || !texto)) { setErrorMsg('Headline e Texto obrigatórios no Fluxo 3.'); return; }
-        if (selectedFlow === 3 && !url_original && !imagem_url && !selectedFile && contentType === 'feed') {
-            setErrorMsg('Imagem obrigatória para matérias manuais sem link (Fluxo 3).');
+        const { url_original, context_tag, titulo, conteudo, image_url, content_type, template_set, placid_template_uuid } = formData;
+
+        // Validation based on unified behavior
+        if (!context_tag) { setErrorMsg('Tag de editoria é obrigatória.'); return; }
+        if (template_set === 'individuais' && !placid_template_uuid) { setErrorMsg('Selecione um template para a campanha individual.'); return; }
+        if (!url_original && !titulo && !conteudo && !image_url && !selectedFile) {
+            setErrorMsg('Preencha pelo menos um campo ou insira um link para gerar a matéria.');
             return;
         }
 
@@ -180,18 +198,18 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                 if (!searchError && existingNews && existingNews.length > 0) {
                     throw new Error(`Esta matéria já foi gerada no sistema por outro usuário. Pautas duplicadas não são permitidas.`);
                 }
-            } else if (headline) {
+            } else if (titulo) {
                 const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
                 const { data: existingNews, error: searchError } = await supabase
                     .from('ap_candidate_news')
                     .select('id')
                     .eq('cliente_id', clienteId)
-                    .ilike('headline', headline)
+                    .ilike('headline', titulo)
                     .gte('created_at', twentyFourHoursAgo)
                     .limit(1);
 
                 if (!searchError && existingNews && existingNews.length > 0) {
-                    throw new Error('Uma matéria com este headline já foi gerada nas últimas 24h para sua conta.');
+                    throw new Error('Uma matéria com este título já foi gerada nas últimas 24h para sua conta.');
                 }
             }
 
@@ -199,8 +217,8 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
             let scrapedConteudo = '';
             let scrapedImage = '';
 
-            // Auto-Scraping Logic (Fluxo 1 e 2)
-            if (url_original && selectedFlow !== 3) {
+            // Auto-Scraping Logic
+            if (url_original) {
                 const { data, error } = await supabase.functions.invoke('ap-link-scraper', {
                     body: { url: url_original }
                 });
@@ -213,25 +231,25 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                 scrapedImage = data.image_url || '';
             }
 
-            let finalImageUrl = imagem_url || scrapedImage || null;
-            if (selectedFile && contentType === 'feed') {
+            let finalImageUrl = image_url || scrapedImage || null;
+            if (selectedFile && content_type === 'feed') {
                 finalImageUrl = await handleFileUpload(selectedFile);
             }
 
             const payload = {
                 empresa_id: clienteId,
-                titulo: headline || scrapedTitle || 'Pauta OMNI',
-                conteudo: texto || scrapedConteudo || '',
+                titulo: titulo || scrapedTitle || 'Pauta OMNI',
+                conteudo: conteudo || scrapedConteudo || '',
                 url_original: url_original || null,
-                imagem_url: contentType === 'feed' ? finalImageUrl : null,
-                content_type: contentType,
+                imagem_url: content_type === 'feed' ? finalImageUrl : null,
+                content_type: content_type,
                 auth_user_id: professionalId || user?.id,
-                // Hybrid fields
-                userTag: tag.toUpperCase(),
-                userHeadline: selectedFlow >= 2 ? (headline || null) : null,
-                userText: texto ? texto : null, // Fix 1: send userText whenever texto exists
-                template_set: form.template_set || 'default',
-                placid_template_uuid: form.placid_template_uuid || null,
+                // Hybrid fields expected by exact ap-employee-generator edge function mappings
+                userTag: context_tag.toUpperCase(),
+                userHeadline: titulo || null,
+                userText: conteudo || null,
+                template_set: template_set || 'default',
+                placid_template_uuid: placid_template_uuid || null,
             };
 
             const { data, error } = await supabase.functions.invoke('ap-employee-generator', {
@@ -285,7 +303,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
         // Update the action flag
         const update = { [field]: true };
         // Check if other flag is already set
-        const otherField = field === 'acao_baixou' ? 'acao_copiou' : 'acao_baixou';
+        // Check if other flag is already set
         const otherVal = field === 'acao_baixou' ? actionCopiou : actionBaixou;
         // If other flag is ALREADY true, promote to published
         if (otherVal) {
@@ -304,8 +322,6 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
         // O roteiro continua sendo exibido no modal para consulta se for Reels.
 
         navigator.clipboard.writeText(copyText);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
         const newCopiou = true;
         setActionCopiou(newCopiou);
         if (successData?.news_id) {
@@ -339,7 +355,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
             else if (blob.type === 'video/mp4') ext = '.mp4';
             else if (blob.type === 'image/webp') ext = '.webp';
             else {
-                const match = url.match(/\.([a-z0-9]+)(?:[\?#]|$)/i);
+                const match = url.match(/\.([a-z0-9]+)(?:[?#]|$)/i);
                 if (match) ext = `.${match[1].toLowerCase()}`;
             }
 
@@ -400,6 +416,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
         if (!isOpen || activeTab !== 'history' || !user?.id) return;
         setHistoryPage(0);
         fetchHistory(0, false);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, activeTab, user]);
 
     const handleLoadMore = () => {
@@ -476,6 +493,14 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                         <p style={{ margin: 0, fontSize: '14px', color: '#0284c7', fontWeight: 700, textAlign: 'center' }}>Gerando arte...</p>
                                         <p style={{ margin: 0, fontSize: '12px', color: '#38bdf8', textAlign: 'center' }}>O Placid está renderizando seu card. Aguarde alguns segundos.</p>
                                     </div>
+                                ) : successData?.pending_review ? (
+                                    <div style={{ width: '100%', borderRadius: '16px', border: '1px solid #dcfce7', background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)', padding: '32px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px', boxSizing: 'border-box' }}>
+                                        <div style={{ width: 48, height: 48, background: '#10b981', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                            <Check size={24} color="#fff" />
+                                        </div>
+                                        <p style={{ margin: 0, fontSize: '15px', color: '#065f46', fontWeight: 700, textAlign: 'center' }}>Matéria Criada com Sucesso!</p>
+                                        <p style={{ margin: 0, fontSize: '13px', color: '#059669', textAlign: 'center', maxWidth: '300px' }}>Sua sugestão foi enviada. Assim que o administrador aprovar, a arte será gerada automaticamente.</p>
+                                    </div>
                                 ) : (
                                     <div style={{ width: '100%', borderRadius: '16px', border: '1px dashed #e2e8f0', background: '#f8fafc', padding: '28px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', boxSizing: 'border-box' }}>
                                         <div style={{ width: 48, height: 48, background: '#fee2e2', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -524,7 +549,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                     <button onClick={handleCopy} style={{ width: '100%', background: '#fff', color: actionCopiou ? '#16a34a' : '#111827', border: actionCopiou ? '2px solid #16a34a' : '1px solid #e2e8f0', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: 'pointer', transition: 'all 0.2s' }}>
                                         {actionCopiou ? <><CheckCircle2 size={18} color="#16a34a" /> Copiado!</> : <><Copy size={18} /> Copiar {successData.content_type === 'reels' ? 'Roteiro e Legenda' : 'Legenda'}</>}
                                     </button>
-                                    <button onClick={() => { setSuccessData(null); setForm({ url_original: '', tag: '', headline: '', texto: '', imagem_url: '' }); setSelectedFile(null); }} style={{ background: 'transparent', color: '#64748b', border: 'none', padding: '16px', fontSize: '14px', fontWeight: 600, marginTop: '4px', cursor: 'pointer' }}>
+                                    <button onClick={() => { setSuccessData(null); setFormData({ url_original: '', titulo: '', conteudo: '', context_tag: '', content_type: 'feed', image_url: '', template_set: 'default', placid_template_uuid: null }); setSelectedFile(null); }} style={{ background: 'transparent', color: '#64748b', border: 'none', padding: '16px', fontSize: '14px', fontWeight: 600, marginTop: '4px', cursor: 'pointer' }}>
 
                                         Novo Conteúdo
                                     </button>
@@ -532,218 +557,16 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
 
                             </div>
                         ) : (
-                            <form onSubmit={handleGenerate} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-
-                                <div style={{ display: 'flex', gap: '8px', background: '#f1f5f9', padding: '6px', borderRadius: '16px', overflowX: 'auto', marginBottom: '16px' }}>
-                                    {[
-                                        { id: 1, label: 'Link + Tag' },
-                                        { id: 2, label: 'Link + Tag + Headline' },
-                                        { id: 3, label: 'Manual' }
-                                    ].map(flow => (
-                                        <button
-                                            key={flow.id}
-                                            type="button"
-                                            onClick={() => setSelectedFlow(flow.id)}
-                                            style={{
-                                                flex: 1, padding: '10px 8px', borderRadius: '12px', border: 'none',
-                                                background: selectedFlow === flow.id ? '#fff' : 'transparent',
-                                                color: selectedFlow === flow.id ? '#0f172a' : '#64748b',
-                                                fontWeight: 600, fontSize: '13px', whiteSpace: 'nowrap',
-                                                boxShadow: selectedFlow === flow.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                                                cursor: 'pointer', transition: 'all 0.2s'
-                                            }}
-                                        >
-                                            {flow.label}
-                                        </button>
-                                    ))}
-                                </div>
-
-                                {/* Formato Selector */}
-                                <div style={{ display: 'flex', gap: '12px', background: '#f1f5f9', padding: '6px', borderRadius: '16px' }}>
-                                    <button
-                                        type="button"
-                                        onClick={() => setContentType('feed')}
-                                        style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', background: contentType === 'feed' ? '#fff' : 'transparent', color: contentType === 'feed' ? '#0f172a' : '#64748b', fontWeight: 600, fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: contentType === 'feed' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', cursor: 'pointer', transition: 'all 0.2s' }}
-                                    >
-                                        <ImageIconLucide size={18} /> Estático (Feed)
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setContentType('reels')}
-                                        style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', background: contentType === 'reels' ? '#fff' : 'transparent', color: contentType === 'reels' ? '#0f172a' : '#64748b', fontWeight: 600, fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: contentType === 'reels' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', cursor: 'pointer', transition: 'all 0.2s' }}
-                                    >
-                                        <Video size={18} /> Vídeo (Reels)
-                                    </button>
-                                </div>
-
-                                {/* Part 4 - Template Selector */}
-                                <div style={{ display: 'flex', gap: '16px', background: '#f8fafc', padding: '16px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
-                                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                        <label style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>Campanha Visual</label>
-                                        <select
-                                            value={form.template_set}
-                                            onChange={e => setForm({ ...form, template_set: e.target.value, placid_template_uuid: null })}
-                                            style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '14px', outline: 'none', backgroundColor: '#fff', cursor: 'pointer' }}
-                                        >
-                                            <option value="default">Padrão OMNI (Automático)</option>
-                                            <option value="individuais">Templates Manuais</option>
-                                        </select>
-                                    </div>
-                                    {form.template_set === 'individuais' && (
-                                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px', animation: 'fadeIn 0.2s ease-out' }}>
-                                            <label style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>Selecionar Template</label>
-                                            <select
-                                                value={form.placid_template_uuid || ''}
-                                                onChange={e => setForm({ ...form, placid_template_uuid: e.target.value })}
-                                                style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '14px', outline: 'none', backgroundColor: '#fff', cursor: 'pointer' }}
-                                            >
-                                                <option value="" disabled>Escolha um template...</option>
-                                                {availableTemplates.filter(t => t.formato === contentType).map(t => (
-                                                    <option key={t.id} value={t.placid_template_uuid}>{t.nome}</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Tag Obrigatória */}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
-                                    <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Editoria (Tag) <span style={{ color: '#ef4444' }}>*</span></label>
-                                    <input
-                                        value={form.tag}
-                                        onChange={e => setForm({ ...form, tag: e.target.value.toUpperCase() })}
-                                        placeholder="Ex: URGENTE"
-                                        style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' }}
-                                    />
-                                </div>
-
-                                {/* Link */}
-                                {(selectedFlow === 1 || selectedFlow === 2) && (
-                                    <div style={{ padding: '16px', background: '#e0f2fe', border: '1px solid #bae6fd', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px', width: '100%', boxSizing: 'border-box' }}>
-                                        <label style={{ fontSize: '14px', fontWeight: 700, color: '#0284c7', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Link Origem <span style={{ color: '#ef4444' }}>*</span></label>
-                                        <p style={{ margin: 0, fontSize: '13px', color: '#0369a1' }}>A IA irá extrair o conteúdo desta URL.</p>
-                                        <input
-                                            value={form.url_original || ''}
-                                            onChange={e => setForm({ ...form, url_original: e.target.value })}
-                                            placeholder="https://globo.com/noticia..."
-                                            style={{ width: '100%', padding: '14px', borderRadius: '10px', border: '1px solid #7dd3fc', fontSize: '15px', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' }}
-                                        />
-                                    </div>
-                                )}
-
-                                {/* Headline (Opcional/Obrigatório) */}
-                                {(selectedFlow === 2 || selectedFlow === 3) && (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
-                                        <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>
-                                            Headline Maior <span style={{ color: '#ef4444' }}>*</span>
-                                        </label>
-                                        <input
-                                            value={form.headline}
-                                            onChange={e => setForm({ ...form, headline: e.target.value })}
-                                            placeholder="Ex: Novo viaduto é inaugurado..."
-                                            style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' }}
-                                        />
-                                    </div>
-                                )}
-
-                                {/* Texto Base */}
-                                {selectedFlow === 3 && (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
-                                        <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Texto Base da Matéria <span style={{ color: '#ef4444' }}>*</span></label>
-                                        <textarea
-                                            value={form.texto}
-                                            onChange={e => setForm({ ...form, texto: e.target.value })}
-                                            placeholder="Escreva a notícia base. A IA revisará e criará a caption com hashtags..."
-                                            rows={4}
-                                            style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', resize: 'vertical', minHeight: '80px', boxSizing: 'border-box' }}
-                                        />
-                                    </div>
-                                )}
-
-                                {contentType === 'feed' && (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
-                                        <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Foto (Fundo do Card)</label>
-
-                                        <div
-                                            onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
-                                            onDragLeave={() => setIsDragging(false)}
-                                            onDrop={e => {
-                                                e.preventDefault();
-                                                setIsDragging(false);
-                                                if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-                                                    setSelectedFile(e.dataTransfer.files[0]);
-                                                    setForm({ ...form, imagem_url: '' });
-                                                }
-                                            }}
-                                            style={{
-                                                border: isDragging ? '2px dashed #3b82f6' : '2px dashed #cbd5e1',
-                                                borderRadius: '12px',
-                                                padding: '20px 16px',
-                                                textAlign: 'center',
-                                                background: isDragging ? '#eff6ff' : '#f8fafc',
-                                                cursor: 'pointer',
-                                                transition: 'all 0.2s',
-                                                display: 'flex',
-                                                flexDirection: 'column',
-                                                alignItems: 'center',
-                                                gap: '8px'
-                                            }}
-                                            onClick={() => document.getElementById('employee-file-input').click()}
-                                        >
-                                            <input
-                                                id="employee-file-input"
-                                                type="file"
-                                                accept="image/*"
-                                                style={{ display: 'none' }}
-                                                onChange={(e) => {
-                                                    if (e.target.files && e.target.files[0]) {
-                                                        setSelectedFile(e.target.files[0]);
-                                                        setForm({ ...form, imagem_url: '' });
-                                                    }
-                                                }}
-                                            />
-
-                                            {selectedFile ? (
-                                                <>
-                                                    <div style={{ background: '#dcfce7', color: '#166534', padding: '8px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                        <CheckCircle2 size={16} /> Arquivo Anexado: {selectedFile.name}
-                                                    </div>
-                                                    <span style={{ fontSize: '12px', color: '#64748b' }}>Clique para alterar</span>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <div style={{ background: '#e2e8f0', width: '40px', height: '40px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                        <ImageIcon size={20} color="#64748b" />
-                                                    </div>
-                                                    <span style={{ fontSize: '14px', color: '#475569', fontWeight: 500 }}>
-                                                        Clique ou arraste a imagem original aqui
-                                                    </span>
-                                                </>
-                                            )}
-                                        </div>
-
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '8px 0' }}>
-                                            <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
-                                            <span style={{ fontSize: '11px', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase' }}>OU URL</span>
-                                            <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
-                                        </div>
-
-                                        <input
-                                            value={form.imagem_url}
-                                            onChange={e => {
-                                                setForm({ ...form, imagem_url: e.target.value });
-                                                if (e.target.value) setSelectedFile(null);
-                                            }}
-                                            placeholder="https://exemplo.com/foto.jpg"
-                                            style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', appearance: 'none', boxSizing: 'border-box' }}
-                                            onFocus={e => e.target.style.borderColor = '#94a3b8'}
-                                            onBlur={e => e.target.style.borderColor = '#cbd5e1'}
-                                        />
-                                    </div>
-                                )}
-
-
-                            </form>
+                            <ArticleForm
+                                mode="employee"
+                                formData={formData}
+                                setFormData={setFormData}
+                                onSubmit={handleGenerate}
+                                isSubmitting={isSubmitting || isUploading}
+                                availableTemplates={availableTemplates}
+                                selectedFile={selectedFile}
+                                setSelectedFile={setSelectedFile}
+                            />
                         )
                     )}
 
@@ -838,21 +661,8 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
 
                 </div>
 
-                {/* Sticky Bottom Bar for Action */}
-                {activeTab === 'create' && !successData && (
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', padding: '20px', borderTop: '1px solid #f0f0f0', background: '#ffffff', width: '100%', boxSizing: 'border-box' }}>
-                        <button type="submit" onClick={handleGenerate} disabled={isSubmitting || isUploading || (!form.tag || (selectedFlow === 1 && !form.url_original))} style={{ width: '100%', boxSizing: 'border-box', background: (isSubmitting || isUploading) ? '#cbd5e1' : '#2563eb', color: '#fff', border: 'none', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', boxShadow: (isSubmitting || isUploading) ? 'none' : '0 4px 6px -1px rgba(37, 99, 235, 0.2), 0 2px 4px -1px rgba(37, 99, 235, 0.1)', cursor: (isSubmitting || isUploading) ? 'not-allowed' : 'pointer', transition: 'all 0.2s' }}>
-                            {isSubmitting || isUploading ? (
-                                <>
-                                    <div style={{ width: '18px', height: '18px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
-                                    Extraindo e Gerando IA...
-                                </>
-                            ) : (
-                                <><Brain size={18} /> {contentType === 'reels' ? 'Gerar Roteiro e Frame' : 'Gerar Matéria'}</>
-                            )}
-                        </button>
-                    </div>
-                )}
+                {/* Sticky Bottom Bar for Action - Removed as the button is now part of ArticleForm */}
+
 
                 <style>{`
 @keyframes spin {

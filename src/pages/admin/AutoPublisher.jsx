@@ -4,13 +4,14 @@ import '../../styles/AutoPublisher.css'
 import {
     Rss, RefreshCcw, Check, X, Copy, Download,
     ImageIcon, Zap, Info, MoreVertical, Brain, Heart, MessageCircle, Send, Bookmark, Plus, UploadCloud, Link2,
-    Video, CheckCircle2, ChevronDown, ChevronUp, Pencil, Loader2
+    Video, CheckCircle2, ChevronDown, ChevronUp, Pencil, Loader2, AlertTriangle
 } from 'lucide-react'
 import AutoPublisherSettings from './AutoPublisherSettings'
 import AutoPublisherTemplates from './AutoPublisherTemplates'
 import EditorialEngine from '../../features/editorial/EditorialEngine'
 import { SkeletonCard, SkeletonTable } from '../../components/Skeleton'
 import { toast } from 'sonner'
+import ArticleForm from '../../components/editorial/ArticleForm'
 
 const FIXED_CLIENT_ID = 'cd287e6e-f273-4d0f-a72d-2a8c391e40e9'
 
@@ -384,6 +385,7 @@ export default function AutoPublisher() {
     // ── Manual submission (Hybrid Editorial Engine)
     async function submitManualNews(e) {
         e.preventDefault()
+        if (isSubmittingManual) return;
 
         // 1. Validation Logic
         const newErrors = {}
@@ -723,246 +725,22 @@ export default function AutoPublisher() {
                         </div>
 
                         <div style={{ display: 'flex', flexDirection: 'column', padding: '20px', gap: '20px', overflowY: 'auto', flex: 1, maxHeight: '75vh', boxSizing: 'border-box' }}>
-                            <form onSubmit={submitManualNews} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                                {/* Formato */}
-                                <div style={{ display: 'flex', gap: '12px', background: '#f1f5f9', padding: '6px', borderRadius: '16px' }}>
-                                    {[['feed', 'Estático (Feed)', <ImageIcon size={18} />], ['reels', 'Vídeo (Reels)', <Video size={18} />]].map(([val, lbl, icon]) => (
-                                        <button key={val} type="button" onClick={() => setFormData({ ...formData, content_type: val })}
-                                            style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', background: formData.content_type === val ? '#fff' : 'transparent', color: formData.content_type === val ? '#0f172a' : '#64748b', fontWeight: 600, fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: formData.content_type === val ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', cursor: 'pointer' }}>
-                                            {icon} {lbl}
-                                        </button>
-                                    ))}
-                                </div>
-
-                                {/* Campanha */}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                    <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Campanha</label>
-                                    <select
-                                        value={formData.template_set || 'default'}
-                                        onChange={(e) => setFormData({ ...formData, template_set: e.target.value })}
-                                        style={{ width: '100%', padding: '12px 16px', borderRadius: '12px', border: '1px solid #e2e8f0', background: '#f8fafc', fontSize: '14px', color: '#0f172a', fontWeight: 500, outline: 'none', transition: 'all 0.2s', appearance: 'none' }}
-                                    >
-                                        <option value="default">Padrão</option>
-                                        <option value="individuais">Individuais</option>
-                                        <option value="natal">Natal</option>
-                                        <option value="ano_novo">Ano Novo</option>
-                                        <option value="dia_das_mulheres">Dia das Mulheres</option>
-                                        <option value="dia_dos_pais">Dia dos Pais</option>
-                                    </select>
-                                </div>
-
-                                {/* Template de Campanha (para qualquer set não-padrão) */}
-                                {formData.template_set && formData.template_set !== 'default' && (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                        <label style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>Template</label>
-                                        <select
-                                            value={formData.placid_template_uuid || ''}
-                                            onChange={(e) => {
-                                                setFormData({ ...formData, placid_template_uuid: e.target.value });
-                                                if (manualFormErrors.placid_template_uuid) setManualFormErrors({ ...manualFormErrors, placid_template_uuid: null });
-                                            }}
-                                            style={{
-                                                width: '100%',
-                                                padding: '12px 16px',
-                                                borderRadius: '12px',
-                                                border: manualFormErrors.placid_template_uuid ? '1px solid #ef4444' : '1px solid #e2e8f0',
-                                                background: '#f8fafc',
-                                                fontSize: '14px',
-                                                color: '#0f172a',
-                                                fontWeight: 500,
-                                                outline: 'none',
-                                                transition: 'all 0.2s',
-                                                appearance: 'none',
-                                                boxShadow: manualFormErrors.placid_template_uuid ? '0 0 0 2px rgba(239, 68, 68, 0.2)' : 'none'
-                                            }}
-                                        >
-                                            <option value="">Selecione um template...</option>
-                                            {availableTemplates.map(t => (
-                                                <option key={t.id} value={t.placid_template_uuid}>{t.nome}</option>
-                                            ))}
-                                        </select>
-                                        {manualFormErrors.placid_template_uuid && <span style={{ color: '#ef4444', fontSize: '12px', fontWeight: 600 }}>{manualFormErrors.placid_template_uuid}</span>}
-                                    </div>
-                                )}
-
-                                {/* Link */}
-                                <div style={{ padding: '16px', background: '#e0f2fe', border: '1px solid #bae6fd', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px', boxSizing: 'border-box' }}>
-                                    <label style={{ fontSize: '14px', fontWeight: 700, color: '#0284c7', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Motor de IA (Link)</label>
-                                    <p style={{ margin: 0, fontSize: '13px', color: '#0369a1' }}>Cole um link para a IA extrair o contexto e gerar os textos automaticamente.</p>
-                                    <input
-                                        value={formData.url_original}
-                                        onChange={e => {
-                                            setFormData({ ...formData, url_original: e.target.value });
-                                            if (manualFormErrors.url_original) setManualFormErrors({ ...manualFormErrors, url_original: null });
-                                        }}
-                                        placeholder="https://g1.globo.com/exemplo..."
-                                        style={{
-                                            width: '100%',
-                                            padding: '14px',
-                                            borderRadius: '10px',
-                                            border: manualFormErrors.url_original ? '1px solid #ef4444' : '1px solid #7dd3fc',
-                                            boxShadow: manualFormErrors.url_original ? '0 0 0 2px rgba(239, 68, 68, 0.2)' : 'none',
-                                            fontSize: '15px',
-                                            outline: 'none',
-                                            backgroundColor: '#fff',
-                                            boxSizing: 'border-box',
-                                            transition: 'all 0.2s'
-                                        }}
-                                    />
-                                    {manualFormErrors.url_original && <span style={{ color: '#ef4444', fontSize: '12px', fontWeight: 600 }}>{manualFormErrors.url_original}</span>}
-                                </div>
-
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', opacity: 0.6 }}>
-                                    <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
-                                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Ou crie manualmente</span>
-                                    <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
-                                </div>
-
-                                {/* Título */}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', boxSizing: 'border-box' }}>
-                                    <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Título Principal</label>
-                                    <input
-                                        value={formData.titulo}
-                                        onChange={e => {
-                                            setFormData({ ...formData, titulo: e.target.value });
-                                            if (manualFormErrors.titulo) setManualFormErrors({ ...manualFormErrors, titulo: null });
-                                        }}
-                                        placeholder="Prefeito anuncia nova ponte na cidade..."
-                                        style={{
-                                            width: '100%',
-                                            padding: '14px',
-                                            borderRadius: '12px',
-                                            border: manualFormErrors.titulo ? '1px solid #ef4444' : '1px solid #cbd5e1',
-                                            boxShadow: manualFormErrors.titulo ? '0 0 0 2px rgba(239, 68, 68, 0.2)' : 'none',
-                                            fontSize: '15px',
-                                            outline: 'none',
-                                            backgroundColor: '#fff',
-                                            boxSizing: 'border-box',
-                                            transition: 'all 0.2s'
-                                        }}
-                                    />
-                                    {manualFormErrors.titulo && <span style={{ color: '#ef4444', fontSize: '12px', fontWeight: 600 }}>{manualFormErrors.titulo}</span>}
-                                </div>
-
-                                {/* Conteúdo */}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', boxSizing: 'border-box' }}>
-                                    <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Detalhes Adicionais</label>
-                                    <textarea
-                                        value={formData.conteudo}
-                                        onChange={e => {
-                                            setFormData({ ...formData, conteudo: e.target.value });
-                                            if (manualFormErrors.conteudo) setManualFormErrors({ ...manualFormErrors, conteudo: null });
-                                        }}
-                                        placeholder="Cole o release ou o corpo do texto aqui..."
-                                        rows={4}
-                                        style={{
-                                            width: '100%',
-                                            padding: '14px',
-                                            borderRadius: '12px',
-                                            border: manualFormErrors.conteudo ? '1px solid #ef4444' : '1px solid #cbd5e1',
-                                            boxShadow: manualFormErrors.conteudo ? '0 0 0 2px rgba(239, 68, 68, 0.2)' : 'none',
-                                            fontSize: '15px',
-                                            outline: 'none',
-                                            resize: 'vertical',
-                                            minHeight: '80px',
-                                            boxSizing: 'border-box',
-                                            transition: 'all 0.2s'
-                                        }}
-                                    />
-                                    {manualFormErrors.conteudo && <span style={{ color: '#ef4444', fontSize: '12px', fontWeight: 600 }}>{manualFormErrors.conteudo}</span>}
-                                </div>
-
-                                {/* Tag */}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', boxSizing: 'border-box' }}>
-                                    <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Tag de Editoria</label>
-                                    <input
-                                        value={formData.context_tag}
-                                        onChange={e => {
-                                            setFormData({ ...formData, context_tag: e.target.value.toUpperCase() });
-                                            if (manualFormErrors.context_tag) setManualFormErrors({ ...manualFormErrors, context_tag: null });
-                                        }}
-                                        maxLength={20}
-                                        placeholder="Ex: URGENTE"
-                                        style={{
-                                            width: '100%',
-                                            padding: '14px',
-                                            borderRadius: '12px',
-                                            border: manualFormErrors.context_tag ? '1px solid #ef4444' : '1px solid #cbd5e1',
-                                            boxShadow: manualFormErrors.context_tag ? '0 0 0 2px rgba(239, 68, 68, 0.2)' : 'none',
-                                            fontSize: '15px',
-                                            outline: 'none',
-                                            backgroundColor: '#fff',
-                                            boxSizing: 'border-box',
-                                            transition: 'all 0.2s'
-                                        }}
-                                    />
-                                    {manualFormErrors.context_tag && <span style={{ color: '#ef4444', fontSize: '12px', fontWeight: 600 }}>{manualFormErrors.context_tag}</span>}
-                                </div>
-
-                                {/* Foto (feed only) */}
-                                {formData.content_type === 'feed' && (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', boxSizing: 'border-box' }}>
-                                        <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Foto (Fundo do Card)</label>
-                                        <div
-                                            onDragOver={e => { e.preventDefault(); setIsDragging(true) }}
-                                            onDragLeave={() => setIsDragging(false)}
-                                            onDrop={e => { e.preventDefault(); setIsDragging(false); if (e.dataTransfer.files && e.dataTransfer.files[0]) { setSelectedFile(e.dataTransfer.files[0]); setFormData({ ...formData, image_url: '' }) } }}
-                                            style={{ border: isDragging ? '2px dashed #3b82f6' : '2px dashed #cbd5e1', borderRadius: '12px', padding: '20px 16px', textAlign: 'center', background: isDragging ? '#eff6ff' : '#f8fafc', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}
-                                            onClick={() => document.getElementById('manual-file-upload').click()}
-                                        >
-                                            <input id="manual-file-upload" type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { if (e.target.files && e.target.files[0]) { setSelectedFile(e.target.files[0]); setFormData({ ...formData, image_url: '' }) } }} />
-                                            {selectedFile ? (
-                                                <div style={{ background: '#dcfce7', color: '#166534', padding: '8px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                    <CheckCircle2 size={16} /> {selectedFile.name}
-                                                </div>
-                                            ) : (
-                                                <>
-                                                    <div style={{ background: '#e2e8f0', width: '40px', height: '40px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                        <UploadCloud size={20} color="#64748b" />
-                                                    </div>
-                                                    <span style={{ fontSize: '14px', color: '#475569', fontWeight: 500 }}>Clique ou arraste a imagem aqui</span>
-                                                </>
-                                            )}
-                                        </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', opacity: 0.6 }}>
-                                            <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
-                                            <span style={{ fontSize: '11px', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase' }}>OU URL</span>
-                                            <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
-                                        </div>
-                                        <input
-                                            value={formData.image_url}
-                                            onChange={e => {
-                                                setFormData({ ...formData, image_url: e.target.value });
-                                                if (e.target.value) setSelectedFile(null);
-                                                if (manualFormErrors.image_url) setManualFormErrors({ ...manualFormErrors, image_url: null });
-                                            }}
-                                            placeholder="https://exemplo.com/foto.jpg"
-                                            style={{
-                                                width: '100%',
-                                                padding: '14px',
-                                                borderRadius: '12px',
-                                                border: manualFormErrors.image_url ? '1px solid #ef4444' : '1px solid #cbd5e1',
-                                                boxShadow: manualFormErrors.image_url ? '0 0 0 2px rgba(239, 68, 68, 0.2)' : 'none',
-                                                fontSize: '15px',
-                                                outline: 'none',
-                                                backgroundColor: '#fff',
-                                                boxSizing: 'border-box',
-                                                transition: 'all 0.2s'
-                                            }}
-                                        />
-                                        {manualFormErrors.image_url && <span style={{ color: '#ef4444', fontSize: '12px', fontWeight: 600 }}>{manualFormErrors.image_url}</span>}
-                                    </div>
-                                )}
-
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #e2e8f0' }}>
-                                    <button type="submit" disabled={isSubmittingManual} style={{ width: '100%', background: '#111827', color: '#fff', border: 'none', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: isSubmittingManual ? 'not-allowed' : 'pointer', opacity: isSubmittingManual ? 0.7 : 1 }}>
-                                        {isSubmittingManual ? 'Gerando...' : 'Gerar Matéria'}
-                                    </button>
-                                    <button type="button" onClick={() => { setManualModalOpen(false); setSelectedFile(null) }} style={{ background: 'transparent', color: '#64748b', border: 'none', padding: '16px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>
-                                        Cancelar
-                                    </button>
-                                </div>
-                            </form>
+                            <ArticleForm
+                                mode="admin"
+                                formData={formData}
+                                setFormData={data => {
+                                    setFormData(data);
+                                    // Optionally clear errors here if mapped
+                                    setManualFormErrors({}); 
+                                }}
+                                errors={manualFormErrors}
+                                onSubmit={submitManualNews}
+                                isSubmitting={isSubmittingManual}
+                                onCancel={() => { setManualModalOpen(false); setSelectedFile(null); }}
+                                availableTemplates={availableTemplates}
+                                selectedFile={selectedFile}
+                                setSelectedFile={setSelectedFile}
+                            />
                         </div>
                     </div>
                 </div>
