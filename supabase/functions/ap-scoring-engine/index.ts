@@ -47,6 +47,24 @@ Deno.serve(async (_req: Request) => {
             const titleLengthScore = item.titulo.length >= 40 && item.titulo.length <= 80 ? 1.5 : 0.5;
             const base_score = Math.min(10, freshnessScore + imageScore + titleLengthScore);
 
+            // Priority score boost (matches 'priority_topic' rules)
+            const { data: priorityRules } = await supabase
+                .schema("ap").from("editorial_rules")
+                .select("value")
+                .eq("cliente_id", item.cliente_id)
+                .eq("rule_type", "priority_topic");
+
+            let priorityBoost = 0;
+            if (priorityRules && priorityRules.length > 0) {
+                const searchString = `${item.titulo} ${item.conteudo ?? ""}`.toLowerCase();
+                for (const rule of priorityRules) {
+                    if (searchString.includes(rule.value.toLowerCase())) {
+                        priorityBoost = 5; // Fixed boost for hitting a priority city/topic
+                        break;
+                    }
+                }
+            }
+
             // Learning score: average of approved items from same categoria+fonte in last 30 days
             const { data: history } = await supabase
                 .schema("ap").from("learning_history")
@@ -62,9 +80,12 @@ Deno.serve(async (_req: Request) => {
                     ? history.reduce((sum, h) => sum + (h.score_delta ?? 0), 0) / history.length
                     : 0;
 
+            const final_base_score = Math.min(10, base_score + priorityBoost);
+
+
             // Upsert score — idempotent
             await supabase.schema("ap").from("candidate_scores").upsert(
-                { news_id: item.id, cliente_id: item.cliente_id, base_score, learning_score },
+                { news_id: item.id, cliente_id: item.cliente_id, base_score: final_base_score, learning_score },
                 { onConflict: "news_id" }
             );
 

@@ -259,7 +259,8 @@ export default function AutoPublisher() {
     }
 
     async function handleApproveSelected(item) {
-        if (item.status !== 'selected' && item.status !== 'studio_ready') return
+        const approvableStatuses = ['selected', 'pending_review', 'studio_selected', 'studio_ready']
+        if (!approvableStatuses.includes(item.status)) return
         setIsProcessing(true)
         try {
             // 'approve_for_ig' = aprovação humana explícita.
@@ -269,7 +270,7 @@ export default function AutoPublisher() {
             const user = authUser.data?.user
             const userName = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email || 'Editor'
 
-            const { error: prodError } = await supabase.functions.invoke('ap-content-production', {
+            const { data, error: prodError } = await supabase.functions.invoke('ap-content-production', {
                 body: {
                     action: 'approve_for_ig',
                     newsId: item.id,
@@ -281,6 +282,7 @@ export default function AutoPublisher() {
                 }
             })
             if (prodError) throw prodError
+            if (data?.errors && data.errors.length > 0) throw new Error(data.errors[0].error || "Erro na edge function")
 
             const { error: renderError } = await supabase.functions.invoke('ap-render-engine', {
                 body: { action: 'render_one', newsId: item.id }

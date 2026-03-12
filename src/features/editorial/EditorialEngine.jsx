@@ -448,13 +448,14 @@ export default function EditorialEngine() {
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
                         <button className="editorial-button secondary" onClick={() => startAddRule('forbidden')}><Plus size={14} /> Palavra Proibida</button>
                         <button className="editorial-button secondary" onClick={() => startAddRule('mandatory')}><Plus size={14} /> Termo Obrigatório</button>
+                        <button className="editorial-button secondary" onClick={() => startAddRule('priority_topic')}><Plus size={14} /> Tópico de Interesse</button>
                         <button className="editorial-button secondary" onClick={() => startAddRule('substitution')}><Plus size={14} /> Substituição</button>
                     </div>
 
                     {activeRuleType && (
                         <div style={{ marginTop: 16, padding: 12, borderRadius: 8, backgroundColor: 'var(--color-bg-secondary)', border: '1px solid var(--color-border-light)' }}>
                             <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>
-                                Adicionando {activeRuleType === 'forbidden' ? 'Palavra Proibida' : activeRuleType === 'mandatory' ? 'Termo Obrigatório' : 'Substituição'}
+                                Adicionando {activeRuleType === 'forbidden' ? 'Palavra Proibida' : activeRuleType === 'mandatory' ? 'Termo Obrigatório' : activeRuleType === 'priority_topic' ? 'Tópico de Interesse' : 'Substituição'}
                             </label>
                             <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                                 <input
@@ -488,10 +489,10 @@ export default function EditorialEngine() {
                                             <td>
                                                 <span style={{
                                                     fontSize: 12, padding: '2px 8px', borderRadius: 4, fontWeight: 600,
-                                                    backgroundColor: r.rule_type === 'forbidden' ? 'rgba(239,68,68,0.1)' : r.rule_type === 'mandatory' ? 'rgba(16,185,129,0.1)' : 'rgba(245,158,11,0.1)',
-                                                    color: r.rule_type === 'forbidden' ? '#EF4444' : r.rule_type === 'mandatory' ? '#10B981' : '#F59E0B'
+                                                    backgroundColor: r.rule_type === 'forbidden' ? 'rgba(239,68,68,0.1)' : r.rule_type === 'mandatory' ? 'rgba(16,185,129,0.1)' : r.rule_type === 'priority_topic' ? 'rgba(56,189,248,0.1)' : 'rgba(245,158,11,0.1)',
+                                                    color: r.rule_type === 'forbidden' ? '#EF4444' : r.rule_type === 'mandatory' ? '#10B981' : r.rule_type === 'priority_topic' ? '#0284C7' : '#F59E0B'
                                                 }}>
-                                                    {r.rule_type === 'forbidden' ? 'PROIBIDA' : r.rule_type === 'mandatory' ? 'OBRIGATÓRIO' : 'SUBSTITUIÇÃO'}
+                                                    {r.rule_type === 'forbidden' ? 'PROIBIDA' : r.rule_type === 'mandatory' ? 'OBRIGATÓRIO' : r.rule_type === 'priority_topic' ? 'PRIORIDADE SCORES' : 'SUBSTITUIÇÃO'}
                                                 </span>
                                             </td>
                                             <td>{r.value}</td>

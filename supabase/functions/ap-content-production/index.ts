@@ -55,7 +55,7 @@ Deno.serve(async (req: Request) => {
     // approve_for_ig: aprovação humana explícita → move para 'pending_render'.
     let statusList = ["raw", "ready_for_scoring"];
     if (actionType === "process_selected" || actionType === "approve_for_ig" || actionType === "process_studio") {
-        statusList = ["selected", "studio_selected"];
+        statusList = ["selected", "studio_selected", "pending_review"];
     }
 
     let query = supabase.schema("ap").from("candidate_news")
@@ -102,6 +102,44 @@ Deno.serve(async (req: Request) => {
             // Employee-sourced items must still go through expansion here when being approved.
             const isEmployeeGenerated = item.source === "employee";
             const hasManualInput = (item.headline && item.headline.length > 5) || (item.caption && item.caption.length > 10);
+
+            if (actionType === "approve_for_ig") {
+                console.log(`[FLOW] Explicit human approval for ${item.id}. Moving directly to pending_render.`);
+                const finalHeadline = userHeadline || item.headline || item.titulo || "Pauta OMNI";
+                const finalCaption = userText || item.caption || "";
+                const finalTag = userTag || item.context_tag || item.categoria || "DESTAQUE";
+
+                const updatePayload: any = {
+                    headline: finalHeadline,
+                    caption: finalCaption,
+                    context_tag: finalTag,
+                    status: "pending_render",
+                    processing_started_at: null
+                };
+
+                if (typeof body?.approved_by_id === "string") {
+                    updatePayload.approved_by = body.approved_by_id;
+                    updatePayload.approved_by_name = body.approved_by_name || "Editor";
+                    updatePayload.approved_at = new Date().toISOString();
+                }
+
+                await supabase.schema("ap").from("candidate_news")
+                    .update(updatePayload)
+                    .eq("id", item.id);
+
+                if (typeof body?.approved_by_id === "string") {
+                    await supabase.schema("ap").from("editorial_events").insert({
+                        worker: "ap-content-production",
+                        action: "approve_news",
+                        news_id: item.id,
+                        user_id: body.approved_by_id,
+                        payload: updatePayload
+                    });
+                }
+
+                processedCount++;
+                continue;
+            }
 
             if (hasManualInput && !isEmployeeGenerated && actionType !== "process_studio") {
                 console.log(`[FLOW] [ap-content-production] Manual edit detected — item ${item.id} moved to pending_review (Action: ${actionType}). Awaiting human approval.`);
