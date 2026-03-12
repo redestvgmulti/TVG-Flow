@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../../services/supabase';
-import { CheckCircle2, Copy, Download, X, AlertCircle, RefreshCcw, ImageIcon, Brain, Search, SearchCode, Video, Image as ImageIconLucide } from 'lucide-react';
+import { Check, CheckCircle2, Copy, Download, X, AlertCircle, RefreshCcw, ImageIcon, Brain, Search, SearchCode, Video, Image as ImageIconLucide } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import ArticleForm from '../../components/editorial/ArticleForm';
 
@@ -499,7 +499,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                             <Check size={24} color="#fff" />
                                         </div>
                                         <p style={{ margin: 0, fontSize: '15px', color: '#065f46', fontWeight: 700, textAlign: 'center' }}>Matéria Criada com Sucesso!</p>
-                                        <p style={{ margin: 0, fontSize: '13px', color: '#059669', textAlign: 'center', maxWidth: '300px' }}>Sua sugestão foi enviada. Assim que o administrador aprovar, a arte será gerada automaticamente.</p>
+                                        <p style={{ margin: 0, fontSize: '13px', color: '#059669', textAlign: 'center', maxWidth: '300px' }}>Estamos gerando a sua arte agora mesmo. Em alguns segundos ela estará pronta para download.</p>
                                     </div>
                                 ) : (
                                     <div style={{ width: '100%', borderRadius: '16px', border: '1px dashed #e2e8f0', background: '#f8fafc', padding: '28px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', boxSizing: 'border-box' }}>
@@ -537,7 +537,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                 {isPublished && (
                                     <div style={{ background: '#dcfce7', border: '1px solid #86efac', borderRadius: '10px', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#166534', fontWeight: 700 }}>
                                         <CheckCircle2 size={18} color="#16a34a" />
-                                        Publicada! Esta matéria foi movida para o painel do Admin.
+                                        Sua matéria foi gerada com sucesso e está pronta para uso!
                                     </div>
                                 )}
 
@@ -621,8 +621,32 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                                         <Copy size={16} /> Textos
                                                     </button>
                                                 )}
-                                                <button onClick={() => handleDownloadUrl(item.render_url)} style={{ flex: 1, padding: '10px', background: '#1e293b', border: '1px solid #1e293b', borderRadius: '8px', fontSize: '13px', fontWeight: 600, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: 'pointer' }}>
-                                                    <Download size={16} /> Cópia (Frame/Arte)
+                                                <button 
+                                                    onClick={() => item.render_url && handleDownloadUrl(item.render_url)} 
+                                                    disabled={!item.render_url}
+                                                    style={{ 
+                                                        flex: 1, 
+                                                        padding: '10px', 
+                                                        background: !item.render_url ? '#f1f5f9' : '#1e293b', 
+                                                        border: !item.render_url ? '1px solid #e2e8f0' : '1px solid #1e293b', 
+                                                        borderRadius: '8px', 
+                                                        fontSize: '13px', 
+                                                        fontWeight: 600, 
+                                                        color: !item.render_url ? '#94a3b8' : '#fff', 
+                                                        display: 'flex', 
+                                                        alignItems: 'center', 
+                                                        justifyContent: 'center', 
+                                                        gap: '6px', 
+                                                        cursor: !item.render_url ? 'not-allowed' : 'pointer' 
+                                                    }}
+                                                >
+                                                    {item.render_url ? (
+                                                        <><Download size={16} /> Cópia (Frame/Arte)</>
+                                                    ) : (
+                                                        item.status === 'pending_render' ? 'Gerando arte...' : 
+                                                        item.status === 'pending_review' ? 'Aguardando Aprovação' : 
+                                                        'Arte Indisponível'
+                                                    )}
                                                 </button>
                                             </div>
                                         </div>

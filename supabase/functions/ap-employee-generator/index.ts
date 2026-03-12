@@ -282,10 +282,10 @@ Deno.serve(async (req: Request) => {
 
         console.log(`[AUDIT] [ap-employee-generator] Merge Final: Tag=${resolvedTag}, Headline=${resolvedHeadline}`);
 
-        // 6. Salvamento Final — Employee items vão para 'pending_review' (aguarda revisão humana)
+        // 6. Salvamento Final — Employee items agora vão para 'pending_render' (bypass aprovação)
         const { error: finalUpdErr } = await supabase.schema("ap").from("candidate_news")
             .update({
-                status: "pending_review",  // Human must approve before render
+                status: "pending_render", // Pula a aprovação humana
                 headline: resolvedHeadline,
                 caption: finalCaption,
                 context_tag: resolvedTag,
@@ -296,18 +296,30 @@ Deno.serve(async (req: Request) => {
 
         if (finalUpdErr) throw finalUpdErr;
 
-        console.log(`[FLOW] [ap-employee-generator] Item ${newsId} -> pending_review. Awaiting human approval before render.`);
+        console.log(`[FLOW] [ap-employee-generator] Item ${newsId} -> pending_render. Triggering immediate render engine.`);
 
-        // Render will be triggered by the human approval action (approve_for_ig) in the frontend
+        // 7. Gatilho Imediato para Render Engine
+        try {
+            fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ap-render-engine`, {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ action: "render_one", newsId: newsId })
+            }).catch(e => console.error("[AUDIT] Falha ao disparar render engine imediato:", e.message));
+        } catch (e) {
+            console.warn("[AUDIT] Erro ao tentar disparar render engine:", e);
+        }
 
         return new Response(JSON.stringify({
             success: true,
             news_id: newsId,
-            status: "pending_review",
+            status: "pending_render",
             headline: resolvedHeadline,
             caption: finalCaption,
             context_tag: resolvedTag,
-            pending_review: true // Signal to frontend that human review is required
+            render_pending: true // Inicia polling no frontend
         }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     } catch (e: any) {
