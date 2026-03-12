@@ -65,7 +65,7 @@ Deno.serve(async (req: Request) => {
         console.error("[ap-render-engine] Failed to parse request body:", e);
     }
 
-    const cutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const cutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     let query = supabase
         .schema("ap").from("candidate_news")
         .select(`
@@ -80,14 +80,16 @@ Deno.serve(async (req: Request) => {
             placid_template_uuid, 
             content_type,
             template_set
-        `)
-        .eq("status", "pending_render");
+        `);
 
     if (targetNewsId) {
         query = query.eq("id", targetNewsId);
     } else {
+        // Pick items that are either:
+        // 1. Pending render and not currently processing
+        // 2. Already in processing but the lock has expired (cutoff)
         query = query
-            .or(`processing_started_at.is.null,processing_started_at.lt.${cutoff}`)
+            .or(`and(status.eq.pending_render,processing_started_at.is.null),and(status.eq.processing,processing_started_at.lt.${cutoff})`)
             .limit(BATCH_LIMIT);
     }
 
@@ -98,12 +100,15 @@ Deno.serve(async (req: Request) => {
 
     const results: any[] = [];
     const promises = (items ?? []).map(async (item) => {
-        // Atomic Lock - set to 'processing' as per requirement
+        // Atomic Lock - only acquire if it still has the status we fetched
         const { data: lockData, error: lockErr } = await supabase
             .schema("ap").from("candidate_news")
-            .update({ processing_started_at: new Date().toISOString(), status: 'processing' })
+            .update({ 
+                processing_started_at: new Date().toISOString(), 
+                status: 'processing' 
+            })
             .eq("id", item.id)
-            .eq("status", "pending_render")
+            .eq("status", item.status) // Safety check: must still be in the state we pulled
             .select("id");
 
         if (lockErr || !lockData || lockData.length === 0) {

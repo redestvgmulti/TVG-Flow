@@ -1,0 +1,31 @@
+import { createClient } from '@supabase/supabase-js'
+import fs from 'fs'
+
+const envFile = fs.readFileSync('.env.local', 'utf8')
+const env = {}
+envFile.split('\n').forEach(line => {
+    const [key, ...values] = line.split('=')
+    if (key && values.length > 0) {
+        env[key.trim()] = values.join('=').trim()
+    }
+})
+
+const supabase = createClient(env.VITE_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY)
+
+async function check() {
+    const clienteId = 'cd287e6e-f273-4d0f-a72d-2a8c391e40e9';
+    const { data, error } = await supabase
+        .schema('ap')
+        .from('candidate_news')
+        .select('id, titulo, status, render_url, processing_started_at, created_at')
+        .eq('cliente_id', clienteId)
+        .in('status', ['pending_render', 'ready_to_publish', 'approved', 'queued_for_posting', 'pending_review'])
+        .order('created_at', { ascending: false });
+        
+    console.log(`Inventory for Client ${clienteId}:`);
+    data.forEach(item => {
+        console.log(`- [${item.status}] ${item.titulo} (URL: ${item.render_url ? 'YES' : 'NO'}, Time: ${item.processing_started_at})`);
+    });
+}
+
+check()

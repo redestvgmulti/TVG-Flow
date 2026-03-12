@@ -34,7 +34,7 @@ const STATUS_TAB = {
     scored: 'coletadas',
     selected: 'pendentes',
     pending_render: 'aprovadas',
-    processing: 'coletadas',
+    processing: 'aprovadas',
     pending_review: 'pendentes',
     ready_to_publish: 'aprovadas',
     approved: 'aprovadas',
@@ -135,9 +135,9 @@ export default function AutoPublisher() {
         setLoading(true)
 
         let statuses = []
-        if (currentTab === 'coletadas') statuses = ['raw', 'ready_for_scoring', 'scored', 'failed', 'rejected', 'processing']
+        if (currentTab === 'coletadas') statuses = ['raw', 'ready_for_scoring', 'scored', 'failed', 'rejected']
         if (currentTab === 'pendentes') statuses = ['selected', 'studio_selected', 'studio_ready', 'pending_review']
-        if (currentTab === 'aprovadas') statuses = ['pending_render', 'ready_to_publish', 'approved', 'queued_for_posting']
+        if (currentTab === 'aprovadas') statuses = ['pending_render', 'processing', 'ready_to_publish', 'approved', 'queued_for_posting']
         if (currentTab === 'publicadas') statuses = ['posted']
 
         if (statuses.length === 0) {
@@ -277,6 +277,11 @@ export default function AutoPublisher() {
             const authUser = await supabase.auth.getUser()
             const user = authUser.data?.user
             const userName = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email || 'Editor'
+
+            // Ensure we clear any stale lock before pushing to production/render
+            await supabase.schema('ap').from('candidate_news').update({
+                processing_started_at: null
+            }).eq('id', item.id)
 
             const { data, error: prodError } = await supabase.functions.invoke('ap-content-production', {
                 body: {
@@ -970,8 +975,9 @@ function AprovadaCard({ item, onPublish, onReject, onEdit, isProcessing }) {
     const [copied, setCopied] = useState(false)
     const [isExpanded, setIsExpanded] = useState(false)
 
-    // True if Placid hasn't returned the URL yet
-    const isRendering = item.status === 'pending_render' || (item.status === 'pending_review' && !item.render_url)
+    // True if render is actually active
+    const isRendering = item.status === 'pending_render' || item.status === 'processing'
+    const isAwaitingReview = item.status === 'pending_review' && !item.render_url
 
     const handleCopy = () => {
         const text = `${item.headline ?? item.titulo}\n\n${item.caption ?? ''}`
@@ -1090,10 +1096,16 @@ function AprovadaCard({ item, onPublish, onReject, onEdit, isProcessing }) {
                 )}
             </div>
 
-            {/* Alerta de Renderização */}
+            {/* Alerta de Renderização / Revisão */}
             {isRendering && (
-                <div style={{ margin: '12px 16px', padding: '10px', background: '#fef9c3', borderRadius: '8px', fontSize: '12px', color: '#854d0e', fontWeight: 600, textAlign: 'center', border: '1px solid #fde047' }}>
+                <div style={{ margin: '12px 16px', padding: '10px', background: '#f5f3ff', borderRadius: '8px', fontSize: '12px', color: '#6d28d9', fontWeight: 600, textAlign: 'center', border: '1px solid #ddd6fe' }}>
                     ⏳ Em renderização — aguarde a arte ficar pronta
+                </div>
+            )}
+
+            {isAwaitingReview && (
+                <div style={{ margin: '12px 16px', padding: '10px', background: '#fff7ed', borderRadius: '8px', fontSize: '12px', color: '#c2410c', fontWeight: 600, textAlign: 'center', border: '1px solid #fdba74' }}>
+                    ⚠️ Aguardando Revisão — clique em Aprovar para renderizar
                 </div>
             )}
             
