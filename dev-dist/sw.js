@@ -67,14 +67,11 @@ if (!self.define) {
     });
   };
 }
-define(['./workbox-a87ad30a'], (function (workbox) { 'use strict';
+define(['./workbox-b79e8dca'], (function (workbox) { 'use strict';
 
   importScripts("/push-sw.js");
-  self.addEventListener('message', event => {
-    if (event.data && event.data.type === 'SKIP_WAITING') {
-      self.skipWaiting();
-    }
-  });
+  self.skipWaiting();
+  workbox.clientsClaim();
 
   /**
    * The precacheAndRoute() method efficiently caches and responds to
@@ -85,18 +82,30 @@ define(['./workbox-a87ad30a'], (function (workbox) { 'use strict';
     "url": "registerSW.js",
     "revision": "3ca0b8505b4bec776b69afdba2768812"
   }, {
-    "url": "index.html",
-    "revision": "0.q3sl39sol88"
+    "url": "/index.html",
+    "revision": "0.ces1p2a9ahg"
   }], {});
   workbox.cleanupOutdatedCaches();
-  workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("index.html"), {
-    allowlist: [/^\/$/]
+  workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("/index.html"), {
+    allowlist: [/^\/$/],
+    denylist: [/^\/api\//, /^\/__\//, /\.(?:png|jpg|jpeg|svg|gif|webp|ico|css|js|woff2)$/]
   }));
-  workbox.registerRoute(/^https:\/\/gyooxmpyxncrezjiljrj\.supabase\.co\/.*$/, new workbox.NetworkFirst({
-    "cacheName": "supabase-api",
+  workbox.registerRoute(/^https:\/\/gyooxmpyxncrezjiljrj\.supabase\.co\/auth\/.*$/, new workbox.NetworkOnly(), 'GET');
+  workbox.registerRoute(/^https:\/\/gyooxmpyxncrezjiljrj\.supabase\.co\/rest\/.*$/, new workbox.NetworkFirst({
+    "cacheName": "supabase-data-api",
+    "networkTimeoutSeconds": 10,
     plugins: [new workbox.ExpirationPlugin({
       maxEntries: 50,
       maxAgeSeconds: 86400
+    }), new workbox.CacheableResponsePlugin({
+      statuses: [0, 200]
+    })]
+  }), 'GET');
+  workbox.registerRoute(/^https:\/\/gyooxmpyxncrezjiljrj\.supabase\.co\/storage\/.*$/, new workbox.CacheFirst({
+    "cacheName": "supabase-storage",
+    plugins: [new workbox.ExpirationPlugin({
+      maxEntries: 100,
+      maxAgeSeconds: 604800
     }), new workbox.CacheableResponsePlugin({
       statuses: [0, 200]
     })]
