@@ -62,15 +62,34 @@ function App() {
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return
     
+    const bc = new BroadcastChannel('flowos-pwa-sync')
     let refreshing = false
+    
     const handleControllerChange = () => {
       if (refreshing) return
       refreshing = true
+      console.log('[PWA] Controller changed, refreshing and broadcasting...')
+      bc.postMessage({ type: 'RELOAD_REQUESTED' })
       window.location.reload()
     }
     
+    const handleBroadcastChannelMessage = (event) => {
+      if (event.data?.type === 'RELOAD_REQUESTED') {
+        if (refreshing) return
+        refreshing = true
+        console.log('[PWA] Sync reload requested from another tab...')
+        window.location.reload()
+      }
+    }
+    
     navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange)
-    return () => navigator.serviceWorker.removeEventListener('controllerchange', handleControllerChange)
+    bc.addEventListener('message', handleBroadcastChannelMessage)
+    
+    return () => {
+      navigator.serviceWorker.removeEventListener('controllerchange', handleControllerChange)
+      bc.removeEventListener('message', handleBroadcastChannelMessage)
+      bc.close()
+    }
   }, [])
   
   return (
