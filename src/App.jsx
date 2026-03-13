@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import AppLayout from './layout/AppLayout'
 import AdminLayout from './layout/AdminLayout'
@@ -51,20 +52,27 @@ import TenantErrorBoundary from './components/TenantErrorBoundary'
 
 
 import { UpdateBanner } from './components/UpdateBanner'
-import { useServiceWorkerUpdater } from './hooks/useServiceWorkerUpdater'
 import { useVersionGate } from './hooks/useVersionGate'
-import { checkPendingUpdate } from './utils/checkPendingUpdate'
 
 function App() {
   // PWA Update System
-  useServiceWorkerUpdater()
   useVersionGate()
-  
-  // Safe reload on startup if update was pending
-  useEffect(() => {
-    checkPendingUpdate()
-  }, [])
 
+  // Controller change listener for Vite PWA updates
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return
+    
+    let refreshing = false
+    const handleControllerChange = () => {
+      if (refreshing) return
+      refreshing = true
+      window.location.reload()
+    }
+    
+    navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange)
+    return () => navigator.serviceWorker.removeEventListener('controllerchange', handleControllerChange)
+  }, [])
+  
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AuthProvider>

@@ -1,6 +1,8 @@
 {
   "min_version": "1.4.3",
   "latest_version": "1.4.3",
-  "force_update": true,
-  "message": "Nova versão disponível"
+  "force_update": false,
+  "message": "Nova versão disponível",
+  "commit": "38c0077",
+  "timestamp": "2026-03-12T23:54:59.232Z"
 }

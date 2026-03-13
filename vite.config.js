@@ -3,6 +3,9 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { execSync } from 'node:child_process'
 
+import fs from 'node:fs/promises'
+import path from 'node:path'
+
 // Generate version identifier for update banner
 const commitHash = (() => {
   try {
@@ -12,8 +15,26 @@ const commitHash = (() => {
   }
 })()
 
-const pkg = JSON.parse(await import('node:fs/promises').then(f => f.readFile('./package.json', 'utf-8')))
+const pkg = JSON.parse(await fs.readFile('./package.json', 'utf-8'))
 const APP_VERSION = `${pkg.version}+${commitHash}`
+
+// Custom plugin to keep system-version.json in sync
+const VersionSyncPlugin = () => ({
+  name: 'version-sync-plugin',
+  async buildStart() {
+    const versionPath = path.resolve('public/system-version.json')
+    const content = {
+      min_version: pkg.version,
+      latest_version: pkg.version,
+      force_update: false, // Default to false, can be manually set to true if needed
+      message: "Nova versão disponível",
+      commit: commitHash,
+      timestamp: new Date().toISOString()
+    }
+    await fs.writeFile(versionPath, JSON.stringify(content, null, 2))
+    console.log(`[VersionSync] Updated public/system-version.json to ${pkg.version}+${commitHash}`)
+  }
+})
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -21,9 +42,8 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(APP_VERSION),
   },
   plugins: [
-    react(),
     VitePWA({
-      registerType: 'autoUpdate', // Definitive fix: PWA updates automatically
+      registerType: 'prompt', // Definitive fix: UI controls update via prompt
       includeAssets: ['icons/*.png', 'offline.html'],
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}']
@@ -105,10 +125,12 @@ export default defineConfig({
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024 // 5MB limit for precaching
       },
       devOptions: {
-        enabled: process.env.VITE_SW_DEV === 'true', // Enable with: VITE_SW_DEV=true npm run dev
+        enabled: true, // Enabled for testing and consistency
         type: 'module'
       }
-    })
+    }),
+    react(),
+    VersionSyncPlugin(),
   ],
   build: {
     // Remove console.log/debug but keep error/warn for debugging

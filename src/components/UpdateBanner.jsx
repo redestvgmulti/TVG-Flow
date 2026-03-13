@@ -19,11 +19,19 @@ export function UpdateBanner() {
     const handleUpdate = async () => {
         setIsUpdating(true)
         
-        // Small delay for UI smoothness
-        await new Promise(resolve => setTimeout(resolve, 200))
-        
-        // Triggers SW update which leads to controllerchange -> sessionStorage ready
-        updateServiceWorker(true)
+        // Triggers SW update (skipWaiting)
+        // This will trigger 'controllerchange' event in App.jsx
+        try {
+            updateServiceWorker(true)
+        } catch (err) {
+            console.error('[PWA] updateServiceWorker failed:', err)
+        }
+
+        // Safety Fallback: If no reload happens in 5 seconds, force it.
+        // This handles cases where the SW is broken or deadlock occurs.
+        setTimeout(() => {
+            window.location.reload()
+        }, 5000)
     }
 
     // If update triggered, show loading

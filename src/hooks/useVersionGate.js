@@ -38,9 +38,16 @@ export function useVersionGate() {
             const data = await response.json()
             const currentVersion = __APP_VERSION__
 
+            // Safeguard: Don't trigger if we already tried upgrading this version in this session
+            const lastUpgradedVersion = sessionStorage.getItem('last_upgraded_version')
+            if (lastUpgradedVersion === data.min_version) {
+                return
+            }
+
             // Critical check: Is a force update required?
             if (data.force_update && isOutdated(currentVersion, data.min_version)) {
                 console.warn('[VersionGate] Local version is outdated. Forcing upgrade...')
+                sessionStorage.setItem('last_upgraded_version', data.min_version)
                 await forceUpgrade()
             }
         } catch (error) {
