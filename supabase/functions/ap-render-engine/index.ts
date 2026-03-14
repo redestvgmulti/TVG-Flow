@@ -42,6 +42,9 @@ Deno.serve(async (req: Request) => {
         { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
+    const workerInstanceId = crypto.randomUUID();
+    console.log(`[ap-render-engine] Worker Started. InstanceID: ${workerInstanceId}`);
+
     const renderApiKey = Deno.env.get("RENDER_API_KEY");
     const globalTemplateId = Deno.env.get("RENDER_TEMPLATE_ID");
 
@@ -79,17 +82,21 @@ Deno.serve(async (req: Request) => {
             context_tag, 
             placid_template_uuid, 
             content_type,
-            template_set
+            template_set,
+            status,
+            retry_count
         `);
 
     if (targetNewsId) {
-        query = query.eq("id", targetNewsId);
+        // Even with targetNewsId, we only process if it's in a valid state for rendering
+        query = query.eq("id", targetNewsId)
+            .or(`status.eq.pending_render,and(status.eq.processing,processing_started_at.lt.${cutoff}),and(status.eq.rendering,processing_started_at.lt.${cutoff})`);
     } else {
         // Pick items that are either:
         // 1. Pending render and not currently processing
-        // 2. Already in processing but the lock has expired (cutoff)
+        // 2. Already in processing/rendering but the lock has expired (cutoff)
         query = query
-            .or(`and(status.eq.pending_render,processing_started_at.is.null),and(status.eq.processing,processing_started_at.lt.${cutoff})`)
+            .or(`and(status.eq.pending_render,processing_started_at.is.null),and(status.eq.processing,processing_started_at.lt.${cutoff}),and(status.eq.rendering,processing_started_at.lt.${cutoff})`)
             .limit(BATCH_LIMIT);
     }
 
@@ -101,11 +108,14 @@ Deno.serve(async (req: Request) => {
     const results: any[] = [];
     const promises = (items ?? []).map(async (item) => {
         // Atomic Lock - only acquire if it still has the status we fetched
+        // Atomic Lock - only acquire if it still has the status we fetched
+        // CAS (Compare-And-Swap) pattern to prevent race conditions
         const { data: lockData, error: lockErr } = await supabase
             .schema("ap").from("candidate_news")
             .update({ 
                 processing_started_at: new Date().toISOString(), 
-                status: 'processing' 
+                status: 'rendering',
+                worker_id: workerInstanceId
             })
             .eq("id", item.id)
             .eq("status", item.status) // Safety check: must still be in the state we pulled
@@ -211,19 +221,26 @@ Deno.serve(async (req: Request) => {
                 let finalUrl = data.image_url;
                 const pollingUrl = data.polling_url;
 
-                // Polling Loop for Async Rendering (MÁXIMO 10 tentativas para evitar timeouts do servidor)
+                // Polling Loop for Async Rendering (Hardened with exponential backoff)
                 if (!finalUrl && pollingUrl) {
                     console.log(`[ap-render-engine] Polling iniciado: ${pollingUrl}`);
-                    for (let i = 0; i < 10; i++) {
-                        await new Promise(r => setTimeout(r, 3000));
+                    for (let attempt = 1; attempt <= 20; attempt++) {
+                        console.log("[AUDIT][RENDER_ATTEMPT]", {
+                            news_id: item.id,
+                            attempt
+                        });
+                        const delay = Math.min(5000 * attempt, 30000);
+                        await new Promise(r => setTimeout(r, delay));
+                        
                         const pollRes = await fetch(pollingUrl, {
                             headers: { "Authorization": `Bearer ${renderApiKey}` }
                         });
+                        
                         if (pollRes.ok) {
                             const pollData = await pollRes.json();
                             if (pollData.status === "finished" && pollData.image_url) {
                                 finalUrl = pollData.image_url;
-                                console.log(`[ap-render-engine] Polling sucesso: ${finalUrl}`);
+                                console.log(`[ap-render-engine] Polling sucesso (tentativa ${attempt}): ${finalUrl}`);
                                 break;
                             }
                         }
@@ -254,8 +271,10 @@ Deno.serve(async (req: Request) => {
                         const publicRenderUrl = `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/public/ap-renders/${internalPath}`;
 
                         await supabase.schema("ap").from("candidate_news").update({
+                            imagem_url: publicRenderUrl,
                             render_url: publicRenderUrl,
-                            status: "ready_to_publish",
+                            rendered_at: new Date().toISOString(),
+                            status: "render_complete",
                             processing_started_at: null,
                             completed_at: new Date().toISOString()
                         }).eq("id", item.id);
@@ -269,12 +288,16 @@ Deno.serve(async (req: Request) => {
                         results.push({ id: item.id, status: "error", error: dlErr.message });
                     }
                 } else {
-                    // Sem URL após 10 tentativas = Timeout e falha. Sem Webhook configurado, a matéria ficaria travada sem imagem.
+                    // Sem URL após 20 tentativas = Timeout.
+                    const newRetryCount = (item.retry_count || 0) + 1;
+                    const finalStatus = newRetryCount >= 3 ? "failed_render" : "pending_render";
+                    
                     await supabase.schema("ap").from("candidate_news").update({
-                        status: "failed",
+                        status: finalStatus,
+                        retry_count: newRetryCount,
                         processing_started_at: null
                     }).eq("id", item.id);
-                    results.push({ id: item.id, status: "pending_async", message: "Timeout de polling. Render continuará no background pelo Placid." });
+                    results.push({ id: item.id, status: finalStatus, message: "Timeout de polling após 20 tentativas." });
                 }
             } else {
                 const errText = await renderRes.text();
@@ -282,10 +305,15 @@ Deno.serve(async (req: Request) => {
             }
         } catch (err: any) {
             console.error(`[ap-render-engine] item ${item.id}:`, err.message);
-            results.push({ id: item.id, status: "error", error: err.message });
-            // Error handling matching instructions: never return to queue, set status = 'failed'
+            
+            const newRetryCount = (item.retry_count || 0) + 1;
+            const finalStatus = newRetryCount >= 3 ? "failed_render" : "pending_render";
+
+            results.push({ id: item.id, status: finalStatus, error: err.message });
+            
             await supabase.schema("ap").from("candidate_news").update({
-                status: "failed",
+                status: finalStatus,
+                retry_count: newRetryCount,
                 processing_started_at: null
             }).eq("id", item.id);
         }

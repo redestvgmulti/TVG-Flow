@@ -37,6 +37,7 @@ const STATUS_TAB = {
     processing: 'aprovadas',
     pending_review: 'pendentes',
     ready_to_publish: 'aprovadas',
+    render_complete: 'aprovadas',
     approved: 'aprovadas',
     queued_for_posting: 'aprovadas',
     studio_selected: 'pendentes',
@@ -137,7 +138,7 @@ export default function AutoPublisher() {
         let statuses = []
         if (currentTab === 'coletadas') statuses = ['raw', 'ready_for_scoring', 'scored', 'failed', 'rejected']
         if (currentTab === 'pendentes') statuses = ['selected', 'studio_selected', 'studio_ready', 'pending_review']
-        if (currentTab === 'aprovadas') statuses = ['pending_render', 'processing', 'ready_to_publish', 'approved', 'queued_for_posting']
+        if (currentTab === 'aprovadas') statuses = ['pending_render', 'processing', 'render_complete', 'approved', 'queued_for_posting']
         if (currentTab === 'publicadas') statuses = ['posted']
 
         if (statuses.length === 0) {
@@ -490,21 +491,29 @@ export default function AutoPublisher() {
         }
 
         // 5. Standardized Payload
+        const { data: authData } = await supabase.auth.getUser()
+        const user = authData?.user
+        let finalAuthUserId = user?.id || null
+        if (finalAuthUserId === 'null') finalAuthUserId = null
+
         const payload = {
             empresa_id: clienteId,
+            auth_user_id: finalAuthUserId,
             url_original: formData.url_original || null,
             titulo: formData.titulo || scrapedTitle || 'Pauta OMNI',
             conteudo: formData.conteudo || scrapedConteudo || '',
-            context_tag: formData.context_tag,
-            image_url: finalImageUrl,
+            context_tag: formData.context_tag.toUpperCase(),
             content_type: formData.content_type || 'feed',
+            imagem_url: finalImageUrl,
             template_set: formData.template_set || 'default',
             placid_template_uuid: formData.placid_template_uuid || null,
-            // Legacy/Hybrid field support
+            // Hybrid fields for backend compatibility
             userHeadline: formData.titulo || null,
-            userText: formData.conteudo || null,
-            userTag: formData.context_tag.toUpperCase()
+            userTag: formData.context_tag.toUpperCase(),
+            userText: formData.conteudo || null
         }
+
+        console.log("[AUDIT][GENERATOR_PAYLOAD]", payload);
 
         try {
             const { data, error } = await supabase.functions.invoke('ap-employee-generator', { body: payload })
@@ -875,7 +884,7 @@ function PendenteCard({ item, onReject, onStudio, onApproveSelected, onEdit, isP
             </div>
 
             {/* Part 3 - Dashboard Visual Alert */}
-            {(item.content_type === 'feed' && !item.imagem_url && !item.imagem_storage && !item.render_url) && (
+            {(item.content_type === 'feed' && !item.imagem_url && !item.imagem_storage && !item.render_url && !['pending_render', 'processing', 'generating'].includes(item.status)) && (
                 <div style={{ padding: '6px 12px', background: '#fee2e2', color: '#ef4444', fontSize: '11px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', borderBottom: '1px solid #fca5a5' }}>
                     <AlertTriangle size={14} /> Erro: Post de Feed sem Imagem
                 </div>

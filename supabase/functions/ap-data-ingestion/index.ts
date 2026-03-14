@@ -7,6 +7,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { classifyCategory } from "../_shared/categoryHeuristics.ts";
 
 const BATCH_LIMIT = 50;
 const MAX_AGE_HOURS = 24;
@@ -164,6 +165,7 @@ Deno.serve(async (_req: Request) => {
           studio_media_image_url: item.studio_media_image_url,
           studio_media_video_url: item.studio_media_video_url,
           published_at: item.pubDate ? new Date(item.pubDate).toISOString() : null,
+          categoria: classifyCategory(item.title, item.description || ""),
           status: "raw",
           source: "rss"
         });

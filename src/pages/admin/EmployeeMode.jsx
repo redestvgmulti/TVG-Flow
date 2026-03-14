@@ -5,8 +5,7 @@ import { Check, CheckCircle2, Copy, Download, X, AlertCircle, RefreshCcw, ImageI
 import { useAuth } from '../../contexts/AuthContext';
 import ArticleForm from '../../components/editorial/ArticleForm';
 
-// Fallback provider client
-const FALLBACK_CLIENT_ID = 'cd287e6e-f273-4d0f-a72d-2a8c391e40e9';
+// Fallback provider client removed - enforce session ID
 
 export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaId }) {
     const { user: ctxUser, professionalId } = useAuth();
@@ -37,20 +36,20 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
     const [isPublished, setIsPublished] = useState(false);
 
     // Multi-tenant resolution
-    const [clienteId, setClienteId] = useState(empresaId || FALLBACK_CLIENT_ID);
+    const [clienteId, setClienteId] = useState(empresaId || null);
 
     useEffect(() => {
-        if (isOpen && professionalId && !empresaId) {
-            // Use server-side RPC to bypass RLS restrictions safely
-            supabase.rpc('get_my_cliente_id').then(({ data: id, error }) => {
+        if (isOpen && professionalId && !empresaId && !clienteId) {
+            // Use server-side RPC to resolve agency client ID
+            supabase.rpc('get_agencia_cliente_id').then(({ data: id, error }) => {
                 if (error) {
-                    console.error('[EmployeeMode] Failed to resolve clienteId via RPC:', error);
+                    console.error("[ERROR][EMPRESA_RESOLUTION]", error);
                 } else if (id) {
                     setClienteId(id);
                 }
             });
         }
-    }, [isOpen, professionalId, empresaId]);
+    }, [isOpen, professionalId, empresaId, clienteId]);
 
     // ── Load available templates for any non-default campaign (Unified with AutoPublisher)
     useEffect(() => {
@@ -181,6 +180,30 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
             return;
         }
 
+        let currentClienteId = clienteId;
+
+        if (!currentClienteId) {
+            setIsSubmitting(true);
+            try {
+                const { data: empresa_id, error } = await supabase.rpc("get_agencia_cliente_id");
+
+                if (error) {
+                    console.error("[ERROR][EMPRESA_RESOLUTION]", error);
+                    setErrorMsg("Não foi possível identificar o cliente da agência.");
+                    setIsSubmitting(false);
+                    return;
+                }
+
+                console.log("[AUDIT][EMPLOYEE_GENERATION_EMPRESA]", empresa_id);
+                currentClienteId = empresa_id;
+                setClienteId(empresa_id);
+            } catch (err) {
+                setErrorMsg("Erro ao identificar a agência. Tente novamente.");
+                setIsSubmitting(false);
+                return;
+            }
+        }
+
         setIsSubmitting(true);
         setErrorMsg(null);
         setSuccessData(null);
@@ -192,7 +215,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                     .from('ap_candidate_news')
                     .select('id')
                     .eq('url_original', url_original)
-                    .eq('cliente_id', clienteId)
+                    .eq('cliente_id', currentClienteId)
                     .limit(1);
 
                 if (!searchError && existingNews && existingNews.length > 0) {
@@ -203,7 +226,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                 const { data: existingNews, error: searchError } = await supabase
                     .from('ap_candidate_news')
                     .select('id')
-                    .eq('cliente_id', clienteId)
+                    .eq('cliente_id', currentClienteId)
                     .ilike('headline', titulo)
                     .gte('created_at', twentyFourHoursAgo)
                     .limit(1);
@@ -236,21 +259,34 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                 finalImageUrl = await handleFileUpload(selectedFile);
             }
 
+            // Sanitize professionalId (convert "null" string to null)
+            let finalAuthUserId = professionalId || user?.id;
+            if (finalAuthUserId === 'null') finalAuthUserId = null;
+
             const payload = {
-                empresa_id: clienteId,
+                empresa_id: currentClienteId,
+                auth_user_id: finalAuthUserId,
+                url_original: url_original || null,
                 titulo: titulo || scrapedTitle || 'Pauta OMNI',
                 conteudo: conteudo || scrapedConteudo || '',
-                url_original: url_original || null,
-                imagem_url: content_type === 'feed' ? finalImageUrl : null,
+                context_tag: context_tag.toUpperCase(),
                 content_type: content_type,
-                auth_user_id: professionalId || user?.id,
+                imagem_url: content_type === 'feed' ? finalImageUrl : null,
+                template_set: template_set || 'default',
+                placid_template_uuid: placid_template_uuid || null,
                 // Hybrid fields expected by exact ap-employee-generator edge function mappings
                 userTag: context_tag.toUpperCase(),
                 userHeadline: titulo || null,
                 userText: conteudo || null,
-                template_set: template_set || 'default',
-                placid_template_uuid: placid_template_uuid || null,
             };
+
+            // Validation and Audit
+            if (!payload.empresa_id) {
+                throw new Error("empresa_id could not be resolved");
+            }
+
+            console.log("[AUDIT][EMPLOYEE_GENERATION_EMPRESA]", payload.empresa_id);
+            console.log("[AUDIT][GENERATOR_PAYLOAD]", payload);
 
             const { data, error } = await supabase.functions.invoke('ap-employee-generator', {
                 body: payload
@@ -506,8 +542,9 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                         <div style={{ width: 48, height: 48, background: '#fee2e2', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
                                         </div>
-                                        <p style={{ margin: 0, fontSize: '14px', color: '#475569', fontWeight: 600, textAlign: 'center' }}>Arte não disponível.</p>
-                                        <p style={{ margin: 0, fontSize: '12px', color: '#94a3b8', textAlign: 'center' }}>O render pode ter falhado. Tente novamente ou contate o administrador.</p>
+                                        <p style={{ margin: 0, fontSize: '14px', color: '#475569', fontWeight: 600, textAlign: 'center', maxWidth: '300px' }}>
+                                            A arte foi enviada para a fila de processamento. Ela estará disponível no seu Histórico em alguns instantes.
+                                        </p>
                                     </div>
                                 )}
 
@@ -587,9 +624,15 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                         <div style={{ display: 'flex', padding: '16px', gap: '16px', borderBottom: '1px solid #f1f5f9' }}>
                                             {item.render_url ? (
                                                 <img src={item.render_url} alt="" style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '10px', border: '1px solid #e2e8f0', cursor: 'pointer' }} onClick={() => window.open(item.render_url, '_blank')} />
+                                            ) : ['pending_render', 'processing'].includes(item.status) ? (
+                                                <div style={{ width: '80px', height: '80px', background: '#f8fafc', borderRadius: '10px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: '1px dashed #3b82f6' }}>
+                                                    <RefreshCcw size={18} color="#3b82f6" className="spin" style={{ marginBottom: '4px' }}/>
+                                                    <span style={{ fontSize: '9px', color: '#3b82f6', fontWeight: 600 }}>Na fila</span>
+                                                </div>
                                             ) : (
-                                                <div style={{ width: '80px', height: '80px', background: '#f1f5f9', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                    <ImageIcon size={24} color="#cbd5e1" />
+                                                <div style={{ width: '80px', height: '80px', background: '#fef2f2', borderRadius: '10px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: '1px solid #fecaca' }}>
+                                                    <ImageIcon size={20} color="#ef4444" style={{ marginBottom: '4px' }} />
+                                                    <span style={{ fontSize: '9px', color: '#ef4444', fontWeight: 600 }}>Falhou</span>
                                                 </div>
                                             )}
 

@@ -48,7 +48,7 @@ Deno.serve(async (req: Request) => {
         const tenantCol = ['templates', 'template_sets'].includes(resource) ? 'empresa_id' : 'cliente_id';
 
         if (action === "list") {
-            const orderCol = resource === 'templates' ? 'ordem.asc' : 'created_at.asc';
+            const orderCol = resource === 'templates' ? 'ordem.asc,criado_em.asc' : 'created_at.asc';
             const res = await fetch(
                 `${base}?${tenantCol}=eq.${FIXED_CLIENT_ID}&order=${orderCol}`,
                 { method: "GET", headers: pgHeaders }

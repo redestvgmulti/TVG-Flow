@@ -5,8 +5,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { buildEditorialPrompt, getEditorialContext } from "../_shared/editorialPromptBuilder.ts";
-import { callLLM } from "../_shared/llmClient.ts";
+import { runEditorialWorkflow } from "../_shared/editorialWorkflow.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -26,11 +25,79 @@ async function fetchWithTimeout(resource: URL | RequestInfo, options = {}) {
     return response;
 }
 
+function isUUID(str: string) {
+    if (!str || typeof str !== 'string') return false;
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
+}
+
+function isValidUrl(str: string) {
+    if (!str || typeof str !== 'string') return false;
+    try {
+        new URL(str);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function normalizePayload(payload: any) {
+    const normalized: any = {};
+    for (const key in payload) {
+        const val = payload[key];
+        normalized[key] = (val === undefined || val === "") ? null : val;
+    }
+    return normalized;
+}
+
+/**
+ * Resolves the first available template for a given set and client.
+ */
+async function resolveTemplate(supabase: any, template_set: string, empresa_id: string, content_type: string) {
+    console.log(`[AUDIT] [ap-employee-generator] Resolvendo template automático para set=${template_set}, empresa=${empresa_id}, tipo=${content_type}`);
+    const { data, error } = await supabase.schema("ap")
+        .from("templates")
+        .select("id, placid_template_uuid")
+        .eq("template_set", template_set)
+        .eq("empresa_id", empresa_id)
+        .eq("tipo", content_type)
+        .eq("ativo", true) // Apenas templates ativos
+        .order("ordem", { ascending: true }) // Prioriza ordem
+        .order("criado_em", { ascending: true }) // Fallback para data de criação (criado_em)
+        .limit(1);
+
+    if (error) {
+        console.error("[GENERATOR_ERROR] Erro ao consultar templates:", error.message);
+        return null;
+    }
+
+    if (!data || data.length === 0) {
+        console.warn("[AUDIT][TEMPLATE_RESOLUTION_EMPTY]", {
+            empresa_id,
+            template_set
+        });
+        return null;
+    }
+
+    const resolved = data[0].placid_template_uuid || null;
+    const resolved_id = data[0].id || null;
+    
+    console.log("[AUDIT][TEMPLATE_SELECTED]", {
+        template_id: resolved_id,
+        placid_template_uuid: resolved,
+        content_type: content_type,
+        template_set,
+        empresa_id
+    });
+    
+    return resolved;
+}
+
 Deno.serve(async (req: Request) => {
     if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
     try {
         const body = await req.json();
+        console.log("[AUDIT][GENERATOR_REQUEST_BODY]", body);
         const {
             titulo,
             conteudo,
@@ -48,12 +115,70 @@ Deno.serve(async (req: Request) => {
             placid_template_uuid: raw_placid_uuid = null
         } = body;
 
-        console.log(`[AUDIT] [ap-employee-generator] Invocado para Empresa: ${empresa_id}, Link: ${url_original}`);
-        console.log(`[AUDIT] [ap-employee-generator] Payload Recebido:`, JSON.stringify(body));
+        let placid_template_uuid = raw_placid_uuid;
+        const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-        if (!empresa_id) throw new Error("empresa_id obrigatório");
+        console.log("[AUDIT][GENERATOR_PAYLOAD]", body);
 
-        const imagem_url = raw_image_url || raw_imagem_url || null;
+        // 1. Validation & Sanitization
+        if (!empresa_id) {
+            const reason = "empresa_id é obrigatório";
+            console.error("[GENERATOR_ERROR]", reason);
+            return new Response(JSON.stringify({ error: "VALIDATION_ERROR", message: reason }), { status: 400, headers: corsHeaders });
+        }
+        if (!isUUID(empresa_id)) {
+            const reason = `UUID inválido para empresa_id: ${empresa_id}`;
+            console.error("[GENERATOR_ERROR]", reason);
+            return new Response(JSON.stringify({ error: "VALIDATION_ERROR", message: reason }), { status: 400, headers: corsHeaders });
+        }
+        
+        if (auth_user_id && auth_user_id !== 'null' && !isUUID(auth_user_id)) {
+            console.warn(`[AUDIT] [ap-employee-generator] UUID inválido para auth_user_id: ${auth_user_id}. Ignorando.`);
+        }
+        const finalAuthUserId = (auth_user_id && auth_user_id !== 'null' && isUUID(auth_user_id)) ? auth_user_id : null;
+
+        const validTypes = ["feed", "reels"];
+        if (!validTypes.includes(content_type)) {
+            const reason = `content_type inválido: ${content_type}`;
+            console.error("[GENERATOR_ERROR]", reason);
+            return new Response(JSON.stringify({ error: "VALIDATION_ERROR", message: reason }), { status: 400, headers: corsHeaders });
+        }
+
+        // 1b. titulo & conteudo validation
+        if (!titulo || String(titulo).trim().length < 2) {
+            const reason = "titulo é obrigatório para geração (mínimo 2 caracteres)";
+            console.error("[GENERATOR_ERROR]", { reason, payload: body });
+            return new Response(JSON.stringify({ error: "VALIDATION_ERROR", message: reason }), { status: 400, headers: corsHeaders });
+        }
+        if (!conteudo || String(conteudo).trim().length < 5) {
+            const reason = "conteudo é muito curto ou ausente (mínimo 5 caracteres)";
+            console.error("[GENERATOR_ERROR]", { reason, payload: body });
+            return new Response(JSON.stringify({ error: "VALIDATION_ERROR", message: reason }), { status: 400, headers: corsHeaders });
+        }
+
+        if (!placid_template_uuid) {
+            const resolved = await resolveTemplate(supabase, raw_template_set || 'default', empresa_id, content_type);
+            if (!resolved) {
+                console.error("[GENERATOR_ERROR] Template not found", {
+                    empresa_id,
+                    template_set: raw_template_set,
+                    content_type
+                });
+                return new Response(JSON.stringify({ 
+                    error: "TEMPLATE_NOT_FOUND", 
+                    message: "No active template available for feed generation" 
+                }), { status: 400, headers: corsHeaders });
+            }
+            placid_template_uuid = resolved;
+        }
+
+        const imagem_url = raw_imagem_url || raw_image_url || null;
+        if (imagem_url && !isValidUrl(imagem_url)) {
+            const reason = `Formato de imagem_url inválido: ${imagem_url}`;
+            console.error("[GENERATOR_ERROR]", reason);
+            return new Response(JSON.stringify({ error: "VALIDATION_ERROR", message: reason }), { status: 400, headers: corsHeaders });
+        }
+
         const userHeadline = (typeof rawUserHeadline === 'string' && rawUserHeadline.trim()) ? rawUserHeadline.trim() : null;
         const userTag = (rawUserTag || rawContextTag) ? String(rawUserTag || rawContextTag).toUpperCase().trim() : null;
         const userText = (typeof rawUserText === 'string' && rawUserText.trim()) ? rawUserText.trim() : null;
@@ -64,12 +189,9 @@ Deno.serve(async (req: Request) => {
             console.warn("[AUDIT] [ap-employee-generator] Nenhuma imagem ou link fornecido. Prosseguindo sem imagem.");
         }
 
-        const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-
         // 1. Resolver Template (Manual ou Automático via Render Engine)
         let template_id = null;
         let template_ordem = null;
-        let placid_template_uuid = raw_placid_uuid;
         let template_nome_snapshot = null;
         const template_set = raw_template_set || 'default';
 
@@ -90,9 +212,11 @@ Deno.serve(async (req: Request) => {
             console.log(`[AUDIT] [ap-employee-generator] Rotação automática solicitada (UUID nulo).`);
         }
 
-        // 2. Criar registro inicial como 'processing' para esconder do UI e travar
-        const { data: newsItem, error: insertError } = await supabase.schema("ap").from("candidate_news")
-            .insert({
+        // 3. Criar registro inicial como 'processing' para esconder do UI e travar
+        let newsItem = null;
+        let normalizedPayload = null;
+        try {
+            const rawPayload = {
                 cliente_id: empresa_id,
                 titulo: userHeadline || titulo || "Pauta OMNI",
                 conteudo: userText || conteudo || "",
@@ -102,21 +226,36 @@ Deno.serve(async (req: Request) => {
                 source: "employee",
                 imagem_url: imagem_url,
                 content_type: content_type,
-                criado_por_user_id: auth_user_id || null,
+                criado_por_user_id: finalAuthUserId,
                 role_criador: "employee",
+                generated_by: "employee",
+                origin: "manual",
                 template_id: template_id,
                 template_ordem: template_ordem,
                 placid_template_uuid: placid_template_uuid,
                 template_nome_snapshot: template_nome_snapshot,
                 template_set: template_set,
                 gerado_em: new Date().toISOString()
-            })
-            .select("id")
-            .single();
+            };
 
-        if (insertError || !newsItem) {
-            console.error("[AUDIT] [ap-employee-generator] Insert Error:", insertError);
-            throw new Error("Erro ao criar registro no banco.");
+            normalizedPayload = normalizePayload(rawPayload);
+
+            const { data, error: insertError } = await supabase.schema("ap").from("candidate_news")
+                .insert(normalizedPayload)
+                .select("id")
+                .single();
+
+            if (insertError) throw insertError;
+            newsItem = data;
+        } catch (dbErr: any) {
+            console.error("[GENERATOR_ERROR][DB_INSERT_FAILED]", { 
+                error: dbErr.message, 
+                payload: normalizedPayload 
+            });
+            return new Response(JSON.stringify({ 
+                error: "Falha ao criar registro no banco.", 
+                details: dbErr.message 
+            }), { status: 400, headers: corsHeaders });
         }
 
         const newsId = newsItem.id;
@@ -218,112 +357,49 @@ Deno.serve(async (req: Request) => {
             return new Response(JSON.stringify({ error: msg }), { status: 400, headers: corsHeaders });
         };
 
-        // 4. Inteligência Artificial
-        let finalOpenAiKey = "";
-        let context = await getEditorialContext(supabase, empresa_id, userText || conteudo || titulo || "");
-
-        if (context?.settings?.vault_secret_id) {
-            const { data: secretData } = await supabase.rpc('get_decrypted_secret', { secret_id: context.settings.vault_secret_id });
-            if (secretData) finalOpenAiKey = secretData;
-        }
-        if (!finalOpenAiKey) finalOpenAiKey = Deno.env.get("ANTHROPIC_API_KEY") || Deno.env.get("OPENAI_API_KEY") || "";
-        if (!finalOpenAiKey) return failProcess("Chave de API ausente.");
-
-        const prompt = await buildEditorialPrompt(supabase, {
-            titulo: userHeadline || titulo || "Pauta OMNI",
-            conteudo: userText || conteudo || "",
-            categoria: userTag || "Geral",
-            url_original: url_original || null,
-            settings: context?.settings || { cliente_id: empresa_id },
-            promptVersion: context?.promptVersion,
-            humanization: context?.humanization,
-            rules: context?.rules || [],
-            ragContext: context?.ragContext || [],
-            openaiKey: finalOpenAiKey,
-            contentType: content_type as any,
+        // 4. Shared Editorial Workflow (AI Processing)
+        console.log(`[FLOW] Triggering shared editorial workflow for ${newsId}`);
+        const result = await runEditorialWorkflow(supabase, {
+            newsId,
+            clienteId: empresa_id,
             userHeadline,
             userTag,
-            userText
+            userText,
+            contentType: content_type as any
         });
-
-        const model = context?.settings?.model_primary || OPENAI_MODEL_G;
-        console.log(`[AUDIT] [ap-employee-generator] Chamando IA (${model})...`);
-
-        const { content } = await callLLM({
-            apiKey: finalOpenAiKey,
-            model: model,
-            prompt: prompt,
-            baseUrl: context?.settings?.api_base_url || undefined,
-            temperature: context?.settings?.temperature || 0.7,
-            maxTokens: 1500
-        });
-
-        let parsedData: any = null;
-        try {
-            // Robust extraction: try multiple JSON block patterns
-            const jsonMatch = content.match(/```json\s*([\s\S]*?)```/) ||
-                content.match(/```([\s\S]*?)```/) ||
-                content.match(/(\{[\s\S]*\})/);
-            const jsonStr = jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : content;
-            parsedData = JSON.parse(jsonStr.trim());
-        } catch (e) {
-            console.warn("[AUDIT] [ap-employee-generator] JSON Parse falhou — usando fallback humano.", content.slice(0, 200));
-            parsedData = {}; // Will use human data fallback below
-        }
-
-        // 5. Merge de Prioridade Humana
-        // Caption: AI expands userText → use parsed.caption as the final expanded version.
-        // Only fall back to userText/conteudo if AI failed to return a valid caption.
-        const resolvedHeadline = userHeadline ?? parsedData.headline ?? titulo ?? "Pauta OMNI";
-        const resolvedTag = userTag ?? parsedData.context_tag ?? "DESTAQUE";
-        const finalCaption = (parsedData.caption || parsedData.legenda) ?? userText ?? conteudo ?? "";
-
-        if (!resolvedHeadline) return failProcess("Headline ausente após merge.");
-
-        console.log(`[AUDIT] [ap-employee-generator] Merge Final: Tag=${resolvedTag}, Headline=${resolvedHeadline}`);
 
         // 6. Salvamento Final — Employee items agora vão para 'pending_render' (bypass aprovação)
         const { error: finalUpdErr } = await supabase.schema("ap").from("candidate_news")
             .update({
                 status: "pending_render", // Pula a aprovação humana
-                headline: resolvedHeadline,
-                caption: finalCaption,
-                context_tag: resolvedTag,
-                roteiro_json: parsedData.roteiro || null,
+                headline: result.headline,
+                caption: result.caption,
+                context_tag: result.context_tag,
+                roteiro_json: result.roteiro_json,
                 processing_started_at: null
             })
             .eq("id", newsId);
 
         if (finalUpdErr) throw finalUpdErr;
 
-        console.log(`[FLOW] [ap-employee-generator] Item ${newsId} -> pending_render. Triggering immediate render engine.`);
-
-        // 7. Gatilho Imediato para Render Engine
-        try {
-            fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ap-render-engine`, {
-                method: "POST",
-                headers: {
-                    "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ action: "render_one", newsId: newsId })
-            }).catch(e => console.error("[AUDIT] Falha ao disparar render engine imediato:", e.message));
-        } catch (e) {
-            console.warn("[AUDIT] Erro ao tentar disparar render engine:", e);
-        }
+        console.log(`[FLOW] [ap-employee-generator] Item ${newsId} -> pending_render. Queued for worker.`);
 
         return new Response(JSON.stringify({
             success: true,
             news_id: newsId,
             status: "pending_render",
-            headline: resolvedHeadline,
-            caption: finalCaption,
-            context_tag: resolvedTag,
+            headline: result.headline,
+            caption: result.caption,
+            context_tag: result.context_tag,
             render_pending: true // Inicia polling no frontend
         }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     } catch (e: any) {
-        console.error(`[AUDIT] [ap-employee-generator] Erro Global:`, e.message);
-        return new Response(JSON.stringify({ error: e.message }), { status: 400, headers: corsHeaders });
+        console.error(`[GENERATOR_ERROR]`, e.message);
+        return new Response(JSON.stringify({ 
+            error: "INTERNAL_ERROR",
+            message: e.message || "Erro interno no servidor",
+            stack: Deno.env.get("ENVIRONMENT") === "development" ? e.stack : undefined
+        }), { status: 400, headers: corsHeaders });
     }
 });

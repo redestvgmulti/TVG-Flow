@@ -259,3 +259,34 @@ export async function callLLM({
   }
 }
 
+/**
+ * Logs AI consumption for auditing.
+ */
+export function logAIUsage(model: string, inputTokens: number, outputTokens: number, newsId: string | null = null) {
+  console.log("[AUDIT][AI_USAGE]", JSON.stringify({
+    candidate_news_id: newsId,
+    model_name: model,
+    input_tokens: inputTokens,
+    output_tokens: outputTokens,
+    timestamp: new Date().toISOString()
+  }));
+}
+
+/**
+ * Routes to different models based on pipeline stage and task complexity.
+ * Approved tiers: low-cost (summarization, tagging, classification) 
+ * vs high-quality (caption, headline).
+ */
+export function selectModel(
+  task: 'low-cost' | 'high-quality',
+  tenantPreference: string | null = null
+): string {
+  // Low-cost tier (Efficiency)
+  if (task === 'low-cost') {
+    return "gpt-4o-mini";
+  }
+  
+  // High-quality tier (Creative Excellence)
+  return tenantPreference || "claude-3-5-sonnet-20241022";
+}
+

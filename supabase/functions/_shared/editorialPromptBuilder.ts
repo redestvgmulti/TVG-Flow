@@ -22,10 +22,11 @@ export interface EditorialInput {
     userHeadline?: string | null;
     userTag?: string | null;
     userText?: string | null;
+    status?: string | null;
 }
 
 export async function buildEditorialPrompt(sbAdmin: SupabaseClient, data: EditorialInput): Promise<string> {
-    const { titulo, conteudo, categoria, url_original, settings, promptVersion, humanization, rules, openaiKey, contentType, userHeadline, userTag, userText } = data;
+    const { titulo, conteudo, categoria, url_original, settings, promptVersion, humanization, rules, openaiKey, contentType, userHeadline, userTag, userText, status } = data;
 
     // SANITIZAÇÃO (P0)
     const safeTitulo = titulo.slice(0, 500);
@@ -101,12 +102,15 @@ Use EXATAMENTE esta tag no campo context_tag do JSON de saída. NÃO a altere.\n
     let ragSection = "";
 
     // Check if there are ANY documents before wasting an Embedding API call
+    // OPTIMIZATION: RAG only for selected production items
+    const isReadyForProduction = ["selected", "studio_selected"].includes(status || "");
+
     const { count: docsCount } = await sbAdmin
         .schema("ap").from("editorial_rag_documents")
         .select("id", { count: "exact", head: true })
         .eq("cliente_id", settings.cliente_id);
 
-    if (docsCount && docsCount > 0 && openaiKey && safeConteudo) {
+    if (isReadyForProduction && docsCount && docsCount > 0 && openaiKey && safeConteudo) {
         try {
             const baseUrl = settings.api_base_url || "https://api.openai.com/v1";
             const isAnthropic = baseUrl.includes("anthropic.com");
@@ -134,7 +138,7 @@ Use EXATAMENTE esta tag no campo context_tag do JSON de saída. NÃO a altere.\n
                     const { data: matchedChunks, error: matchErr } = await sbAdmin.rpc('match_editorial_documents', {
                         query_embedding: queryEmbedding,
                         p_cliente_id: settings.cliente_id,
-                        match_count: 5 // Limit top 5
+                        match_count: 2 // Optimized from 5 to 2 to save tokens
                     });
 
                     if (!matchErr && matchedChunks && matchedChunks.length > 0) {
