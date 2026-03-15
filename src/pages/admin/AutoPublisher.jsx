@@ -138,7 +138,7 @@ export default function AutoPublisher() {
         let statuses = []
         if (currentTab === 'coletadas') statuses = ['raw', 'ready_for_scoring', 'scored', 'failed', 'rejected']
         if (currentTab === 'pendentes') statuses = ['selected', 'studio_selected', 'studio_ready', 'pending_review']
-        if (currentTab === 'aprovadas') statuses = ['pending_render', 'processing', 'render_complete', 'approved', 'queued_for_posting']
+        if (currentTab === 'aprovadas') statuses = ['pending_render', 'processing', 'render_complete', 'ready_to_publish', 'approved', 'queued_for_posting']
         if (currentTab === 'publicadas') statuses = ['posted']
 
         if (statuses.length === 0) {
@@ -1127,7 +1127,7 @@ function AprovadaCard({ item, onPublish, onReject, onEdit, isProcessing }) {
             {/* Botões: Baixar Arte + Copiar Legenda */}
             <div className="ap-card-actions-wrap">
                 <div className="ap-card-btn-row">
-                    <button className="ap-btn-reject" onClick={() => onReject(item)} title="Descartar" disabled={isRendering || isProcessing} style={{ flexShrink: 0, padding: '8px' }}>
+                    <button className="ap-btn-reject" onClick={() => onReject(item)} title="Descartar" disabled={isProcessing} style={{ flexShrink: 0, padding: '8px' }}>
                         <X size={16} />
                     </button>
                     <button className="ap-card-btn-secondary" onClick={handleDownload} disabled={isRendering} title="Baixar Arte" style={{ fontSize: '12px', padding: '0 10px' }}>
