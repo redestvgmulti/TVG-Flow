@@ -1064,14 +1064,20 @@ function AprovadaCard({ item, onPublish, onReject, onEdit, isProcessing }) {
 
             {/* Imagem */}
             <div className="ap-card-img-wrap" style={{ aspectRatio: '4/5', width: '100%', background: '#fafafa', position: 'relative' }}>
-                {(item.render_url || item.imagem_storage || item.imagem_url || item.studio_media_image_url) ? (
+                {isRendering ? (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: '12px', background: '#f8fafc' }}>
+                        <Loader2 size={40} color="#6366f1" className="animate-spin" style={{ animation: 'spin 1s linear infinite' }} />
+                        <span style={{ fontSize: '16px', color: '#334155', fontWeight: 600, textAlign: 'center', padding: '0 20px', lineHeight: '1.4' }}>
+                            ⏱️ Gerando design final<br/>
+                            <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>(leva ~15s)...</span>
+                        </span>
+                    </div>
+                ) : (item.render_url || item.imagem_storage || item.imagem_url || item.studio_media_image_url) ? (
                     <img className="ap-card-img" src={item.render_url ?? (item.imagem_storage ? supabase.storage.from('ap-images').getPublicUrl(item.imagem_storage).data.publicUrl : null) ?? item.imagem_url ?? item.studio_media_image_url} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 ) : (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 8 }}>
                         <ImageIcon size={32} color="#dbdbdb" />
-                        {isRendering && <span style={{ fontSize: 12, color: '#94a3b8' }}>Renderizando...</span>}
                     </div>
-
                 )}
             </div>
 
@@ -1106,12 +1112,6 @@ function AprovadaCard({ item, onPublish, onReject, onEdit, isProcessing }) {
             </div>
 
             {/* Alerta de Renderização / Revisão */}
-            {isRendering && (
-                <div style={{ margin: '12px 16px', padding: '10px', background: '#f5f3ff', borderRadius: '8px', fontSize: '12px', color: '#6d28d9', fontWeight: 600, textAlign: 'center', border: '1px solid #ddd6fe' }}>
-                    ⏳ Em renderização — aguarde a arte ficar pronta
-                </div>
-            )}
-
             {isAwaitingReview && (
                 <div style={{ margin: '12px 16px', padding: '10px', background: '#fff7ed', borderRadius: '8px', fontSize: '12px', color: '#c2410c', fontWeight: 600, textAlign: 'center', border: '1px solid #fdba74' }}>
                     ⚠️ Aguardando Revisão — clique em Aprovar para renderizar
