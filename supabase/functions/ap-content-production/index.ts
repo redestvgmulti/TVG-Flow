@@ -57,7 +57,7 @@ Deno.serve(async (req: Request) => {
     }
 
     let query = supabase.schema("ap").from("candidate_news")
-        .select("id, cliente_id, titulo, conteudo, categoria, context_tag, url_original, status, headline, caption, content_type");
+        .select("id, cliente_id, titulo, conteudo, categoria, context_tag, url_original, status, headline, caption, content_type, imagem_url, imagem_storage, render_url");
 
     if (newsId) {
         query = query.eq("id", newsId);
