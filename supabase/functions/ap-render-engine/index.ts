@@ -49,7 +49,7 @@ Deno.serve(async (req: Request) => {
     const globalTemplateId = Deno.env.get("RENDER_TEMPLATE_ID");
 
     if (!renderApiKey) {
-        return new Response(JSON.stringify({ error: "RENDER_API_KEY not configured" }), { status: 500 });
+        return new Response(JSON.stringify({ error: "RENDER_API_KEY not configured" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     // Suporte a execução direcionada (ex: matéria manual)
@@ -114,7 +114,7 @@ Deno.serve(async (req: Request) => {
             .schema("ap").from("candidate_news")
             .update({ 
                 processing_started_at: new Date().toISOString(), 
-                status: 'rendering',
+                status: 'processing',
                 worker_id: workerInstanceId
             })
             .eq("id", item.id)
@@ -274,7 +274,7 @@ Deno.serve(async (req: Request) => {
                             imagem_url: publicRenderUrl,
                             render_url: publicRenderUrl,
                             rendered_at: new Date().toISOString(),
-                            status: "render_complete",
+                            status: "ready_to_publish",
                             processing_started_at: null,
                             completed_at: new Date().toISOString()
                         }).eq("id", item.id);
@@ -290,7 +290,7 @@ Deno.serve(async (req: Request) => {
                 } else {
                     // Sem URL após 20 tentativas = Timeout.
                     const newRetryCount = (item.retry_count || 0) + 1;
-                    const finalStatus = newRetryCount >= 3 ? "failed_render" : "pending_render";
+                    const finalStatus = newRetryCount >= 3 ? "failed" : "pending_render";
                     
                     await supabase.schema("ap").from("candidate_news").update({
                         status: finalStatus,
@@ -307,7 +307,7 @@ Deno.serve(async (req: Request) => {
             console.error(`[ap-render-engine] item ${item.id}:`, err.message);
             
             const newRetryCount = (item.retry_count || 0) + 1;
-            const finalStatus = newRetryCount >= 3 ? "failed_render" : "pending_render";
+            const finalStatus = newRetryCount >= 3 ? "failed" : "pending_render";
 
             results.push({ id: item.id, status: finalStatus, error: err.message });
             
