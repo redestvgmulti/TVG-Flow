@@ -254,43 +254,44 @@ export default function EditTaskModal({ task, isOpen, onClose, onSuccess, curren
 
     return createPortal(
         <div className="modal-backdrop" onClick={onClose}>
-            <div ref={modalRef} className="modal" onClick={e => e.stopPropagation()}>
-
+            <div ref={modalRef} className="modal modal-large" onClick={e => e.stopPropagation()} style={{ boxShadow: '0 32px 64px -16px rgba(0,0,0,0.25)', borderRadius: '24px' }}>
+                
                 {/* Header */}
-                <div className="modal-header">
+                <div className="modal-header" style={{ padding: '24px 32px', backgroundColor: '#fff', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
                     <div>
-                        <h3>Editar Ordem de Serviço</h3>
-                        <p className="text-sm text-gray-500 mt-1">{task.empresas?.nome || 'Sem cliente associado'}</p>
+                        <h3 style={{ fontSize: '24px', fontWeight: '800', letterSpacing: '-0.02em', color: 'var(--color-text-primary)', margin: 0, lineHeight: 1.2 }}>Editar Ordem de Serviço</h3>
+                        <p style={{ marginTop: '4px', fontSize: '14px', color: 'var(--color-text-secondary)', fontWeight: '500', margin: '4px 0 0 0' }}>{task.empresas?.nome || 'Sem cliente associado'}</p>
                     </div>
                     <button
                         onClick={onClose}
                         className="modal-close"
                         title="Fechar (Esc)"
+                        style={{ alignSelf: 'flex-start', background: 'var(--color-bg-subtle)' }}
                     >
-                        <X size={20} />
+                        <X size={20} strokeWidth={2.5} />
                     </button>
                 </div>
 
                 {/* Body */}
-                <div className="modal-body">
-                    {/* Title */}
-                    <div className="form-group">
-                        <label htmlFor="edit-title">Título</label>
-                        <input
-                            id="edit-title"
-                            type="text"
-                            value={formData.titulo}
-                            onChange={(e) => setFormData({ ...formData, titulo: e.target.value })}
-                            className="input"
-                            placeholder="Título da tarefa"
-                            disabled={!canEdit}
-                        />
-                    </div>
-
-                    {/* Deadline */}
-                    <div className="form-group">
-                        <label htmlFor="edit-deadline">Prazo (Deadline)</label>
-                        <div className="relative">
+                <div className="modal-body" style={{ padding: '32px', backgroundColor: '#fafafa', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                    
+                    {/* Title & Deadline - 2 Columns */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)', gap: '20px' }}>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                            <label htmlFor="edit-title" style={{ fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Título</label>
+                            <input
+                                id="edit-title"
+                                type="text"
+                                value={formData.titulo}
+                                onChange={(e) => setFormData({ ...formData, titulo: e.target.value })}
+                                className="input"
+                                placeholder="Título da tarefa"
+                                disabled={!canEdit}
+                                style={{ padding: '14px 16px', fontSize: '15px', fontWeight: '600' }}
+                            />
+                        </div>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                            <label htmlFor="edit-deadline" style={{ fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Prazo (Deadline)</label>
                             <input
                                 id="edit-deadline"
                                 type="datetime-local"
@@ -298,29 +299,30 @@ export default function EditTaskModal({ task, isOpen, onClose, onSuccess, curren
                                 onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
                                 className="input"
                                 disabled={!canEdit}
+                                style={{ padding: '14px 16px', fontSize: '15px', fontWeight: '600', width: '100%' }}
                             />
-
                         </div>
                     </div>
 
                     {/* Description */}
-                    <div className="form-group">
-                        <label htmlFor="edit-description">Descrição</label>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label htmlFor="edit-description" style={{ fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Descrição</label>
                         <textarea
                             id="edit-description"
                             value={formData.descricao}
                             onChange={(e) => setFormData({ ...formData, descricao: e.target.value })}
-                            className="input min-h-[120px]"
-                            placeholder="Descreva os detalhes da tarefa..."
+                            className="input"
+                            placeholder="Descreva os detalhes da tarefa de forma clara..."
                             disabled={!canEdit}
+                            style={{ padding: '16px', fontSize: '15px', minHeight: '160px', resize: 'vertical', lineHeight: '1.6' }}
                         />
                     </div>
 
                     {/* Drive Link */}
-                    <div className="form-group">
-                        <label htmlFor="edit-drive-link" className="flex items-center gap-2">
-                            <LinkIcon size={14} />
-                            Link do Drive
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label htmlFor="edit-drive-link" style={{ fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <LinkIcon size={14} style={{ opacity: 0.6 }}/>
+                            Link de Arquivos (Drive / Notion)
                         </label>
                         <input
                             id="edit-drive-link"
@@ -330,79 +332,90 @@ export default function EditTaskModal({ task, isOpen, onClose, onSuccess, curren
                             className="input"
                             placeholder="https://drive.google.com/..."
                             disabled={!canEdit}
+                            style={{ padding: '14px 16px', fontSize: '15px', fontWeight: '600', color: 'var(--color-primary)' }}
                         />
                     </div>
 
                     {/* Workflow Editor */}
                     {isWorkflow && (
-                        <div className="border-t border-gray-100 pt-6">
-                            <div className="flex justify-between items-center mb-4">
-                                <h3 className="text-md font-semibold text-gray-800 flex items-center gap-2">
-                                    <FileText size={16} /> Micro Tarefas
+                        <div style={{ marginTop: '8px', paddingTop: '32px', borderTop: '1px solid rgba(0,0,0,0.08)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                                <h3 style={{ fontSize: '16px', fontWeight: '800', color: 'var(--color-text-primary)', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                                    <span style={{ display: 'flex', padding: '6px', backgroundColor: 'var(--color-primary-light)', color: 'var(--color-primary)', borderRadius: '8px' }}>
+                                        <FileText size={16} strokeWidth={2.5} />
+                                    </span>
+                                    Micro Tarefas Workflow
                                 </h3>
                                 {canEdit && (
                                     <button
                                         type="button"
                                         onClick={handleAddMicroTask}
-                                        className="text-sm text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1"
+                                        style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', fontSize: '13px', fontWeight: '700', borderRadius: '100px', backgroundColor: 'var(--color-primary-light)', color: 'var(--color-primary)', border: 'none', cursor: 'pointer', transition: 'all 0.2s' }}
                                     >
-                                        <Plus size={16} /> Adicionar Etapa
+                                        <Plus size={16} strokeWidth={3} /> Nova Etapa
                                     </button>
                                 )}
                             </div>
 
-                            <div className="space-y-3">
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                                 {combinedMicroTasks.length === 0 && (
-                                    <p className="text-sm text-gray-400 italic">Nenhuma micro-tarefa ativa.</p>
+                                    <div style={{ padding: '32px 24px', textAlign: 'center', backgroundColor: '#fff', border: '1px dashed var(--color-border)', borderRadius: '12px' }}>
+                                        <p style={{ fontSize: '14px', fontWeight: '500', color: 'var(--color-text-tertiary)', margin: 0 }}>Nenhuma etapa de workflow definida para esta OS.</p>
+                                    </div>
                                 )}
                                 {combinedMicroTasks.map((mt, idx) => (
-                                    <div key={mt.id} className="p-3 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-between gap-3">
-                                        <div className="flex-1 grid grid-cols-2 gap-3">
+                                    <div key={mt.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', backgroundColor: '#fff', border: '1px solid var(--color-border)', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)', gap: '16px', flexWrap: 'wrap' }}>
+                                        <div style={{ flex: '1', display: 'grid', gridTemplateColumns: mt.isNew ? '1fr 1fr' : '1fr 1fr', gap: '16px', alignItems: 'center', minWidth: '300px' }}>
                                             {mt.isNew ? (
                                                 <>
                                                     <input
-                                                        placeholder="Função (ex: Editor)"
-                                                        className="text-sm p-1 border rounded"
+                                                        placeholder="Nome da Função (ex: Edição)"
+                                                        className="input"
                                                         value={mt.funcao}
                                                         onChange={e => updateNewMicroTask(mt.id, 'funcao', e.target.value)}
+                                                        style={{ padding: '10px 14px', fontSize: '14px', fontWeight: '600', backgroundColor: 'var(--color-bg-subtle)' }}
                                                     />
                                                     <select
-                                                        className="text-sm p-1 border rounded"
+                                                        className="input"
                                                         value={mt.profissional_id}
                                                         onChange={e => updateNewMicroTask(mt.id, 'profissional_id', e.target.value)}
+                                                        style={{ padding: '10px 14px', fontSize: '14px', fontWeight: '600', backgroundColor: 'var(--color-bg-subtle)' }}
                                                     >
-                                                        <option value="">Selecione...</option>
+                                                        <option value="">Atribuir Profissional...</option>
                                                         {professionals.map(p => (
                                                             <option key={p.id} value={p.id}>{p.nome}</option>
                                                         ))}
                                                     </select>
                                                 </>
                                             ) : (
-                                                <div className="text-sm">
-                                                    <span className="font-medium text-gray-700 block">{mt.funcao}</span>
-                                                    <span className="text-gray-500">{mt.profissionais?.nome || '...'}</span>
-                                                </div>
+                                                <>
+                                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                        <span style={{ fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)', marginBottom: '4px' }}>Função da Etapa</span>
+                                                        <span style={{ fontSize: '15px', fontWeight: '800', color: 'var(--color-text-primary)' }}>{mt.funcao}</span>
+                                                    </div>
+                                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                        <span style={{ fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary)', marginBottom: '4px' }}>Responsável Atual</span>
+                                                        <span style={{ fontSize: '14px', fontWeight: '600', color: 'var(--color-text-secondary)' }}>{mt.profissionais?.nome || '— Não Atribuído —'}</span>
+                                                    </div>
+                                                </>
                                             )}
                                         </div>
 
-                                        <div className="flex items-center gap-2">
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', paddingLeft: '20px', borderLeft: mt.isNew ? 'none' : '1px solid var(--color-border-light)' }}>
                                             {!mt.isNew && (
-                                                <span className={`text-xs px-2 py-1 rounded-full ${mt.status === 'concluida' ? 'bg-green-100 text-green-700' :
-                                                    mt.status === 'em_execucao' ? 'bg-blue-100 text-blue-700' :
-                                                        'bg-gray-200 text-gray-700'
-                                                    }`}>
-                                                    {mt.status}
+                                                <span className={`badge ${mt.status === 'concluida' ? 'badge-success' : mt.status === 'em_execucao' ? 'badge-primary' : 'badge-neutral'}`} style={{ padding: '6px 12px', fontSize: '12px' }}>
+                                                    {mt.status.replace('_', ' ')}
                                                 </span>
                                             )}
 
                                             <button
                                                 type="button"
                                                 onClick={() => handleRemoveMicroTask(mt.id, mt.isNew)}
-                                                className="text-red-500 hover:text-red-700 p-1"
-                                                title={(!mt.isNew && (mt.status === 'em_execucao' || mt.status === 'concluida')) ? 'Bloqueado' : 'Remover'}
+                                                style={{ padding: '8px', borderRadius: '8px', border: 'none', background: 'var(--color-danger-bg)', color: 'var(--color-danger)', cursor: (!mt.isNew && (mt.status === 'em_execucao' || mt.status === 'concluida')) ? 'not-allowed' : 'pointer', opacity: (!mt.isNew && (mt.status === 'em_execucao' || mt.status === 'concluida')) ? 0.4 : 1, transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                                title={(!mt.isNew && (mt.status === 'em_execucao' || mt.status === 'concluida')) ? 'Protegida: Etapa em andamento' : 'Excluir Etapa'}
                                                 disabled={!mt.isNew && (mt.status === 'em_execucao' || mt.status === 'concluida')}
                                             >
-                                                <Trash2 size={16} className={(!mt.isNew && (mt.status === 'em_execucao' || mt.status === 'concluida')) ? 'opacity-30' : ''} />
+                                                <Trash2 size={18} />
                                             </button>
                                         </div>
                                     </div>
@@ -411,43 +424,23 @@ export default function EditTaskModal({ task, isOpen, onClose, onSuccess, curren
                         </div>
                     )}
 
-                    {/* Attachments Editor */}
-                    {isWorkflow && attachments.length > 0 && (
-                        <div className="border-t border-gray-100 pt-6">
-                            <h3 className="text-md font-semibold text-gray-800 mb-3">Anexos</h3>
-                            <div className="space-y-2">
-                                {attachments.filter(f => !removedAttachmentIds.includes(f.id)).map(file => (
-                                    <div key={file.id} className="flex justify-between items-center p-2 bg-white border rounded">
-                                        <span className="text-sm truncate max-w-[200px]">{file.original_filename}</span>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleRemoveAttachment(file.id)}
-                                            className="text-red-500 hover:text-red-700 text-xs"
-                                        >
-                                            Remover
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
                     {/* Danger Zone */}
-                    <div className="mt-8 p-4 bg-red-50 rounded-lg border border-red-100">
-                        <div className="flex justify-between items-center">
-                            <div>
-                                <h4 className="text-sm font-bold text-red-700 flex items-center gap-2">
-                                    <AlertTriangle size={16} /> Zona de Perigo
+                    <div style={{ marginTop: '16px' }}>
+                        <div style={{ padding: '24px', backgroundColor: 'var(--color-danger-bg)', border: '2px solid rgba(239, 68, 68, 0.2)', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
+                            <div style={{ flex: '1', minWidth: '240px' }}>
+                                <h4 style={{ fontSize: '15px', fontWeight: '900', color: 'var(--color-danger)', display: 'flex', alignItems: 'center', gap: '8px', margin: '0 0 6px 0', textTransform: 'uppercase', letterSpacing: '-0.02em' }}>
+                                    <AlertTriangle size={18} strokeWidth={3} /> ZONA DE REVOGAÇÃO
                                 </h4>
-                                <p className="text-xs text-red-600 mt-1">O cancelamento é irreversível (arquivamento).</p>
+                                <p style={{ fontSize: '13px', fontWeight: '600', color: 'rgba(239, 68, 68, 0.8)', margin: 0, lineHeight: '1.4' }}>O arquivamento desta OS é irreversível pela interface e bloqueará edições de equipe.</p>
                             </div>
                             <button
                                 type="button"
                                 onClick={handleCancelOS}
-                                className={`px-4 py-2 bg-white text-red-600 border border-red-200 rounded-md hover:bg-red-50 hover:border-red-300 text-sm font-medium transition-colors shadow-sm ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className="btn"
+                                style={{ backgroundColor: '#fff', color: 'var(--color-danger)', border: '2px solid rgba(239, 68, 68, 0.3)', fontWeight: '800', boxShadow: '0 2px 4px rgba(239, 68, 68, 0.1)', cursor: !canEdit ? 'not-allowed' : 'pointer', opacity: !canEdit ? 0.5 : 1 }}
                                 disabled={!canEdit}
                             >
-                                Cancelar OS
+                                Arquivar Definitivamente
                             </button>
                         </div>
                     </div>
@@ -455,30 +448,48 @@ export default function EditTaskModal({ task, isOpen, onClose, onSuccess, curren
                 </div>
 
                 {/* Footer */}
-                <div className="modal-footer">
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="btn btn-secondary"
-                        disabled={loading}
-                    >
-                        Fechar
-                    </button>
-                    <button
-                        onClick={handleSave}
-                        className="btn btn-primary"
-                        disabled={loading || !canEdit}
-                    >
-                        {loading ? 'Salvando...' : 'Salvar Alterações'}
-                    </button>
-                    {!checkingPermissions && !canEdit && (
-                        <div className="absolute left-6 text-xs text-red-500 font-medium">
-                            Modo Leitura (Sem Permissão)
-                        </div>
-                    )}
+                <div className="modal-footer" style={{ padding: '20px 32px', borderTop: '1px solid rgba(0,0,0,0.06)', backgroundColor: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ flex: '1' }}>
+                        {!checkingPermissions && !canEdit && (
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-danger)', backgroundColor: 'var(--color-danger-bg)', padding: '6px 12px', borderRadius: '8px' }}>
+                                <AlertTriangle size={14} strokeWidth={2.5} /> Permissão Somente Leitura
+                            </div>
+                        )}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="btn btn-secondary"
+                            style={{ fontWeight: '700', padding: '12px 24px', borderRadius: '12px', border: '2px solid var(--color-border)' }}
+                            disabled={loading}
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            onClick={handleSave}
+                            className="btn btn-primary"
+                            style={{ fontWeight: '700', padding: '12px 24px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', background: loading || !canEdit ? 'var(--color-border)' : 'var(--color-primary)' }}
+                            disabled={loading || !canEdit}
+                        >
+                            {loading ? (
+                                <>
+                                    <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" style={{ animation: 'spin 1s linear infinite' }}>
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    <span>Salvando...</span>
+                                    <style>{`@keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
+                                </>
+                            ) : (
+                                'Salvar Alterações'
+                            )}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>,
         document.body
     )
 }
+
