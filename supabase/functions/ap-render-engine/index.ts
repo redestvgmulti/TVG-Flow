@@ -142,7 +142,7 @@ Deno.serve(async (req: Request) => {
                 // Get the template from the queue (must use Service Role and Atomic consumption)
                 const { data: templateData, error: templateErr } = await supabase
                     .schema('ap')
-                    .rpc("get_and_advance_template", {
+                    .rpc("get_next_template", {
                         p_empresa_id: empresaId,
                         p_tipo: queueType,
                         p_template_set: item.template_set || 'default'
@@ -221,16 +221,17 @@ Deno.serve(async (req: Request) => {
                 let finalUrl = data.image_url;
                 const pollingUrl = data.polling_url;
 
-                // Polling Loop for Async Rendering (Hardened with exponential backoff)
+                // Polling Loop for Async Rendering (Hardened)
                 if (!finalUrl && pollingUrl) {
                     console.log(`[ap-render-engine] Polling iniciado: ${pollingUrl}`);
-                    for (let attempt = 1; attempt <= 20; attempt++) {
+                    for (let attempt = 1; attempt <= 3; attempt++) {
                         console.log("[AUDIT][RENDER_ATTEMPT]", {
                             news_id: item.id,
                             attempt
                         });
-                        const delay = Math.min(5000 * attempt, 30000);
-                        await new Promise(r => setTimeout(r, delay));
+                        
+                        // Passo 2: Delay fixo de 2000ms
+                        await new Promise(r => setTimeout(r, 2000));
                         
                         const pollRes = await fetch(pollingUrl, {
                             headers: { "Authorization": `Bearer ${renderApiKey}` }
@@ -270,7 +271,7 @@ Deno.serve(async (req: Request) => {
 
                         const publicRenderUrl = `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/public/ap-renders/${internalPath}`;
 
-                        await supabase.schema("ap").from("candidate_news").update({
+                        const { error: finalUpdateErr } = await supabase.schema("ap").from("candidate_news").update({
                             imagem_url: publicRenderUrl,
                             render_url: publicRenderUrl,
                             rendered_at: new Date().toISOString(),
@@ -278,44 +279,62 @@ Deno.serve(async (req: Request) => {
                             processing_started_at: null,
                             completed_at: new Date().toISOString()
                         }).eq("id", item.id);
+                        
+                        if (finalUpdateErr) throw new Error("Database update falhou após internalização: " + finalUpdateErr.message);
+
                         results.push({ id: item.id, status: "success", url: publicRenderUrl });
                     } catch (dlErr: any) {
                         console.error(`[ap-render-engine] Falha ao internalizar imagem de ${item.id}:`, dlErr);
-                        await supabase.schema("ap").from("candidate_news").update({
+                        const { error: catchUpdateErr } = await supabase.schema("ap").from("candidate_news").update({
                             status: "failed",
+                            error_log: String(dlErr.message).substring(0, 500),
                             processing_started_at: null
                         }).eq("id", item.id);
+                        
+                        if (catchUpdateErr) {
+                            console.error(`[ap-render-engine] Falha crítica de BD ao atualizar status para failed: ${catchUpdateErr.message}`);
+                        }
+
                         results.push({ id: item.id, status: "error", error: dlErr.message });
                     }
                 } else {
-                    // Sem URL após 20 tentativas = Timeout.
-                    const newRetryCount = (item.retry_count || 0) + 1;
-                    const finalStatus = newRetryCount >= 3 ? "failed" : "pending_render";
+                    // Sem URL após 3 tentativas = Timeout definitivo.
+                    const finalStatus = "failed";
+                    const timeoutErrMessage = "Render timeout: Polling excedido após 3 tentativas.";
                     
-                    await supabase.schema("ap").from("candidate_news").update({
+                    const { error: timeoutUpdateErr } = await supabase.schema("ap").from("candidate_news").update({
                         status: finalStatus,
-                        retry_count: newRetryCount,
+                        error_log: timeoutErrMessage,
                         processing_started_at: null
                     }).eq("id", item.id);
-                    results.push({ id: item.id, status: finalStatus, message: "Timeout de polling após 20 tentativas." });
+
+                    if (timeoutUpdateErr) {
+                        console.error(`[ap-render-engine] Falha de BD ao atualizar timeout: ${timeoutUpdateErr.message}`);
+                        throw new Error("Update timeout failed: " + timeoutUpdateErr.message);
+                    }
+
+                    results.push({ id: item.id, status: finalStatus, message: timeoutErrMessage });
                 }
             } else {
                 const errText = await renderRes.text();
                 throw new Error(`Placid REST Error ${renderRes.status}: ${errText}`);
             }
         } catch (err: any) {
-            console.error(`[ap-render-engine] item ${item.id}:`, err.message);
+            console.error(`[ap-render-engine] Erro capturado para o item ${item.id}:`, err.message);
             
-            const newRetryCount = (item.retry_count || 0) + 1;
-            const finalStatus = newRetryCount >= 3 ? "failed" : "pending_render";
-
+            const finalStatus = "failed";
+            
             results.push({ id: item.id, status: finalStatus, error: err.message });
             
-            await supabase.schema("ap").from("candidate_news").update({
+            const { error: genericUpdateErr } = await supabase.schema("ap").from("candidate_news").update({
                 status: finalStatus,
-                retry_count: newRetryCount,
+                error_log: String(err.message).substring(0, 500),
                 processing_started_at: null
             }).eq("id", item.id);
+
+            if (genericUpdateErr) {
+                console.error(`[ap-render-engine] CATASTRÓFICO: BD falhou ao registrar fallback de erro para ${item.id}:`, genericUpdateErr.message);
+            }
         }
     });
 

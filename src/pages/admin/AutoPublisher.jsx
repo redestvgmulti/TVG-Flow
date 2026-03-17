@@ -376,15 +376,19 @@ export default function AutoPublisher() {
     async function handleForceProcess() {
         if (isProcessing) return
         setIsProcessing(true)
+        toast.info("Iniciando pipeline... (Pode levar alguns segundos)");
         try {
-            await supabase.functions.invoke('ap-content-production', { body: { action: 'process_selected' } })
-            await supabase.functions.invoke('ap-render-engine')
-            toast.success("Processamento forçado concluído.")
-            fetchCounts(); fetchItems(tab)
+            await supabase.functions.invoke('ap-image-fetcher');
+            await supabase.functions.invoke('ap-scoring-engine');
+            await supabase.functions.invoke('ap-daily-feed-builder');
+            await supabase.functions.invoke('ap-content-production', { body: { action: 'process_selected' } });
+            await supabase.functions.invoke('ap-render-engine');
+            toast.success("Processamento forçado concluído.");
+            fetchCounts(); fetchItems(tab);
         } catch (err) {
-            toast.error("Erro ao processar.")
+            toast.error("Erro ao processar.");
         } finally {
-            setIsProcessing(false)
+            setIsProcessing(false);
         }
     }
 
