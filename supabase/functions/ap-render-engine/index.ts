@@ -142,7 +142,7 @@ Deno.serve(async (req: Request) => {
                 // Get the template from the queue (must use Service Role and Atomic consumption)
                 const { data: templateData, error: templateErr } = await supabase
                     .schema('ap')
-                    .rpc("get_next_template", {
+                    .rpc("get_and_advance_template", {
                         p_empresa_id: empresaId,
                         p_tipo: queueType,
                         p_template_set: item.template_set || 'default'
@@ -224,14 +224,14 @@ Deno.serve(async (req: Request) => {
                 // Polling Loop for Async Rendering (Hardened)
                 if (!finalUrl && pollingUrl) {
                     console.log(`[ap-render-engine] Polling iniciado: ${pollingUrl}`);
-                    for (let attempt = 1; attempt <= 3; attempt++) {
+                    for (let attempt = 1; attempt <= 15; attempt++) {
                         console.log("[AUDIT][RENDER_ATTEMPT]", {
                             news_id: item.id,
                             attempt
                         });
                         
-                        // Passo 2: Delay fixo de 2000ms
-                        await new Promise(r => setTimeout(r, 2000));
+                        // Passo 2: Delay fixo
+                        await new Promise(r => setTimeout(r, 3000));
                         
                         const pollRes = await fetch(pollingUrl, {
                             headers: { "Authorization": `Bearer ${renderApiKey}` }
@@ -298,9 +298,9 @@ Deno.serve(async (req: Request) => {
                         results.push({ id: item.id, status: "error", error: dlErr.message });
                     }
                 } else {
-                    // Sem URL após 3 tentativas = Timeout definitivo.
+                    // Sem URL após 15 tentativas = Timeout definitivo.
                     const finalStatus = "failed";
-                    const timeoutErrMessage = "Render timeout: Polling excedido após 3 tentativas.";
+                    const timeoutErrMessage = "Render timeout: Polling excedido após 15 tentativas.";
                     
                     const { error: timeoutUpdateErr } = await supabase.schema("ap").from("candidate_news").update({
                         status: finalStatus,

@@ -49,41 +49,31 @@ function normalizePayload(payload: any) {
     return normalized;
 }
 
-/**
- * Resolves the first available template for a given set and client.
- */
 async function resolveTemplate(supabase: any, template_set: string, empresa_id: string, content_type: string) {
-    console.log(`[AUDIT] [ap-employee-generator] Resolvendo template automático para set=${template_set}, empresa=${empresa_id}, tipo=${content_type}`);
-    const { data, error } = await supabase.schema("ap")
-        .from("templates")
-        .select("id, placid_template_uuid")
-        .eq("template_set", template_set)
-        .eq("empresa_id", empresa_id)
-        .eq("tipo", content_type)
-        .eq("ativo", true) // Apenas templates ativos
-        .order("ordem", { ascending: true }) // Prioriza ordem
-        .order("criado_em", { ascending: true }) // Fallback para data de criação (criado_em)
-        .limit(1);
-
-    if (error) {
-        console.error("[GENERATOR_ERROR] Erro ao consultar templates:", error.message);
-        return null;
-    }
-
-    if (!data || data.length === 0) {
-        console.warn("[AUDIT][TEMPLATE_RESOLUTION_EMPTY]", {
-            empresa_id,
-            template_set
-        });
-        return null;
-    }
-
-    const resolved = data[0].placid_template_uuid || null;
-    const resolved_id = data[0].id || null;
+    console.log(`[AUDIT] [ap-employee-generator] Resolvendo template automático via RPC get_and_advance_template para set=${template_set}, empresa=${empresa_id}, tipo=${content_type}`);
     
-    console.log("[AUDIT][TEMPLATE_SELECTED]", {
+    // ATENTION: ap-employee-generator must actively advance the queue 
+    // to prevent the same template (e.g. Luiza Medeiros) from being used repeatedly
+    const { data: templateData, error } = await supabase.schema("ap")
+        .rpc("get_and_advance_template", {
+            p_empresa_id: empresa_id,
+            p_tipo: content_type,
+            p_template_set: template_set
+        });
+
+    if (error || !templateData) {
+        console.error("[GENERATOR_ERROR] Erro ao rotacionar template via RPC:", error?.message || "Sem dados");
+        return null;
+    }
+
+    const resolved = templateData.placid_template_uuid || null;
+    const resolved_id = templateData.id || null;
+    
+    console.log("[AUDIT][TEMPLATE_ROTATED]", {
         template_id: resolved_id,
         placid_template_uuid: resolved,
+        ordem: templateData.ordem,
+        nome: templateData.nome,
         content_type: content_type,
         template_set,
         empresa_id
