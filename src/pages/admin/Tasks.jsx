@@ -772,7 +772,6 @@ function Tasks() {
             })()
 
             const matchesPriority = priorityFilter === 'all' || task.priority === priorityFilter
-            const matchesAssignedTo = assignedToFilter === 'all' || task.assigned_to === assignedToFilter
 
             // Deadline filter logic
             let matchesDeadline = true
@@ -793,7 +792,7 @@ function Tasks() {
                 }
             }
 
-            return matchesSearch && matchesStatus && matchesPriority && matchesAssignedTo && matchesDeadline
+            return matchesSearch && matchesStatus && matchesPriority && matchesDeadline
         })
 
         // Aplicar ordenação inteligente
