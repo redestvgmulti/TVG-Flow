@@ -230,6 +230,7 @@ function Tasks() {
 
                 if (matchingClientIds.length > 0) {
                     conditions.push(`cliente_id.in.(${matchingClientIds.join(',')})`)
+                    conditions.push(`empresa_id.in.(${matchingClientIds.join(',')})`)
                 }
 
                 if (matchingProfIds.length > 0) {
