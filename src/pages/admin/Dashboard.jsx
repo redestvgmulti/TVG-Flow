@@ -413,7 +413,7 @@ export default function Painel() {
             {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
             <div className="dashboard-grid-charts">
                 {/* Coluna Esquerda: Gráfico de Evolução (Maior) */}
-                <div className="card">
+                <div className="card" style={{ minWidth: 0 }}>
                     <div className="card-header card-header-flex">
                         <h3 className="card-title">Evolução da Operação ({isMobile ? '05' : '30'} dias)</h3>
                     </div>
@@ -424,48 +424,50 @@ export default function Painel() {
                             </div>
                         ) : (
 
-                            <AreaChart width={typeof window !== 'undefined' && window.innerWidth < 768 ? window.innerWidth - 64 : 700} height={typeof window !== 'undefined' && window.innerWidth < 768 ? 180 : 250} data={safeChartData}>
+                            <ResponsiveContainer width="100%" height={isMobile ? 180 : 250}>
+                                <AreaChart data={safeChartData}>
 
-                                <defs>
-                                    <linearGradient id="colorCreated" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1} />
-                                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                                    </linearGradient>
-                                    <linearGradient id="colorCompleted" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.1} />
-                                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                                <XAxis
-                                    dataKey="date"
-                                    axisLine={false}
-                                    tickLine={false}
-                                    tick={{ fontSize: typeof window !== 'undefined' && window.innerWidth < 768 ? 11 : 16, fill: '#6b7280' }}
-                                />
-                                <YAxis width={typeof window !== 'undefined' && window.innerWidth < 768 ? 30 : 50}
-                                    axisLine={false}
-                                    tickLine={false}
-                                    tickFormatter={(value) => value === 0 ? '' : value}
-                                    tick={{ fontSize: typeof window !== 'undefined' && window.innerWidth < 768 ? 11 : 16, fill: '#6b7280' }}
-                                />
-                                <Tooltip wrapperClassName="chart-tooltip" />
-                                <Area
-                                    type="monotone"
-                                    dataKey={chartView === 'created' ? 'criadas' : 'concluidas'}
-                                    stroke={chartView === 'created' ? '#3b82f6' : '#10b981'}
-                                    strokeWidth={3}
-                                    fillOpacity={1}
-                                    fill={`url(#color${chartView === 'created' ? 'Created' : 'Completed'})`}
-                                    activeDot={{ r: 6, strokeWidth: 0 }}
-                                />
-                            </AreaChart>
+                                    <defs>
+                                        <linearGradient id="colorCreated" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1} />
+                                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                                        </linearGradient>
+                                        <linearGradient id="colorCompleted" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.1} />
+                                            <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                                        </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                                    <XAxis
+                                        dataKey="date"
+                                        axisLine={false}
+                                        tickLine={false}
+                                        tick={{ fontSize: isMobile ? 11 : 12, fill: '#6b7280' }}
+                                    />
+                                    <YAxis width={isMobile ? 30 : 40}
+                                        axisLine={false}
+                                        tickLine={false}
+                                        tickFormatter={(value) => value === 0 ? '' : value}
+                                        tick={{ fontSize: isMobile ? 11 : 12, fill: '#6b7280' }}
+                                    />
+                                    <Tooltip wrapperClassName="chart-tooltip" />
+                                    <Area
+                                        type="monotone"
+                                        dataKey={chartView === 'created' ? 'criadas' : 'concluidas'}
+                                        stroke={chartView === 'created' ? '#3b82f6' : '#10b981'}
+                                        strokeWidth={3}
+                                        fillOpacity={1}
+                                        fill={`url(#color${chartView === 'created' ? 'Created' : 'Completed'})`}
+                                        activeDot={{ r: 6, strokeWidth: 0 }}
+                                    />
+                                </AreaChart>
+                            </ResponsiveContainer>
                         )}
                     </div>
                 </div>
 
                 {/* Coluna Direita: Feed Operacional (Decision Instrument) */}
-                <div className="h-full">
+                <div className="h-full" style={{ minWidth: 0 }}>
                     <OperationalFeed />
                 </div>
             </div>

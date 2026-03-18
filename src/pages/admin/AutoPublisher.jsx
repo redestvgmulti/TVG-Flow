@@ -692,7 +692,11 @@ export default function AutoPublisher() {
                                                 <td>
                                                     {item.render_url ? (
                                                         <a href={item.render_url} target="_blank" rel="noreferrer">
-                                                            <img src={item.render_url} alt="" style={{ width: 80, height: 45, objectFit: 'cover', borderRadius: 6, border: '1px solid #e2e8f0' }} />
+                                                            {item.render_url.toLowerCase().includes('.mp4') ? (
+                                                                <video src={item.render_url} style={{ width: 80, height: 45, objectFit: 'cover', borderRadius: 6, border: '1px solid #e2e8f0' }} preload="metadata" muted playsInline />
+                                                            ) : (
+                                                                <img src={item.render_url} alt="" style={{ width: 80, height: 45, objectFit: 'cover', borderRadius: 6, border: '1px solid #e2e8f0' }} />
+                                                            )}
                                                         </a>
                                                     ) : <span style={{ color: '#94a3b8', fontSize: 12 }}>Sem arte</span>}
                                                 </td>
@@ -888,24 +892,24 @@ function PendenteCard({ item, onReject, onStudio, onApproveSelected, onEdit, isP
 
             {/* Imagem */}
             <div className="ap-card-img-wrap" style={{ aspectRatio: '4/5', width: '100%', background: '#fafafa', position: 'relative' }}>
-                {(item.render_url || item.imagem_storage || item.imagem_url || item.studio_media_image_url) ? (
-                    <img
-                        className="ap-card-img"
-                        src={
-                            item.render_url ??
-                            (item.imagem_storage ? supabase.storage.from('ap-images').getPublicUrl(item.imagem_storage).data.publicUrl : null) ??
-                            item.imagem_url ??
-                            item.studio_media_image_url
-                        }
-                        alt=""
-                        loading="lazy"
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    />
-                ) : (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 8 }}>
-                        <ImageIcon size={32} color="#dbdbdb" />
-                    </div>
-                )}
+                {(() => {
+                    const finalUrl = item.render_url ?? (item.imagem_storage ? supabase.storage.from('ap-images').getPublicUrl(item.imagem_storage).data.publicUrl : null) ?? item.imagem_url ?? item.studio_media_image_url;
+                    if (!finalUrl) {
+                        return (
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 8 }}>
+                                <ImageIcon size={32} color="#dbdbdb" />
+                            </div>
+                        );
+                    }
+                    if (finalUrl && finalUrl.toLowerCase().includes('.mp4')) {
+                        return (
+                            <video className="ap-card-img" src={finalUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} autoPlay loop muted playsInline />
+                        );
+                    }
+                    return (
+                        <img className="ap-card-img" src={finalUrl} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    );
+                })()}
             </div>
 
             {/* Ações Insta */}
@@ -1068,13 +1072,24 @@ function AprovadaCard({ item, onPublish, onReject, onEdit, isProcessing }) {
                             <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>(leva ~15s)...</span>
                         </span>
                     </div>
-                ) : (item.render_url || item.imagem_storage || item.imagem_url || item.studio_media_image_url) ? (
-                    <img className="ap-card-img" src={item.render_url ?? (item.imagem_storage ? supabase.storage.from('ap-images').getPublicUrl(item.imagem_storage).data.publicUrl : null) ?? item.imagem_url ?? item.studio_media_image_url} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                ) : (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 8 }}>
-                        <ImageIcon size={32} color="#dbdbdb" />
-                    </div>
-                )}
+                ) : (() => {
+                    const finalUrl = item.render_url ?? (item.imagem_storage ? supabase.storage.from('ap-images').getPublicUrl(item.imagem_storage).data.publicUrl : null) ?? item.imagem_url ?? item.studio_media_image_url;
+                    if (!finalUrl) {
+                        return (
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 8 }}>
+                                <ImageIcon size={32} color="#dbdbdb" />
+                            </div>
+                        );
+                    }
+                    if (finalUrl && finalUrl.toLowerCase().includes('.mp4')) {
+                        return (
+                            <video className="ap-card-img" src={finalUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} autoPlay loop muted playsInline />
+                        );
+                    }
+                    return (
+                        <img className="ap-card-img" src={finalUrl} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    );
+                })()}
             </div>
 
             {/* Ações Insta */}

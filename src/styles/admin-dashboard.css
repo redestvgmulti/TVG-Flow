@@ -35,10 +35,10 @@
  */
 .dashboard-grid-charts {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 24px;
-    align-items: start;
-    /* Decouple heights */
+    align-items: stretch;
+    /* Ensure both columns have the same stretch limit */
     margin-bottom: 24px;
 }
 
