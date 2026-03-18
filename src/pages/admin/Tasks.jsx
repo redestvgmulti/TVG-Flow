@@ -749,8 +749,8 @@ function Tasks() {
     function getFilteredTasks() {
         const filtered = tasks.filter(task => {
             const searchLower = searchTerm.toLowerCase()
-            const matchTitle = task.titulo?.toLowerCase().includes(searchLower)
-            const matchCompany = task.empresas?.nome?.toLowerCase().includes(searchLower) || false
+            const matchTitle = (task.titulo || '').toLowerCase().includes(searchLower)
+            const matchCompany = (task.empresas?.nome || '').toLowerCase().includes(searchLower)
             
             const matchesSearch = matchTitle || matchCompany
 
