@@ -711,10 +711,8 @@ function ExecutionView({ task, onBack, onUpdateStatus, onDeleteTask, user, role,
             // Se tem ordem, filtra APENAS etapas anteriores
             if (currentOrder != null && currentOrder > 1) {
                 query = query.lt('ordem', currentOrder).order('ordem', { ascending: false })
-                console.log('[loadProfessionalsForReturn] Filtering by ordem < ', currentOrder)
             } else if (currentOrder === 1) {
                 // 🎯 FIX: Primeira etapa - devolver para o CRIADOR da OS
-                console.log('[loadProfessionalsForReturn] First stage - returning to OS creator')
 
                 // Buscar criador da OS
                 const { data: osData, error: osError } = await supabase
@@ -764,11 +762,6 @@ function ExecutionView({ task, onBack, onUpdateStatus, onDeleteTask, user, role,
                 return
             }
 
-            console.log('[loadProfessionalsForReturn] Loaded professionals:', {
-                count: data.length,
-                current_ordem: currentOrder,
-                professionals: data.map(p => ({ nome: p.profissionais.nome, funcao: p.funcao, ordem: p.ordem }))
-            })
             setProfessionals(data || [])
         } catch (error) {
             console.error('[loadProfessionalsForReturn] Unexpected error:', error)

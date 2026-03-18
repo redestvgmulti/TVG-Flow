@@ -68,7 +68,6 @@ function App() {
     const handleControllerChange = () => {
       if (refreshing) return
       refreshing = true
-      console.log('[PWA] Controller changed, refreshing and broadcasting...')
       bc.postMessage({ type: 'RELOAD_REQUESTED' })
       window.location.reload()
     }
@@ -77,7 +76,6 @@ function App() {
       if (event.data?.type === 'RELOAD_REQUESTED') {
         if (refreshing) return
         refreshing = true
-        console.log('[PWA] Sync reload requested from another tab...')
         window.location.reload()
       }
     }

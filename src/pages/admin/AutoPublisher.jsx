@@ -168,11 +168,6 @@ export default function AutoPublisher() {
     useEffect(() => {
         if (formData.template_set && formData.template_set !== 'default' && formData.content_type) {
             async function loadTemplates() {
-                console.log("[AutoPublisher] Fetching templates via edge function for:", {
-                    template_set: formData.template_set,
-                    tipo: formData.content_type
-                });
-
                 try {
                     const { data, error } = await supabase.functions.invoke('ap-config', {
                         method: 'POST',
@@ -198,7 +193,6 @@ export default function AutoPublisher() {
                         t.ativo
                     ).sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
 
-                    console.log("[AutoPublisher] [EDGE] Templates found (filtered):", filtered.length);
                     setAvailableTemplates(filtered)
                 } catch (err) {
                     console.error("[AutoPublisher] Failed to load templates:", err);
@@ -516,8 +510,6 @@ export default function AutoPublisher() {
             userTag: formData.context_tag.toUpperCase(),
             userText: formData.conteudo || null
         }
-
-        console.log("[AUDIT][GENERATOR_PAYLOAD]", payload);
 
         try {
             const { data, error } = await supabase.functions.invoke('ap-employee-generator', { body: payload })

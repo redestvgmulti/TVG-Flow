@@ -194,7 +194,6 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                     return;
                 }
 
-                console.log("[AUDIT][EMPLOYEE_GENERATION_EMPRESA]", empresa_id);
                 currentClienteId = empresa_id;
                 setClienteId(empresa_id);
             } catch (err) {
@@ -284,9 +283,6 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
             if (!payload.empresa_id) {
                 throw new Error("empresa_id could not be resolved");
             }
-
-            console.log("[AUDIT][EMPLOYEE_GENERATION_EMPRESA]", payload.empresa_id);
-            console.log("[AUDIT][GENERATOR_PAYLOAD]", payload);
 
             const { data, error } = await supabase.functions.invoke('ap-employee-generator', {
                 body: payload

@@ -18,14 +18,8 @@ export default function NewOS() {
         // Run permission check once auth is ready
         if (!authLoading && role) {
             async function validateAccess() {
-                console.log('--- DEBUG PERMISSION CHECK ---')
-                console.log('Role:', role)
-                console.log('isSuperAdmin:', isSuperAdmin())
-                console.log('isAdmin:', isAdmin())
-
                 // If implicit role check fails, block immediately
                 if (isSuperAdmin()) {
-                    console.log('BLOCKED: Super Admin')
                     setCanPerformAction(false) // Super admin never creates OS
                     setPermissionChecked(true)
                     return
