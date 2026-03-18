@@ -6,6 +6,9 @@ const corsHeaders = {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Cargo values that are not valid for real microtask assignment
+const INVALID_CARGOS = new Set(['SEM_CARGO', 'LEGADO'])
+
 serve(async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
@@ -18,60 +21,34 @@ serve(async (req) => {
         )
 
         const {
-            empresa_id, // Legacy payload - for warning only
-            cliente_id, // REQUIRED
+            empresa_id: empresa_id_from_client,
+            cliente_id,
             titulo,
             descricao,
             deadline_at,
             funcoes,
+            profissionais_ids,
             prioridade,
             workflow_stages,
             drive_link,
             created_by
         } = await req.json()
 
-        // 🚨 BLOQUEIO DE CONTRATO ANTIGO
-        if (empresa_id && !cliente_id) {
-            console.warn(`[WARNING-LEGACY] Payload obsoleto detectado: o sistema recebeu 'empresa_id' em vez de 'cliente_id'. Abortando.`);
+        console.log('Received payload:', { empresa_id_from_client, titulo, workflow_stages: workflow_stages?.length, created_by })
+
+        // ──────────────────────────────────────────────────────────────
+        // VALIDATION: required fields
+        // ──────────────────────────────────────────────────────────────
+        if (!empresa_id_from_client || !titulo || !deadline_at || !created_by) {
             return new Response(
-                JSON.stringify({ 
-                    error: 'Contrato obsoleto: O sistema não aceita mais empresa_id na raiz. Use o UUID correto no campo cliente_id.',
-                    deprecated_field: 'empresa_id'
-                }),
-                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            )
-        } else if (empresa_id) {
-            console.warn(`[WARNING-LEGACY] Payload contém 'empresa_id' redundante/obsoleto ignorado pelo Edge.`);
-        }
-
-        // 1. NOVO PARADIGMA ESTABELECIDO: Cliente puro.
-        const resolved_cliente_id = cliente_id;
-
-        console.log('Received payload:', { resolved_cliente_id, titulo, funcoes, workflow_stages, created_by })
-
-        // Validation
-        if (!resolved_cliente_id || !titulo || !deadline_at || !created_by) {
-            console.error('Validation failed:', { resolved_cliente_id: !!resolved_cliente_id, titulo: !!titulo, deadline_at: !!deadline_at, created_by: !!created_by })
-            return new Response(
-                JSON.stringify({ error: 'Missing required fields: cliente_id, titulo, deadline_at, created_by' }),
+                JSON.stringify({ error: 'Missing required fields: empresa_id, titulo, deadline_at, created_by' }),
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             )
         }
 
-        // AJUSTE OBRIGATÓRIO: Blindagem de status - nunca confiar no frontend
-        const validPriorities = ['baixa', 'normal', 'alta', 'urgente']
-        let normalizedPriority = 'normal' // default seguro
-
-        if (prioridade && validPriorities.includes(prioridade)) {
-            normalizedPriority = prioridade
-        } else if (prioridade) {
-            console.warn('Invalid priority received, using default:', prioridade)
-        }
-
-        // Status é SEMPRE 'pendente' para novas tarefas
-        const safeStatus = 'pendente'
-
-        // AJUSTE OBRIGATÓRIO: Validar permissão (admin bypassa)
+        // ──────────────────────────────────────────────────────────────
+        // SECURITY: Resolve user profile
+        // ──────────────────────────────────────────────────────────────
         const { data: userProfile, error: profileError } = await supabaseClient
             .from('profissionais')
             .select('role')
@@ -79,51 +56,111 @@ serve(async (req) => {
             .single()
 
         if (profileError || !userProfile) {
-            console.error('User not found:', profileError)
             return new Response(
                 JSON.stringify({ error: 'Usuário não encontrado' }),
                 { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             )
         }
 
-        // 2. BUSCAR TENANT DO USUÁRIO LOGADO VAI EMPRESA_PROFISSIONAIS
-        const { data: userTenantConfig, error: permError } = await supabaseClient
-            .from('empresa_profissionais')
-            .select('empresa_id')
-            .eq('profissional_id', created_by)
-            .eq('ativo', true)
-            .limit(1)
-            .maybeSingle()
+        // ──────────────────────────────────────────────────────────────
+        // SECURITY: Derive empresa_id from backend — never trust client
+        // Prevents privilege escalation via crafted empresa_id values
+        // ──────────────────────────────────────────────────────────────
+        let empresa_id: string
 
-        if (permError || !userTenantConfig) {
-            console.error('Tenant resolution denied: user not linked to any active company config', {
-                created_by,
-                role: userProfile.role
-            })
-            return new Response(
-                JSON.stringify({
-                    error: 'Você não tem um Tenant (Empresa Principal) ativo vinculado'
-                }),
-                { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            )
+        if (userProfile.role === 'admin') {
+            // Admin: confirm empresa exists in DB, use it as-is
+            const { data: empresaExists } = await supabaseClient
+                .from('empresas')
+                .select('id')
+                .eq('id', empresa_id_from_client)
+                .single()
+
+            if (!empresaExists) {
+                return new Response(
+                    JSON.stringify({ error: 'Empresa não encontrada' }),
+                    { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                )
+            }
+            empresa_id = empresaExists.id
+        } else {
+            // Non-admin: empresa_id must be derived from their own empresa_profissionais record
+            const { data: epLink, error: epLinkError } = await supabaseClient
+                .from('empresa_profissionais')
+                .select('empresa_id')
+                .eq('profissional_id', created_by)
+                .eq('empresa_id', empresa_id_from_client)
+                .eq('ativo', true)
+                .maybeSingle()
+
+            if (epLinkError || !epLink) {
+                console.error('Permission denied: user not linked to company', { created_by, empresa_id_from_client })
+                return new Response(
+                    JSON.stringify({ error: 'Você não tem permissão para criar tarefas nesta empresa' }),
+                    { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                )
+            }
+            // Use empresa_id from DB record — not from client
+            empresa_id = epLink.empresa_id
         }
 
-        // Definido com segurança pelo backend:
-        const derived_empresa_id = userTenantConfig.empresa_id;
+        // ──────────────────────────────────────────────────────────────
+        // SAFE DEFAULTS — never trust frontend for these
+        // ──────────────────────────────────────────────────────────────
+        const validPriorities = ['baixa', 'normal', 'alta', 'urgente']
+        const normalizedPriority = prioridade && validPriorities.includes(prioridade) ? prioridade : 'normal'
+        const safeStatus = 'pendente'
 
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // NEW WORKFLOW: Macro/Micro Tasks
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // ══════════════════════════════════════════════════════════════
+        // WORKFLOW: Macro/Micro Tasks
+        // ══════════════════════════════════════════════════════════════
         if (workflow_stages && Array.isArray(workflow_stages) && workflow_stages.length > 0) {
+
+            // ──────────────────────────────────────────────────────────
+            // PERFORMANCE: Batch-fetch ALL cargos in a single query.
+            // Build a Map(profissional_id → cargo) to use inside the loop.
+            // Never query the DB inside the loop.
+            // ──────────────────────────────────────────────────────────
+            const allProfissionalIds = [
+                ...new Set(
+                    (workflow_stages as any[])
+                        .map((s: any) => s.profissional_id)
+                        .filter(Boolean)
+                )
+            ]
+
+            const { data: cargoRows, error: cargoError } = await supabaseClient
+                .from('empresa_profissionais')
+                .select('profissional_id, cargo')
+                .eq('empresa_id', empresa_id)
+                .in('profissional_id', allProfissionalIds)
+
+            if (cargoError) {
+                console.error('Error fetching cargos batch:', cargoError)
+                return new Response(
+                    JSON.stringify({ error: 'Erro ao buscar cargos dos profissionais', details: cargoError.message }),
+                    { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                )
+            }
+
+            // Build in-memory map: profissional_id → cargo (null if invalid)
+            const cargoMap = new Map<string, string | null>()
+            for (const row of cargoRows ?? []) {
+                const valid = row.cargo && !INVALID_CARGOS.has(row.cargo) ? row.cargo : null
+                cargoMap.set(row.profissional_id, valid)
+            }
+
+            console.log('Cargo map built:', Object.fromEntries(cargoMap))
+
             // Create macro task
             const { data: macroTask, error: macroError } = await supabaseClient
                 .from('tarefas')
                 .insert({
                     titulo,
                     descricao: descricao || null,
-                    empresa_id: derived_empresa_id, // TENANT derivado com segurança
-                    cliente_id: resolved_cliente_id, // CLIENTE REAL (prefeitura)
-                    created_by: created_by,
+                    empresa_id,
+                    cliente_id: cliente_id || null,
+                    created_by,
                     deadline: deadline_at,
                     status: safeStatus,
                     prioridade: normalizedPriority,
@@ -141,44 +178,64 @@ serve(async (req) => {
                 )
             }
 
-            // Create micro tasks with dependencies
-            const microTasksToCreate = []
-            const microTaskMap = new Map() // ordem -> micro_task_id
+            const microTasksCreated: any[] = []
+            const skipped: any[] = []
+            const microTaskMap = new Map<number, string>() // ordem → micro_task_id
 
-            for (let i = 0; i < workflow_stages.length; i++) {
-                const stage = workflow_stages[i]
+            for (let i = 0; i < (workflow_stages as any[]).length; i++) {
+                const stage = (workflow_stages as any[])[i]
                 const ordem = i + 1
 
-                // Determine initial status
-                let initialStatus = 'pendente'
-                if (stage.depends_on_ordem && stage.depends_on_ordem > 0) {
-                    initialStatus = 'bloqueada' // Blocked by dependency
+                // ──────────────────────────────────────────────────────
+                // HARDENING: Validate cargo from in-memory map.
+                // cargo is the ONLY source of truth.
+                // funcao is legacy display only — never used for logic.
+                // ──────────────────────────────────────────────────────
+                const cargoSnapshot = cargoMap.get(stage.profissional_id) ?? null
+
+                if (!cargoSnapshot) {
+                    console.warn(`Profissional ${stage.profissional_id} sem cargo válido — microtask bloqueada`)
+                    skipped.push({
+                        profissional_id: stage.profissional_id,
+                        funcao_recebida: stage.funcao ?? null,
+                        motivo: 'cargo_invalido'
+                    })
+                    continue
                 }
 
-                const microTaskPayload = {
-                    tarefa_id: macroTask.id,
-                    profissional_id: stage.profissional_id,
-                    funcao: stage.funcao,
-                    peso: 1, // Default weight since we removed it from UI
-                    status: initialStatus,
-                    depends_on: null, // Will be set after creation
-                    deadline_at: stage.deadline_at || null // SLA deadline for this micro task
-                }
+                const initialStatus = stage.depends_on_ordem && stage.depends_on_ordem > 0
+                    ? 'bloqueada'
+                    : 'pendente'
 
                 const { data: microTask, error: microError } = await supabaseClient
                     .from('tarefas_micro')
-                    .insert(microTaskPayload)
+                    .insert({
+                        tarefa_id: macroTask.id,
+                        profissional_id: stage.profissional_id,
+                        cargo: cargoSnapshot,          // ← immutable snapshot, source of truth
+                        funcao: stage.funcao ?? null,  // ← legacy only, visual compatibility
+                        peso: 1,
+                        status: initialStatus,
+                        depends_on: null,
+                        deadline_at: stage.deadline_at || null
+                    })
                     .select()
                     .single()
 
                 if (microError) {
-                    console.error(`Error creating micro task for ${stage.funcao}:`, microError)
+                    console.error('Error creating micro task:', microError)
+                    skipped.push({
+                        profissional_id: stage.profissional_id,
+                        funcao_recebida: stage.funcao ?? null,
+                        motivo: 'db_error',
+                        details: microError.message
+                    })
                     continue
                 }
 
                 microTaskMap.set(ordem, microTask.id)
 
-                // Update dependency if exists
+                // Resolve dependency link
                 if (stage.depends_on_ordem && stage.depends_on_ordem > 0) {
                     const dependsOnId = microTaskMap.get(stage.depends_on_ordem)
                     if (dependsOnId) {
@@ -189,9 +246,9 @@ serve(async (req) => {
                     }
                 }
 
-                microTasksToCreate.push(microTask)
+                microTasksCreated.push(microTask)
 
-                // Log creation
+                // Creation log
                 await supabaseClient
                     .from('tarefas_micro_logs')
                     .insert({
@@ -200,14 +257,14 @@ serve(async (req) => {
                         acao: 'created'
                     })
 
-                // Notify professional if not blocked
+                // Notify using cargo — never funcao
                 if (initialStatus === 'pendente') {
                     await supabaseClient
                         .from('notifications')
                         .insert({
                             profissional_id: stage.profissional_id,
                             title: 'Nova Etapa Atribuída',
-                            message: `Você recebeu uma nova etapa de ${stage.funcao}: "${titulo}"`,
+                            message: `Você recebeu uma nova etapa de ${cargoSnapshot}: "${titulo}"`,
                             type: 'micro_task_assigned',
                             link: `/staff/tasks`,
                             read: false
@@ -220,9 +277,11 @@ serve(async (req) => {
                     success: true,
                     mode: 'macro_micro',
                     macro_task_id: macroTask.id,
-                    micro_tasks_created: microTasksToCreate.length,
-                    micro_tasks: microTasksToCreate.map(mt => ({
+                    micro_tasks_created: microTasksCreated.length,
+                    skipped,
+                    micro_tasks: microTasksCreated.map(mt => ({
                         id: mt.id,
+                        cargo: mt.cargo,
                         funcao: mt.funcao,
                         status: mt.status
                     }))
@@ -231,34 +290,42 @@ serve(async (req) => {
             )
         }
 
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // LEGACY WORKFLOW: Individual Tasks (Backward Compatibility)
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        if (!funcoes || !Array.isArray(funcoes) || funcoes.length === 0) {
+        // ══════════════════════════════════════════════════════════════
+        // LEGACY WORKFLOW: Individual Tasks (OS Simples)
+        // ══════════════════════════════════════════════════════════════
+        const funcoesArr = (funcoes || []) as string[]
+        const profissionaisIdsArr = (profissionais_ids || []) as string[]
+
+        if (funcoesArr.length === 0 && profissionaisIdsArr.length === 0) {
             return new Response(
-                JSON.stringify({ error: 'Missing required field: funcoes (for legacy mode)' }),
+                JSON.stringify({ error: 'Missing required field: funcoes or profissionais_ids (for OS Simples mode)' }),
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             )
         }
 
-        // Resolve professionals for ALL selected functions using derived TENANT
-        const { data: professionals, error: profError } = await supabaseClient
+        let query = supabaseClient
             .from('empresa_profissionais')
             .select(`
                 profissional_id,
                 funcao,
+                cargo,
                 profissionais!inner (
                     id,
                     nome,
                     departamento_id
                 )
             `)
-            .eq('empresa_id', derived_empresa_id) // Validates against TENANT, not prefeitura
-            .in('funcao', funcoes)
+            .eq('empresa_id', empresa_id)
             .eq('ativo', true)
 
+        if (profissionaisIdsArr.length > 0) {
+            query = query.in('profissional_id', profissionaisIdsArr)
+        } else {
+            query = query.in('cargo', funcoesArr) // Fallback for older interface
+        }
+
+        const { data: professionals, error: profError } = await query
         if (profError) {
-            console.error('Error fetching professionals:', profError)
             return new Response(
                 JSON.stringify({ error: 'Erro ao buscar profissionais vinculados', details: profError.message }),
                 { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -268,41 +335,37 @@ serve(async (req) => {
         if (!professionals || professionals.length === 0) {
             return new Response(
                 JSON.stringify({
-                    error: 'Nenhum profissional ativo encontrado para as funções selecionadas neste Tenant.',
-                    empresa_id: derived_empresa_id,
-                    funcoes
+                    error: 'Nenhum profissional ativo encontrado para a seleção nesta empresa.',
+                    empresa_id,
+                    funcoes: funcoesArr,
+                    profissionais_ids: profissionaisIdsArr
                 }),
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             )
         }
 
-        // Create tasks for each professional
-        const createdTasks = []
-        const notifications = []
+        const createdTasks: any[] = []
+        const notifications: string[] = []
 
         for (const prof of professionals) {
-            const professional = prof.profissionais
-
+            const professional = (prof as any).profissionais
             if (!professional) continue
-
-            // Create task
-            const taskPayload = {
-                titulo: `${titulo} - ${prof.funcao}`,
-                descricao: descricao || null,
-                empresa_id: derived_empresa_id, // TENANT derivado
-                cliente_id: resolved_cliente_id, // CLIENTE REAL
-                created_by: created_by,
-                assigned_to: professional.id,
-                departamento_id: professional.departamento_id,
-                deadline: deadline_at,
-                status: safeStatus,
-                prioridade: normalizedPriority,
-                drive_link: drive_link || null
-            }
 
             const { data: task, error: taskError } = await supabaseClient
                 .from('tarefas')
-                .insert(taskPayload)
+                .insert({
+                    titulo: `${titulo} - ${prof.cargo || prof.funcao}`,
+                    descricao: descricao || null,
+                    empresa_id,
+                    cliente_id: cliente_id || null,
+                    created_by,
+                    assigned_to: professional.id,
+                    departamento_id: professional.departamento_id,
+                    deadline: deadline_at,
+                    status: safeStatus,
+                    prioridade: normalizedPriority,
+                    drive_link: drive_link || null
+                })
                 .select()
                 .single()
 
@@ -313,23 +376,18 @@ serve(async (req) => {
 
             createdTasks.push(task)
 
-            // Create in-app notification
-            const notificationPayload = {
-                profissional_id: professional.id,
-                title: 'Nova Tarefa Atribuída',
-                message: `Você recebeu uma nova tarefa de ${prof.funcao}: "${titulo}"`,
-                type: 'task_assigned',
-                link: `/staff/tasks/${task.id}`,
-                read: false
-            }
-
-            const { error: notifError } = await supabaseClient
+            await supabaseClient
                 .from('notifications')
-                .insert(notificationPayload)
+                .insert({
+                    profissional_id: professional.id,
+                    title: 'Nova Tarefa Atribuída',
+                    message: `Você recebeu uma nova tarefa de ${prof.cargo || prof.funcao}: "${titulo}"`,
+                    type: 'task_assigned',
+                    link: `/staff/tasks/${task.id}`,
+                    read: false
+                })
 
-            if (!notifError) {
-                notifications.push(professional.id)
-            }
+            notifications.push(professional.id)
         }
 
         if (createdTasks.length === 0) {
@@ -348,11 +406,7 @@ serve(async (req) => {
                 mode: 'legacy',
                 tasks_created: createdTasks.length,
                 notifications_sent: notifications.length,
-                tasks: createdTasks.map(t => ({
-                    id: t.id,
-                    titulo: t.titulo,
-                    profissional_id: t.profissional_id
-                }))
+                tasks: createdTasks.map(t => ({ id: t.id, titulo: t.titulo }))
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
@@ -360,7 +414,7 @@ serve(async (req) => {
     } catch (error) {
         console.error('Unexpected error:', error)
         return new Response(
-            JSON.stringify({ error: error.message || 'Internal server error' }),
+            JSON.stringify({ error: (error as Error).message || 'Internal server error' }),
             { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
     }

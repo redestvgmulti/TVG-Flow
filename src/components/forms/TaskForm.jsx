@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { CheckCircle, AlertTriangle, Layers, Building2, Calendar as CalendarIcon, Plus, X, GripVertical, Link, Upload } from 'lucide-react'
+import { CheckCircle, AlertTriangle, Layers, Building2, Calendar as CalendarIcon, Plus, X, GripVertical, Link, Upload, User } from 'lucide-react'
 import { toast } from 'sonner'
 import { clientService } from '../../services/clientService'
 import { professionalsService } from '../../services/professionals'
@@ -14,7 +14,6 @@ export default function TaskForm({ onSuccess, onCancel }) {
 
     // Data
     const [companies, setCompanies] = useState([])
-    const [availableFunctions, setAvailableFunctions] = useState([])
     const [professionals, setProfessionals] = useState([])
 
     // Form
@@ -33,7 +32,6 @@ export default function TaskForm({ onSuccess, onCancel }) {
 
     // States
     const [loadingCompanies, setLoadingCompanies] = useState(true)
-    const [loadingFunctions, setLoadingFunctions] = useState(false)
     const [loadingProfessionals, setLoadingProfessionals] = useState(false)
     const [submitting, setSubmitting] = useState(false)
     const [uploadingFiles, setUploadingFiles] = useState(false) // New: Upload state
@@ -44,6 +42,18 @@ export default function TaskForm({ onSuccess, onCancel }) {
             loadTenantData()
         }
     }, [user])
+
+    // Load professionals when the user selects a company
+    useEffect(() => {
+        if (clienteId) {
+            loadProfessionals(clienteId)
+            // Reset dependencies
+            setSelectedFunctions([])
+            setWorkflowStages([])
+        } else {
+            setProfessionals([])
+        }
+    }, [clienteId])
 
     async function loadTenantData() {
         try {
@@ -58,9 +68,9 @@ export default function TaskForm({ onSuccess, onCancel }) {
             if (error && error.code !== 'PGRST116') throw error;
             
             if (tenantData?.empresa_id) {
-                const tenantId = tenantData.empresa_id;
-                loadFunctions(tenantId);
-                loadProfessionals(tenantId);
+                // Tenant identity resolved.
+                // We don't auto-load professionals here anymore.
+                // It happens when the user selects a company from the dropdown.
             }
         } catch (error) {
             console.error('Error loading tenant data:', error);
@@ -86,19 +96,6 @@ export default function TaskForm({ onSuccess, onCancel }) {
         }
     }
 
-    async function loadFunctions(companyId) {
-        try {
-            setLoadingFunctions(true)
-            const funcs = await professionalsService.getFunctionsByCompany(companyId)
-            setAvailableFunctions(funcs || [])
-        } catch (error) {
-            console.error(error)
-            toast.error('Erro ao buscar funções da empresa')
-        } finally {
-            setLoadingFunctions(false)
-        }
-    }
-
     const toggleFunction = (fn) => {
         if (selectedFunctions.includes(fn)) {
             setSelectedFunctions(prev => prev.filter(f => f !== fn))
@@ -117,6 +114,7 @@ export default function TaskForm({ onSuccess, onCancel }) {
                 .select(`
                     profissional_id,
                     funcao,
+                    cargo,
                     profissionais!inner (
                         id,
                         nome
@@ -149,7 +147,7 @@ export default function TaskForm({ onSuccess, onCancel }) {
 
     function addWorkflowStageFromFunction(funcao) {
         // Find professional for this function
-        const professionalsForFunction = professionals.filter(p => p.funcao === funcao)
+        const professionalsForFunction = professionals.filter(p => (p.cargo || p.funcao || 'Sem Cargo') === funcao)
         const profissionalId = professionalsForFunction.length > 0 ? professionalsForFunction[0].profissional_id : ''
 
         setWorkflowStages([...workflowStages, {
@@ -177,7 +175,7 @@ export default function TaskForm({ onSuccess, onCancel }) {
 
         // Auto-fill professional when function is selected
         if (field === 'funcao' && value) {
-            const professionalsForFunction = professionals.filter(p => p.funcao === value)
+            const professionalsForFunction = professionals.filter(p => (p.cargo || p.funcao || 'Sem Cargo') === value)
             if (professionalsForFunction.length > 0) {
                 // Auto-select first professional of this function
                 newStages[index].profissional_id = professionalsForFunction[0].profissional_id
@@ -228,6 +226,7 @@ export default function TaskForm({ onSuccess, onCancel }) {
         setSubmitting(true)
         try {
             const payload = {
+                empresa_id: clienteId, // Backend uses this to valiadate and fetch permissions
                 cliente_id: clienteId,
                 titulo: titulo,
                 descricao: descricao || null,
@@ -241,7 +240,7 @@ export default function TaskForm({ onSuccess, onCancel }) {
             if (useWorkflow) {
                 payload.workflow_stages = workflowStages
             } else {
-                payload.funcoes = selectedFunctions
+                payload.profissionais_ids = selectedFunctions // Using the same state but it now holds IDs
             }
 
             // Call Edge Function for centralized, atomic task creation
@@ -304,11 +303,25 @@ export default function TaskForm({ onSuccess, onCancel }) {
                 }
             }
 
-            const successMessage = useWorkflow
-                ? `Macro tarefa criada! (${data.micro_tasks_created} etapas geradas)`
-                : `OS criada! (${data.tasks_created} tarefas geradas)`
+            // --- FEEDBACK VISUAL FINAL ---
+            if (data.skipped && data.skipped.length > 0) {
+                // Recupera o nome dos profissionais ignorados para o feedback ficar legível
+                const skippedNames = data.skipped.map(s => {
+                    const prof = professionals.find(p => p.profissional_id === s.profissional_id)
+                    return prof?.profissionais?.nome || 'Profissional Desconhecido'
+                }).join(', ')
 
-            toast.success(successMessage)
+                const createdCount = useWorkflow ? data.micro_tasks_created : data.tasks_created
+                toast.warning(`OS criada! ${createdCount} atribuídas, mas ${data.skipped.length} não atribuída(s). Profissionais sem cargo válido: ${skippedNames}`, {
+                    duration: 8000
+                })
+            } else {
+                const successMessage = useWorkflow
+                    ? `Macro tarefa criada! (${data.micro_tasks_created} etapas geradas)`
+                    : `OS criada! (${data.tasks_created} tarefas geradas)`
+
+                toast.success(successMessage)
+            }
 
             if (onSuccess) {
                 onSuccess(data)
@@ -323,8 +336,21 @@ export default function TaskForm({ onSuccess, onCancel }) {
         }
     }
 
+    const premiumInputStyle = {
+        padding: '12px 14px', 
+        borderRadius: '10px', 
+        border: '1px solid var(--color-border)', 
+        backgroundColor: 'var(--color-surface)',
+        color: 'var(--color-text-primary)',
+        fontSize: '0.95rem',
+        width: '100%',
+        outline: 'none',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+        transition: 'border-color 0.2s ease, box-shadow 0.2s ease'
+    }
+
     return (
-        <form onSubmit={handleSubmit} className="admin-form">
+        <form onSubmit={handleSubmit} className="admin-form" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             {/* Company Selection */}
             <div className="admin-form-group">
                 <label className="admin-form-label">
@@ -336,6 +362,7 @@ export default function TaskForm({ onSuccess, onCancel }) {
                     value={clienteId}
                     onChange={e => setClienteId(e.target.value)}
                     disabled={loadingCompanies || companies.length === 0}
+                    style={premiumInputStyle}
                     required
                 >
                     <option value="">
@@ -367,6 +394,7 @@ export default function TaskForm({ onSuccess, onCancel }) {
                     value={titulo}
                     onChange={e => setTitulo(e.target.value)}
                     placeholder="Ex: Campanha Black Friday"
+                    style={premiumInputStyle}
                     required
                 />
             </div>
@@ -380,8 +408,9 @@ export default function TaskForm({ onSuccess, onCancel }) {
                     className="admin-form-textarea"
                     value={descricao}
                     onChange={e => setDescricao(e.target.value)}
-                    rows={3}
+                    rows={4}
                     placeholder="Detalhes da demanda..."
+                    style={{ ...premiumInputStyle, minHeight: '120px', resize: 'vertical' }}
                 />
             </div>
 
@@ -397,6 +426,7 @@ export default function TaskForm({ onSuccess, onCancel }) {
                     value={deadline}
                     onChange={e => setDeadline(e.target.value)}
                     max="2099-12-31T23:59"
+                    style={premiumInputStyle}
                     required
                 />
             </div>
@@ -410,6 +440,7 @@ export default function TaskForm({ onSuccess, onCancel }) {
                     className="admin-form-select"
                     value={prioridade}
                     onChange={e => setPrioridade(e.target.value)}
+                    style={premiumInputStyle}
                 >
                     <option value="baixa">Baixa</option>
                     <option value="normal">Normal</option>
@@ -430,6 +461,7 @@ export default function TaskForm({ onSuccess, onCancel }) {
                     value={driveLink}
                     onChange={e => setDriveLink(e.target.value)}
                     placeholder="https://drive.google.com/..."
+                    style={premiumInputStyle}
                 />
             </div>
 
@@ -453,17 +485,40 @@ export default function TaskForm({ onSuccess, onCancel }) {
                     <label className="admin-form-label">
                         Modo de Criação
                     </label>
-                    <div className="admin-mode-toggle">
+                    <div className="admin-mode-toggle" style={{ 
+                        display: 'flex', 
+                        gap: '4px', 
+                        padding: '4px', 
+                        backgroundColor: 'var(--color-surface)', 
+                        borderRadius: '12px', 
+                        border: '1px solid var(--color-border)',
+                        width: '100%'
+                    }}>
                         <button
                             type="button"
                             onClick={() => {
                                 setUseWorkflow(false)
                                 setWorkflowStages([])
                             }}
-                            className={`admin-function-btn ${!useWorkflow ? 'selected' : ''}`}
+                            style={{ 
+                                flex: 1,
+                                justifyContent: 'center',
+                                padding: '12px 24px', 
+                                borderRadius: '8px', 
+                                border: 'none', 
+                                backgroundColor: !useWorkflow ? 'var(--color-primary)' : 'transparent',
+                                color: !useWorkflow ? '#ffffff' : 'var(--color-text-secondary)',
+                                fontWeight: !useWorkflow ? 600 : 500,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                transition: 'all 0.2s ease',
+                                cursor: 'pointer',
+                                boxShadow: !useWorkflow ? '0 2px 8px rgba(var(--color-primary-rgb), 0.3)' : 'none'
+                            }}
                         >
-                            {!useWorkflow && <CheckCircle size={14} />}
-                            Modo Legado (Múltiplas Tarefas)
+                            {!useWorkflow && <CheckCircle size={16} strokeWidth={2.5} />}
+                            OS Simples
                         </button>
                         <button
                             type="button"
@@ -471,16 +526,31 @@ export default function TaskForm({ onSuccess, onCancel }) {
                                 setUseWorkflow(true)
                                 setSelectedFunctions([])
                             }}
-                            className={`admin-function-btn ${useWorkflow ? 'selected' : ''}`}
+                            style={{ 
+                                flex: 1,
+                                justifyContent: 'center',
+                                padding: '12px 24px', 
+                                borderRadius: '8px', 
+                                border: 'none', 
+                                backgroundColor: useWorkflow ? 'var(--color-primary)' : 'transparent',
+                                color: useWorkflow ? '#ffffff' : 'var(--color-text-secondary)',
+                                fontWeight: useWorkflow ? 600 : 500,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                transition: 'all 0.2s ease',
+                                cursor: 'pointer',
+                                boxShadow: useWorkflow ? '0 2px 8px rgba(var(--color-primary-rgb), 0.3)' : 'none'
+                            }}
                         >
-                            {useWorkflow && <CheckCircle size={14} />}
-                            Workflow (Macro/Micro)
+                            {useWorkflow && <CheckCircle size={16} strokeWidth={2.5} />}
+                            OS Múltipla
                         </button>
                     </div>
                     <p className="admin-mode-description">
                         {useWorkflow
-                            ? 'Crie uma tarefa macro com etapas sequenciais atribuídas a profissionais específicos'
-                            : 'Crie tarefas individuais para cada função selecionada (comportamento atual)'}
+                            ? 'Crie uma OS centralizada contendo etapas (Micro) distribuídas para profissionais.'
+                            : 'Crie OSs individuais para cada cargo selecionado.'}
                     </p>
                 </div>
 
@@ -493,24 +563,65 @@ export default function TaskForm({ onSuccess, onCancel }) {
                             <Layers className="admin-form-label-icon" />
                             Funções *
                         </label>
-                        {loadingFunctions ? (
+                        {loadingProfessionals ? (
                             <p className="text-secondary text-sm">Carregando...</p>
-                        ) : availableFunctions.length === 0 ? (
+                        ) : professionals.length === 0 ? (
                             <div className="admin-form-empty-state">
                                 <AlertTriangle size={16} />
                                 <span>Nenhuma função disponível para esta empresa</span>
                             </div>
                         ) : (
-                            <div className="admin-functions-grid">
-                                {availableFunctions.map(fn => (
+                            <div className="admin-functions-grid" style={{ 
+                                display: 'grid', 
+                                gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', 
+                                gap: '12px' 
+                            }}>
+                                {Object.keys(
+                                    professionals.reduce((acc, p) => { 
+                                        const displayKey = p.cargo || p.funcao || 'Sem Cargo'
+                                        acc[displayKey] = true
+                                        return acc 
+                                    }, {})
+                                ).sort((a, b) => a.localeCompare(b)).map(fn => (
                                     <button
                                         key={fn}
                                         type="button"
                                         onClick={() => addWorkflowStageFromFunction(fn)}
                                         className="admin-function-btn"
+                                        style={{ 
+                                            flexDirection: 'row', 
+                                            alignItems: 'center', 
+                                            justifyContent: 'flex-start', 
+                                            gap: '12px', 
+                                            padding: '12px 14px',
+                                            height: 'auto',
+                                            textAlign: 'left',
+                                            borderRadius: '8px',
+                                            border: '1px solid var(--color-border)',
+                                            backgroundColor: 'var(--color-surface)'
+                                        }}
                                     >
-                                        <Plus size={14} />
-                                        {fn}
+                                        <div style={{ 
+                                            display: 'flex', 
+                                            alignItems: 'center', 
+                                            justifyContent: 'center', 
+                                            minWidth: '28px', 
+                                            height: '28px', 
+                                            borderRadius: '50%', 
+                                            backgroundColor: 'rgba(0,0,0,0.04)', 
+                                            color: 'var(--color-text-tertiary)' 
+                                        }}>
+                                            <Plus size={14} />
+                                        </div>
+                                        <strong style={{ 
+                                            fontSize: '0.9rem', 
+                                            whiteSpace: 'nowrap',
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                            color: 'var(--color-text-primary)'
+                                        }}>
+                                            {fn}
+                                        </strong>
                                     </button>
                                 ))}
                             </div>
@@ -532,54 +643,117 @@ export default function TaskForm({ onSuccess, onCancel }) {
                                 <span>Clique nas funções acima para adicionar etapas</span>
                             </div>
                         ) : (
-                            <div className="admin-workflow-list">
+                            <div className="admin-workflow-list" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                                 {workflowStages.map((stage, index) => (
-                                    <div key={index} className="admin-workflow-stage-card">
-                                        <div className="admin-workflow-stage-header">
-                                            <GripVertical size={16} className="text-tertiary" />
-                                            <span className="admin-workflow-stage-title">Etapa {index + 1}: {stage.funcao}</span>
-                                            {index > 0 && (
-                                                <span className="admin-workflow-stage-subtitle">
-                                                    (depende da Etapa {index})
+                                    <div key={index} className="admin-workflow-stage-card" style={{
+                                        backgroundColor: 'var(--color-surface)',
+                                        border: '1px solid var(--color-border)',
+                                        borderRadius: '12px',
+                                        padding: '20px',
+                                        boxShadow: '0 4px 16px rgba(0,0,0,0.03)'
+                                    }}>
+                                        <div className="admin-workflow-stage-header" style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            borderBottom: '1px solid var(--color-divider)',
+                                            paddingBottom: '16px',
+                                            marginBottom: '20px'
+                                        }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', flex: 1, gap: '10px' }}>
+                                                <GripVertical size={16} className="text-tertiary" style={{ cursor: 'grab', color: 'var(--color-text-tertiary)' }} />
+                                                <span className="admin-workflow-stage-title" style={{
+                                                    fontSize: '1.05rem',
+                                                    fontWeight: 600,
+                                                    letterSpacing: '0.3px',
+                                                    color: 'var(--color-text-primary)',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '8px'
+                                                }}>
+                                                    <span style={{ 
+                                                        backgroundColor: 'var(--color-background)', 
+                                                        color: 'var(--color-text-secondary)',
+                                                        fontSize: '0.75rem', 
+                                                        padding: '4px 8px', 
+                                                        borderRadius: '6px',
+                                                        border: '1px solid var(--color-border)'
+                                                    }}>
+                                                        ETAPA {index + 1}
+                                                    </span>
+                                                    {stage.funcao}
                                                 </span>
-                                            )}
+                                                {index > 0 && (
+                                                    <span className="admin-workflow-stage-subtitle" style={{
+                                                        fontSize: '0.8rem',
+                                                        color: 'var(--color-text-tertiary)',
+                                                        marginLeft: '8px'
+                                                    }}>
+                                                        (depende da Etapa {index})
+                                                    </span>
+                                                )}
+                                            </div>
                                             <button
                                                 type="button"
                                                 onClick={() => removeWorkflowStage(index)}
                                                 className="admin-workflow-remove-btn"
                                                 title="Remover etapa"
+                                                style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    width: '32px',
+                                                    height: '32px',
+                                                    borderRadius: '8px',
+                                                    border: 'none',
+                                                    backgroundColor: 'var(--color-danger-light)',
+                                                    color: 'var(--color-danger)',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.2s'
+                                                }}
                                             >
-                                                <X size={18} />
+                                                <X size={16} strokeWidth={2.5} />
                                             </button>
                                         </div>
 
-                                        <div className="admin-workflow-content">
+                                        <div className="admin-workflow-content" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                                             {/* Professional and Priority Row */}
-                                            <div className="admin-workflow-row">
-                                                <div>
-                                                    <label className="admin-workflow-label">
+                                            <div className="admin-workflow-row" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)', gap: '16px' }}>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                    <label className="admin-workflow-label" style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
                                                         Profissional *
                                                     </label>
                                                     <select
                                                         className="admin-form-select"
                                                         value={stage.profissional_id}
                                                         onChange={(e) => updateWorkflowStage(index, 'profissional_id', e.target.value)}
+                                                        style={{ 
+                                                            padding: '10px 14px', 
+                                                            borderRadius: '8px', 
+                                                            border: '1px solid var(--color-border)', 
+                                                            backgroundColor: 'var(--color-surface)',
+                                                            color: 'var(--color-text-primary)',
+                                                            fontSize: '0.9rem',
+                                                            width: '100%',
+                                                            cursor: 'pointer',
+                                                            outline: 'none',
+                                                            boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
+                                                        }}
                                                         required
                                                     >
                                                         <option value="">
-                                                            {professionals.filter(p => p.funcao === stage.funcao).length === 0
+                                                            {professionals.filter(p => (p.cargo || p.funcao || 'Sem Cargo') === stage.funcao).length === 0
                                                                 ? 'Nenhum profissional encontrado'
                                                                 : 'Selecione...'}
                                                         </option>
                                                         {professionals
-                                                            .filter(p => p.funcao === stage.funcao)
+                                                            .filter(p => (p.cargo || p.funcao || 'Sem Cargo') === stage.funcao)
                                                             .map(p => (
                                                                 <option key={p.profissional_id} value={p.profissional_id}>
                                                                     {p.profissionais.nome}
                                                                 </option>
                                                             ))}
                                                     </select>
-                                                    {professionals.filter(p => p.funcao === stage.funcao).length === 0 && (
+                                                    {professionals.filter(p => (p.cargo || p.funcao || 'Sem Cargo') === stage.funcao).length === 0 && (
                                                         <span className="admin-workflow-warning">
                                                             <AlertTriangle size={12} />
                                                             Adicione um profissional desta função
@@ -587,14 +761,26 @@ export default function TaskForm({ onSuccess, onCancel }) {
                                                     )}
                                                 </div>
 
-                                                <div>
-                                                    <label className="admin-workflow-label">
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                    <label className="admin-workflow-label" style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
                                                         Prioridade
                                                     </label>
                                                     <select
                                                         className="admin-form-select"
                                                         value={stage.prioridade || 'normal'}
                                                         onChange={(e) => updateWorkflowStage(index, 'prioridade', e.target.value)}
+                                                        style={{ 
+                                                            padding: '10px 14px', 
+                                                            borderRadius: '8px', 
+                                                            border: '1px solid var(--color-border)', 
+                                                            backgroundColor: 'var(--color-surface)',
+                                                            color: 'var(--color-text-primary)',
+                                                            fontSize: '0.9rem',
+                                                            width: '100%',
+                                                            cursor: 'pointer',
+                                                            outline: 'none',
+                                                            boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
+                                                        }}
                                                     >
                                                         <option value="baixa">Baixa</option>
                                                         <option value="normal">Normal</option>
@@ -605,8 +791,8 @@ export default function TaskForm({ onSuccess, onCancel }) {
                                             </div>
 
                                             {/* Tags Row */}
-                                            <div>
-                                                <label className="admin-workflow-label">
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                <label className="admin-workflow-label" style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
                                                     Tags (opcional)
                                                 </label>
                                                 <input
@@ -618,13 +804,18 @@ export default function TaskForm({ onSuccess, onCancel }) {
                                                         const tags = e.target.value.split(',').map(t => t.trim()).filter(t => t)
                                                         updateWorkflowStage(index, 'tags', tags)
                                                     }}
+                                                    style={{ 
+                                                        padding: '10px 14px', 
+                                                        borderRadius: '8px', 
+                                                        border: '1px solid var(--color-border)', 
+                                                    }}
                                                 />
                                             </div>
 
                                             {/* Deadline Row */}
-                                            <div>
-                                                <label className="admin-workflow-label">
-                                                    <CalendarIcon size={14} style={{ marginRight: '4px', display: 'inline' }} />
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                <label className="admin-workflow-label" style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
+                                                    <CalendarIcon size={14} style={{ marginRight: '6px', display: 'inline', position: 'relative', top: '2px', color: 'var(--color-text-tertiary)' }} />
                                                     Prazo da Etapa (opcional)
                                                 </label>
                                                 <input
@@ -651,46 +842,123 @@ export default function TaskForm({ onSuccess, onCancel }) {
                 </>
             )}
 
-            {/* Functions */}
-            {!useWorkflow && (
-                <div className="admin-form-group">
-                    <label className="admin-form-label">
-                        <Layers className="admin-form-label-icon" />
-                        Funções *
-                    </label>
-                    {loadingFunctions ? (
-                        <p className="text-secondary text-sm">Carregando...</p>
-                    ) : availableFunctions.length === 0 ? (
-                        <div className="admin-form-empty-state">
-                            <AlertTriangle size={16} />
-                            <span>Nenhuma função disponível para esta empresa</span>
-                        </div>
-                    ) : (
-                        <div className="admin-functions-grid">
-                            {availableFunctions.map(fn => (
-                                <button
-                                    key={fn}
-                                    type="button"
-                                    onClick={() => toggleFunction(fn)}
-                                    className={`admin-function-btn ${selectedFunctions.includes(fn) ? 'selected' : ''}`}
-                                >
-                                    {selectedFunctions.includes(fn) && <CheckCircle size={14} />}
-                                    {fn}
-                                </button>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            )}
+            {/* Functions — derived from professionals (single source of truth) */}
+            {!useWorkflow && (() => {
+                const sortedProfessionals = [...professionals].sort((a, b) => {
+                    const nameA = a.profissionais?.nome?.toLowerCase() || ''
+                    const nameB = b.profissionais?.nome?.toLowerCase() || ''
+                    return nameA.localeCompare(nameB)
+                })
+
+                return (
+                    <div className="admin-form-group">
+                        <label className="admin-form-label">
+                            <Layers className="admin-form-label-icon" />
+                            Profissionais *
+                        </label>
+                        {loadingProfessionals ? (
+                            <p className="text-secondary text-sm">Carregando...</p>
+                        ) : sortedProfessionals.length === 0 ? (
+                            <div className="admin-form-empty-state">
+                                <AlertTriangle size={16} />
+                                <span>Nenhum profissional disponível para esta empresa</span>
+                            </div>
+                        ) : (
+                            <div className="admin-functions-grid" style={{ 
+                                display: 'grid', 
+                                gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', 
+                                gap: '12px' 
+                            }}>
+                                {sortedProfessionals.map(p => {
+                                    const cargoName = p.cargo || p.funcao || 'Sem Cargo'
+                                    const isSelected = selectedFunctions.includes(p.profissional_id)
+                                    return (
+                                        <button
+                                            key={p.profissional_id}
+                                            type="button"
+                                            onClick={() => toggleFunction(p.profissional_id)}
+                                            className={`admin-function-btn ${isSelected ? 'selected' : ''}`}
+                                            style={{ 
+                                                flexDirection: 'row', 
+                                                alignItems: 'center', 
+                                                justifyContent: 'flex-start', 
+                                                gap: '12px', 
+                                                padding: '12px 14px',
+                                                height: 'auto',
+                                                textAlign: 'left'
+                                            }}
+                                        >
+                                            <div style={{ 
+                                                display: 'flex', 
+                                                alignItems: 'center', 
+                                                justifyContent: 'center', 
+                                                minWidth: '28px', 
+                                                height: '28px', 
+                                                borderRadius: '50%', 
+                                                backgroundColor: isSelected ? 'rgba(var(--color-primary-rgb), 0.1)' : 'rgba(0,0,0,0.04)', 
+                                                color: isSelected ? 'var(--color-primary)' : 'var(--color-text-tertiary)',
+                                                transition: 'all 0.2s ease'
+                                            }}>
+                                                {isSelected ? <CheckCircle size={14} strokeWidth={2.5} /> : <User size={14} />}
+                                            </div>
+                                            <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                                                <strong style={{ 
+                                                    fontSize: '0.9rem', 
+                                                    whiteSpace: 'nowrap',
+                                                    overflow: 'hidden',
+                                                    textOverflow: 'ellipsis',
+                                                    color: isSelected ? 'var(--color-primary-dark)' : 'var(--color-text-primary)'
+                                                }}>
+                                                    {p.profissionais?.nome}
+                                                </strong>
+                                                <span style={{
+                                                    fontSize: '0.7rem',
+                                                    color: isSelected ? 'var(--color-primary)' : 'var(--color-text-tertiary)',
+                                                    marginTop: '2px',
+                                                    fontWeight: 600,
+                                                    letterSpacing: '0.3px',
+                                                    textTransform: 'uppercase'
+                                                }}>
+                                                    {cargoName}
+                                                </span>
+                                            </div>
+                                        </button>
+                                    )
+                                })}
+                            </div>
+                        )}
+                        <p className="admin-mode-description" style={{ marginTop: '16px' }}>
+                            Selecione os profissionais individualmente. Uma OS será criada para cada pessoa selecionada.
+                        </p>
+                    </div>
+                )
+            })()}
 
             {/* Actions */}
-            <div className="admin-form-actions">
+            <div className="admin-form-actions" style={{ 
+                display: 'flex', 
+                justifyContent: 'flex-end', 
+                gap: '16px', 
+                marginTop: '12px', 
+                paddingTop: '24px', 
+                borderTop: '1px solid var(--color-border)' 
+            }}>
                 {onCancel && (
                     <button
                         type="button"
                         onClick={onCancel}
                         className="admin-form-btn-cancel"
                         disabled={submitting}
+                        style={{ 
+                            padding: '12px 24px', 
+                            borderRadius: '10px', 
+                            border: '1px solid var(--color-border)', 
+                            backgroundColor: 'transparent', 
+                            color: 'var(--color-text-secondary)', 
+                            fontWeight: 600, 
+                            cursor: 'pointer', 
+                            transition: 'all 0.2s ease' 
+                        }}
                     >
                         Cancelar
                     </button>
@@ -699,6 +967,17 @@ export default function TaskForm({ onSuccess, onCancel }) {
                     type="submit"
                     className="admin-form-btn-submit"
                     disabled={submitting || (useWorkflow ? workflowStages.length === 0 : selectedFunctions.length === 0)}
+                    style={{ 
+                        padding: '12px 32px', 
+                        borderRadius: '10px', 
+                        border: 'none', 
+                        backgroundColor: (submitting || (useWorkflow ? workflowStages.length === 0 : selectedFunctions.length === 0)) ? 'var(--color-text-tertiary)' : 'var(--color-primary)', 
+                        color: '#ffffff', 
+                        fontWeight: 600, 
+                        cursor: (submitting || (useWorkflow ? workflowStages.length === 0 : selectedFunctions.length === 0)) ? 'not-allowed' : 'pointer', 
+                        boxShadow: (submitting || (useWorkflow ? workflowStages.length === 0 : selectedFunctions.length === 0)) ? 'none' : '0 4px 14px rgba(var(--color-primary-rgb), 0.35)', 
+                        transition: 'all 0.2s ease' 
+                    }}
                 >
                     {submitting
                         ? (uploadingFiles ? 'Enviando arquivos...' : 'Criando...')

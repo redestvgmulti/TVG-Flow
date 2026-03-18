@@ -69,7 +69,7 @@ function Sidebar({ mobileMenuOpen, onClose }) {
             const { count, error } = await supabase
                 .from('tarefas')
                 .select('*', { count: 'exact', head: true })
-                .neq('status', 'completed')
+                .neq('status', 'concluida')
 
             if (error) {
                 // Silent fail - don't crash UI for a badge
