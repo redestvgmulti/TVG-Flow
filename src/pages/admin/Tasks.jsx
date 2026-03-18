@@ -748,7 +748,11 @@ function Tasks() {
 
     function getFilteredTasks() {
         const filtered = tasks.filter(task => {
-            const matchesSearch = task.titulo.toLowerCase().includes(searchTerm.toLowerCase())
+            const searchLower = searchTerm.toLowerCase()
+            const matchTitle = task.titulo?.toLowerCase().includes(searchLower)
+            const matchCompany = task.empresas?.nome?.toLowerCase().includes(searchLower) || false
+            
+            const matchesSearch = matchTitle || matchCompany
 
             // Status filter com normalização
             const matchesStatus = statusFilter === 'all' || (() => {
