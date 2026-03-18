@@ -93,7 +93,7 @@ Deno.serve(async (req: Request) => {
             conteudo,
             imagem_url: raw_imagem_url,
             image_url: raw_image_url,
-            empresa_id,
+            cliente_id,
             auth_user_id,
             url_original,
             content_type = 'feed',
@@ -110,17 +110,32 @@ Deno.serve(async (req: Request) => {
 
         console.log("[AUDIT][GENERATOR_PAYLOAD]", body);
 
-        // 1. Validation & Sanitization
-        if (!empresa_id) {
-            const reason = "empresa_id é obrigatório";
+        // 1. Validation & Tenant Resolution
+        if (!cliente_id) {
+            const reason = "cliente_id é obrigatório no novo contrato";
             console.error("[GENERATOR_ERROR]", reason);
             return new Response(JSON.stringify({ error: "VALIDATION_ERROR", message: reason }), { status: 400, headers: corsHeaders });
         }
-        if (!isUUID(empresa_id)) {
-            const reason = `UUID inválido para empresa_id: ${empresa_id}`;
+        if (!isUUID(cliente_id)) {
+            const reason = `UUID inválido para cliente_id: ${cliente_id}`;
             console.error("[GENERATOR_ERROR]", reason);
             return new Response(JSON.stringify({ error: "VALIDATION_ERROR", message: reason }), { status: 400, headers: corsHeaders });
         }
+
+        // Derive (TENANT) from client details
+        const { data: tenantData, error: tenantErr } = await supabase
+            .from("empresas")
+            .select("tenant_id")
+            .eq("id", cliente_id)
+            .single();
+
+        if (tenantErr || !tenantData?.tenant_id) {
+            const reason = `Não foi possível derivar o Tenant (empresa_id) para o cliente: ${cliente_id}`;
+            console.error("[GENERATOR_ERROR]", reason);
+            return new Response(JSON.stringify({ error: "VALIDATION_ERROR", message: reason }), { status: 400, headers: corsHeaders });
+        }
+        
+        const empresa_id = tenantData.tenant_id;
         
         if (auth_user_id && auth_user_id !== 'null' && !isUUID(auth_user_id)) {
             console.warn(`[AUDIT] [ap-employee-generator] UUID inválido para auth_user_id: ${auth_user_id}. Ignorando.`);
@@ -207,7 +222,7 @@ Deno.serve(async (req: Request) => {
         let normalizedPayload = null;
         try {
             const rawPayload = {
-                cliente_id: empresa_id,
+                cliente_id: cliente_id,
                 titulo: userHeadline || titulo || "Pauta OMNI",
                 conteudo: userText || conteudo || "",
                 url_original: url_original || null,
@@ -351,7 +366,7 @@ Deno.serve(async (req: Request) => {
         console.log(`[FLOW] Triggering shared editorial workflow for ${newsId}`);
         const result = await runEditorialWorkflow(supabase, {
             newsId,
-            clienteId: empresa_id,
+            clienteId: cliente_id,
             userHeadline,
             userTag,
             userText,

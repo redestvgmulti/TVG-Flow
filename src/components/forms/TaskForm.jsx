@@ -18,7 +18,7 @@ export default function TaskForm({ onSuccess, onCancel }) {
     const [professionals, setProfessionals] = useState([])
 
     // Form
-    const [empresaId, setEmpresaId] = useState('')
+    const [clienteId, setClienteId] = useState('')
     const [titulo, setTitulo] = useState('')
     const [descricao, setDescricao] = useState('')
     const [deadline, setDeadline] = useState('')
@@ -40,23 +40,33 @@ export default function TaskForm({ onSuccess, onCancel }) {
 
     useEffect(() => {
         loadCompanies()
-    }, [])
-
-    useEffect(() => {
-        if (empresaId) {
-            // Load functions (used by workflow mode)
-            loadFunctions(empresaId)
-
-            // CRITICAL FIX: Load professionals in BOTH modes (legacy and workflow)
-            // Previously this was only called if useWorkflow === true, breaking legacy mode
-            loadProfessionals(empresaId)
-        } else {
-            setAvailableFunctions([])
-            setSelectedFunctions([])
-            setProfessionals([])
-            setWorkflowStages([])
+        if (user?.id) {
+            loadTenantData()
         }
-    }, [empresaId, useWorkflow])
+    }, [user])
+
+    async function loadTenantData() {
+        try {
+            const { data: tenantData, error } = await supabase
+                .from('empresa_profissionais')
+                .select('empresa_id')
+                .eq('profissional_id', user.id)
+                .eq('ativo', true)
+                .limit(1)
+                .single()
+            
+            if (error && error.code !== 'PGRST116') throw error;
+            
+            if (tenantData?.empresa_id) {
+                const tenantId = tenantData.empresa_id;
+                loadFunctions(tenantId);
+                loadProfessionals(tenantId);
+            }
+        } catch (error) {
+            console.error('Error loading tenant data:', error);
+            // Optionally notify, but let's not block the UI
+        }
+    }
 
     async function loadCompanies() {
         try {
@@ -218,7 +228,7 @@ export default function TaskForm({ onSuccess, onCancel }) {
         setSubmitting(true)
         try {
             const payload = {
-                empresa_id: empresaId,
+                cliente_id: clienteId,
                 titulo: titulo,
                 descricao: descricao || null,
                 deadline_at: new Date(deadline).toISOString(),
@@ -277,7 +287,7 @@ export default function TaskForm({ onSuccess, onCancel }) {
                     const uploadResults = await fileService.uploadTaskAttachments(
                         attachments,
                         targetTaskId,
-                        empresaId,
+                        clienteId,
                         user.id
                     )
 
@@ -323,8 +333,8 @@ export default function TaskForm({ onSuccess, onCancel }) {
                 </label>
                 <select
                     className="admin-form-select"
-                    value={empresaId}
-                    onChange={e => setEmpresaId(e.target.value)}
+                    value={clienteId}
+                    onChange={e => setClienteId(e.target.value)}
                     disabled={loadingCompanies || companies.length === 0}
                     required
                 >
@@ -439,8 +449,7 @@ export default function TaskForm({ onSuccess, onCancel }) {
             </div>
 
             {/* Workflow Mode Toggle */}
-            {empresaId && (
-                <div className="admin-form-group">
+            <div className="admin-form-group">
                     <label className="admin-form-label">
                         Modo de Criação
                     </label>
@@ -474,10 +483,9 @@ export default function TaskForm({ onSuccess, onCancel }) {
                             : 'Crie tarefas individuais para cada função selecionada (comportamento atual)'}
                     </p>
                 </div>
-            )}
 
             {/* Workflow Builder */}
-            {empresaId && useWorkflow && (
+            {useWorkflow && (
                 <>
                     {/* Function Selection for Workflow */}
                     <div className="admin-form-group">
@@ -644,7 +652,7 @@ export default function TaskForm({ onSuccess, onCancel }) {
             )}
 
             {/* Functions */}
-            {empresaId && !useWorkflow && (
+            {!useWorkflow && (
                 <div className="admin-form-group">
                     <label className="admin-form-label">
                         <Layers className="admin-form-label-icon" />

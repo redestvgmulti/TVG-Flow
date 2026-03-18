@@ -18,24 +18,42 @@ serve(async (req) => {
         )
 
         const {
-            empresa_id,
+            empresa_id, // Legacy payload - for warning only
+            cliente_id, // REQUIRED
             titulo,
             descricao,
             deadline_at,
             funcoes,
             prioridade,
-            workflow_stages, // NEW: Optional workflow stages for macro/micro tasks
+            workflow_stages,
             drive_link,
-            created_by // ETAPA 1: Obrigatório
+            created_by
         } = await req.json()
 
-        console.log('Received payload:', { empresa_id, titulo, funcoes, workflow_stages, created_by })
+        // 🚨 BLOQUEIO DE CONTRATO ANTIGO
+        if (empresa_id && !cliente_id) {
+            console.warn(`[WARNING-LEGACY] Payload obsoleto detectado: o sistema recebeu 'empresa_id' em vez de 'cliente_id'. Abortando.`);
+            return new Response(
+                JSON.stringify({ 
+                    error: 'Contrato obsoleto: O sistema não aceita mais empresa_id na raiz. Use o UUID correto no campo cliente_id.',
+                    deprecated_field: 'empresa_id'
+                }),
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+        } else if (empresa_id) {
+            console.warn(`[WARNING-LEGACY] Payload contém 'empresa_id' redundante/obsoleto ignorado pelo Edge.`);
+        }
+
+        // 1. NOVO PARADIGMA ESTABELECIDO: Cliente puro.
+        const resolved_cliente_id = cliente_id;
+
+        console.log('Received payload:', { resolved_cliente_id, titulo, funcoes, workflow_stages, created_by })
 
         // Validation
-        if (!empresa_id || !titulo || !deadline_at || !created_by) {
-            console.error('Validation failed:', { empresa_id: !!empresa_id, titulo: !!titulo, deadline_at: !!deadline_at, created_by: !!created_by })
+        if (!resolved_cliente_id || !titulo || !deadline_at || !created_by) {
+            console.error('Validation failed:', { resolved_cliente_id: !!resolved_cliente_id, titulo: !!titulo, deadline_at: !!deadline_at, created_by: !!created_by })
             return new Response(
-                JSON.stringify({ error: 'Missing required fields: empresa_id, titulo, deadline_at, created_by' }),
+                JSON.stringify({ error: 'Missing required fields: cliente_id, titulo, deadline_at, created_by' }),
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             )
         }
@@ -68,31 +86,30 @@ serve(async (req) => {
             )
         }
 
-        // Admin bypassa validação de empresa_profissionais
-        if (userProfile.role !== 'admin') {
-            // Staff: validar vínculo com empresa
-            const { data: permission, error: permError } = await supabaseClient
-                .from('empresa_profissionais')
-                .select('empresa_id')
-                .eq('profissional_id', created_by)
-                .eq('empresa_id', empresa_id)
-                .eq('ativo', true)
-                .maybeSingle()
+        // 2. BUSCAR TENANT DO USUÁRIO LOGADO VAI EMPRESA_PROFISSIONAIS
+        const { data: userTenantConfig, error: permError } = await supabaseClient
+            .from('empresa_profissionais')
+            .select('empresa_id')
+            .eq('profissional_id', created_by)
+            .eq('ativo', true)
+            .limit(1)
+            .maybeSingle()
 
-            if (permError || !permission) {
-                console.error('Permission denied: user not linked to this company', {
-                    created_by,
-                    empresa_id,
-                    role: userProfile.role
-                })
-                return new Response(
-                    JSON.stringify({
-                        error: 'Você não tem permissão para criar tarefas nesta empresa'
-                    }),
-                    { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-                )
-            }
+        if (permError || !userTenantConfig) {
+            console.error('Tenant resolution denied: user not linked to any active company config', {
+                created_by,
+                role: userProfile.role
+            })
+            return new Response(
+                JSON.stringify({
+                    error: 'Você não tem um Tenant (Empresa Principal) ativo vinculado'
+                }),
+                { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
         }
+
+        // Definido com segurança pelo backend:
+        const derived_empresa_id = userTenantConfig.empresa_id;
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         // NEW WORKFLOW: Macro/Micro Tasks
@@ -104,10 +121,11 @@ serve(async (req) => {
                 .insert({
                     titulo,
                     descricao: descricao || null,
-                    empresa_id: empresa_id,
-                    created_by: created_by, // ETAPA 1
+                    empresa_id: derived_empresa_id, // TENANT derivado com segurança
+                    cliente_id: resolved_cliente_id, // CLIENTE REAL (prefeitura)
+                    created_by: created_by,
                     deadline: deadline_at,
-                    status: safeStatus, // Blindado
+                    status: safeStatus,
                     prioridade: normalizedPriority,
                     progress: 0,
                     drive_link: drive_link || null
@@ -223,7 +241,7 @@ serve(async (req) => {
             )
         }
 
-        // Resolve professionals for ALL selected functions
+        // Resolve professionals for ALL selected functions using derived TENANT
         const { data: professionals, error: profError } = await supabaseClient
             .from('empresa_profissionais')
             .select(`
@@ -235,7 +253,7 @@ serve(async (req) => {
                     departamento_id
                 )
             `)
-            .eq('empresa_id', empresa_id)
+            .eq('empresa_id', derived_empresa_id) // Validates against TENANT, not prefeitura
             .in('funcao', funcoes)
             .eq('ativo', true)
 
@@ -250,8 +268,8 @@ serve(async (req) => {
         if (!professionals || professionals.length === 0) {
             return new Response(
                 JSON.stringify({
-                    error: 'Nenhum profissional ativo encontrado para as funções selecionadas nesta empresa.',
-                    empresa_id,
+                    error: 'Nenhum profissional ativo encontrado para as funções selecionadas neste Tenant.',
+                    empresa_id: derived_empresa_id,
                     funcoes
                 }),
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -271,12 +289,13 @@ serve(async (req) => {
             const taskPayload = {
                 titulo: `${titulo} - ${prof.funcao}`,
                 descricao: descricao || null,
-                empresa_id: empresa_id,
-                created_by: created_by, // ETAPA 1
+                empresa_id: derived_empresa_id, // TENANT derivado
+                cliente_id: resolved_cliente_id, // CLIENTE REAL
+                created_by: created_by,
                 assigned_to: professional.id,
                 departamento_id: professional.departamento_id,
                 deadline: deadline_at,
-                status: safeStatus, // Blindado
+                status: safeStatus,
                 prioridade: normalizedPriority,
                 drive_link: drive_link || null
             }

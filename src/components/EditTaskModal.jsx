@@ -260,7 +260,7 @@ export default function EditTaskModal({ task, isOpen, onClose, onSuccess, curren
                 <div className="modal-header" style={{ padding: '24px 32px', backgroundColor: '#fff', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
                     <div>
                         <h3 style={{ fontSize: '24px', fontWeight: '800', letterSpacing: '-0.02em', color: 'var(--color-text-primary)', margin: 0, lineHeight: 1.2 }}>Editar Ordem de Serviço</h3>
-                        <p style={{ marginTop: '4px', fontSize: '14px', color: 'var(--color-text-secondary)', fontWeight: '500', margin: '4px 0 0 0' }}>{task.empresas?.nome || 'Sem cliente associado'}</p>
+                        <p style={{ marginTop: '4px', fontSize: '14px', color: 'var(--color-text-secondary)', fontWeight: '500', margin: '4px 0 0 0' }}>{task.cliente?.nome || 'Sem cliente associado'}</p>
                     </div>
                     <button
                         onClick={onClose}

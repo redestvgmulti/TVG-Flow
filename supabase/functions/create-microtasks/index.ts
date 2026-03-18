@@ -24,7 +24,7 @@ serve(async (req) => {
             }
         )
 
-        const { tarefa_id, profissional_ids, empresa_id } = await req.json()
+        const { tarefa_id, profissional_ids } = await req.json()
 
         // Validate input
         if (!tarefa_id || !Array.isArray(profissional_ids) || profissional_ids.length === 0) {
@@ -34,12 +34,28 @@ serve(async (req) => {
             )
         }
 
-        // If empresa_id is provided, validate that all professionals belong to that company
-        if (empresa_id) {
+        // 1. Recover the true Tenant (empresa_id) from the parent Macro Task
+        const { data: macroTask, error: fetchError } = await supabaseClient
+            .from('tarefas')
+            .select('empresa_id')
+            .eq('id', tarefa_id)
+            .single()
+
+        if (fetchError || !macroTask) {
+             return new Response(
+                JSON.stringify({ error: 'Macro OS não encontrada para derivar o Tenant' }),
+                { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+        }
+
+        const derived_tenant_id = macroTask.empresa_id;
+
+        // 2. Validate that all professionals belong to that Tenant
+        if (derived_tenant_id) {
             const { data: validProfessionals, error: validationError } = await supabaseClient
                 .from('empresa_profissionais')
                 .select('profissional_id')
-                .eq('empresa_id', empresa_id)
+                .eq('empresa_id', derived_tenant_id)
                 .in('profissional_id', profissional_ids)
 
             if (validationError) {
@@ -52,7 +68,7 @@ serve(async (req) => {
             if (invalidProfessionals.length > 0) {
                 return new Response(
                     JSON.stringify({
-                        error: 'Some professionals are not associated with this company',
+                        error: 'Alguns profissionais não estão vinculados ao Tenant principal da Agência.',
                         invalid_professionals: invalidProfessionals
                     }),
                     { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

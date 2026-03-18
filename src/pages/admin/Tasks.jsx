@@ -197,7 +197,7 @@ function Tasks() {
                 .from('tarefas')
                 .select(`
                     *,
-                    empresas (
+                    cliente:empresas!cliente_id (
                         id,
                         nome
                     ),
@@ -230,7 +230,6 @@ function Tasks() {
 
                 if (matchingClientIds.length > 0) {
                     conditions.push(`cliente_id.in.(${matchingClientIds.join(',')})`)
-                    conditions.push(`empresa_id.in.(${matchingClientIds.join(',')})`)
                 }
 
                 if (matchingProfIds.length > 0) {
@@ -750,7 +749,7 @@ function Tasks() {
         const filtered = tasks.filter(task => {
             const searchLower = searchTerm.toLowerCase()
             const matchTitle = (task.titulo || '').toLowerCase().includes(searchLower)
-            const matchCompany = (task.empresas?.nome || '').toLowerCase().includes(searchLower)
+            const matchCompany = (task.cliente?.nome || '').toLowerCase().includes(searchLower)
             
             const matchesSearch = matchTitle || matchCompany
 
@@ -1114,7 +1113,7 @@ function Tasks() {
                                                 </div>
                                             </td>
                                             <td>
-                                                {task.empresas?.nome || <span className="text-slate-400 italic font-normal text-sm">Sem cliente</span>}
+                                                {task.cliente?.nome || 'Sem cliente associado'}
                                             </td>
                                             <td>
                                                 {task.micro_tasks && task.micro_tasks.length > 0 ? (

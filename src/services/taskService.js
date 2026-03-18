@@ -23,7 +23,7 @@ export const createTask = async (taskData) => {
         }])
         .select(`
       *,
-      empresas!tarefas_empresa_id_fkey (id, nome),
+      empresas!cliente_id (id, nome),
       profissionais (id, nome),
       departamentos (id, nome, cor_hex)
     `)
@@ -59,7 +59,7 @@ export const updateTask = async (taskId, updates) => {
         .eq('id', taskId)
         .select(`
       *,
-      empresas!tarefas_empresa_id_fkey (id, nome),
+      empresas!cliente_id (id, nome),
       profissionais (id, nome),
       departamentos (id, nome, cor_hex)
     `)
@@ -89,7 +89,7 @@ export const getTaskById = async (taskId) => {
         .from('tarefas')
         .select(`
       *,
-      empresas!tarefas_empresa_id_fkey (id, nome),
+      empresas!cliente_id (id, nome),
       profissionais (id, nome),
       departamentos (id, nome, cor_hex)
     `)
@@ -110,7 +110,7 @@ export const getAllTasks = async (filters = {}) => {
         .from('tarefas')
         .select(`
       *,
-      empresas!tarefas_empresa_id_fkey (id, nome),
+      empresas!cliente_id (id, nome),
       profissionais (id, nome),
       departamentos (id, nome, cor_hex)
     `)

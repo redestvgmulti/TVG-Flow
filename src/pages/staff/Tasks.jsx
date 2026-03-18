@@ -84,7 +84,7 @@ export default function StaffTasks() {
                         id,
                         nome
                     ),
-                    empresa:empresa_id (
+                    cliente:empresas!cliente_id (
                         id,
                         nome
                     ),
@@ -140,7 +140,7 @@ export default function StaffTasks() {
                             // Criador da OS & Empresa
                             criador_id: osTask.criador?.id || null,
                             criador_nome: osTask.criador?.nome || 'Não identificado',
-                            empresa_nome: osTask.empresa?.nome || '',
+                            cliente_nome: osTask.cliente?.nome || '',
 
                             // Flags e referências
                             is_micro_task: true,
@@ -156,7 +156,7 @@ export default function StaffTasks() {
                         ...osTask,
                         // Ensure we map the joined data correctly for simple tasks too
                         criador_nome: osTask.criador?.nome || 'Não identificado',
-                        empresa_nome: osTask.empresa?.nome || '',
+                        cliente_nome: osTask.cliente?.nome || '',
                         is_micro_task: false,
                         is_os_simples: true,
                         is_os_complexa: false,
@@ -528,7 +528,7 @@ function TaskCard({ task, onClick }) {
                     <span className="staff-task-status-text">{statusText}</span>
 
                     {/* Novo formato: Dot + Criador + Dot + Empresa */}
-                    {task.status === 'pendente' && (task.criador_nome || task.empresa_nome) && (
+                    {task.status === 'pendente' && (task.criador_nome || task.cliente_nome) && (
                         <div className="staff-task-origin-info">
                             {task.criador_nome && (
                                 <>
@@ -536,10 +536,10 @@ function TaskCard({ task, onClick }) {
                                     <span className="origin-creator">{task.criador_nome.split(' ')[0]}</span>
                                 </>
                             )}
-                            {task.empresa_nome && (
+                            {task.cliente_nome && (
                                 <>
                                     <span className="dot-separator">•</span>
-                                    <span className="origin-company">{task.empresa_nome}</span>
+                                    <span className="origin-company">{task.cliente_nome}</span>
                                 </>
                             )}
                         </div>
@@ -838,7 +838,7 @@ function ExecutionView({ task, onBack, onUpdateStatus, onDeleteTask, user, role,
                 </div>
 
                 {/* Origin Info (New) */}
-                {(task.criador_nome || task.empresa_nome) && (
+                {(task.criador_nome || task.cliente_nome) && (
                     <div className="execution-origin-info" style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem', color: '#6B7280' }}>
                         {task.criador_nome && (
                             <span className="origin-creator">
@@ -846,12 +846,12 @@ function ExecutionView({ task, onBack, onUpdateStatus, onDeleteTask, user, role,
                                 {task.criador_nome}
                             </span>
                         )}
-                        {task.criador_nome && task.empresa_nome && (
+                        {task.criador_nome && task.cliente_nome && (
                             <span className="dot-separator">•</span>
                         )}
-                        {task.empresa_nome && (
+                        {task.cliente_nome && (
                             <span className="origin-company" style={{ fontWeight: 500, color: '#4B5563' }}>
-                                {task.empresa_nome}
+                                {task.cliente_nome}
                             </span>
                         )}
                     </div>

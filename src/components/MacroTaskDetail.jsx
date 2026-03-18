@@ -92,7 +92,7 @@ export default function MacroTaskDetail({ taskId, onBack, isModal = false, onEdi
                 .from('tarefas')
                 .select(`
                     *,
-                    cliente:empresas(nome)
+                    cliente:empresas!cliente_id(nome)
                 `)
                 .eq('id', taskId)
                 .single()

@@ -16,6 +16,7 @@ serve(async (req) => {
                 deadline,
                 assigned_to,
                 cliente_id,
+                empresa_id,
                 is_overdue,
                 hours_overdue
             `)
@@ -60,11 +61,11 @@ serve(async (req) => {
                 recipients.push(task.assigned_to)
             }
 
-            // 2. Company managers (professionals with role admin for this company)
+            // 2. Company managers (professionals with role admin for this TENANT)
             const { data: managers } = await supabase
                 .from('empresa_profissionais')
                 .select('profissional_id, profissionais!inner(role)')
-                .eq('empresa_id', task.cliente_id)
+                .eq('empresa_id', task.empresa_id) // Corrected: Alerts the Tenant's Managers, not the Client's!
                 .eq('ativo', true)
                 .eq('profissionais.role', 'admin')
 
