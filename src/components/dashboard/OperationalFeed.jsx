@@ -26,7 +26,7 @@ export default function OperationalFeed() {
             const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()
 
             // Fetch recent micro-task activities (last 48h)
-            const { data, error } = await supabase
+            const microPromise = supabase
                 .from('tarefas_micro')
                 .select(`
                     id,
@@ -39,12 +39,37 @@ export default function OperationalFeed() {
                 .neq('status', 'pendente') // Only show active/completed/returned
                 .gt('updated_at', twoDaysAgo)
                 .order('updated_at', { ascending: false })
-                .limit(50) // Allow scrolling for up to 50 recent events
+                .limit(50)
 
-            if (error) throw error
+            // Fetch recent macro-task (OS Simples) activities
+            const macroPromise = supabase
+                .from('tarefas')
+                .select(`
+                    id,
+                    status,
+                    updated_at,
+                    profissionais!assigned_to(nome),
+                    titulo
+                `)
+                .neq('status', 'pendente')
+                .eq('has_micro_tasks', false) // Only OS Simples
+                .gt('updated_at', twoDaysAgo)
+                .order('updated_at', { ascending: false })
+                .limit(50)
 
-            const formattedEvents = data.map(transformEvent)
-            setEvents(formattedEvents)
+            const [microRes, macroRes] = await Promise.all([microPromise, macroPromise])
+
+            if (microRes.error) throw microRes.error
+            if (macroRes.error) throw macroRes.error
+
+            const microEvents = (microRes.data || []).map(item => transformEvent(item, true))
+            const macroEvents = (macroRes.data || []).map(item => transformEvent(item, false))
+
+            const allEvents = [...microEvents, ...macroEvents]
+                .sort((a, b) => b.timestamp - a.timestamp)
+                .slice(0, 50)
+
+            setEvents(allEvents)
         } catch (error) {
             console.error('Error fetching feed:', error)
         } finally {
@@ -53,8 +78,8 @@ export default function OperationalFeed() {
     }
 
     function setupRealtimeSubscription() {
-        return supabase
-            .channel('operational-feed')
+        const microChannel = supabase
+            .channel('operational-feed-micro')
             .on(
                 'postgres_changes',
                 {
@@ -63,7 +88,6 @@ export default function OperationalFeed() {
                     table: 'tarefas_micro'
                 },
                 async (payload) => {
-                    // Fetch full details for the updated row to get relations
                     const { data, error } = await supabase
                         .from('tarefas_micro')
                         .select(`
@@ -78,15 +102,54 @@ export default function OperationalFeed() {
                         .single()
 
                     if (!error && data) {
-                        handleNewEvent(data)
+                        handleNewEvent(data, true)
                     }
                 }
             )
             .subscribe()
+
+        const macroChannel = supabase
+            .channel('operational-feed-macro')
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'tarefas'
+                },
+                async (payload) => {
+                    // Only process OS Simples
+                    if (payload.new.has_micro_tasks) return;
+
+                    const { data, error } = await supabase
+                        .from('tarefas')
+                        .select(`
+                            id,
+                            status,
+                            updated_at,
+                            profissionais!assigned_to(nome),
+                            titulo
+                        `)
+                        .eq('id', payload.new.id)
+                        .single()
+
+                    if (!error && data) {
+                        handleNewEvent(data, false)
+                    }
+                }
+            )
+            .subscribe()
+
+        return {
+            unsubscribe: () => {
+                supabase.removeChannel(microChannel)
+                supabase.removeChannel(macroChannel)
+            }
+        }
     }
 
-    function handleNewEvent(rawEvent) {
-        const newEvent = transformEvent(rawEvent)
+    function handleNewEvent(rawEvent, isMicroTask) {
+        const newEvent = transformEvent(rawEvent, isMicroTask)
 
         // Ignore if status is pending (reset)
         if (rawEvent.status === 'pendente') return
@@ -103,36 +166,40 @@ export default function OperationalFeed() {
 
             // Prepend new event
             const updated = [newEvent, ...prev]
-            return updated.slice(0, 50) // Keep max 50 for scrolling
+            return updated.sort((a, b) => b.timestamp - a.timestamp).slice(0, 50) // Keep max 50 for scrolling
         })
     }
 
-    function transformEvent(item) {
+    function transformEvent(item, isMicroTask) {
         let type = 'unknown'
         if (item.status === 'em_progresso' || item.status === 'em_execucao' || item.status === 'fazendo') type = 'start'
         if (item.status === 'concluida' || item.status === 'feito') type = 'complete'
         if (item.status === 'devolvida') type = 'adjustment'
 
+        const userName = item.profissionais?.nome || 'Alguém'
+        const taskTitle = isMicroTask ? (item.tarefas?.titulo || 'Tarefa desconhecida') : item.titulo
+        const itemName = isMicroTask ? item.funcao : 'OS Simples'
+
         return {
             id: item.id + '_' + item.updated_at, // Unique key for animation
             type,
-            user: item.profissionais?.nome || 'Alguém',
-            action: getActionText(type, item.funcao),
-            task: item.tarefas?.titulo || 'Tarefa desconhecida',
+            user: userName,
+            action: getActionText(type, itemName),
+            task: taskTitle,
             timestamp: new Date(item.updated_at)
         }
     }
 
-    function getActionText(type, microTaskName) {
+    function getActionText(type, itemName) {
         switch (type) {
             case 'start':
-                return <>Iniciou <strong>{microTaskName}</strong></>
+                return <>Iniciou <strong>{itemName}</strong></>
             case 'complete':
-                return <>Concluiu <strong>{microTaskName}</strong></>
+                return <>Concluiu <strong>{itemName}</strong></>
             case 'adjustment':
-                return <>Solicitou ajuste em <strong>{microTaskName}</strong></>
+                return <>Solicitou ajuste em <strong>{itemName}</strong></>
             default:
-                return <>Atualizou <strong>{microTaskName}</strong></>
+                return <>Atualizou <strong>{itemName}</strong></>
         }
     }
 
