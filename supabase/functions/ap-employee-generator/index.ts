@@ -217,13 +217,36 @@ Deno.serve(async (req: Request) => {
             console.log(`[AUDIT] [ap-employee-generator] Rotação automática solicitada (UUID nulo).`);
         }
 
+        const resolvedTitulo = userHeadline || titulo || "Pauta OMNI";
+
+        // 2b. Backend Deduplication Check (for manual entries without URL)
+        if (!url_original && resolvedTitulo && conteudo) {
+            const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+            const { data: existingDup } = await supabase.schema("ap").from("candidate_news")
+                .select("id")
+                .eq("cliente_id", cliente_id)
+                .eq("titulo", resolvedTitulo)
+                .eq("conteudo", conteudo)
+                .gte("created_at", twentyFourHoursAgo)
+                .limit(1);
+
+            if (existingDup && existingDup.length > 0) {
+                const dupMessage = `Uma matéria idêntica já foi gerada nas últimas 24h.`;
+                console.warn("[AUDIT] [ap-employee-generator] Blocked duplicate submission:", resolvedTitulo);
+                return new Response(JSON.stringify({ 
+                    error: "DUPLICATE_ENTRY", 
+                    message: dupMessage 
+                }), { status: 409, headers: corsHeaders });
+            }
+        }
+
         // 3. Criar registro inicial como 'processing' para esconder do UI e travar
         let newsItem = null;
         let normalizedPayload = null;
         try {
             const rawPayload = {
                 cliente_id: cliente_id,
-                titulo: userHeadline || titulo || "Pauta OMNI",
+                titulo: resolvedTitulo,
                 conteudo: userText || conteudo || "",
                 url_original: url_original || null,
                 context_tag: contextTagForInsert,

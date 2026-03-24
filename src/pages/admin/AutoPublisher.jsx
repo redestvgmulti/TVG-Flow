@@ -436,16 +436,17 @@ export default function AutoPublisher() {
                 setIsSubmittingManual(false)
                 return
             }
-        } else if (formData.titulo) { // Check for duplicate headlines if no URL
+        } else if (formData.titulo && formData.conteudo) { // Check for identical manual articles
             const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
             const { data: existing } = await supabase.schema('ap').from('candidate_news')
                 .select('id')
                 .eq('cliente_id', clienteId)
-                .ilike('headline', formData.titulo)
+                .eq('titulo', formData.titulo)
+                .eq('conteudo', formData.conteudo)
                 .gte('created_at', twentyFourHoursAgo)
                 .limit(1);
             if (existing && existing.length > 0) {
-                const dupError = 'Esta headline já foi gerada nas últimas 24h para esta empresa.'
+                const dupError = 'Esta mesma matéria já foi submetida nas últimas 24h.'
                 setManualFormErrors({ titulo: dupError })
                 toast.error(dupError)
                 setIsSubmittingManual(false)
