@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ImageIcon, Video, UploadCloud, CheckCircle2 } from 'lucide-react';
+import { ImageIcon, Video, UploadCloud, CheckCircle2, Brain, Zap } from 'lucide-react';
 
 export default function ArticleForm({
     mode = 'admin',
