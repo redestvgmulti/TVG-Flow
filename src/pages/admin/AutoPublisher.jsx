@@ -292,14 +292,10 @@ export default function AutoPublisher() {
             if (prodError) throw prodError
             if (data?.errors && data.errors.length > 0) throw new Error(data.errors[0].error || "Erro na edge function")
 
-            const { error: renderError } = await supabase.functions.invoke('ap-render-engine', {
-                body: { action: 'render_one', newsId: item.id }
-            })
-            if (renderError) {
-                toast.info("Aprovado! Arte entrando na fila de renderização.")
-            } else {
-                toast.success("Aprovado e enviado para renderização!")
-            }
+            // Status is now 'pending_render' — the ap-render-engine cron worker
+            // will pick it up automatically. Do NOT invoke render directly:
+            // that would bypass idempotency guards and cause duplicate renders.
+            toast.success("Aprovado! Arte entrará na fila de renderização automaticamente.")
         } catch (err) {
             toast.error("Falha ao aprovar matéria.")
         }
@@ -340,7 +336,7 @@ export default function AutoPublisher() {
                 context_tag: normalizedTag,
                 headline: editForm.headline.trim(),
                 caption: editForm.caption.trim(),
-                imagem_url: finalImageUrl
+                imagem_url: editingItem.content_type === 'reels' ? null : finalImageUrl
             }
             const { error } = await supabase.schema('ap').from('candidate_news')
                 .update(payload)
@@ -376,8 +372,10 @@ export default function AutoPublisher() {
             await supabase.functions.invoke('ap-scoring-engine');
             await supabase.functions.invoke('ap-daily-feed-builder');
             await supabase.functions.invoke('ap-content-production', { body: { action: 'process_selected' } });
-            await supabase.functions.invoke('ap-render-engine');
-            toast.success("Processamento forçado concluído.");
+            // NOTE: ap-render-engine is NOT called here.
+            // It runs on its own cron schedule and will automatically pick up
+            // items in 'pending_render' with idempotency guarantees.
+            toast.success("Pipeline iniciado. A renderização ocorrerá automaticamente.");
             fetchCounts(); fetchItems(tab);
         } catch (err) {
             toast.error("Erro ao processar.");
@@ -503,7 +501,7 @@ export default function AutoPublisher() {
             conteudo: formData.conteudo || scrapedConteudo || '',
             context_tag: formData.context_tag.toUpperCase(),
             content_type: formData.content_type || 'feed',
-            imagem_url: finalImageUrl,
+            imagem_url: formData.content_type === 'reels' ? null : finalImageUrl,
             template_set: formData.template_set || 'default',
             placid_template_uuid: formData.placid_template_uuid || null,
             // Hybrid fields for backend compatibility
@@ -614,7 +612,7 @@ export default function AutoPublisher() {
                                         {items.map(item => (
                                             <tr key={item.id}>
                                                 <td style={{ fontWeight: 500, color: '#0f172a' }}>{item.titulo}</td>
-                                                <td><StatusBadge status={item.status} /></td>
+                                                <td><StatusBadge status={item.status} errorLog={item.error_log} /></td>
                                                 <td><FormatBadge type={item.content_type} /></td>
                                                 <td style={{ fontSize: 12, color: '#94a3b8' }}>
                                                     {new Date(item.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
@@ -795,40 +793,42 @@ export default function AutoPublisher() {
                                     <textarea value={editForm.caption} onChange={e => setEditForm({ ...editForm, caption: e.target.value })} rows={5} required style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', resize: 'vertical', minHeight: '100px', boxSizing: 'border-box' }} />
                                 </div>
 
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', boxSizing: 'border-box' }}>
-                                    <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Foto (Upload ou URL)</label>
-                                    <div
-                                        onDragOver={e => { e.preventDefault(); setIsEditDragging(true) }}
-                                        onDragLeave={() => setIsEditDragging(false)}
-                                        onDrop={e => { e.preventDefault(); setIsEditDragging(false); if (e.dataTransfer.files && e.dataTransfer.files[0]) { setEditSelectedFile(e.dataTransfer.files[0]); setEditForm({ ...editForm, imagem_url: '' }) } }}
-                                        style={{ border: isEditDragging ? '2px dashed #8b5cf6' : '2px dashed #cbd5e1', borderRadius: '12px', padding: '16px', textAlign: 'center', background: isEditDragging ? '#f5f3ff' : '#f8fafc', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}
-                                        onClick={() => document.getElementById('edit-file-upload').click()}
-                                    >
-                                        <input id="edit-file-upload" type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { if (e.target.files && e.target.files[0]) { setEditSelectedFile(e.target.files[0]); setEditForm({ ...editForm, imagem_url: '' }) } }} />
-                                        {editSelectedFile ? (
-                                            <div style={{ background: '#dcfce7', color: '#166534', padding: '8px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                <CheckCircle2 size={16} /> {editSelectedFile.name}
-                                            </div>
-                                        ) : (
-                                            <>
-                                                <div style={{ background: '#e2e8f0', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                    <UploadCloud size={18} color="#64748b" />
+                                {editingItem.content_type !== 'reels' && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', boxSizing: 'border-box' }}>
+                                        <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Foto (Upload ou URL)</label>
+                                        <div
+                                            onDragOver={e => { e.preventDefault(); setIsEditDragging(true) }}
+                                            onDragLeave={() => setIsEditDragging(false)}
+                                            onDrop={e => { e.preventDefault(); setIsEditDragging(false); if (e.dataTransfer.files && e.dataTransfer.files[0]) { setEditSelectedFile(e.dataTransfer.files[0]); setEditForm({ ...editForm, imagem_url: '' }) } }}
+                                            style={{ border: isEditDragging ? '2px dashed #8b5cf6' : '2px dashed #cbd5e1', borderRadius: '12px', padding: '16px', textAlign: 'center', background: isEditDragging ? '#f5f3ff' : '#f8fafc', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}
+                                            onClick={() => document.getElementById('edit-file-upload').click()}
+                                        >
+                                            <input id="edit-file-upload" type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { if (e.target.files && e.target.files[0]) { setEditSelectedFile(e.target.files[0]); setEditForm({ ...editForm, imagem_url: '' }) } }} />
+                                            {editSelectedFile ? (
+                                                <div style={{ background: '#dcfce7', color: '#166534', padding: '8px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                    <CheckCircle2 size={16} /> {editSelectedFile.name}
                                                 </div>
-                                                <span style={{ fontSize: '13px', color: '#475569', fontWeight: 500 }}>Upload de Arquivo (Clique ou Arraste)</span>
-                                            </>
+                                            ) : (
+                                                <>
+                                                    <div style={{ background: '#e2e8f0', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                        <UploadCloud size={18} color="#64748b" />
+                                                    </div>
+                                                    <span style={{ fontSize: '13px', color: '#475569', fontWeight: 500 }}>Upload de Arquivo (Clique ou Arraste)</span>
+                                                </>
+                                            )}
+                                        </div>
+
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', opacity: 0.6 }}>
+                                            <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
+                                            <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>OU</span>
+                                            <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
+                                        </div>
+
+                                        {!editSelectedFile && (
+                                            <input value={editForm.imagem_url} onChange={e => setEditForm({ ...editForm, imagem_url: e.target.value })} placeholder="URL da imagem (ex: https://site.com/foto.jpg)" style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' }} />
                                         )}
                                     </div>
-
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', opacity: 0.6 }}>
-                                        <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
-                                        <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>OU</span>
-                                        <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
-                                    </div>
-
-                                    {!editSelectedFile && (
-                                        <input value={editForm.imagem_url} onChange={e => setEditForm({ ...editForm, imagem_url: e.target.value })} placeholder="URL da imagem (ex: https://site.com/foto.jpg)" style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' }} />
-                                    )}
-                                </div>
+                                )}
 
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #e2e8f0' }}>
                                     <button type="submit" disabled={isSavingEdit} style={{ width: '100%', background: '#8b5cf6', color: '#fff', border: 'none', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: isSavingEdit ? 'not-allowed' : 'pointer', opacity: isSavingEdit ? 0.7 : 1 }}>
@@ -876,8 +876,10 @@ function PendenteCard({ item, onReject, onStudio, onApproveSelected, onEdit, isP
                         <span style={{ fontSize: '13px', fontWeight: 600, color: '#262626' }}>tvgmulti</span>
                         <div style={{ fontSize: '11px', color: '#8e8e8e', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
                             {item.context_tag && <span style={{ color: 'var(--color-primary)', fontWeight: 600 }}>{item.context_tag} •</span>}
-                            <StatusBadge status={item.status} small />
-                            {item.content_type === 'reels' && <span style={{ marginLeft: '4px', padding: '1px 5px', background: '#ede9fe', color: '#6d28d9', borderRadius: '4px', fontSize: '10px', fontWeight: 700, border: '1px solid #ddd6fe', display: 'inline-flex', alignItems: 'center', gap: '3px' }}><Video size={9} />REELS</span>}
+                            <StatusBadge status={item.status} small errorLog={item.error_log} />
+                            <div style={{ marginLeft: '4px' }}>
+                                <FormatBadge type={item.content_type} />
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1169,7 +1171,7 @@ function AprovadaCard({ item, onPublish, onReject, onEdit, isProcessing }) {
 // ──────────────────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────────────────
-function StatusBadge({ status, small }) {
+function StatusBadge({ status, small, errorLog }) {
     const map = {
         raw: { label: 'Ingerida', bg: '#f1f5f9', color: '#475569' },
         ready_for_scoring: { label: 'Aguardando Score', bg: '#fef9c3', color: '#854d0e' },
@@ -1187,17 +1189,30 @@ function StatusBadge({ status, small }) {
     }
     const { label, bg, color } = map[status] || { label: status, bg: '#f1f5f9', color: '#475569' }
     return (
-        <span style={{ padding: small ? '1px 6px' : '3px 10px', borderRadius: '20px', fontSize: small ? '10px' : '11px', fontWeight: 700, background: bg, color, letterSpacing: '0.03em', whiteSpace: 'nowrap' }}>
-            {label}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ padding: small ? '1px 6px' : '3px 10px', borderRadius: '20px', fontSize: small ? '10px' : '11px', fontWeight: 700, background: bg, color, letterSpacing: '0.03em', whiteSpace: 'nowrap' }}>
+                {label}
+            </span>
+            {status === 'failed' && errorLog && (
+                <div title={errorLog} style={{ cursor: 'help' }}>
+                    <AlertTriangle size={small ? 12 : 14} color="#ef4444" />
+                </div>
+            )}
+        </div>
     )
 }
 
 function FormatBadge({ type }) {
-    const isReels = type === 'reels'
+    const config = {
+        feed: { label: 'Feed', icon: <ImageIcon size={10} />, bg: '#f1f5f9', color: '#475569', border: '#e2e8f0' },
+        reels: { label: 'Reels', icon: <Video size={10} />, bg: '#ede9fe', color: '#6d28d9', border: '#ddd6fe' },
+        carousel: { label: 'Carrossel', icon: <Brain size={10} />, bg: '#eff6ff', color: '#2563eb', border: '#bfdbfe' },
+        sponsored: { label: 'Patrocinado', icon: <Zap size={10} />, bg: '#fef3c7', color: '#d97706', border: '#fde68a' },
+    }
+    const { label, icon, bg, color, border } = config[type] || config.feed
     return (
-        <span style={{ padding: '3px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: 600, background: isReels ? '#ede9fe' : '#f1f5f9', color: isReels ? '#6d28d9' : '#475569', border: isReels ? '1px solid #ddd6fe' : '1px solid #e2e8f0', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-            {isReels ? <><Video size={10} />Reels</> : <><ImageIcon size={10} />Feed</>}
+        <span style={{ padding: '3px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: 600, background: bg, color, border: `1px solid ${border}`, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+            {icon}{label}
         </span>
     )
 }

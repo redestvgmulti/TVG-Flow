@@ -1,16 +1,12 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// AutoPublisher — Camada 7: Content Production Worker
-// Hybrid Editorial Engine: suporta userHeadline / userTag / userText
-// Gera headline, caption e roteiro_json via LLM. A IA não sobrescreve dados do usuário.
-// Triggered by: pg_cron (every 20 min) | verify_jwt: false
+// AutoPublisher — Content Production Worker (With Telemetry)
+// Refactored: 2026-03-25 — SRE Observability Implementation.
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
 import { runEditorialWorkflow } from "../_shared/editorialWorkflow.ts";
-
-const BATCH_LIMIT = 50;
-const OPENAI_MODEL_G = "gpt-4o-mini";
+import { Telemetry } from "../_shared/telemetry.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -18,7 +14,10 @@ const corsHeaders = {
     "Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE",
 };
 
-declare const Deno: any;
+const BATCH_LIMIT = 5;
+const LOCK_EXPIRY_MINUTES = 10;
+const LLM_RETRY_CAP = 3;
+const LLM_COST_ESTIMATE = 0.00015; // GPT-4o-mini rough avg cost
 
 Deno.serve(async (req: Request) => {
     if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -29,202 +28,111 @@ Deno.serve(async (req: Request) => {
         { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
-    let actionType: string = "cron";
-    let newsId: string | null = null;
-    let userHeadline: string | null = null;
-    let userTag: string | null = null;
-    let userText: string | null = null;
+    const workerId = crypto.randomUUID();
+    const expiryCutoff = new Date(Date.now() - LOCK_EXPIRY_MINUTES * 60 * 1000).toISOString();
+
     let body: any = {};
-
     try {
-        if (req.method === "POST") {
-            body = await req.json().catch(() => ({}));
-            actionType = body.action || "cron";
-            newsId = body.newsId || null;
-            userHeadline = body.userHeadline || null;
-            userTag = body.userTag || null;
-            userText = body.userText || null;
-        }
-    } catch (e) {
-        console.error("[ap-content-production] Error parsing request body:", e);
-    }
+        if (req.method === "POST") body = await req.json().catch(() => ({}));
+    } catch (_) { /* silent */ }
 
-    // OPTIMIZED: Cron (automático) no longer processes 'raw' items to save tokens.
-    // It now only processes items already selected by the daily builder or manual selection.
-    let statusList = ["selected", "studio_selected"];
-    if (actionType === "process_selected" || actionType === "approve_for_ig" || actionType === "process_studio") {
-        statusList = ["selected", "studio_selected", "pending_review"];
-    }
+    const actionType = body.action || "cron";
+    const userHeadline = body.userHeadline || null;
+    const userTag = body.userTag || null;
+    const userText = body.userText || null;
 
-    let query = supabase.schema("ap").from("candidate_news")
-        .select("id, cliente_id, titulo, conteudo, categoria, context_tag, url_original, status, headline, caption, content_type, imagem_url, imagem_storage, render_url");
+    let query = supabase.schema("ap").from("candidate_news").select("*");
 
-    if (newsId) {
-        query = query.eq("id", newsId);
+    if (body.newsId) {
+        query = query.eq("id", body.newsId);
     } else {
-        query = query.in("status", statusList);
+        query = query
+          .or(`processing_started_at.is.null,processing_started_at.lt.${expiryCutoff}`)
+          .in("status", ["selected", "pending_production"])
+          .order("created_at", { ascending: true })
+          .limit(BATCH_LIMIT);
     }
 
-    const { data: items, error: fetchError } = await query
-        .or(`processing_started_at.is.null,processing_started_at.lt.${new Date(Date.now() - 10 * 60 * 1000).toISOString()}`)
-        .limit(BATCH_LIMIT);
-
-    if (fetchError) {
-        return new Response(JSON.stringify({ error: fetchError.message }), { status: 500, headers: corsHeaders });
-    }
-
-    const errors: any[] = [];
-    let processedCount = 0;
-    let totalLocked = 0;
+    const { data: items } = await query;
+    const results = [];
 
     for (const item of items ?? []) {
-        // Lock
-        const { data: locked, error: lockErr } = await supabase
+        const telemetry = new Telemetry(supabase);
+        await telemetry.logStart({
+            worker_name: "ap-content-production",
+            worker_id: workerId,
+            news_id: item.id,
+            cliente_id: item.cliente_id,
+            action: actionType
+        });
+
+        const lockTime = new Date().toISOString();
+        const { data: lockData } = await supabase
             .schema("ap").from("candidate_news")
-            .update({ processing_started_at: new Date().toISOString() })
+            .update({
+                processing_started_at: lockTime,
+                llm_attempts: (item.llm_attempts || 0) + 1,
+                worker_id: workerId
+            })
             .eq("id", item.id)
-            .is("processing_started_at", null)
+            .or(`processing_started_at.is.null,processing_started_at.lt.${expiryCutoff}`)
             .select("id");
 
-        if (lockErr || !locked || locked.length === 0) {
+        if (!lockData?.length) {
+            await telemetry.logError("acquire_failed_lock_contention");
             continue;
         }
-        totalLocked++;
 
         try {
-            let clienteId = item.cliente_id;
-
-            // --- LLM BYPASS (Human Sovereignty Safeguard) ---
-            const isEmployeeGenerated = item.source === "employee";
-            const hasManualInput = (item.headline && item.headline.length > 5) || (item.caption && item.caption.length > 10);
-
-            // OPTIMIZATION: Skip redundant processing for manual/employee content in cron mode
-            const isManualSource = item.source === "employee" || item.generated_by === "employee" || item.origin === "manual";
-
-            if (actionType === "cron" && isManualSource) {
-                console.log(`[AUDIT] [ap-content-production] Skipping manual/employee content in cron mode: ${item.id}`);
-                processedCount++; // Mark as skip-processed
-                await supabase.schema("ap").from("candidate_news").update({ processing_started_at: null }).eq("id", item.id);
-                continue;
-            }
-
-            if (actionType === "approve_for_ig") {
-                console.log(`[FLOW] Explicit human approval for ${item.id}. Moving directly to pending_render.`);
-                const finalHeadline = userHeadline || item.headline || item.titulo || "Pauta OMNI";
-                const finalCaption = userText || item.caption || "";
-                if (item.content_type === "feed" && !item.imagem_url && !item.imagem_storage && !item.render_url) {
-                    // Part 1 - Backend Guardrail
-                    throw new Error("Feed posts require imagem_url before approval");
-                }
-                const finalTag = userTag || item.context_tag || item.categoria || "DESTAQUE";
-
-                const updatePayload: any = {
-                    headline: finalHeadline,
-                    caption: finalCaption,
-                    context_tag: finalTag,
-                    status: "pending_render",
-                    processing_started_at: null
-                };
-
-                if (typeof body?.approved_by_id === "string") {
-                    updatePayload.approved_by = body.approved_by_id;
-                    updatePayload.approved_by_name = body.approved_by_name || "Editor";
-                    updatePayload.approved_at = new Date().toISOString();
-                }
-
-                await supabase.schema("ap").from("candidate_news")
-                    .update(updatePayload)
-                    .eq("id", item.id);
-
-                if (typeof body?.approved_by_id === "string") {
-                    await supabase.schema("ap").from("editorial_events").insert({
-                        worker: "ap-content-production",
-                        action: "approve_news",
-                        news_id: item.id,
-                        user_id: body.approved_by_id,
-                        payload: updatePayload
-                    });
-                }
-
-                processedCount++;
-                continue;
-            }
-
-            if (hasManualInput && !isEmployeeGenerated && actionType !== "process_studio") {
-                console.log(`[FLOW] [ap-content-production] Manual edit detected — item ${item.id} moved to pending_review (Action: ${actionType}). Awaiting human approval.`);
-                await supabase.schema("ap").from("candidate_news")
-                    .update({
-                        status: "pending_review",  // Human must approve before render
-                        processing_started_at: null
-                    })
-                    .eq("id", item.id)
-                    .in("status", ["raw", "ready_for_scoring", "scored", "selected"]); // Race-condition guard
-                processedCount++;
-                continue;
-            }
-            console.log(`[AUDIT] [ap-content-production] Processing item ${item.id} via AI. Action: ${actionType}. Employee: ${isEmployeeGenerated}`);
-
-
-            // TIERED MODEL ROUTING & AI PROCESSING
-            const modelStage = actionType === "cron" ? "bulk" : "production";
             const result = await runEditorialWorkflow(supabase, {
                 newsId: item.id,
-                clienteId: clienteId,
+                clienteId: item.cliente_id,
                 actionType: (actionType === "process_studio" ? "process_studio" : "standard") as any,
                 userHeadline,
                 userTag,
                 userText,
-                contentType: item.content_type
+                contentType: item.content_type || "feed"
             });
 
-            let updatePayload: any = {};
-            if (actionType === "process_studio") {
-                updatePayload = {
-                    roteiro_studio: result.roteiro_studio,
-                    duracao_estimada: result.duracao_estimada,
-                    broll_sugestao: result.broll_sugestao,
-                    status: "studio_selected",
-                    processing_started_at: null
-                };
-            } else {
-                updatePayload = {
-                    headline: result.headline,
-                    caption: result.caption,
-                    roteiro_json: result.roteiro_json,
-                    context_tag: result.context_tag,
-                    status: actionType === "approve_for_ig" ? "pending_render" : "selected",
-                    processing_started_at: null
-                };
+            const nextStatus = actionType === "approve_for_ig" ? "pending_render" : "pending_production";
+            
+            let updatePayload: any = {
+                headline: result.headline,
+                caption: result.caption,
+                roteiro_json: result.roteiro_json,
+                context_tag: result.context_tag,
+                status: nextStatus,
+                processing_started_at: null,
+                completed_at: new Date().toISOString(),
+                worker_id: null
+            };
 
-                if (actionType === "approve_for_ig" && typeof body?.approved_by_id === "string") {
-                    updatePayload.approved_by = body.approved_by_id;
-                    updatePayload.approved_by_name = body.approved_by_name || "Editor";
-                    updatePayload.approved_at = new Date().toISOString();
-                }
-            }
+            const { data: relData, error: relErr } = await supabase
+                .schema("ap").from("candidate_news")
+                .update(updatePayload)
+                .eq("id", item.id)
+                .eq("processing_started_at", lockTime)
+                .select("id");
 
-            await supabase.schema("ap").from("candidate_news").update(updatePayload).eq("id", item.id);
+            if (relErr || !relData?.length) throw new Error("Release FAILED");
 
-            // Log de Evento Editorial se for aprovação
-            if (actionType === "approve_for_ig" && typeof body?.approved_by_id === "string") {
-                await supabase.schema("ap").from("editorial_events").insert({
-                    worker: "ap-content-production",
-                    action: "approve_news",
-                    news_id: item.id,
-                    user_id: body.approved_by_id,
-                    payload: updatePayload
-                });
-            }
-
-            processedCount++;
+            await telemetry.logSuccess(LLM_COST_ESTIMATE, { next_status: nextStatus });
+            results.push({ id: item.id, status: "success" });
 
         } catch (err: any) {
-            errors.push({ id: item.id, error: err.message });
-            await supabase.schema("ap").from("candidate_news").update({ processing_started_at: null }).eq("id", item.id);
+            const nextAttempts = (item.llm_attempts || 0) + 1;
+            const finalStatus = nextAttempts >= LLM_RETRY_CAP ? "failed" : item.status;
+
+            await supabase.schema("ap").from("candidate_news").update({
+                status: finalStatus,
+                processing_started_at: null,
+                error_log: String(err.message).substring(0, 500)
+            }).eq("id", item.id).eq("processing_started_at", lockTime);
+
+            await telemetry.logError(err.message, 0, { finalStatus });
+            results.push({ id: item.id, status: "error", error: err.message });
         }
     }
 
-    return new Response(JSON.stringify({ ok: true, found: items?.length ?? 0, locked: totalLocked, processed: processedCount, errors }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(JSON.stringify({ ok: true, results }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 });

@@ -1,40 +1,23 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// AutoPublisher — Camada 8: Render Engine Worker (Optimized with Sponsor Rotation)
-// Chama API de render (Placid) com suporte a Polling e Rotação de Patrocinadores.
-// verify_jwt: false
+// AutoPublisher — Render Engine Worker (With Telemetry & Reels Video API)
+// Refactored: 2026-03-25 — Reels Video Integration & Translucency Audit.
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
+import { Telemetry } from "../_shared/telemetry.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
     "Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE",
 };
+
 const BATCH_LIMIT = 5;
+const LOCK_EXPIRY_MINUTES = 10;
+
 Deno.serve(async (req: Request) => {
     if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-
-    // --- INTERNAL AUTHENTICATION CHECK (TEMPORARILY DISABLED) ---
-    /*
-    const internalSecret = req.headers.get("x-internal-secret");
-    const expectedSecret = Deno.env.get("RENDER_ENGINE_SECRET");
-    const authHeader = req.headers.get("Authorization");
-    const isServiceRole = authHeader?.includes(Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "___never___");
-
-    if (expectedSecret && internalSecret !== expectedSecret && !isServiceRole) {
-        console.warn("[ap-render-engine] Unauthorized access attempt: invalid internal secret. Bypassing for service_role if present.");
-        // If it's not service role and not the secret, then we block.
-        if (!isServiceRole) {
-            return new Response(JSON.stringify({ error: "Unauthorized: Invalid internal secret" }), {
-                status: 401,
-                headers: { ...corsHeaders, "Content-Type": "application/json" }
-            });
-        }
-    }
-    */
-    // --- END INTERNAL AUTH ---
 
     const supabase = createClient(
         Deno.env.get("SUPABASE_URL")!,
@@ -42,305 +25,170 @@ Deno.serve(async (req: Request) => {
         { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
-    const workerInstanceId = crypto.randomUUID();
-    console.log(`[ap-render-engine] Worker Started. InstanceID: ${workerInstanceId}`);
-
+    const workerId = crypto.randomUUID();
     const renderApiKey = Deno.env.get("RENDER_API_KEY");
     const globalTemplateId = Deno.env.get("RENDER_TEMPLATE_ID");
+    const lockExpiryCutoff = new Date(Date.now() - LOCK_EXPIRY_MINUTES * 60 * 1000).toISOString();
 
-    if (!renderApiKey) {
-        return new Response(JSON.stringify({ error: "RENDER_API_KEY not configured" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
-    // Suporte a execução direcionada (ex: matéria manual)
     let targetNewsId: string | null = null;
     try {
         if (req.method === "POST") {
-            const contentType = req.headers.get("Content-Type") || "";
-            if (contentType.includes("application/json")) {
-                const body = await req.json().catch(() => null);
-                if (body && body.action === "render_one" && typeof body.newsId === "string") {
-                    targetNewsId = body.newsId;
-                }
+            const body = await req.json().catch(() => null);
+            if (body?.action === "render_one" && typeof body.newsId === "string") {
+                targetNewsId = body.newsId;
             }
         }
-    } catch (e) {
-        console.error("[ap-render-engine] Failed to parse request body:", e);
-    }
+    } catch (_) { /* silent */ }
 
-    const cutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-    let query = supabase
-        .schema("ap").from("candidate_news")
-        .select(`
-            id, 
-            cliente_id, 
-            headline, 
-            imagem_storage, 
-            imagem_url, 
-            categoria, 
-            patrocinador_id, 
-            context_tag, 
-            placid_template_uuid, 
-            content_type,
-            template_set,
-            status,
-            retry_count
-        `);
+    let query = supabase.schema("ap").from("candidate_news")
+        .select("*")
+        .eq("status", "pending_render")
+        .is("render_url", null)
+        .or(`render_started_at.is.null,render_started_at.lt.${lockExpiryCutoff}`)
+        .order("created_at", { ascending: true });
 
-    if (targetNewsId) {
-        // Even with targetNewsId, we only process if it's in a valid state for rendering
-        query = query.eq("id", targetNewsId)
-            .or(`status.eq.pending_render,and(status.eq.processing,processing_started_at.lt.${cutoff}),and(status.eq.rendering,processing_started_at.lt.${cutoff})`);
-    } else {
-        // Pick items that are either:
-        // 1. Pending render and not currently processing
-        // 2. Already in processing/rendering but the lock has expired (cutoff)
-        query = query
-            .or(`and(status.eq.pending_render,processing_started_at.is.null),and(status.eq.processing,processing_started_at.lt.${cutoff}),and(status.eq.rendering,processing_started_at.lt.${cutoff})`)
-            .limit(BATCH_LIMIT);
-    }
+    if (targetNewsId) query = query.eq("id", targetNewsId);
+    else query = query.limit(BATCH_LIMIT);
 
-    const { data: items, error: fetchErr } = await query;
-    if (fetchErr) {
-        console.error("[ap-render-engine] Fetch items error:", fetchErr);
-    }
+    const { data: eligibleItems } = await query;
+    const results = [];
 
-    const results: any[] = [];
-    const promises = (items ?? []).map(async (item) => {
-        // Atomic Lock - only acquire if it still has the status we fetched
-        // Atomic Lock - only acquire if it still has the status we fetched
-        // CAS (Compare-And-Swap) pattern to prevent race conditions
-        const { data: lockData, error: lockErr } = await supabase
+    for (const item of eligibleItems ?? []) {
+        const isReels = item.content_type === "reels";
+        const telemetry = new Telemetry(supabase);
+        await telemetry.logStart({
+            worker_name: "ap-render-engine",
+            worker_id: workerId,
+            news_id: item.id,
+            cliente_id: item.cliente_id,
+            metadata: { content_type: item.content_type }
+        });
+
+        const lockTime = new Date().toISOString();
+        const { data: lockData } = await supabase
             .schema("ap").from("candidate_news")
-            .update({ 
-                processing_started_at: new Date().toISOString(), 
-                status: 'processing',
-                worker_id: workerInstanceId
+            .update({
+                render_started_at: lockTime,
+                worker_id: workerId,
+                render_attempts: (item.render_attempts ?? 0) + 1,
             })
             .eq("id", item.id)
-            .eq("status", item.status) // Safety check: must still be in the state we pulled
+            .eq("status", "pending_render")
+            .is("render_url", null)
+            .or(`render_started_at.is.null,render_started_at.lt.${lockExpiryCutoff}`)
             .select("id");
 
-        if (lockErr || !lockData || lockData.length === 0) {
-            console.warn(`[ap-render-engine] Falha ao travar item ${item.id}:`, lockErr?.message || "Não encontrado ou já travado");
-            return;
+        if (!lockData?.length) {
+            await telemetry.logError("acquire_failed_lock_contention");
+            continue;
         }
 
         try {
+            // 1. Template Selection
             let activeTemplateId = item.placid_template_uuid;
-            let snapshotData = null;
-
             if (!activeTemplateId) {
-                // If not pre-assigned, consume from global queue
-                const empresaId = item.cliente_id;
-                if (!empresaId) {
-                    throw new Error("Não foi possível resolver cliente_id da notícia.");
-                }
-
-                const queueType = item.content_type || 'feed';
-
-                // Get the template from the queue (must use Service Role and Atomic consumption)
-                const { data: templateData, error: templateErr } = await supabase
-                    .schema('ap')
-                    .rpc("get_and_advance_template", {
-                        p_empresa_id: empresaId,
-                        p_tipo: queueType,
-                        p_template_set: item.template_set || 'default'
-                    });
-
-                if (templateErr || !templateData || !templateData.placid_template_uuid) {
-                    throw new Error(`Fila vazia ou erro ao buscar template: ${templateErr?.message || 'Nenhum template ativo'}`);
-                }
-
-                activeTemplateId = templateData.placid_template_uuid;
-                snapshotData = templateData; // save snapshot
-
-                // Update candidate_news with assigned template string and snapshot
-                await supabase.schema("ap").from("candidate_news")
-                    .update({
-                        placid_template_uuid: activeTemplateId,
-                        template_nome_snapshot: templateData.nome || null
-                    })
-                    .eq("id", item.id);
+                const { data: templateData } = await supabase.rpc("get_and_advance_template", {
+                    p_empresa_id: item.cliente_id,
+                    p_tipo: item.content_type || "feed",
+                    p_template_set: item.template_set || "default"
+                });
+                activeTemplateId = templateData?.placid_template_uuid || globalTemplateId;
             }
+            if (!activeTemplateId || !item.headline) throw new Error("Template or Headline missing.");
 
-            if (!activeTemplateId) {
-                activeTemplateId = globalTemplateId; // Fallback extremo se tudo falhar, mas logica pede erro.
-                if (!activeTemplateId) throw new Error("No template_id found");
-            }
-
-            // Build image URL
-            let bgImage = item.imagem_url;
-            if (item.imagem_storage) {
-                bgImage = `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/public/ap-images/${item.imagem_storage}`;
-            }
-
-            // Tag Priority: MUST use context_tag from DB (already consolidated by generator/content-production)
-            // No fallback to 'categoria' allowed per Human-in-the-Loop rules.
-            const resolvedTag = item.context_tag || "DESTAQUE";
-
-            if (!item.headline || item.headline.length < 3) {
-                throw new Error("Render abortado: headline inválida ou ausente no banco.");
-            }
-            if (!resolvedTag) {
-                throw new Error("Render abortado: tag (context_tag) ausente no banco.");
-            }
-            // Imagem obrigatória apenas para feed; Reels pode usar o template sem background
-            if (!bgImage && item.content_type !== 'reels') {
-                throw new Error("Render abortado: imagem_url ausente no banco.");
-            }
-
-            // Build layers object — only include news-image when an image is available
+            // 2. Build Layers (REELS AUDIT: Skip Image Layer for Reels)
             const layers: Record<string, any> = {
                 "headline_news": { text: item.headline },
-                "tag_news": { text: resolvedTag },
+                "tag_news": { text: item.context_tag || "DESTAQUE" },
             };
-            if (bgImage) {
-                layers["news-image"] = {
-                    image: bgImage
+
+            if (!isReels && (item.imagem_url || item.imagem_storage)) {
+                layers["news-image"] = { 
+                    image: item.imagem_storage 
+                        ? `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/public/ap-images/${item.imagem_storage}` 
+                        : item.imagem_url 
                 };
+            } else if (isReels) {
+                console.log(`[Reels-Audit] Enforcing image-free layers for Reels item ${item.id}`);
             }
 
-            const renderPayload = {
-                template_uuid: activeTemplateId,
-                layers,
-            };
+            // 3. Choice of API Endpoint
+            const apiEndpoint = isReels 
+                ? "https://api.placid.app/api/rest/videos" 
+                : "https://api.placid.app/api/rest/images";
 
-            // Call Placid REST API
-            const renderRes = await fetch("https://api.placid.app/api/rest/images", {
+            const renderRes = await fetch(apiEndpoint, {
                 method: "POST",
-                headers: {
-                    "Authorization": `Bearer ${renderApiKey}`,
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(renderPayload),
+                headers: { "Authorization": `Bearer ${renderApiKey}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ template_uuid: activeTemplateId, layers }),
             });
+            
+            if (!renderRes.ok) throw new Error(`Placid API error: ${renderRes.status}`);
+            const { polling_url } = await renderRes.json();
 
-            if (renderRes.ok) {
-                const data = await renderRes.json();
-                let finalUrl = data.image_url;
-                const pollingUrl = data.polling_url;
-
-                // Polling Loop for Async Rendering (Hardened)
-                if (!finalUrl && pollingUrl) {
-                    console.log(`[ap-render-engine] Polling iniciado: ${pollingUrl}`);
-                    for (let attempt = 1; attempt <= 15; attempt++) {
-                        console.log("[AUDIT][RENDER_ATTEMPT]", {
-                            news_id: item.id,
-                            attempt
-                        });
-                        
-                        // Passo 2: Delay fixo
-                        await new Promise(r => setTimeout(r, 3000));
-                        
-                        const pollRes = await fetch(pollingUrl, {
-                            headers: { "Authorization": `Bearer ${renderApiKey}` }
-                        });
-                        
-                        if (pollRes.ok) {
-                            const pollData = await pollRes.json();
-                            if (pollData.status === "finished" && pollData.image_url) {
-                                finalUrl = pollData.image_url;
-                                console.log(`[ap-render-engine] Polling sucesso (tentativa ${attempt}): ${finalUrl}`);
-                                break;
-                            }
-                        }
-                    }
+            // 4. Polling for Completion
+            let mediaUrl = null;
+            const maxPolls = isReels ? 30 : 15; // Videos take longer
+            for (let i = 0; i < maxPolls; i++) {
+                await new Promise(r => setTimeout(r, 2000));
+                const pollRes = await fetch(polling_url, { headers: { "Authorization": `Bearer ${renderApiKey}` } });
+                const pollData = await pollRes.json();
+                
+                if (pollData.status === "success") {
+                    mediaUrl = isReels ? pollData.video_url : pollData.image_url;
+                    if (mediaUrl) break;
+                } else if (pollData.status === "failed") {
+                    throw new Error(`Placid Render Failed: ${pollData.error_message || "Unknown error"}`);
                 }
-
-                if (finalUrl) {
-                    try {
-                        console.log(`[ap-render-engine] Internalizando render final a partir de: ${finalUrl}`);
-                        const renderDlRes = await fetch(finalUrl);
-                        if (!renderDlRes.ok) throw new Error("HTTP Status " + renderDlRes.status);
-
-                        const contentType = renderDlRes.headers.get("content-type") || "image/jpeg";
-                        // Save in structure ap-renders/{empresa_id}/{item_id}.jpg
-                        const empresaId = item.cliente_id;
-                        const ext = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
-                        const internalPath = `${empresaId}/${item.id}.${ext}`;
-
-                        const arrayBuffer = await renderDlRes.arrayBuffer();
-                        const buffer = new Uint8Array(arrayBuffer);
-
-                        const { error: uploadError } = await supabase.storage
-                            .from("ap-renders")
-                            .upload(internalPath, buffer, { contentType, upsert: true });
-
-                        if (uploadError) throw new Error("Supabase Storage Upload falhou: " + uploadError.message);
-
-                        const publicRenderUrl = `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/public/ap-renders/${internalPath}`;
-
-                        const { error: finalUpdateErr } = await supabase.schema("ap").from("candidate_news").update({
-                            imagem_url: publicRenderUrl,
-                            render_url: publicRenderUrl,
-                            rendered_at: new Date().toISOString(),
-                            status: "ready_to_publish",
-                            processing_started_at: null,
-                            completed_at: new Date().toISOString()
-                        }).eq("id", item.id);
-                        
-                        if (finalUpdateErr) throw new Error("Database update falhou após internalização: " + finalUpdateErr.message);
-
-                        results.push({ id: item.id, status: "success", url: publicRenderUrl });
-                    } catch (dlErr: any) {
-                        console.error(`[ap-render-engine] Falha ao internalizar imagem de ${item.id}:`, dlErr);
-                        const { error: catchUpdateErr } = await supabase.schema("ap").from("candidate_news").update({
-                            status: "failed",
-                            error_log: String(dlErr.message).substring(0, 500),
-                            processing_started_at: null
-                        }).eq("id", item.id);
-                        
-                        if (catchUpdateErr) {
-                            console.error(`[ap-render-engine] Falha crítica de BD ao atualizar status para failed: ${catchUpdateErr.message}`);
-                        }
-
-                        results.push({ id: item.id, status: "error", error: dlErr.message });
-                    }
-                } else {
-                    // Sem URL após 15 tentativas = Timeout definitivo.
-                    const finalStatus = "failed";
-                    const timeoutErrMessage = "Render timeout: Polling excedido após 15 tentativas.";
-                    
-                    const { error: timeoutUpdateErr } = await supabase.schema("ap").from("candidate_news").update({
-                        status: finalStatus,
-                        error_log: timeoutErrMessage,
-                        processing_started_at: null
-                    }).eq("id", item.id);
-
-                    if (timeoutUpdateErr) {
-                        console.error(`[ap-render-engine] Falha de BD ao atualizar timeout: ${timeoutUpdateErr.message}`);
-                        throw new Error("Update timeout failed: " + timeoutUpdateErr.message);
-                    }
-
-                    results.push({ id: item.id, status: finalStatus, message: timeoutErrMessage });
-                }
-            } else {
-                const errText = await renderRes.text();
-                throw new Error(`Placid REST Error ${renderRes.status}: ${errText}`);
             }
+            if (!mediaUrl) throw new Error("Render timeout.");
+
+            // 5. Internalize to Storage
+            const dlRes = await fetch(mediaUrl);
+            const contentType = dlRes.headers.get("content-type") || (isReels ? "video/mp4" : "image/jpeg");
+            const extension = isReels ? "mp4" : (contentType.includes("png") ? "png" : "jpg");
+            const storagePath = `${item.cliente_id}/${item.id}.${extension}`;
+            
+            await supabase.storage.from("ap-renders").upload(storagePath, new Uint8Array(await dlRes.arrayBuffer()), { 
+                contentType, 
+                upsert: true 
+            });
+            const publicRenderUrl = `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/public/ap-renders/${storagePath}`;
+
+            // 6. Release (CAS Guard)
+            const { data: relData } = await supabase
+                .schema("ap").from("candidate_news")
+                .update({
+                    render_url: publicRenderUrl,
+                    render_completed_at: new Date().toISOString(),
+                    render_started_at: null,
+                    status: "pending_review",
+                    worker_id: null
+                })
+                .eq("id", item.id)
+                .eq("render_started_at", lockTime)
+                .select("id");
+
+            if (!relData?.length) throw new Error("Release FAILED (Lost Update Lock)");
+
+            const cost = isReels ? 0.10 : 0.05;
+            await telemetry.logSuccess(cost, { template_id: activeTemplateId, content_type: item.content_type });
+            results.push({ id: item.id, status: "success", url: publicRenderUrl });
+
         } catch (err: any) {
-            console.error(`[ap-render-engine] Erro capturado para o item ${item.id}:`, err.message);
+            console.error(`[Render-Error] Item ${item.id}: ${err.message}`);
+            await supabase.schema("ap").from("candidate_news")
+                .update({ 
+                    render_started_at: null, 
+                    error_log: err.message.substring(0, 500) 
+                })
+                .eq("id", item.id)
+                .eq("render_started_at", lockTime);
             
-            const finalStatus = "failed";
-            
-            results.push({ id: item.id, status: finalStatus, error: err.message });
-            
-            const { error: genericUpdateErr } = await supabase.schema("ap").from("candidate_news").update({
-                status: finalStatus,
-                error_log: String(err.message).substring(0, 500),
-                processing_started_at: null
-            }).eq("id", item.id);
-
-            if (genericUpdateErr) {
-                console.error(`[ap-render-engine] CATASTRÓFICO: BD falhou ao registrar fallback de erro para ${item.id}:`, genericUpdateErr.message);
-            }
+            await telemetry.logError(err.message, 0);
+            results.push({ id: item.id, status: "error", error: err.message });
         }
-    });
+    }
 
-    await Promise.allSettled(promises);
-
-    return new Response(JSON.stringify({ ok: true, processed: items?.length ?? 0, results }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(JSON.stringify({ ok: true, results }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 });

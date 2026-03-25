@@ -1,115 +1,47 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// AutoPublisher — Render Recovery Worker (Cron job)
-// Identifica matérias travadas em 'pending_render' e força nova tentativa.
+// AutoPublisher — Render Recovery Worker (With Telemetry)
+// Refactored: 2026-03-25 — SRE Observability Implementation.
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
+import { Telemetry } from "../_shared/telemetry.ts";
 
-const corsHeaders = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-    "Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE",
-};
+const LOCK_EXPIRY_MINUTES = 15;
 
-Deno.serve(async (req: Request) => {
-    if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-
+Deno.serve(async (_req: Request) => {
     const supabase = createClient(
         Deno.env.get("SUPABASE_URL")!,
         Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
         { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
+    const workerId = crypto.randomUUID();
+    const telemetry = new Telemetry(supabase);
+    await telemetry.logStart({ worker_name: "ap-render-recovery", worker_id: workerId });
+
     try {
-        const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+        const expiryCutoff = new Date(Date.now() - LOCK_EXPIRY_MINUTES * 60 * 1000).toISOString();
+        const { data: stuckItems } = await supabase.schema("ap").from("candidate_news")
+            .select("id, render_attempts, render_started_at")
+            .eq("status", "pending_render").is("render_url", null).lt("render_started_at", expiryCutoff).limit(10);
 
-        console.log(`[ap-render-recovery] Buscando matérias travadas antes de: ${fifteenMinutesAgo}`);
+        if (!stuckItems?.length) { await telemetry.logSuccess(0, { recovered: 0 }); return new Response(JSON.stringify({ ok: true })); }
 
-        // Busca itens travados (APENAS status='rendering' com processamento estagnado)
-        const { data: stuckItems, error: fetchErr } = await supabase
-            .schema("ap")
-            .from("candidate_news")
-            .select("id, retry_count")
-            .eq("status", "rendering")
-            .lt("processing_started_at", fifteenMinutesAgo);
-
-        if (fetchErr) throw fetchErr;
-
-        if (!stuckItems || stuckItems.length === 0) {
-            return new Response(JSON.stringify({ ok: true, message: "No stuck items found" }), {
-                headers: { ...corsHeaders, "Content-Type": "application/json" }
-            });
-        }
-
-        console.log(`[ap-render-recovery] Encontrados ${stuckItems.length} itens travados. Iniciando recuperação...`);
-
-        const results = [];
-
+        let recoveredCount = 0;
         for (const item of stuckItems) {
-            console.log(`[ap-render-recovery] Recuperando item: ${item.id} (Tentativa ${item.retry_count + 1})`);
-
-            const newRetryCount = (item.retry_count || 0) + 1;
-            const finalStatus = newRetryCount >= 3 ? "failed_render" : "pending_render";
-
-            // 1. Atualizar status e resetar worker
-            const { error: updErr } = await supabase
-                .schema("ap")
-                .from("candidate_news")
-                .update({
-                    status: finalStatus,
-                    worker_id: null,
-                    retry_count: newRetryCount,
-                    processing_started_at: null,
-                    updated_at: new Date().toISOString()
-                })
-                .eq("id", item.id);
-
-            if (updErr) {
-                console.error(`[ap-render-recovery] Erro ao atualizar item ${item.id}:`, updErr);
-                results.push({ id: item.id, status: "error", error: updErr.message });
-                continue;
-            }
-
-            // 2. Disparar o render_one no ap-render-engine apenas se não falhou permanentemente
-            if (finalStatus === "pending_render") {
-                try {
-                    const renderRes = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ap-render-engine`, {
-                        method: "POST",
-                        headers: {
-                            "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-                            "Content-Type": "application/json"
-                        },
-                        body: JSON.stringify({ action: "render_one", newsId: item.id })
-                    });
-    
-                    if (renderRes.ok) {
-                        console.log(`[ap-render-recovery] Trigger render_one executado para: ${item.id}`);
-                        results.push({ id: item.id, status: "recovered" });
-                    } else {
-                        const errText = await renderRes.text();
-                        console.error(`[ap-render-recovery] Falha ao disparar render_one para ${item.id}: ${errText}`);
-                        results.push({ id: item.id, status: "trigger_failed", error: errText });
-                    }
-                } catch (triggerErr: any) {
-                    console.error(`[ap-render-recovery] Exception no trigger para ${item.id}:`, triggerErr);
-                    results.push({ id: item.id, status: "trigger_exception", error: triggerErr.message });
-                }
-            } else {
-                console.log(`[ap-render-recovery] Item ${item.id} marcado como failed_render (excedeu tentativas).`);
-                results.push({ id: item.id, status: "failed_permanently" });
-            }
+            const nextAttempts = (item.render_attempts ?? 0) + 1;
+            const finalStatus = nextAttempts > 3 ? "failed" : "pending_render";
+            const { data } = await supabase.schema("ap").from("candidate_news")
+                .update({ status: finalStatus, render_started_at: null, render_attempts: nextAttempts, updated_at: new Date().toISOString() })
+                .eq("id", item.id).eq("render_started_at", item.render_started_at).select("id");
+            if (data?.length) recoveredCount++;
         }
 
-        return new Response(JSON.stringify({ ok: true, processed: stuckItems.length, results }), {
-            headers: { ...corsHeaders, "Content-Type": "application/json" }
-        });
-
+        await telemetry.logSuccess(0, { recovered: recoveredCount });
+        return new Response(JSON.stringify({ ok: true, recovered: recoveredCount }));
     } catch (err: any) {
-        console.error("[ap-render-recovery] Fatal error:", err);
-        return new Response(JSON.stringify({ error: err.message }), {
-            status: 500,
-            headers: { ...corsHeaders, "Content-Type": "application/json" }
-        });
+        await telemetry.logError(err.message);
+        return new Response(JSON.stringify({ error: err.message }), { status: 500 });
     }
 });

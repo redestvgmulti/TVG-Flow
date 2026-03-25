@@ -1,10 +1,12 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // AutoPublisher — Employee Generator Worker (Hybrid Editorial Engine)
-// Fluxo: Cria matéria manual -> IA (opcional) -> Status 'selected' (Pendentes)
+// Responsabilidade: Criar registro + LLM → pending_render
+// NÃO gera arte final. NÃO faz upload de imagem renderizada.
+// Apenas salva a URL externa de background. ap-render-engine gera a arte.
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
 import { runEditorialWorkflow } from "../_shared/editorialWorkflow.ts";
 
 const corsHeaders = {
@@ -289,15 +291,15 @@ Deno.serve(async (req: Request) => {
         const newsId = newsItem.id;
         console.log(`[AUDIT] [ap-employee-generator] Registro criado! ID: ${newsId}`);
 
-        // 3. Backend Scraping Fallback & Internalization
+        // 3. Background Image — Scraping Fallback Only
+        // ARCHITECTURE CONTRACT: ap-employee-generator does NOT upload or internalize images.
+        // It only saves the raw external URL. ap-image-fetcher handles internalization for
+        // auto-ingested items. ap-render-engine is the sole producer of the final rendered art.
         let finalImage = imagem_url;
-        let storagePath = null;
-        let imageExternal = false;
-        const BUCKET = "ap-images";
 
-        // a) Scraping Fallback (if no image)
+        // Scraping fallback: if no image was provided but a source URL exists, try to extract OG image
         if (!finalImage && url_original) {
-            console.log(`[AUDIT] [ap-employee-generator] Scraping fallback for: ${url_original}`);
+            console.log(`[AUDIT] [ap-employee-generator] Scraping OG image fallback for: ${url_original}`);
             try {
                 const scrapeRes = await fetchWithTimeout(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ap-link-scraper`, {
                     method: "POST",
@@ -312,66 +314,22 @@ Deno.serve(async (req: Request) => {
                     const scrapeData = await scrapeRes.json();
                     if (scrapeData.image_url) finalImage = scrapeData.image_url;
                 }
-            } catch (e: any) { console.warn("[AUDIT] Scraping falhou:", e.message); }
+            } catch (e: any) { console.warn("[AUDIT] OG image scraping failed:", e.message); }
         }
 
-        // b) Internalization (Production Grade)
-        if (finalImage) {
-            try {
-                const baseHeaders = {
-                    "User-Agent": "Mozilla/5.0",
-                    "Referer": "https://g1.globo.com",
-                    "Accept": "image/avif,image/webp,*/*;q=0.8"
-                };
-                const urlsToTry = [finalImage];
-                if (finalImage.includes(".glbimg.com")) {
-                    const urlParts = finalImage.split("https://");
-                    if (urlParts.length > 2) {
-                        const directUrl = "https://" + urlParts[urlParts.length - 1];
-                        if (directUrl.includes(".glbimg.com")) {
-                            urlsToTry.push(directUrl);
-                        }
-                    } else {
-                        const httpParts = finalImage.split("http://");
-                        if (httpParts.length > 2) {
-                            const directUrl = "http://" + httpParts[httpParts.length - 1];
-                            if (directUrl.includes(".glbimg.com")) {
-                                urlsToTry.push(directUrl);
-                            }
-                        }
-                    }
-                }
-
-                let imgRes: Response | null = null;
-                for (const url of urlsToTry) {
-                    try {
-                        imgRes = await fetch(url, { headers: baseHeaders });
-                        if (imgRes.ok) break;
-                    } catch (e) { console.warn(`[AUDIT] Fetch fail: ${url}`); }
-                }
-
-                if (imgRes && imgRes.ok) {
-                    const contentType = imgRes.headers.get("content-type") || "image/jpeg";
-                    const buffer = new Uint8Array(await imgRes.arrayBuffer());
-
-                    if (buffer.length < 10 * 1024 * 1024) {
-                        const hex = Array.from(buffer.slice(0, 4)).map(b => b.toString(16).padStart(2, '0')).join('');
-                        if (!hex.startsWith('3c')) { // Not HTML
-                            let ext = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
-                            storagePath = `${newsId}.${ext}`;
-                            const { error: upErr } = await supabase.storage.from(BUCKET).upload(storagePath, buffer, { contentType, upsert: true });
-                            if (upErr) storagePath = null;
-                        }
-                    }
-                }
-            } catch (e) { console.error("[AUDIT] Internalization failed", e); }
-        }
-
-        imageExternal = (storagePath === null && finalImage !== null);
-        // Atualiza imagem_url e storage antes de ir pra IA
+        // Persist the external image URL (background only — render engine will use this)
         await supabase.schema("ap").from("candidate_news")
-            .update({ imagem_url: finalImage, imagem_storage: storagePath, image_external: imageExternal })
+            .update({
+                imagem_url: finalImage,
+                imagem_storage: null,           // Storage internalization handled by ap-image-fetcher
+                image_external: !!finalImage,
+            })
             .eq("id", newsId);
+
+        console.log(`[AUDIT] [ap-employee-generator] Background image URL saved for ${newsId}: ${finalImage ?? "(none)"}`);
+        if (!finalImage) {
+            console.warn(`[AUDIT] [ap-employee-generator] No image source for ${newsId}. Render engine will reject feed posts.`);
+        }
 
         const failProcess = async (msg: string) => {
             console.error(`[AUDIT] [ap-employee-generator] Falha: ${msg}`);

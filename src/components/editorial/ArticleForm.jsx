@@ -18,10 +18,15 @@ export default function ArticleForm({
     return (
         <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px', width: '100%' }}>
             {/* Formato */}
-            <div style={{ display: 'flex', gap: '12px', background: '#f1f5f9', padding: '6px', borderRadius: '16px' }}>
-                {[['feed', 'Estático (Feed)', <ImageIcon size={18} key="feed" />], ['reels', 'Vídeo (Reels)', <Video size={18} key="reels" />]].map(([val, lbl, icon]) => (
+            <div style={{ display: 'flex', gap: '8px', background: '#f1f5f9', padding: '6px', borderRadius: '16px', flexWrap: 'wrap' }}>
+                {[
+                    ['feed', 'Estático', <ImageIcon size={18} key="feed" />],
+                    ['reels', 'Reels', <Video size={18} key="reels" />],
+                    ['carousel', 'Carrossel', <Brain size={18} key="carousel" />],
+                    ['sponsored', 'Patrocinado', <Zap size={18} key="sponsored" />]
+                ].map(([val, lbl, icon]) => (
                     <button key={val} type="button" onClick={() => setFormData({ ...formData, content_type: val })}
-                        style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', background: formData.content_type === val ? '#fff' : 'transparent', color: formData.content_type === val ? '#0f172a' : '#64748b', fontWeight: 600, fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: formData.content_type === val ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', cursor: 'pointer', transition: 'all 0.2s' }}>
+                        style={{ flex: '1 1 120px', padding: '10px 8px', borderRadius: '12px', border: 'none', background: formData.content_type === val ? '#fff' : 'transparent', color: formData.content_type === val ? '#0f172a' : '#64748b', fontWeight: 600, fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', boxShadow: formData.content_type === val ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', cursor: 'pointer', transition: 'all 0.2s' }}>
                         {icon} <span style={{ whiteSpace: 'nowrap' }}>{lbl}</span>
                     </button>
                 ))}

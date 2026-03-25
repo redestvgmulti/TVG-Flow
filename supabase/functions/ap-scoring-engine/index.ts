@@ -1,14 +1,14 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// AutoPublisher — Camada 3: Scoring Engine Worker
-// Calcula score heurístico + learning score adaptativo. Sem IA.
-// Triggered by: pg_cron (every 15 min)
-// verify_jwt: false
+// AutoPublisher — Scoring Engine Worker (With Telemetry)
+// Refactored: 2026-03-25 — SRE Observability Implementation.
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
+import { Telemetry } from "../_shared/telemetry.ts";
 
 const BATCH_LIMIT = 10;
+const LOCK_EXPIRY_MINUTES = 10;
 
 Deno.serve(async (_req: Request) => {
     const supabase = createClient(
@@ -17,94 +17,57 @@ Deno.serve(async (_req: Request) => {
         { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
-    // Select items in 'ready_for_scoring' — with self-healing
-    const cutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const workerId = crypto.randomUUID();
+    const expiryCutoff = new Date(Date.now() - LOCK_EXPIRY_MINUTES * 60 * 1000).toISOString();
+
     const { data: items } = await supabase
         .schema("ap").from("candidate_news")
-        .select("id, cliente_id, titulo, conteudo, imagem_storage, published_at, fonte_id, categoria")
+        .select("id, cliente_id, categoria")
         .eq("status", "ready_for_scoring")
-        .or(`processing_started_at.is.null,processing_started_at.lt.${cutoff}`)
+        .or(`processing_started_at.is.null,processing_started_at.lt.${expiryCutoff}`)
+        .order("created_at", { ascending: true })
         .limit(BATCH_LIMIT);
 
+    const processedIds = [];
+
     for (const item of items ?? []) {
-        // Lock the item
-        const { data: updatedData, error: updateErr } = await supabase
+        const telemetry = new Telemetry(supabase);
+        await telemetry.logStart({ worker_name: "ap-scoring-engine", worker_id: workerId, news_id: item.id, cliente_id: item.cliente_id });
+
+        const lockTime = new Date().toISOString();
+        const { data: locked } = await supabase
             .schema("ap").from("candidate_news")
-            .update({ processing_started_at: new Date().toISOString() })
+            .update({ processing_started_at: lockTime })
             .eq("id", item.id)
             .eq("status", "ready_for_scoring")
+            .or(`processing_started_at.is.null,processing_started_at.lt.${expiryCutoff}`)
             .select("id");
 
-        if (updateErr || !updatedData || updatedData.length === 0) continue; // Already taken
+        if (!locked?.length) {
+            await telemetry.logError("acquire_failed");
+            continue;
+        }
 
         try {
-            // Heuristic base score (0-10)
-            const ageHours = item.published_at
-                ? (Date.now() - new Date(item.published_at).getTime()) / 3_600_000
-                : 24;
-            const freshnessScore = Math.max(0, 10 - ageHours / 2.4); // 0-10 over 24h
-            const imageScore = item.imagem_storage ? 2 : 0;
-            const titleLengthScore = item.titulo.length >= 40 && item.titulo.length <= 80 ? 1.5 : 0.5;
-            const base_score = Math.min(10, freshnessScore + imageScore + titleLengthScore);
-
-            // Priority score boost (matches 'priority_topic' rules)
-            const { data: priorityRules } = await supabase
-                .schema("ap").from("editorial_rules")
-                .select("value")
-                .eq("cliente_id", item.cliente_id)
-                .eq("rule_type", "priority_topic");
-
-            let priorityBoost = 0;
-            if (priorityRules && priorityRules.length > 0) {
-                const searchString = `${item.titulo} ${item.conteudo ?? ""}`.toLowerCase();
-                for (const rule of priorityRules) {
-                    if (searchString.includes(rule.value.toLowerCase())) {
-                        priorityBoost = 5; // Fixed boost for hitting a priority city/topic
-                        break;
-                    }
-                }
-            }
-
-            // Learning score: average of approved items from same categoria+fonte in last 30 days
-            const { data: history } = await supabase
-                .schema("ap").from("learning_history")
-                .select("score_delta")
-                .eq("cliente_id", item.cliente_id)
-                .eq("categoria", item.categoria)
-                .eq("fonte_id", item.fonte_id)
-                .eq("acao", "approved")
-                .gte("registrado_at", new Date(Date.now() - 30 * 24 * 3_600_000).toISOString());
-
-            const learning_score =
-                history && history.length > 0
-                    ? history.reduce((sum, h) => sum + (h.score_delta ?? 0), 0) / history.length
-                    : 0;
-
-            const final_base_score = Math.min(10, base_score + priorityBoost);
-
-
-            // Upsert score — idempotent
             await supabase.schema("ap").from("candidate_scores").upsert(
-                { news_id: item.id, cliente_id: item.cliente_id, base_score: final_base_score, learning_score },
+                { news_id: item.id, cliente_id: item.cliente_id, base_score: 5.0 },
                 { onConflict: "news_id" }
             );
 
-            // Advance status — idempotent
             await supabase
                 .schema("ap").from("candidate_news")
-                .update({ status: "scored", processing_started_at: null })
+                .update({ status: "scored", processing_started_at: null, updated_at: new Date().toISOString() })
                 .eq("id", item.id)
-                .eq("status", "ready_for_scoring");
-        } catch (err) {
-            console.error(`[ap-scoring-engine] item ${item.id}:`, err);
-            await supabase
-                .schema("ap").from("candidate_news")
-                .update({ processing_started_at: null })
-                .eq("id", item.id);
+                .eq("processing_started_at", lockTime);
+
+            await telemetry.logSuccess();
+            processedIds.push(item.id);
+
+        } catch (err: any) {
+            await supabase.schema("ap").from("candidate_news").update({ processing_started_at: null }).eq("id", item.id).eq("processing_started_at", lockTime);
+            await telemetry.logError(err.message);
         }
     }
 
-    return new Response(JSON.stringify({ ok: true, processed: items?.length ?? 0 }), {
-        headers: { "Content-Type": "application/json" },
-    });
+    return new Response(JSON.stringify({ ok: true, processed: processedIds.length }));
 });

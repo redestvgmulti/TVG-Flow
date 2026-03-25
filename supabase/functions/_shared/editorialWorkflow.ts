@@ -3,7 +3,7 @@
 // Centralizes LLM logic, prompt building, and human-input merging.
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { buildEditorialPrompt, getEditorialContext, buildStudioPrompt } from "./editorialPromptBuilder.ts";
 import { callLLM, logAIUsage, selectModel } from "./llmClient.ts";
 
