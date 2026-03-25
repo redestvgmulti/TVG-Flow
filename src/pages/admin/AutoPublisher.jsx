@@ -494,7 +494,7 @@ export default function AutoPublisher() {
         if (finalAuthUserId === 'null') finalAuthUserId = null
 
         const payload = {
-            empresa_id: clienteId,
+            cliente_id: clienteId,
             auth_user_id: finalAuthUserId,
             url_original: formData.url_original || null,
             titulo: formData.titulo || scrapedTitle || 'Pauta OMNI',

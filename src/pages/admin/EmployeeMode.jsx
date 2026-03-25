@@ -263,7 +263,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
             if (finalAuthUserId === 'null') finalAuthUserId = null;
 
             const payload = {
-                empresa_id: currentClienteId,
+                cliente_id: currentClienteId,
                 auth_user_id: finalAuthUserId,
                 url_original: url_original || null,
                 titulo: titulo || scrapedTitle || 'Pauta OMNI',
