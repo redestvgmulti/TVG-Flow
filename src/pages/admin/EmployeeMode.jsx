@@ -23,7 +23,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
     });
 
     const [availableTemplates, setAvailableTemplates] = useState([]);
-
+    const [availableCampaigns, setAvailableCampaigns] = useState(null); // null = not yet loaded
 
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [successData, setSuccessData] = useState(null);
@@ -50,6 +50,33 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
             });
         }
     }, [isOpen, professionalId, empresaId, clienteId]);
+
+    // ── Load campaigns (template_sets) every time the modal opens
+    useEffect(() => {
+        if (!isOpen) {
+            setAvailableCampaigns(null); // reset so next open re-fetches
+            return;
+        }
+        async function loadCampaigns() {
+            try {
+                const { data, error } = await supabase.functions.invoke('ap-config', {
+                    method: 'POST',
+                    body: { resource: 'template_sets', action: 'list' }
+                });
+                if (error || !data || data.has_error) {
+                    console.error('[EmployeeMode] Failed to load campaigns:', error || data?.error);
+                    setAvailableCampaigns([]); // fall through to empty state
+                    return;
+                }
+                // Exclude 'default' — it is always rendered as the first option in ArticleForm
+                setAvailableCampaigns(data.filter(c => c.slug !== 'default'));
+            } catch (err) {
+                console.error('[EmployeeMode] Campaign fetch error:', err);
+                setAvailableCampaigns([]);
+            }
+        }
+        loadCampaigns();
+    }, [isOpen]);
 
     // ── Load available templates for any non-default campaign (Unified with AutoPublisher)
     useEffect(() => {
@@ -597,6 +624,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                 onSubmit={handleGenerate}
                                 isSubmitting={isSubmitting || isUploading}
                                 availableTemplates={availableTemplates}
+                                availableCampaigns={availableCampaigns}
                                 selectedFile={selectedFile}
                                 setSelectedFile={setSelectedFile}
                             />

@@ -1,6 +1,16 @@
 import React, { useState } from 'react';
 import { ImageIcon, Video, UploadCloud, CheckCircle2, Brain, Zap } from 'lucide-react';
 
+// Static fallback used only when parent hasn't loaded campaigns from DB yet.
+// Ensures backward compatibility if a parent doesn't pass availableCampaigns.
+const FALLBACK_CAMPAIGNS = [
+    { slug: 'individuais', label: 'Individuais' },
+    { slug: 'natal',       label: 'Natal' },
+    { slug: 'ano_novo',    label: 'Ano Novo' },
+    { slug: 'dia_das_mulheres', label: 'Dia das Mulheres' },
+    { slug: 'dia_dos_pais',    label: 'Dia dos Pais' },
+];
+
 export default function ArticleForm({
     mode = 'admin',
     formData,
@@ -10,9 +20,15 @@ export default function ArticleForm({
     isSubmitting,
     onCancel,
     availableTemplates = [],
+    // null  → not yet loaded, use static fallback (backward compat)
+    // []    → loaded from DB, bank has no non-default campaigns
+    // [...]  → loaded from DB, render these
+    availableCampaigns = null,
     selectedFile,
     setSelectedFile
 }) {
+    // Resolve which campaigns to render in the dropdown
+    const campaignOptions = availableCampaigns !== null ? availableCampaigns : FALLBACK_CAMPAIGNS;
     const [isDragging, setIsDragging] = useState(false);
 
     return (
@@ -42,11 +58,9 @@ export default function ArticleForm({
                         style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '14px', outline: 'none', backgroundColor: '#fff', cursor: 'pointer' }}
                     >
                         <option value="default">Padrão</option>
-                        <option value="individuais">Individuais</option>
-                        <option value="natal">Natal</option>
-                        <option value="ano_novo">Ano Novo</option>
-                        <option value="dia_das_mulheres">Dia das Mulheres</option>
-                        <option value="dia_dos_pais">Dia dos Pais</option>
+                        {campaignOptions.map(c => (
+                            <option key={c.slug} value={c.slug}>{c.label}</option>
+                        ))}
                     </select>
                 </div>
                 {formData.template_set && formData.template_set !== 'default' && (

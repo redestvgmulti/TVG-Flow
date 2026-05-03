@@ -72,6 +72,7 @@ export default function AutoPublisher() {
         placid_template_uuid: null
     })
     const [availableTemplates, setAvailableTemplates] = useState([])
+    const [availableCampaigns, setAvailableCampaigns] = useState(null) // null = not yet loaded
     const [manualFormErrors, setManualFormErrors] = useState({})
     const [isSubmittingManual, setIsSubmittingManual] = useState(false)
     const [selectedFile, setSelectedFile] = useState(null)
@@ -205,6 +206,33 @@ export default function AutoPublisher() {
             setFormData(prev => ({ ...prev, placid_template_uuid: null }))
         }
     }, [formData.template_set, formData.content_type])
+
+    // ── Load campaigns (template_sets) every time the manual modal opens
+    useEffect(() => {
+        if (!isManualModalOpen) {
+            setAvailableCampaigns(null) // reset so next open re-fetches
+            return
+        }
+        async function loadCampaigns() {
+            try {
+                const { data, error } = await supabase.functions.invoke('ap-config', {
+                    method: 'POST',
+                    body: { resource: 'template_sets', action: 'list' }
+                })
+                if (error || !data || data.has_error) {
+                    console.error('[AutoPublisher] Failed to load campaigns:', error || data?.error)
+                    setAvailableCampaigns([])
+                    return
+                }
+                // Exclude 'default' — always rendered as the first option in ArticleForm
+                setAvailableCampaigns(data.filter(c => c.slug !== 'default'))
+            } catch (err) {
+                console.error('[AutoPublisher] Campaign fetch error:', err)
+                setAvailableCampaigns([])
+            }
+        }
+        loadCampaigns()
+    }, [isManualModalOpen])
 
     // ── Load on tab change + realtime
     useEffect(() => {
@@ -753,6 +781,7 @@ export default function AutoPublisher() {
                                 isSubmitting={isSubmittingManual}
                                 onCancel={() => { setManualModalOpen(false); setSelectedFile(null); }}
                                 availableTemplates={availableTemplates}
+                                availableCampaigns={availableCampaigns}
                                 selectedFile={selectedFile}
                                 setSelectedFile={setSelectedFile}
                             />
