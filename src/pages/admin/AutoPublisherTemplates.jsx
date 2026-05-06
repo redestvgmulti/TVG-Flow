@@ -286,7 +286,7 @@ export default function AutoPublisherTemplates() {
                                 style={{ flex: 1.5, minWidth: '150px' }}
                                 placeholder="Template UUID (Placid)"
                                 value={newTemplate.placid_template_uuid}
-                                onChange={e => setNewTemplate(p => ({ ...p, placid_template_uuid: e.target.value }))}
+                                onChange={e => setNewTemplate(p => ({ ...p, placid_template_uuid: e.target.value.trim() }))}
                             />
                             <button className="ap-btn-add" style={{ flex: 'none' }} onClick={addTemplate} disabled={saving || !newTemplate.nome || !newTemplate.placid_template_uuid}>
                                 <Icons.Plus size={14} /> Adicionar

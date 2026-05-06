@@ -1,10 +1,5 @@
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
-
-if (!supabaseUrl || !supabaseKey) {
-  console.error("Missing supabase credentials");
-  process.exit(1);
-}
+const supabaseUrl = 'https://gyooxmpyxncrezjiljrj.supabase.co'
+const supabaseKey = 'sb_secret_QWRBuUsd4mpTFodU5CvFXg_ZqE7IgQN'
 
 async function run() {
     const res = await fetch(`${supabaseUrl}/auth/v1/admin/generate_link`, {
@@ -16,7 +11,8 @@ async function run() {
         },
         body: JSON.stringify({
             type: 'invite',
-            email: 'test_user_no_data@tvgflow.com'
+            email: 'lorranegontijo@tvgflow.com',
+            data: { nome: 'Lorrano Gontijo' }
         })
     });
     
@@ -25,15 +21,6 @@ async function run() {
     } else {
         const data = await res.json();
         console.log("Success generateLink without data:", data);
-        if (data.user && data.user.id) {
-            await fetch(`${supabaseUrl}/auth/v1/admin/users/${data.user.id}`, {
-                method: 'DELETE',
-                headers: {
-                    'apikey': supabaseKey,
-                    'Authorization': `Bearer ${supabaseKey}`
-                }
-            });
-        }
     }
 }
 

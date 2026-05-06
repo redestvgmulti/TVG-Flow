@@ -1,16 +1,24 @@
-import { createClient } from '@supabase/supabase-js';
+const supabaseUrl = 'https://gyooxmpyxncrezjiljrj.supabase.co'
+const supabaseKey = 'sb_secret_QWRBuUsd4mpTFodU5CvFXg_ZqE7IgQN'
 
-const supabaseUrl = 'https://gyooxmpyxncrezjiljrj.supabase.co';
-const supabaseKey = 'sb_secret_QWRBuUsd4mpTFodU5CvFXg_ZqE7IgQN';
-const supabase = createClient(supabaseUrl, supabaseKey);
-
-async function run() {
-    const { data, error } = await supabase.rpc('exec_sql', {
-        query: `SELECT event_object_table, trigger_name, event_manipulation, action_statement
-                FROM information_schema.triggers
-                WHERE event_object_schema = 'ap' AND event_object_table = 'candidate_news';`
+async function check() {
+    const res = await fetch(`${supabaseUrl}/rest/v1/rpc/get_function_def`, {
+        method: 'POST',
+        headers: {
+            'apikey': supabaseKey,
+            'Authorization': `Bearer ${supabaseKey}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            function_name: 'on_auth_user_created'
+        })
     });
-    // If we don't have exec_sql, we'll just check candidate_news with a specific curl or assume it is not a trigger.
-    console.log(data || error);
+    
+    // Actually, RPC to get trigger is not a standard PostgREST function.
+    // Let's use postgres query via a custom endpoint if exists, 
+    // OR we can run `npm install -g pg` or use postgres CLI if available.
+    // Wait, the project doesn't have local postgres access.
+    // Let's check migrations folder!
 }
-run();
+
+check()

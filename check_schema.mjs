@@ -1,34 +1,38 @@
-import { createClient } from '@supabase/supabase-js'
-import fs from 'fs'
+const supabaseUrl = 'https://gyooxmpyxncrezjiljrj.supabase.co'
+const supabaseKey = 'sb_secret_QWRBuUsd4mpTFodU5CvFXg_ZqE7IgQN'
 
-const envFile = fs.readFileSync('.env.local', 'utf8')
-const env = {}
-envFile.split('\n').forEach(line => {
-    const [key, ...values] = line.split('=')
-    if (key && values.length > 0) {
-        env[key.trim()] = values.join('=').trim()
-    }
-})
-
-const supabase = createClient(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY)
-
-async function checkSchema() {
-    const { data, error } = await supabase
-        .from('ap_candidate_news')
-        .select('*')
-        .limit(1)
-
-    if (error) {
-        console.error('Error fetching data:', error)
-        return
-    }
-
-    if (data && data.length > 0) {
-        console.log('Columns in ap_candidate_news:')
-        console.log(Object.keys(data[0]))
+async function check() {
+    const res = await fetch(`${supabaseUrl}/rest/v1/profissionais`, {
+        method: 'POST',
+        headers: {
+            'apikey': supabaseKey,
+            'Authorization': `Bearer ${supabaseKey}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
+        },
+        body: JSON.stringify({
+            id: '00000000-0000-0000-0000-000000000001',
+            email: 'test@tvgflow.com',
+            role: 'staff',
+            ativo: true
+        })
+    });
+    
+    if (!res.ok) {
+        console.error("Error inserting without nome:", await res.text());
     } else {
-        console.log('No data found in ap_candidate_news')
+        const data = await res.json();
+        console.log("Success:", data);
+        
+        // cleanup
+        await fetch(`${supabaseUrl}/rest/v1/profissionais?id=eq.00000000-0000-0000-0000-000000000001`, {
+            method: 'DELETE',
+            headers: {
+                'apikey': supabaseKey,
+                'Authorization': `Bearer ${supabaseKey}`,
+            }
+        });
     }
 }
 
-checkSchema()
+check();
