@@ -40,7 +40,7 @@ serve(async (req) => {
             .eq('id', user.id)
             .single()
 
-        if (profileError || !requesterProfile || requesterProfile.role !== 'admin') {
+        if (profileError || !requesterProfile || !['admin', 'super_admin'].includes(requesterProfile.role)) {
             throw new Error('Unauthorized: Only admins can perform this action')
         }
 
@@ -96,7 +96,7 @@ serve(async (req) => {
             } else {
                 const { error: dbError } = await supabaseAdmin
                     .from('profissionais')
-                    .insert({
+                    .upsert({
                         id: userId,
                         nome: nome,
                         email: email,

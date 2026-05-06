@@ -57,7 +57,7 @@ serve(async (req) => {
             throw new Error('Usuário solicitante não encontrado')
         }
 
-        if (currentUser.role !== 'admin') {
+        if (!['admin', 'super_admin'].includes(currentUser.role)) {
             throw new Error('Apenas administradores podem atualizar profissionais')
         }
 

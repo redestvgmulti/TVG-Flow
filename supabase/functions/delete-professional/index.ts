@@ -54,7 +54,7 @@ serve(async (req) => {
             throw new Error('Usuário não encontrado')
         }
 
-        if (currentUser.role !== 'admin') {
+        if (!['admin', 'super_admin'].includes(currentUser.role)) {
             throw new Error('Apenas administradores podem excluir profissionais')
         }
 

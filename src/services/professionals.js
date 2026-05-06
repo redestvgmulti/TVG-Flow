@@ -52,8 +52,15 @@ export const professionalsService = {
             body: payload
         })
 
-        if (error) throw new Error(error.message || 'Erro de conexão com o servidor')
-        if (data?.error) throw new Error(data.error)
+        if (error) {
+            // Tenta extrair a mensagem do corpo se o supabase-js não fez
+            console.error('Edge Function Error Object:', error);
+            throw new Error(error.message || 'Erro de conexão com o servidor')
+        }
+
+        if (data?.success === false || data?.error) {
+            throw new Error(data.error || 'Erro desconhecido ao criar profissional')
+        }
 
         // Return the full data object which includes inviteLink
         return data
