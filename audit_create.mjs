@@ -1,16 +1,17 @@
 const supabaseUrl = 'https://gyooxmpyxncrezjiljrj.supabase.co'
-const supabaseKey = 'sb_secret_QWRBuUsd4mpTFodU5CvFXg_ZqE7IgQN'
+const serviceKey = 'sb_secret_QWRBuUsd4mpTFodU5CvFXg_ZqE7IgQN'
 
 async function check() {
     const res = await fetch(`${supabaseUrl}/functions/v1/create-professional`, {
         method: 'POST',
         headers: {
-            'Authorization': `Bearer ${supabaseKey}`,
+            'Authorization': `Bearer ${serviceKey}`,
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-            nome: "Lorrano Gontijo",
+            nome: "Lorrane Gontijo",
             email: "lorranegontijo@tvgflow.com",
+            role: "profissional",
             ativo: true
         })
     });
