@@ -7,7 +7,7 @@ const corsHeaders = {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-serve(async (req) => {
+serve(async (req: Request) => {
     // Handle CORS preflight
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
@@ -110,10 +110,11 @@ serve(async (req) => {
             }
 
         } catch (postCreateError) {
-            console.error('Rolling back user creation due to error:', postCreateError)
+            const err = postCreateError as Error
+            console.error('Rolling back user creation due to error:', err)
             // ROLLBACK: Delete the auth user if the DB insert failed
             await supabaseAdmin.auth.admin.deleteUser(userId)
-            throw postCreateError
+            throw err
         }
 
         return new Response(
@@ -130,9 +131,10 @@ serve(async (req) => {
         )
 
     } catch (error) {
-        console.error('Edge Function Error:', error)
+        const err = error as Error
+        console.error('Edge Function Error:', err)
         return new Response(
-            JSON.stringify({ error: error.message, success: false }),
+            JSON.stringify({ error: err.message, success: false }),
             {
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
                 status: 400
