@@ -13,6 +13,7 @@ import { SkeletonCard, SkeletonTable } from '../../components/Skeleton'
 import { toast } from 'sonner'
 import ArticleForm from '../../components/editorial/ArticleForm'
 import { resolveOperationalClienteId } from '../../services/visualTitleGroups'
+import { loadVisualTitleCatalog } from '../../services/visualTitleCatalog'
 
 // ──────────────────────────────────────────────────────────
 // Tab config
@@ -76,7 +77,9 @@ export default function AutoPublisher() {
     })
     const [availableTemplates, setAvailableTemplates] = useState([])
     const [availableCampaigns, setAvailableCampaigns] = useState(null) // null = not yet loaded
-    const [visualTitles, setVisualTitles] = useState([])
+    const [visualTitleGroups, setVisualTitleGroups] = useState([])
+    const [visualTitlesLoading, setVisualTitlesLoading] = useState(false)
+    const [visualTitlesError, setVisualTitlesError] = useState('')
     const [masterRuntime, setMasterRuntime] = useState({ configs: [], killSwitch: false })
     const [manualFormErrors, setManualFormErrors] = useState({})
     const [isSubmittingManual, setIsSubmittingManual] = useState(false)
@@ -223,13 +226,25 @@ export default function AutoPublisher() {
         visual_title_id: null }))
         }
     }, [formData.template_set, formData.content_type])
+    const loadAvailableVisualTitles = useCallback(async () => {
+        if (!clienteId) return
+        setVisualTitlesLoading(true)
+        setVisualTitlesError('')
+        try {
+            setVisualTitleGroups(await loadVisualTitleCatalog(supabase, clienteId))
+        } catch (error) {
+            console.error('[AutoPublisher] visual title catalog failed', error)
+            setVisualTitleGroups([])
+            setVisualTitlesError('N\u00e3o foi poss\u00edvel carregar os selos da mat\u00e9ria.')
+        } finally {
+            setVisualTitlesLoading(false)
+        }
+    }, [clienteId])
+
     useEffect(() => {
         if (!isManualModalOpen || !clienteId) return
-        supabase.schema('ap').from('visual_titles').select('id,nome,asset_bucket,asset_path,ordem,formatos').eq('cliente_id', clienteId).eq('ativo', true).contains('formatos', [formData.content_type]).order('ordem', { ascending: true }).then(({ data, error }) => {
-            if (error) { console.error('[AutoPublisher] visual title fetch failed', error); setVisualTitles([]); return }
-            setVisualTitles((data || []).map(title => ({ ...title, preview_url: supabase.storage.from(title.asset_bucket).getPublicUrl(title.asset_path).data.publicUrl })))
-        })
-    }, [isManualModalOpen, clienteId, formData.content_type])
+        loadAvailableVisualTitles()
+    }, [clienteId, isManualModalOpen, loadAvailableVisualTitles])
 
     // ── Load campaigns (template_sets) every time the manual modal opens
     useEffect(() => {
@@ -478,7 +493,7 @@ export default function AutoPublisher() {
         }
 
         if (sponsorRotationEnabled && !formData.visual_title_id) {
-            newErrors.visual_title_id = 'Selecione o selo da arte para usar a rotacao de patrocinadores.'
+            newErrors.visual_title_id = 'Selecione o selo da mat\u00e9ria para usar a rota\u00e7\u00e3o de patrocinadores.'
         }
 
         if (!sponsorRotationEnabled && formData.template_set === 'individuais' && !formData.placid_template_uuid) {
@@ -847,7 +862,10 @@ export default function AutoPublisher() {
                                 onCancel={() => { setManualModalOpen(false); setSelectedFile(null); }}
                                 availableTemplates={availableTemplates}
                                 availableCampaigns={availableCampaigns}
-                                visualTitles={visualTitles}
+                                visualTitleGroups={visualTitleGroups}
+                                visualTitlesLoading={visualTitlesLoading}
+                                visualTitlesError={visualTitlesError}
+                                onRetryVisualTitles={loadAvailableVisualTitles}
                                 sponsorRotationEnabled={sponsorRotationEnabled}
                                 selectedFile={selectedFile}
                                 setSelectedFile={setSelectedFile}

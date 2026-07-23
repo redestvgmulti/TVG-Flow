@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { ImageIcon, Video, UploadCloud, CheckCircle2 } from 'lucide-react';
+import VisualTitleCombobox from './VisualTitleCombobox';
+import { retainCompatibleVisualTitleId } from '../../services/visualTitleCatalog';
 
 // Static fallback used only when parent hasn't loaded campaigns from DB yet.
 // Ensures backward compatibility if a parent doesn't pass availableCampaigns.
@@ -24,7 +26,10 @@ export default function ArticleForm({
     // []    → loaded from DB, bank has no non-default campaigns
     // [...]  → loaded from DB, render these
     availableCampaigns = null,
-    visualTitles = [],
+    visualTitleGroups = [],
+    visualTitlesLoading = false,
+    visualTitlesError = '',
+    onRetryVisualTitles,
     sponsorRotationEnabled = false,
     selectedFile,
     setSelectedFile
@@ -32,6 +37,14 @@ export default function ArticleForm({
     // Resolve which campaigns to render in the dropdown
     const campaignOptions = availableCampaigns !== null ? availableCampaigns : FALLBACK_CAMPAIGNS;
     const [isDragging, setIsDragging] = useState(false);
+    const [visualTitleFormatNotice, setVisualTitleFormatNotice] = useState('');
+
+    function selectContentType(contentType) {
+        const retainedId = retainCompatibleVisualTitleId(visualTitleGroups, formData.visual_title_id, contentType);
+        const isCompatible = !formData.visual_title_id || retainedId === formData.visual_title_id;
+        setFormData({ ...formData, content_type: contentType, visual_title_id: retainedId });
+        setVisualTitleFormatNotice(isCompatible ? '' : 'O selo selecionado n\u00e3o est\u00e1 dispon\u00edvel para este formato.');
+    }
 
     return (
         <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px', width: '100%' }}>
@@ -41,7 +54,7 @@ export default function ArticleForm({
                     ['feed', 'Feed', <ImageIcon size={18} key="feed" />],
                     ['reels', 'Reels', <Video size={18} key="reels" />],
                 ].map(([val, lbl, icon]) => (
-                    <button key={val} type="button" onClick={() => setFormData({ ...formData, content_type: val })}
+                    <button key={val} type="button" onClick={() => selectContentType(val)}
                         style={{ flex: '1 1 120px', padding: '10px 8px', borderRadius: '12px', border: 'none', background: formData.content_type === val ? '#fff' : 'transparent', color: formData.content_type === val ? '#0f172a' : '#64748b', fontWeight: 600, fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', boxShadow: formData.content_type === val ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', cursor: 'pointer', transition: 'all 0.2s' }}>
                         {icon} <span style={{ whiteSpace: 'nowrap' }}>{lbl}</span>
                     </button>
@@ -92,16 +105,18 @@ export default function ArticleForm({
                 />
             </div>
 
-            {/* Título visual: asset independente de headline e editoria. */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
-                <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Título visual <span style={{ color: '#64748b', fontWeight: 400 }}>(opcional)</span></label>
-                <select value={formData.visual_title_id || ''} onChange={e => setFormData({ ...formData, visual_title_id: e.target.value || null })} style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', background: '#fff' }}>
-                    <option value="">Sem título visual</option>
-                    {visualTitles.map(title => <option key={title.id} value={title.id}>{title.nome}</option>)}
-                </select>
-                {typeof errors.visual_title_id === 'string' && <span style={{ color: '#ef4444', fontSize: '12px', fontWeight: 600 }}>{errors.visual_title_id}</span>}
-                {formData.visual_title_id && visualTitles.find(title => title.id === formData.visual_title_id)?.preview_url && <img src={visualTitles.find(title => title.id === formData.visual_title_id).preview_url} alt="Preview do título visual" style={{ maxHeight: 72, maxWidth: '100%', objectFit: 'contain', objectPosition: 'left', borderRadius: 8 }} />}
-            </div>
+            {/* Selo da mat\u00e9ria: o combobox preserva apenas visual_title_id. */}
+            <VisualTitleCombobox
+                groups={visualTitleGroups}
+                value={formData.visual_title_id || null}
+                contentType={formData.content_type}
+                loading={visualTitlesLoading}
+                error={visualTitlesError}
+                onRetry={onRetryVisualTitles}
+                fieldError={typeof errors.visual_title_id === 'string' ? errors.visual_title_id : ''}
+                onChange={visualTitleId => { setVisualTitleFormatNotice(''); setFormData({ ...formData, visual_title_id: visualTitleId }); }}
+            />
+            {visualTitleFormatNotice && <small role="status" style={{ color: '#92400e' }}>{visualTitleFormatNotice}</small>}
             {sponsorRotationEnabled && <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
                 <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Quantidade de patrocinadores</label>
                 <select value={String(formData.sponsor_count ?? 0)} onChange={event => setFormData({ ...formData, sponsor_count: Number(event.target.value) })} style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', background: '#fff' }}>
