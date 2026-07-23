@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
 import { getDashboardMetrics } from '../../services/dashboardMetrics'
-import { Edit2, Trash2, ClipboardList, AlertTriangle, X, ExternalLink, Folder, RefreshCw } from 'lucide-react'
+import { Edit2, Trash2, ClipboardList, AlertTriangle, X, ExternalLink, Folder, RefreshCw, Loader2, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import MacroTaskDetail from '../../components/MacroTaskDetail'
 import EditTaskModal from '../../components/EditTaskModal'
+import { SkeletonTable } from '../../components/Skeleton'
 import { useAuth } from '../../contexts/AuthContext'
 import '../../styles/adminTasks.css'
 
@@ -802,14 +803,13 @@ function Tasks() {
         // Normalize status to lowercase
         const normalized = status ? status.toLowerCase() : ''
 
-        if (COMPLETED_STATUSES.includes(normalized)) return 'badge-success'
-        if (IN_PROGRESS_STATUSES.includes(normalized)) return 'badge-primary'
-        if (normalized === 'overdue' || normalized === 'atrasada') return 'badge-danger'
-        // Use subtle badge for pending
-        if (PENDING_STATUSES.includes(normalized)) return 'badge-pending-subtle'
-        if (normalized === 'cancelada') return 'badge-neutral' // Add explicit canceled style if needed, reuse neutral for now
+        if (COMPLETED_STATUSES.includes(normalized)) return 'ap-chip tone-success'
+        if (IN_PROGRESS_STATUSES.includes(normalized)) return 'ap-chip tone-brand'
+        if (normalized === 'overdue' || normalized === 'atrasada') return 'ap-chip tone-danger'
+        if (PENDING_STATUSES.includes(normalized)) return 'ap-chip tone-warn'
+        if (normalized === 'cancelada') return 'ap-chip tone-neutral'
 
-        return 'badge-neutral'
+        return 'ap-chip tone-neutral'
     }
 
     function getStatusLabel(status) {
@@ -831,15 +831,15 @@ function Tasks() {
     function getPriorityBadgeClass(priority) {
         switch (priority) {
             case 'urgent':
-                return 'badge-urgent'
+                return 'ap-chip tone-danger no-dot'
             case 'high':
-                return 'badge-high'
-            case 'medium': // Keeping medium as warning/yellow-orange or distinctive
-                return 'badge-medium'
+                return 'ap-chip tone-warn no-dot'
+            case 'medium':
+                return 'ap-chip tone-brand no-dot'
             case 'low':
-                return 'badge-low'
+                return 'ap-chip tone-neutral no-dot'
             default:
-                return 'badge-neutral'
+                return 'ap-chip tone-neutral no-dot'
         }
     }
 
@@ -924,16 +924,11 @@ function Tasks() {
                 <div className="dashboard-header">
                     <h2>Gerenciamento de Tarefas</h2>
                 </div>
-                <div className="bg-red-50 border border-red-200 rounded-lg p-6 flex flex-col items-center justify-center gap-4">
-                    <AlertTriangle size={48} className="text-red-500" />
-                    <h3 className="text-lg font-semibold text-red-700">Erro ao carregar dados</h3>
-                    <p className="text-red-600 bg-white p-4 rounded border border-red-100 font-mono text-sm">
-                        {fetchError}
-                    </p>
-                    <button
-                        onClick={() => window.location.reload()}
-                        className="btn btn-primary"
-                    >
+                <div className="admin-tasks-error">
+                    <AlertTriangle size={48} className="admin-tasks-error-icon" />
+                    <h3 className="admin-tasks-error-title">Erro ao carregar dados</h3>
+                    <p className="admin-tasks-error-detail">{fetchError}</p>
+                    <button onClick={() => window.location.reload()} className="btn btn-primary">
                         Tentar Novamente
                     </button>
                 </div>
@@ -967,75 +962,79 @@ function Tasks() {
 
 
 
-            {/* Filters */}
-            <div className="tool-bar admin-tasks-section-spacing">
-                <div className="tool-bar-header">
-                    <span className="tool-bar-title">Filtros e Busca</span>
+            {/* Filters — barra única premium */}
+            <div className="admin-tasks-filterbar admin-tasks-section-spacing">
+                <div className="filterbar-search">
+                    <Search size={15} />
+                    <input
+                        id="search"
+                        type="text"
+                        aria-label="Buscar por título"
+                        placeholder="Buscar por título..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
                 </div>
 
-                <div className="tool-bar-filters">
-                    <div className="input-group admin-tasks-filter-group">
-                        <label htmlFor="search">Buscar</label>
-                        <input
-                            id="search"
-                            type="text"
-                            className="input"
-                            placeholder="Buscar por título..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
-                    </div>
+                <label className="filterbar-field">
+                    <span>Status</span>
+                    <select
+                        id="status"
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                    >
+                        <option value="all">Todos</option>
+                        <option value="pending">Pendente</option>
+                        <option value="in_progress">Em Progresso</option>
+                        <option value="completed">Concluída</option>
+                        <option value="overdue">Atrasada</option>
+                        <option value="cancelada">Canceladas</option>
+                    </select>
+                </label>
 
-                    <div className="input-group admin-tasks-filter-group">
-                        <label htmlFor="status">Status</label>
-                        <select
-                            id="status"
-                            className="input"
-                            value={statusFilter}
-                            onChange={(e) => setStatusFilter(e.target.value)}
-                        >
-                            <option value="all">Todos</option>
-                            <option value="pending">Pendente</option>
-                            <option value="in_progress">Em Progresso</option>
-                            <option value="completed">Concluída</option>
-                            <option value="overdue">Atrasada</option>
-                            <option value="cancelada">Canceladas</option>
-                        </select>
-                    </div>
+                <label className="filterbar-field">
+                    <span>Prioridade</span>
+                    <select
+                        id="priority"
+                        value={priorityFilter}
+                        onChange={(e) => setPriorityFilter(e.target.value)}
+                    >
+                        <option value="all">Todas</option>
+                        <option value="low">Baixa</option>
+                        <option value="medium">Média</option>
+                        <option value="high">Alta</option>
+                        <option value="urgent">Urgente</option>
+                    </select>
+                </label>
 
-                    <div className="input-group admin-tasks-filter-group">
-                        <label htmlFor="priority">Prioridade</label>
-                        <select
-                            id="priority"
-                            className="input"
-                            value={priorityFilter}
-                            onChange={(e) => setPriorityFilter(e.target.value)}
-                        >
-                            <option value="all">Todas</option>
-                            <option value="low">Baixa</option>
-                            <option value="medium">Média</option>
-                            <option value="high">Alta</option>
-                            <option value="urgent">Urgente</option>
-                        </select>
-                    </div>
+                <label className="filterbar-field">
+                    <span>Prazo</span>
+                    <select
+                        id="deadline"
+                        value={deadlineFilter}
+                        onChange={(e) => setDeadlineFilter(e.target.value)}
+                    >
+                        <option value="all">Todas</option>
+                        <option value="overdue">Atrasadas</option>
+                        <option value="today">Hoje</option>
+                        <option value="week">Esta Semana</option>
+                    </select>
+                </label>
 
-                    {/* Assigned To Filter Removed */}
-
-                    <div className="input-group admin-tasks-filter-group">
-                        <label htmlFor="deadline">Prazo</label>
-                        <select
-                            id="deadline"
-                            className="input"
-                            value={deadlineFilter}
-                            onChange={(e) => setDeadlineFilter(e.target.value)}
-                        >
-                            <option value="all">Todas</option>
-                            <option value="overdue">Atrasadas</option>
-                            <option value="today">Hoje</option>
-                            <option value="week">Esta Semana</option>
-                        </select>
-                    </div>
-                </div>
+                {(searchTerm || statusFilter !== 'pending' || priorityFilter !== 'all' || deadlineFilter !== 'all') && (
+                    <button
+                        type="button"
+                        className="filterbar-clear"
+                        onClick={() => {
+                            setSearchTerm('')
+                            setStatusFilter('pending')
+                            setPriorityFilter('all')
+                            setDeadlineFilter('all')
+                        }}
+                    >
+                        <X size={13} /> Limpar
+                    </button>
+                )}
             </div>
 
             {/* Table */}
@@ -1047,14 +1046,13 @@ function Tasks() {
                 </div>
 
                 {loading ? (
-                    <div className="p-12 flex flex-col justify-center items-center gap-4">
-                        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600"></div>
-                        <p className="text-slate-500 font-medium animate-pulse">Carregando tarefas...</p>
+                    <div style={{ padding: 16 }}>
+                        <SkeletonTable rows={6} cols={6} />
                     </div>
                 ) : tasks.length === 0 ? (
                     <div className="empty-state">
                         <span className="admin-tasks-empty-icon">
-                            <ClipboardList size={64} className="text-slate-300" strokeWidth={1} />
+                            <ClipboardList size={64} strokeWidth={1} style={{ color: 'var(--color-text-tertiary)' }} />
                         </span>
                         <p className="empty-text">
                             {searchTerm || statusFilter !== 'all' || priorityFilter !== 'all' || deadlineFilter !== 'all'
@@ -1064,7 +1062,7 @@ function Tasks() {
                     </div>
                 ) : (
                     <div className="table-container">
-                        <table className="table">
+                        <table className="ap-table">
                             <thead>
                                 <tr>
                                     <th className="admin-tasks-checkbox-cell">
@@ -1117,7 +1115,7 @@ function Tasks() {
                                             </td>
                                             <td>
                                                 {task.micro_tasks && task.micro_tasks.length > 0 ? (
-                                                    <span className="badge badge-neutral" title="Tarefa Macro com múltiplas etapas">
+                                                    <span className="ap-chip tone-brand no-dot" title="Tarefa Macro com múltiplas etapas">
                                                         Workflow ({task.micro_tasks.length})
                                                     </span>
                                                 ) : (
@@ -1136,12 +1134,12 @@ function Tasks() {
                                                 </div>
                                             </td>
                                             <td>
-                                                <span className={`badge ${getStatusBadgeClass(task.status)}`}>
+                                                <span className={getStatusBadgeClass(task.status)}>
                                                     {getStatusLabel(task.status)}
                                                 </span>
                                             </td>
                                             <td>
-                                                <span className={`badge ${getPriorityBadgeClass(task.priority)}`}>
+                                                <span className={getPriorityBadgeClass(task.priority)}>
                                                     {getPriorityLabel(task.priority)}
                                                 </span>
                                             </td>
@@ -1172,19 +1170,8 @@ function Tasks() {
                         </table>
 
                         {/* Pagination Info and Load More Button */}
-                        <div style={{
-                            padding: '20px',
-                            borderTop: '1px solid #e2e8f0',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            gap: '12px'
-                        }}>
-                            <p style={{
-                                fontSize: '14px',
-                                color: '#64748b',
-                                margin: 0
-                            }}>
+                        <div className="admin-tasks-pagination">
+                            <p className="admin-tasks-pagination-info">
                                 Mostrando {tasks.length} de {totalCount} tarefas
                             </p>
 
@@ -1193,13 +1180,11 @@ function Tasks() {
                                     onClick={loadMore}
                                     disabled={isLoadingMore}
                                     className="btn btn-secondary"
-                                    style={{
-                                        minWidth: '200px'
-                                    }}
+                                    style={{ minWidth: '200px' }}
                                 >
                                     {isLoadingMore ? (
                                         <>
-                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900" style={{ display: 'inline-block', marginRight: '8px' }}></div>
+                                            <Loader2 size={16} className="ap-spin-icon" style={{ marginRight: 8 }} />
                                             Carregando...
                                         </>
                                     ) : (
@@ -1222,7 +1207,7 @@ function Tasks() {
                         <button onClick={handleCancelSelection} className="btn btn-secondary">
                             Cancelar
                         </button>
-                        <button onClick={handleOpenBulkDeleteModal} className="btn btn-primary">
+                        <button onClick={handleOpenBulkDeleteModal} className="btn btn-danger">
                             <Trash2 size={18} className="admin-tasks-icon-spacing" />
                             Excluir Selecionadas
                         </button>
@@ -1452,7 +1437,7 @@ function Tasks() {
                             </button>
                             <button
                                 onClick={handleConfirmDelete}
-                                className="btn btn-primary"
+                                className="btn btn-danger"
                                 disabled={submitting}
                             >
                                 {submitting ? 'Excluindo...' : 'Excluir'}
@@ -1489,7 +1474,7 @@ function Tasks() {
                             </button>
                             <button
                                 onClick={handleConfirmCancel}
-                                className="btn btn-primary"
+                                className="btn btn-danger"
                                 disabled={submitting}
                             >
                                 {submitting ? 'Cancelando...' : 'Confirmar Cancelamento'}
@@ -1528,7 +1513,7 @@ function Tasks() {
                             </button>
                             <button
                                 onClick={handleConfirmBulkDelete}
-                                className="btn btn-primary"
+                                className="btn btn-danger"
                                 disabled={submitting}
                             >
                                 {submitting ? 'Excluindo...' : 'Excluir Todas'}

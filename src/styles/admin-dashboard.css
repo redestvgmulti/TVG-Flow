@@ -1,17 +1,17 @@
-/* Figma Make Dashboard - Pixel-Perfect Replica */
+/* ============================================================
+   Admin Dashboard — CityOS Premium (v2.1)
+   Recomprometido com tokens.css. Blocos de métrica deduplicados;
+   paleta tokenizada; sombras em camadas. Utilitários globais no
+   fim preservados como estavam (bundle global).
+   ============================================================ */
 
-/* 
- * CONTAINER & LAYOUT
- */
+/* ── Container & layout ───────────────────────────────────── */
 .dashboard-container {
     padding: 24px 32px;
     max-width: 1440px;
     margin: 0 auto;
 }
 
-/* 
- * HEADER - Figma Make Style
- */
 .dashboard-header {
     margin-bottom: 24px;
     display: flex;
@@ -20,285 +20,532 @@
 }
 
 .dashboard-header h2 {
+    font-family: var(--font-display, inherit);
     font-size: 24px;
-    font-weight: 600;
-    color: #1a1a1a;
-    margin: 0;
+    font-weight: 700;
     letter-spacing: -0.02em;
+    color: var(--color-text-primary);
+    margin: 0;
 }
 
-/* 
- * KPI GRID - Exact Figma Make Layout
- */
-/* 
- * KPI GRID - Exact Figma Make Layout
- */
+/* ── KPI grid ─────────────────────────────────────────────── */
+.dashboard-grid-metrics {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 24px;
+    margin-bottom: 24px;
+}
+
 .dashboard-grid-charts {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 24px;
     align-items: stretch;
-    /* Ensure both columns have the same stretch limit */
     margin-bottom: 24px;
 }
 
-/* Metric Cards */
+/* ── Metric cards (fonte única) ───────────────────────────── */
 .metric-card {
     padding: 24px;
-    border-radius: 12px;
-    border: 1px solid #e5e7eb;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-    background: white;
+    border-radius: 16px;
+    border: 1px solid var(--color-border, #E9EDF2);
+    box-shadow: var(--shadow-2, 0 4px 14px rgba(15, 23, 42, 0.07));
+    background: var(--color-bg-surface, #fff);
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
     gap: 4px;
     height: 100%;
-    transition: transform 0.2s, box-shadow 0.2s;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .metric-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-3, 0 14px 30px -8px rgba(15, 23, 42, 0.16));
 }
 
-/* Specific Card Backgrounds */
 .metric-card-neutral-bg {
-    background: white;
+    background: var(--color-bg-surface, #fff);
 }
 
-.metric-card-primary-bg {
-    background: #eff6ff !important;
-    /* blue-50 */
+/* Especificidade dupla (.metric-card.metric-card-*) para vencer .card,
+   que também define background — o original usava !important pelo mesmo motivo. */
+.metric-card.metric-card-primary-bg {
+    background: #eff6ff;
     border-color: #dbeafe;
-    box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.15);
-    /* Blue glow */
 }
 
-.metric-card-success-bg {
-    background: #f0fdf4 !important;
-    /* green-50 */
+.metric-card.metric-card-success-bg {
+    background: #f0fdf4;
     border-color: #dcfce7;
-    box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.15);
-    /* Green glow */
 }
 
-.metric-card-critical-bg {
-    background: #ef4444 !important;
-    /* red-500 */
+/* Usado em Tarefas ("Ativas Atrasadas") — antes indefinido (renderizava branco) */
+.metric-card.metric-card-danger-bg {
+    background: #fef2f2;
+    border-color: #fecaca;
+}
+
+.metric-card.metric-card-danger-bg .metric-value {
+    color: var(--color-danger, #DC2626);
+}
+
+/* Card "Atrasadas" — fundo vermelho original, sem brilho-cassino */
+.metric-card.metric-card-critical-bg {
+    background: #ef4444;
     border-color: #f87171;
     cursor: pointer;
     position: relative;
-    overflow: hidden;
-    box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
-    /* Glow effect */
 }
 
-/* Shine effect */
-.metric-card-critical-bg::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 50%;
-    height: 100%;
-    background: linear-gradient(to right,
-            rgba(255, 255, 255, 0) 0%,
-            rgba(255, 255, 255, 0.2) 50%,
-            rgba(255, 255, 255, 0) 100%);
-    transform: skewX(-25deg);
-    animation: shine 3s infinite;
+.metric-card.metric-card-critical-bg:hover {
+    background: #dc2626;
+    transform: translateY(-3px);
+    box-shadow: 0 14px 30px -8px rgba(239, 68, 68, 0.4);
+    border-color: #f87171;
 }
 
-@keyframes shine {
-    0% {
-        left: -100%;
-    }
-
-    20% {
-        left: 200%;
-    }
-
-    100% {
-        left: 200%;
-    }
+.metric-card.metric-card-critical-bg:focus-visible {
+    outline: 2px solid var(--color-danger, #DC2626);
+    outline-offset: 2px;
 }
 
-.metric-card-critical-bg:hover {
-    background: #dc2626 !important;
-    /* darker red on hover */
-    box-shadow: 0 6px 20px rgba(239, 68, 68, 0.5);
+/* Texto branco no card vermelho — especificidade alta para vencer
+   os vários .metric-value definidos em outros arquivos (mesma especificidade). */
+.metric-card.metric-card-critical-bg .metric-label,
+.metric-card.metric-card-critical-bg .metric-value,
+.metric-card.metric-card-critical-bg .metric-percentage,
+.metric-card.metric-card-critical-bg .metric-badge-critical,
+.metric-card.metric-card-critical-bg .metric-icon-critical,
+.metric-card.metric-card-critical-bg .metric-icon-critical-small {
+    color: #ffffff;
 }
 
 /* Labels */
 .metric-label {
     font-size: 13px;
     font-weight: 600;
-    color: #6b7280;
+    color: var(--color-text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.05em;
     margin-bottom: 0;
 }
 
 .metric-label-critical {
-    color: #ffffff !important;
+    color: #ffffff;
     margin-bottom: 0;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 /* Values */
 .metric-value {
+    font-family: var(--font-display, inherit);
     font-size: 32px;
     font-weight: 700;
-    color: #111827;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-text-primary);
     line-height: 1.2;
+    letter-spacing: -0.01em;
     margin-bottom: 0;
 }
 
 .metric-value-critical {
-    color: #ffffff !important;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    color: #ffffff;
 }
 
-/* Percentages and Footer Info */
+/* Percentages / footer */
 .metric-percentage {
     font-size: 13px;
     font-weight: 500;
-    color: #6b7280;
-}
-
-.metric-header-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 0;
+    color: var(--color-text-tertiary);
 }
 
 .metric-footer-row {
     display: flex;
     align-items: center;
     gap: 6px;
-    margin-top: 4px;
+    margin-top: 6px;
 }
 
 .metric-badge-critical {
     font-size: 12px;
-    font-weight: 600;
+    font-weight: 700;
     line-height: 1;
-    /* Fix vertical alignment */
-    color: #ffffff !important;
+    color: #ffffff;
     opacity: 0.9;
-    padding-top: 1px;
-    /* Optical adjustment */
 }
 
 .metric-icon-critical,
 .metric-icon-critical-small {
     color: #ffffff;
     display: block;
-    /* Ensure it behaves as a block for flex alignment */
 }
 
-/* 
- * TASK LIST - Clean Figma Make Style
- */
-.task-list {
+/* Variante compacta (usada em Tarefas / outras telas) */
+.metric-card-small {
+    flex: 1 1 220px;
+    min-width: 200px;
+    padding: 1.5rem;
+}
+
+.metric-card-small .metric-value {
+    font-size: 2.5rem;
+}
+
+.metric-card-small .metric-label {
+    font-size: 0.75rem;
+}
+
+/* ── Charts ───────────────────────────────────────────────── */
+.chart-container {
+    width: 100%;
+    height: 250px;
+    min-height: 250px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.chart-empty-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--color-text-tertiary);
+    font-size: 14px;
+}
+
+.chart-tooltip {
+    background-color: var(--color-bg-surface, #fff) !important;
+    border: 1px solid var(--color-border, #E9EDF2) !important;
+    border-radius: 10px !important;
+    box-shadow: var(--shadow-2, 0 4px 14px rgba(15, 23, 42, 0.07)) !important;
+}
+
+/* ── Feed operacional ─────────────────────────────────────── */
+.feed-container {
+    height: 320px;
+    overflow-y: auto;
+    padding-right: 8px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 12px;
 }
 
-.task-item {
-    background: #ffffff;
-    border: 1px solid #e5e7eb;
-    border-radius: 6px;
-    padding: 16px;
+.feed-container::-webkit-scrollbar {
+    width: 6px;
+}
+
+.feed-container::-webkit-scrollbar-track {
+    background: var(--color-bg-app, #F5F7FA);
+    border-radius: 3px;
+}
+
+.feed-container::-webkit-scrollbar-thumb {
+    background: var(--color-border, #E5E7EB);
+    border-radius: 3px;
+}
+
+.feed-container::-webkit-scrollbar-thumb:hover {
+    background: var(--color-border-hover, #D1D5DB);
+}
+
+.feed-item {
+    display: flex;
+    gap: 12px;
+    padding: 12px;
+    background: var(--color-bg-surface, #fff);
+    border: 1px solid var(--color-border, #E9EDF2);
+    border-radius: 10px;
+    transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.feed-item:hover {
+    background: var(--color-bg-app, #F5F7FA);
+    border-color: var(--color-border-hover, #D1D5DB);
+    transform: translateX(2px);
+}
+
+.feed-icon-wrapper {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: var(--color-text-secondary);
+    background: var(--color-bg-subtle, #F0F2F5);
+}
+
+.feed-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.feed-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0;
+}
+
+.feed-user {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+}
+
+.feed-time {
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+    font-variant-numeric: tabular-nums;
+}
+
+.feed-action {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    line-height: 1.4;
+    margin: 0 0 4px 0;
+}
+
+.feed-context {
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0;
+}
+
+/* ── Tarefas recentes ─────────────────────────────────────── */
+.recent-tasks-list {
+    display: flex;
+    flex-direction: column;
+    padding-top: 8px;
+    gap: 4px;
+}
+
+.task-item-minimal {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    transition: all 150ms ease;
+    padding: 10px 14px;
+    border-radius: 9px;
+    cursor: pointer;
+    background: transparent;
+    transition: background 0.15s ease;
+    position: relative;
+    border: 1px solid transparent;
 }
 
-.task-item:hover {
-    border-color: #d1d5db;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+.task-item-minimal.overdue {
+    background: rgba(239, 68, 68, 0.04);
 }
 
-.task-card-horizontal {
+.task-item-minimal.overdue:hover {
+    background: rgba(239, 68, 68, 0.08);
+}
+
+.task-item-minimal:not(.overdue):hover {
+    background-color: var(--color-bg-subtle, #F0F2F5);
+}
+
+.task-item-minimal:hover .task-title {
+    color: var(--color-text-primary);
+}
+
+.task-item-minimal:hover .task-action-arrow {
+    opacity: 1;
+    transform: translateX(2px);
+}
+
+.task-content {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    flex: 1;
+    min-width: 0;
+}
+
+.task-title-row {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 10px;
 }
 
-.task-card-overdue {
-    border-left: 3px solid #ef4444;
-    background: #fef2f2;
+.task-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 1px;
 }
 
-/* 
- * BADGES - Figma Make Style
- */
+.status-dot-pendente {
+    background-color: var(--color-warning, #D97706);
+}
+
+.status-dot-em_execucao {
+    background-color: var(--color-primary, #2563EB);
+}
+
+.status-dot-concluida {
+    background-color: var(--color-success, #059669);
+}
+
+.status-dot-atrasada {
+    background-color: var(--color-danger, #DC2626);
+}
+
+.task-title {
+    font-size: 14px;
+    color: var(--color-text-secondary);
+    transition: color 0.15s ease;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    letter-spacing: -0.01em;
+}
+
+.recent-tasks-list .task-item-minimal:first-child .task-title {
+    font-weight: 600;
+    color: var(--color-text-primary);
+}
+
+.task-meta {
+    display: flex;
+    align-items: center;
+    font-size: 12px;
+    color: var(--color-text-tertiary);
+    font-weight: 400;
+    padding-left: 16px;
+    gap: 6px;
+}
+
+.user-text {
+    color: var(--color-text-secondary);
+    font-weight: 500;
+}
+
+.separator {
+    color: var(--color-border, #E5E7EB);
+    font-size: 10px;
+}
+
+.date-text {
+    font-variant-numeric: tabular-nums;
+}
+
+.task-item-minimal.overdue .date-text {
+    color: var(--color-danger, #DC2626);
+    font-weight: 500;
+}
+
+.task-action-arrow {
+    font-family: system-ui, -apple-system, sans-serif;
+    color: var(--color-text-tertiary);
+    opacity: 0;
+    transform: translateX(0px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    font-size: 18px;
+    padding-right: 4px;
+    line-height: 1;
+}
+
+.empty-state-minimal {
+    padding: 32px 0;
+    text-align: center;
+    color: var(--color-text-tertiary);
+    font-size: 13px;
+    font-style: italic;
+}
+
+.btn-link-subtle {
+    background: none;
+    border: none;
+    color: var(--color-text-tertiary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: color 0.2s ease;
+    padding: 0;
+}
+
+.btn-link-subtle:hover {
+    color: var(--color-text-secondary);
+}
+
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 12px;
+    height: 32px;
+}
+
+/* ── Badges (dashboard) ───────────────────────────────────── */
 .badge {
     display: inline-flex;
     align-items: center;
     padding: 4px 10px;
-    border-radius: 4px;
+    border-radius: var(--radius-full, 9999px);
     font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.02em;
+    font-weight: 700;
+    letter-spacing: 0.03em;
     text-transform: uppercase;
 }
 
 .badge-success {
-    background: #d1fae5;
-    color: #065f46;
+    background: var(--color-success-bg, #D1FAE5);
+    color: var(--color-success, #059669);
 }
 
 .badge-primary {
-    background: #dbeafe;
-    color: #1e40af;
+    background: var(--color-primary-light, #EFF6FF);
+    color: var(--color-primary, #2563EB);
 }
 
 .badge-danger {
-    background: #fee2e2;
-    color: #991b1b;
+    background: var(--color-danger-bg, #FEE2E2);
+    color: var(--color-danger, #DC2626);
 }
 
 .badge-warning {
-    background: #fef3c7;
-    color: #92400e;
+    background: var(--color-warning-bg, #FEF3C7);
+    color: var(--color-warning, #D97706);
 }
 
-/* 
- * EMPTY STATES
- */
-.empty-state {
-    text-align: center;
-    padding: 48px 24px;
-    color: #9ca3af;
+/* ── Animations ───────────────────────────────────────────── */
+.animation-fade-in {
+    animation: fadeIn 0.2s ease-out;
 }
 
-.empty-icon {
-    font-size: 48px;
-    margin-bottom: 16px;
-    display: block;
-    opacity: 0.5;
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
-.empty-text {
-    font-size: 14px;
-    color: #6b7280;
-    margin: 0 0 16px 0;
+@media (prefers-reduced-motion: reduce) {
+    .metric-card,
+    .metric-card:hover,
+    .metric-card-critical-bg:hover,
+    .feed-item,
+    .task-action-arrow,
+    .animation-fade-in {
+        transition: none;
+        animation: none;
+        transform: none;
+    }
 }
 
-/* 
- * LOADING STATE - Premium 3D Flip 
- */
-/* Loaded globally in components.css */
-
-/* 
- * UTILITY CLASSES
- */
+/* ── Utilitários globais (preservados — bundle global) ────── */
 .flex {
     display: flex;
 }
@@ -355,59 +602,7 @@
     background: #fee2e2;
 }
 
-/* 
- * ANIMATIONS
- */
-.animation-fade-in {
-    animation: fadeIn 0.2s ease-out;
-}
-
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(4px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* 
- * CHARTS
- */
-.chart-container {
-    width: 100%;
-    height: 250px;
-    /* Desktop default */
-    min-height: 250px;
-    position: relative;
-    /* Required for ResponsiveContainer */
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.chart-empty-state {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    color: var(--color-text-tertiary);
-    font-size: 14px;
-}
-
-.chart-tooltip {
-    background-color: #fff !important;
-    border: 1px solid #e5e7eb !important;
-    border-radius: 8px !important;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
-}
-
-/* 
- * RESPONSIVE - Mobile First
- */
+/* ── Responsive ───────────────────────────────────────────── */
 @media (max-width: 1024px) {
     .dashboard-grid-charts {
         grid-template-columns: 1fr;
@@ -415,12 +610,9 @@
 }
 
 @media (max-width: 768px) {
-
-    /* Mobile Container Fixes */
     .dashboard-container {
         padding: 16px;
         padding-bottom: calc(env(safe-area-inset-bottom) + 100px);
-        /* Bottom nav + safe area */
     }
 
     .dashboard-grid-metrics {
@@ -436,58 +628,45 @@
         font-size: 24px;
     }
 
-    /* Chart Height Limiting */
     .chart-container {
         height: 180px !important;
         min-height: 180px !important;
         position: relative !important;
         overflow-x: hidden !important;
-        /* Remove horizontal scroll on mobile */
     }
 
-    /* Feed Operational - Better Rhythm */
     .feed-container {
         max-height: 400px;
-        /* Limit to reasonable mobile height */
     }
 
     .feed-item {
         padding: 14px;
         margin-bottom: 8px;
-        /* Better vertical rhythm */
     }
 
     .feed-item:last-child {
         margin-bottom: 0;
     }
 
-    /* Charts Grid - Mobile Spacing */
     .dashboard-grid-charts {
         gap: 20px;
-        /* More breathing room */
         margin-bottom: 20px;
     }
 
-    /* Long Cards - Bottom Spacing */
     .card {
         margin-bottom: 20px;
-        /* Prevent "colado" feeling */
     }
 
     .card:last-child {
         margin-bottom: 24px;
-        /* Extra space before safe area */
     }
 
-    /* Recent Tasks Mobile Improvements */
     .recent-tasks-list {
         gap: 8px;
-        /* Better vertical rhythm */
     }
 
     .task-item-minimal {
         padding: 12px 14px;
-        /* Comfortable touch target */
     }
 }
 
@@ -496,7 +675,6 @@
         grid-template-columns: 1fr;
     }
 
-    /* Even more constrained on very small screens */
     .chart-container {
         max-height: 240px !important;
     }
@@ -506,7 +684,6 @@
         padding-bottom: calc(env(safe-area-inset-bottom) + 100px);
     }
 
-    /* Global Mobile Overflow Protection */
     .dashboard-container,
     .dashboard-grid-metrics,
     .dashboard-grid-charts,
@@ -519,528 +696,4 @@
         overflow-x: hidden;
         box-sizing: border-box;
     }
-
-    /* Ensure no element can force horizontal scroll */
-    * {
-        max-width: 100%;
-        box-sizing: border-box;
-    }
-}
-
-/* 
- * SPECIAL METRIC CARDS
- */
-.metric-card-overdue {
-    background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
-    box-shadow: 0 0 20px rgba(239, 68, 68, 0.3),
-        0 4px 6px rgba(0, 0, 0, 0.1);
-    border: 1px solid #fca5a5;
-}
-
-.metric-card-overdue .metric-label,
-.metric-card-overdue .metric-value {
-    color: #ffffff;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-}
-
-.metric-card-small {
-    flex: 1 1 220px;
-    min-width: 200px;
-    padding: 1.5rem;
-}
-
-.metric-card-small .metric-value {
-    font-size: 2.5rem;
-}
-
-.metric-card-small .metric-label {
-    font-size: 0.75rem;
-}
-
-/* Fundos coloridos leves para cada tipo de métrica */
-.dashboard-grid-metrics {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 24px;
-    margin-bottom: 24px;
-}
-
-/* Metric Cards */
-
-
-.metric-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-}
-
-/* Specific Card Backgrounds */
-.metric-card-neutral-bg {
-    background: white;
-}
-
-.metric-card-primary-bg {
-    background: #eff6ff;
-    /* blue-50 */
-    border-color: #dbeafe;
-}
-
-.metric-card-success-bg {
-    background: #f0fdf4;
-    /* green-50 */
-    border-color: #dcfce7;
-}
-
-.metric-card-critical-bg {
-    background: #fef2f2;
-    border-color: #fecaca;
-    cursor: pointer;
-}
-
-.metric-card-critical-bg:hover {
-    background: #fee2e2;
-}
-
-/* Labels */
-.metric-label {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-bottom: 0;
-}
-
-.metric-label-critical {
-    color: #991b1b;
-    margin-bottom: 0;
-}
-
-/* Values */
-.metric-value {
-    font-size: 32px;
-    font-weight: 700;
-    color: var(--text-primary);
-    line-height: 1.2;
-    margin-bottom: 0;
-}
-
-.metric-value-critical {
-    color: #b91c1c;
-}
-
-/* Percentages and Footer Info */
-.metric-percentage {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--text-secondary);
-}
-
-.metric-header-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 0;
-}
-
-.metric-footer-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-top: 4px;
-}
-
-.metric-badge-critical {
-    font-size: 12px;
-    font-weight: 600;
-    color: #b91c1c;
-}
-
-.metric-icon-critical {
-    color: #dc2626;
-}
-
-.metric-icon-critical-small {
-    color: #dc2626;
-}
-
-
-
-.metric-card-critical-alert:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15),
-        0 8px 20px rgba(239, 68, 68, 0.25);
-    border-color: #f87171;
-}
-
-.metric-critical-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 12px;
-}
-
-.metric-critical-title {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.metric-critical-icon {
-    color: #dc2626;
-    flex-shrink: 0;
-}
-
-.metric-critical-label {
-    margin: 0;
-    color: #991b1b;
-}
-
-.metric-critical-value {
-    font-size: 48px;
-    color: #dc2626;
-    margin: 0;
-    line-height: 1;
-    font-weight: 800;
-}
-
-.metric-critical-description {
-    font-size: 13px;
-    color: #991b1b;
-    margin: 12px 0;
-    font-weight: 500;
-}
-
-.metric-critical-action {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    color: #dc2626;
-    font-weight: 600;
-    margin-top: 16px;
-    padding-top: 16px;
-    border-top: 1px solid rgba(220, 38, 38, 0.2);
-}
-
-.metric-critical-action svg {
-    flex-shrink: 0;
-}
-
-/* Overlay Metric Card (Secondary Indicator Styling) */
-.metric-card-overlay {
-    max-width: 400px;
-    position: relative;
-}
-
-.metric-header-with-badge {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 12px;
-}
-
-.metric-badge-overlay {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 10px;
-    font-weight: 600;
-    color: #ffffff;
-    background: rgba(255, 255, 255, 0.3);
-    padding: 4px 8px;
-    border-radius: 4px;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    cursor: help;
-}
-
-
-/* 
- * FEED OPERACIONAL - Restored Scrollable Style
- */
-.feed-container {
-    height: 320px;
-    overflow-y: auto;
-    padding-right: 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-/* Custom Scrollbar for Feed */
-.feed-container::-webkit-scrollbar {
-    width: 6px;
-}
-
-.feed-container::-webkit-scrollbar-track {
-    background: #f9fafb;
-    border-radius: 3px;
-}
-
-.feed-container::-webkit-scrollbar-thumb {
-    background: #e5e7eb;
-    border-radius: 3px;
-}
-
-.feed-container::-webkit-scrollbar-thumb:hover {
-    background: #d1d5db;
-}
-
-.feed-item {
-    display: flex;
-    gap: 12px;
-    padding: 12px;
-    background: #ffffff;
-    border: 1px solid #f3f4f6;
-    border-radius: 8px;
-    transition: all 0.2s ease;
-}
-
-.feed-item:hover {
-    background: #fcfcfc;
-    border-color: #e5e7eb;
-    transform: translateX(2px);
-}
-
-.feed-icon-wrapper {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    color: #4b5563;
-}
-
-.feed-content {
-    flex: 1;
-    min-width: 0;
-}
-
-.feed-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 0;
-}
-
-.feed-user {
-    font-size: 12px;
-    font-weight: 600;
-    color: #374151;
-}
-
-.feed-time {
-    font-size: 11px;
-    color: #9ca3af;
-}
-
-.feed-action {
-    font-size: 13px;
-    color: #4b5563;
-    line-height: 1.4;
-    margin: 0 0 4px 0;
-}
-
-.feed-context {
-    font-size: 11px;
-    color: #9ca3af;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    margin: 0;
-}
-
-/* 
- * RECENT TASKS - Restored Horizontal Cards
- */
-/* 
- * RECENT TASKS - Framer/Linear Polish (Definitive)
- */
-.recent-tasks-list {
-    display: flex;
-    flex-direction: column;
-    padding-top: 8px;
-    gap: 4px;
-    /* Slight gap for hover areas */
-}
-
-.task-item-minimal {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 10px 14px;
-    border-radius: 8px;
-    cursor: pointer;
-    background: transparent;
-    transition: all 0.15s ease-out;
-    position: relative;
-    border: 1px solid transparent;
-    /* Prepare for border */
-}
-
-/* Overdue State - Subtle Background */
-.task-item-minimal.overdue {
-    background: rgba(239, 68, 68, 0.04);
-}
-
-.task-item-minimal.overdue:hover {
-    background: rgba(239, 68, 68, 0.08);
-    /* Slightly darker on hover */
-}
-
-/* Hover - "Ghost" Feel for normal items */
-.task-item-minimal:not(.overdue):hover {
-    background-color: rgba(0, 0, 0, 0.025);
-}
-
-/* Hover Elements */
-.task-item-minimal:hover .task-title {
-    color: #111827;
-}
-
-.task-item-minimal:hover .task-action-arrow {
-    opacity: 1;
-    transform: translateX(2px);
-}
-
-.task-content {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    flex: 1;
-    min-width: 0;
-}
-
-.task-title-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-/* Micro-Indicator Dots */
-.task-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    flex-shrink: 0;
-    margin-top: 1px;
-    /* Optical optical alignment */
-}
-
-/* Desaturated/Soft Colors */
-.status-dot-pendente {
-    background-color: #fbbf24;
-    /* Soft Yellow */
-}
-
-.status-dot-em_execucao {
-    background-color: #60a5fa;
-    /* Soft Blue */
-}
-
-.status-dot-concluida {
-    background-color: #34d399;
-    /* Soft Green */
-}
-
-.status-dot-atrasada {
-    background-color: #ef4444;
-    /* Soft Red */
-    opacity: 0.8;
-}
-
-
-/* Automatic Hierarchy */
-.task-title {
-    font-size: 14px;
-    color: #374151;
-    transition: color 0.15s ease;
-    font-weight: 500;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    letter-spacing: -0.01em;
-}
-
-/* First item - Semibold */
-.recent-tasks-list .task-item-minimal:first-child .task-title {
-    font-weight: 600;
-    color: #1f2937;
-}
-
-.task-meta {
-    display: flex;
-    align-items: center;
-    font-size: 12px;
-    color: #9ca3af;
-    font-weight: 400;
-    padding-left: 16px;
-    /* Align with title text */
-    gap: 6px;
-}
-
-.user-text {
-    color: #6b7280;
-    font-weight: 500;
-}
-
-.separator {
-    color: #e5e7eb;
-    /* Very subtle separator */
-    font-size: 10px;
-}
-
-.date-text {
-    font-variant-numeric: tabular-nums;
-}
-
-.task-item-minimal.overdue .date-text {
-    color: #ef4444;
-    /* Red date for overdue */
-    font-weight: 500;
-}
-
-/* Invisible Arrow interaction */
-.task-action-arrow {
-    font-family: system-ui, -apple-system, sans-serif;
-    color: #9ca3af;
-    opacity: 0;
-    /* Hidden by default */
-    transform: translateX(0px);
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    font-size: 18px;
-    padding-right: 4px;
-    line-height: 1;
-}
-
-.empty-state-minimal {
-    padding: 32px 0;
-    text-align: center;
-    color: #9ca3af;
-    font-size: 13px;
-    font-style: italic;
-}
-
-/* Subtle Link Button */
-.btn-link-subtle {
-    background: none;
-    border: none;
-    color: #9ca3af;
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: color 0.2s;
-    padding: 0;
-}
-
-.btn-link-subtle:hover {
-    color: #6b7280;
-}
-
-.btn-sm {
-    padding: 6px 12px;
-    font-size: 12px;
-    height: 32px;
 }

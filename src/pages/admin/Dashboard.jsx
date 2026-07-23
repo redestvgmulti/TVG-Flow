@@ -86,9 +86,6 @@ export default function Painel() {
     const [showDeleteModal, setShowDeleteModal] = useState(false)
     const [isDeleting, setIsDeleting] = useState(false)
 
-    // Feedback state
-    const [feedback, setFeedback] = useState({ show: false, type: '', message: '' })
-
     useEffect(() => {
         fetchPainelData()
         fetchProfissionais()
@@ -100,15 +97,6 @@ export default function Painel() {
         window.addEventListener('resize', handleResize)
         return () => window.removeEventListener('resize', handleResize)
     }, [])
-
-    useEffect(() => {
-        if (feedback.show) {
-            const timer = setTimeout(() => {
-                setFeedback({ show: false, type: '', message: '' })
-            }, 3000)
-            return () => clearTimeout(timer)
-        }
-    }, [feedback.show])
 
     async function fetchProfissionais() {
         try {
@@ -167,7 +155,7 @@ export default function Painel() {
 
         } catch (error) {
             console.error('Error fetching dashboard data:', error)
-            showFeedback('error', 'Failed to load dashboard data. Please refresh the page.')
+            toast.error('Não foi possível carregar o painel. Atualize a página.')
         } finally {
             setLoading(false)
             setIsRefreshing(false)
@@ -220,10 +208,6 @@ export default function Painel() {
         setSelectedTask(null)
     }
 
-    function showFeedback(type, message) {
-        setFeedback({ show: true, type, message })
-    }
-
     function handleOpenReatribuirModal(task) {
         setReatribuiringTask(task)
         setReatribuirTo(task.assigned_to || '')
@@ -231,11 +215,7 @@ export default function Painel() {
 
     async function handleReatribuirTask(e) {
         e.preventDefault()
-
-        if (!confirm(`Reatribuir "${reassigningTask.titulo}" to ${professionals.find(p => p.id === reassignTo)?.nome || 'Não atribuída'}?`)) {
-            return
-        }
-
+        // O próprio modal já é a confirmação — sem confirm() nativo redundante.
         setReatribuiring(true)
 
         try {
@@ -247,11 +227,11 @@ export default function Painel() {
             if (error) throw error
 
             setReatribuiringTask(null)
-            showFeedback('success', 'Task reassigned successfully!')
+            toast.success('Tarefa reatribuída com sucesso.')
             await fetchPainelData()
         } catch (error) {
             console.error('Error reassigning task:', error)
-            showFeedback('error', 'Failed to reassign task')
+            toast.error('Falha ao reatribuir a tarefa.')
         } finally {
             setReatribuiring(false)
         }
@@ -259,10 +239,6 @@ export default function Painel() {
 
     // handlers for status updates...
     async function handleUpdateStatus(taskId, newStatus, taskTitle) {
-        if (!confirm(`Change status of "${taskTitle}" to ${newStatus}?`)) {
-            return
-        }
-
         try {
             const { error } = await supabase
                 .from('tarefas')
@@ -274,19 +250,15 @@ export default function Painel() {
 
             if (error) throw error
 
-            showFeedback('success', `Task status updated to ${newStatus}`)
+            toast.success('Status da tarefa atualizado.')
             await fetchPainelData()
         } catch (error) {
             console.error('Error updating task:', error)
-            showFeedback('error', 'Failed to update task status')
+            toast.error('Falha ao atualizar o status.')
         }
     }
 
     async function handleCompleteTask(taskId, taskTitle) {
-        if (!confirm(`Mark "${taskTitle}" as completed?`)) {
-            return
-        }
-
         try {
             const { error } = await supabase
                 .from('tarefas')
@@ -298,11 +270,11 @@ export default function Painel() {
 
             if (error) throw error
 
-            showFeedback('success', 'Task completed!')
+            toast.success('Tarefa concluída!')
             await fetchPainelData()
         } catch (error) {
             console.error('Error completing task:', error)
-            showFeedback('error', 'Failed to complete task')
+            toast.error('Falha ao concluir a tarefa.')
         }
     }
 
@@ -348,15 +320,6 @@ export default function Painel() {
 
     return (
         <div className="dashboard-container animation-fade-in">
-            {feedback.show && (
-                <div className={`card mb-6 p-4 border-${feedback.type === 'success' ? 'success' : 'danger'} bg-${feedback.type === 'success' ? 'success' : 'danger'}-subtle`}>
-                    <p className={`text-${feedback.type === 'success' ? 'success' : 'danger'} font-medium m-0`}>
-                        {feedback.message}
-                    </p>
-                </div>
-            )}
-
-
             {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
             {/* BLOCO 1: KPIs PRIMÁRIOS - Torre de Controle      */}
             {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
@@ -429,32 +392,32 @@ export default function Painel() {
 
                                     <defs>
                                         <linearGradient id="colorCreated" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1} />
-                                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                                            <stop offset="5%" stopColor="#2563EB" stopOpacity={0.14} />
+                                            <stop offset="95%" stopColor="#2563EB" stopOpacity={0} />
                                         </linearGradient>
                                         <linearGradient id="colorCompleted" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.1} />
-                                            <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                                            <stop offset="5%" stopColor="#059669" stopOpacity={0.14} />
+                                            <stop offset="95%" stopColor="#059669" stopOpacity={0} />
                                         </linearGradient>
                                     </defs>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EDF0F3" />
                                     <XAxis
                                         dataKey="date"
                                         axisLine={false}
                                         tickLine={false}
-                                        tick={{ fontSize: isMobile ? 11 : 12, fill: '#6b7280' }}
+                                        tick={{ fontSize: isMobile ? 11 : 12, fill: '#9CA3AF' }}
                                     />
                                     <YAxis width={isMobile ? 30 : 40}
                                         axisLine={false}
                                         tickLine={false}
                                         tickFormatter={(value) => value === 0 ? '' : value}
-                                        tick={{ fontSize: isMobile ? 11 : 12, fill: '#6b7280' }}
+                                        tick={{ fontSize: isMobile ? 11 : 12, fill: '#9CA3AF' }}
                                     />
                                     <Tooltip wrapperClassName="chart-tooltip" />
                                     <Area
                                         type="monotone"
                                         dataKey={chartView === 'created' ? 'criadas' : 'concluidas'}
-                                        stroke={chartView === 'created' ? '#3b82f6' : '#10b981'}
+                                        stroke={chartView === 'created' ? '#2563EB' : '#059669'}
                                         strokeWidth={3}
                                         fillOpacity={1}
                                         fill={`url(#color${chartView === 'created' ? 'Created' : 'Completed'})`}
