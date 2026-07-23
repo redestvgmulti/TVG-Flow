@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../services/supabase'
 import { assetPreviewUrl, uploadImmutablePng } from '../../services/masterV1Assets'
+import VisualTitlesManager from '../../components/editorial/VisualTitlesManager'
 
-const CLIENTE_ID = 'cd287e6e-f273-4d0f-a72d-2a8c391e40e9'
 const DEFAULT_MAP = { news_image: '', headline: '', tag: '', visual_title: 'tag-png', sponsor_1: 'patrocinador-1', sponsor_2: 'patrocinador-2' }
-const emptyTitle = { id: null, nome: '', slug: '', formatos: ['feed', 'reels'], ordem: 0, ativo: true }
 const emptySponsor = { id: null, nome: '', slug: '', ativo: true }
 const emptyMembership = { sponsor_id: '', template_set: 'default', content_type: 'feed', ordem: 0, ativo: true }
 
@@ -46,19 +45,13 @@ function PngField({ label, file, currentAsset, onFileChange }) {
   </label>
 }
 
-function toggleFormat(item, format) {
-  return item.formatos.includes(format) ? item.formatos.filter(value => value !== format) : [...item.formatos, format]
-}
-
-export default function AutoPublisherMasterV1Settings() {
+export default function AutoPublisherMasterV1Settings({ clienteId, clienteError }) {
   const [tab, setTab] = useState('titles')
   const [titles, setTitles] = useState([])
   const [sponsors, setSponsors] = useState([])
   const [memberships, setMemberships] = useState([])
   const [configs, setConfigs] = useState([])
   const [control, setControl] = useState({ kill_switch: false })
-  const [title, setTitle] = useState(emptyTitle)
-  const [titleFile, setTitleFile] = useState(null)
   const [sponsor, setSponsor] = useState(emptySponsor)
   const [sponsorFile, setSponsorFile] = useState(null)
   const [membership, setMembership] = useState(emptyMembership)
@@ -74,13 +67,13 @@ export default function AutoPublisherMasterV1Settings() {
 
   const notice = text => setMessage(text)
 
-  async function load() {
+  const load = useCallback(async () => {
     const [titlesResult, sponsorsResult, membershipsResult, configsResult, controlResult] = await Promise.all([
-      supabase.schema('ap').from('visual_titles').select('*').eq('cliente_id', CLIENTE_ID).order('ordem'),
-      supabase.schema('ap').from('render_sponsors').select('*').eq('cliente_id', CLIENTE_ID).order('nome'),
-      supabase.schema('ap').from('render_sponsor_scope_memberships').select('*').eq('cliente_id', CLIENTE_ID).order('template_set').order('content_type').order('ordem'),
-      supabase.schema('ap').from('master_render_configs').select('*').eq('cliente_id', CLIENTE_ID),
-      supabase.schema('ap').from('master_render_controls').select('*').eq('cliente_id', CLIENTE_ID).maybeSingle(),
+      supabase.schema('ap').from('visual_titles').select('*').eq('cliente_id', clienteId).order('ordem'),
+      supabase.schema('ap').from('render_sponsors').select('*').eq('cliente_id', clienteId).order('nome'),
+      supabase.schema('ap').from('render_sponsor_scope_memberships').select('*').eq('cliente_id', clienteId).order('template_set').order('content_type').order('ordem'),
+      supabase.schema('ap').from('master_render_configs').select('*').eq('cliente_id', clienteId),
+      supabase.schema('ap').from('master_render_controls').select('*').eq('cliente_id', clienteId).maybeSingle(),
     ])
     const failure = [titlesResult, sponsorsResult, membershipsResult, configsResult, controlResult].find(result => result.error)
     if (failure?.error) throw failure.error
@@ -89,9 +82,9 @@ export default function AutoPublisherMasterV1Settings() {
     setMemberships(membershipsResult.data || [])
     setConfigs(configsResult.data || [])
     setControl(controlResult.data || { kill_switch: false })
-  }
+  }, [clienteId])
 
-  useEffect(() => { load().catch(error => notice(error.message)) }, [])
+  useEffect(() => { if (clienteId) load().catch(error => notice(error.message)) }, [clienteId, load])
 
   useEffect(() => {
     const current = configs.find(config => config.content_type === format && (config.template_set || '') === templateSet)
@@ -104,32 +97,6 @@ export default function AutoPublisherMasterV1Settings() {
   const selectedSponsor = sponsors.find(item => item.id === membership.sponsor_id)
   const sponsorById = useMemo(() => new Map(sponsors.map(item => [item.id, item])), [sponsors])
 
-  async function saveTitle() {
-    setSaving(true)
-    try {
-      const normalizedSlug = slugify(title.slug || title.nome)
-      if (!title.nome.trim() || !normalizedSlug) throw new Error('Nome do selo e obrigatorio.')
-      if (!title.id && !titleFile) throw new Error('Envie o PNG do selo.')
-      if (!title.formatos.length) throw new Error('Selecione ao menos um formato.')
-      let asset = null
-      if (titleFile) asset = await uploadImmutablePng({ supabase, file: titleFile, clienteId: CLIENTE_ID, kind: 'visual-titles', slug: normalizedSlug })
-      const payload = { nome: title.nome.trim(), slug: normalizedSlug, formatos: title.formatos, ordem: Number(title.ordem) || 0, ativo: Boolean(title.ativo) }
-      if (asset) Object.assign(payload, { asset_bucket: asset.bucket, asset_path: asset.path, asset_version: asset.version, sha256: asset.sha256 })
-      const result = title.id
-        ? await supabase.schema('ap').from('visual_titles').update(payload).eq('id', title.id).eq('cliente_id', CLIENTE_ID)
-        : await supabase.schema('ap').from('visual_titles').insert({ ...payload, cliente_id: CLIENTE_ID })
-      if (result.error) throw result.error
-      setTitle(emptyTitle)
-      setTitleFile(null)
-      notice('Selo salvo. Versoes anteriores permanecem preservadas no Storage.')
-      await load()
-    } catch (error) {
-      notice(error.message)
-    } finally {
-      setSaving(false)
-    }
-  }
-
   async function saveSponsor() {
     setSaving(true)
     try {
@@ -137,12 +104,12 @@ export default function AutoPublisherMasterV1Settings() {
       if (!sponsor.nome.trim() || !normalizedSlug) throw new Error('Nome do patrocinador e obrigatorio.')
       if (!sponsor.id && !sponsorFile) throw new Error('Envie o PNG do patrocinador.')
       let asset = null
-      if (sponsorFile) asset = await uploadImmutablePng({ supabase, file: sponsorFile, clienteId: CLIENTE_ID, kind: 'sponsors', slug: normalizedSlug })
+      if (sponsorFile) asset = await uploadImmutablePng({ supabase, file: sponsorFile, clienteId, kind: 'sponsors', slug: normalizedSlug })
       const payload = { nome: sponsor.nome.trim(), slug: normalizedSlug, ativo: Boolean(sponsor.ativo) }
       if (asset) Object.assign(payload, { asset_bucket: asset.bucket, asset_path: asset.path, asset_version: asset.version, sha256: asset.sha256 })
       const result = sponsor.id
-        ? await supabase.schema('ap').from('render_sponsors').update(payload).eq('id', sponsor.id).eq('cliente_id', CLIENTE_ID)
-        : await supabase.schema('ap').from('render_sponsors').insert({ ...payload, cliente_id: CLIENTE_ID })
+        ? await supabase.schema('ap').from('render_sponsors').update(payload).eq('id', sponsor.id).eq('cliente_id', clienteId)
+        : await supabase.schema('ap').from('render_sponsors').insert({ ...payload, cliente_id: clienteId })
       if (result.error) throw result.error
       setSponsor(emptySponsor)
       setSponsorFile(null)
@@ -161,7 +128,7 @@ export default function AutoPublisherMasterV1Settings() {
       if (!membership.sponsor_id) throw new Error('Selecione um patrocinador.')
       const scope = String(membership.template_set || '').trim().toLowerCase()
       if (!/^[a-z0-9][a-z0-9_-]*$/.test(scope)) throw new Error('Campanha invalida.')
-      const result = await supabase.schema('ap').from('render_sponsor_scope_memberships').upsert({ cliente_id: CLIENTE_ID, sponsor_id: membership.sponsor_id, template_set: scope, content_type: membership.content_type, ordem: Number(membership.ordem) || 0, ativo: Boolean(membership.ativo) }, { onConflict: 'cliente_id,template_set,content_type,sponsor_id' })
+      const result = await supabase.schema('ap').from('render_sponsor_scope_memberships').upsert({ cliente_id: clienteId, sponsor_id: membership.sponsor_id, template_set: scope, content_type: membership.content_type, ordem: Number(membership.ordem) || 0, ativo: Boolean(membership.ativo) }, { onConflict: 'cliente_id,template_set,content_type,sponsor_id' })
       if (result.error) throw result.error
       setMembership(emptyMembership)
       notice('Escopo de rotacao salvo.')
@@ -180,7 +147,7 @@ export default function AutoPublisherMasterV1Settings() {
       if (new Set(duplicateNames).size !== duplicateNames.length) throw new Error('O layer map possui nomes duplicados.')
       if (enabled && (!masterUuid || !layerMap.visual_title || !activeTitle)) throw new Error('Ativacao exige UUID, layer do selo e pelo menos um selo ativo.')
       const current = configs.find(config => config.content_type === format && (config.template_set || '') === templateSet)
-      const payload = { cliente_id: CLIENTE_ID, content_type: format, template_set: templateSet || null, master_template_uuid: masterUuid || null, enabled, layer_map: layerMap }
+      const payload = { cliente_id: clienteId, content_type: format, template_set: templateSet || null, master_template_uuid: masterUuid || null, enabled, layer_map: layerMap }
       const result = current ? await supabase.schema('ap').from('master_render_configs').update(payload).eq('id', current.id) : await supabase.schema('ap').from('master_render_configs').insert(payload)
       if (result.error) throw result.error
       notice('Configuracao master salva. Nenhuma ativacao e feita automaticamente.')
@@ -195,7 +162,7 @@ export default function AutoPublisherMasterV1Settings() {
   async function saveKillSwitch() {
     setSaving(true)
     try {
-      const result = await supabase.schema('ap').from('master_render_controls').upsert({ cliente_id: CLIENTE_ID, kill_switch: Boolean(control.kill_switch) }, { onConflict: 'cliente_id' })
+      const result = await supabase.schema('ap').from('master_render_controls').upsert({ cliente_id: clienteId, kill_switch: Boolean(control.kill_switch) }, { onConflict: 'cliente_id' })
       if (result.error) throw result.error
       notice('Kill switch salvo.')
       await load()
@@ -207,7 +174,7 @@ export default function AutoPublisherMasterV1Settings() {
   }
 
   async function archiveMembership(item) {
-    const { error } = await supabase.schema('ap').from('render_sponsor_scope_memberships').update({ ativo: !item.ativo }).eq('id', item.id).eq('cliente_id', CLIENTE_ID)
+    const { error } = await supabase.schema('ap').from('render_sponsor_scope_memberships').update({ ativo: !item.ativo }).eq('id', item.id).eq('cliente_id', clienteId)
     if (error) notice(error.message)
     else await load()
   }
@@ -224,23 +191,16 @@ export default function AutoPublisherMasterV1Settings() {
     return { template_uuid: enabled && masterUuid ? masterUuid : '<UUID legado>', contract: enabled && masterUuid && !control.kill_switch ? 'master_v1' : 'legacy', selected_config: config?.id || null, layers }
   }, [activeTitle, configs, control.kill_switch, enabled, format, layerMap, masterUuid, previewSponsor1, previewSponsor2, sponsorById, templateSet])
 
-  const tabs = [['titles', 'Selos da arte'], ['sponsors', 'Patrocinadores'], ['masters', 'Templates master'], ['diagnostic', 'Diagnostico']]
+  const tabs = [['titles', 'Selos da mat\u00e9ria'], ['sponsors', 'Patrocinadores'], ['masters', 'Templates master'], ['diagnostic', 'Diagnostico']]
+
+  if (!clienteId) return <div className="ap-form-section" role={clienteError ? "alert" : "status"}>{clienteError || "Carregando cliente operacional..."}</div>
 
   return <div className="ap-settings" style={{ marginTop: 24 }}><div className="ap-form-section">
     <h2>Configuracoes das artes</h2>
     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>{tabs.map(([key, label]) => <button key={key} type="button" className={tab === key ? 'ap-btn-add' : 'ap-btn-outline'} onClick={() => setTab(key)}>{label}</button>)}</div>
     {message && <p role="status" style={{ color: '#475569' }}>{message}</p>}
 
-    {tab === 'titles' && <><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 12, alignItems: 'end' }}>
-      <label>Nome<input className="ap-input" value={title.nome} onChange={event => setTitle({ ...title, nome: event.target.value, slug: title.slug || slugify(event.target.value) })} /></label>
-      <label>Slug<input className="ap-input" value={title.slug} onChange={event => setTitle({ ...title, slug: slugify(event.target.value) })} /></label>
-      <label>Ordem<input className="ap-input" type="number" min="0" value={title.ordem} onChange={event => setTitle({ ...title, ordem: event.target.value })} /></label>
-      <label><input type="checkbox" checked={title.formatos.includes('feed')} onChange={() => setTitle({ ...title, formatos: toggleFormat(title, 'feed') })} /> Feed</label>
-      <label><input type="checkbox" checked={title.formatos.includes('reels')} onChange={() => setTitle({ ...title, formatos: toggleFormat(title, 'reels') })} /> Reels</label>
-      <label><input type="checkbox" checked={title.ativo} onChange={event => setTitle({ ...title, ativo: event.target.checked })} /> Ativo</label>
-      <PngField label="PNG do selo" file={titleFile} currentAsset={title.id ? title : null} onFileChange={(file, error) => { setTitleFile(file); if (error) notice(error) }} />
-    </div><div style={{ display: 'flex', gap: 8, marginTop: 12 }}><button type="button" className="ap-btn-add" disabled={saving} onClick={saveTitle}>{title.id ? 'Salvar alteracoes' : 'Cadastrar selo'}</button>{title.id && <button type="button" className="ap-btn-outline" onClick={() => { setTitle(emptyTitle); setTitleFile(null) }}>Cancelar edicao</button>}</div>
-    <table className="ap-table" style={{ marginTop: 16 }}><thead><tr><th>Preview</th><th>Nome</th><th>Formatos</th><th>Ordem</th><th>Status</th><th>Acoes</th></tr></thead><tbody>{titles.map(item => <tr key={item.id}><td><img src={assetPreviewUrl(supabase, { bucket: item.asset_bucket, path: item.asset_path })} alt="" style={{ height: 30, maxWidth: 90, objectFit: 'contain' }} /></td><td>{item.nome}</td><td>{item.formatos.join(', ')}</td><td>{item.ordem}</td><td>{item.ativo ? 'Ativo' : 'Arquivado'}</td><td><button type="button" className="ap-btn-sm" onClick={() => { setTitle({ ...item }); setTitleFile(null) }}>Editar</button><button type="button" className="ap-btn-sm" onClick={async () => { const result = await supabase.schema('ap').from('visual_titles').update({ ativo: !item.ativo }).eq('id', item.id).eq('cliente_id', CLIENTE_ID); if (result.error) notice(result.error.message); else await load() }}>{item.ativo ? 'Arquivar' : 'Ativar'}</button></td></tr>)}</tbody></table></>}
+    {tab === 'titles' && <VisualTitlesManager clienteId={clienteId} onChanged={load} />}
 
     {tab === 'sponsors' && <><h3>Catalogo de patrocinadores</h3><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 12, alignItems: 'end' }}>
       <label>Nome<input className="ap-input" value={sponsor.nome} onChange={event => setSponsor({ ...sponsor, nome: event.target.value, slug: sponsor.slug || slugify(event.target.value) })} /></label>
@@ -248,7 +208,7 @@ export default function AutoPublisherMasterV1Settings() {
       <label><input type="checkbox" checked={sponsor.ativo} onChange={event => setSponsor({ ...sponsor, ativo: event.target.checked })} /> Ativo</label>
       <PngField label="Logo PNG" file={sponsorFile} currentAsset={sponsor.id ? sponsor : null} onFileChange={(file, error) => { setSponsorFile(file); if (error) notice(error) }} />
     </div><div style={{ display: 'flex', gap: 8, marginTop: 12 }}><button type="button" className="ap-btn-add" disabled={saving} onClick={saveSponsor}>{sponsor.id ? 'Salvar alteracoes' : 'Cadastrar patrocinador'}</button>{sponsor.id && <button type="button" className="ap-btn-outline" onClick={() => { setSponsor(emptySponsor); setSponsorFile(null) }}>Cancelar edicao</button>}</div>
-    <table className="ap-table" style={{ marginTop: 16 }}><thead><tr><th>Preview</th><th>Nome</th><th>Status</th><th>Acoes</th></tr></thead><tbody>{sponsors.map(item => <tr key={item.id}><td><img src={assetPreviewUrl(supabase, { bucket: item.asset_bucket, path: item.asset_path })} alt="" style={{ height: 30, maxWidth: 90, objectFit: 'contain' }} /></td><td>{item.nome}</td><td>{item.ativo ? 'Ativo' : 'Arquivado'}</td><td><button type="button" className="ap-btn-sm" onClick={() => { setSponsor({ ...item }); setSponsorFile(null) }}>Editar</button><button type="button" className="ap-btn-sm" onClick={async () => { const result = await supabase.schema('ap').from('render_sponsors').update({ ativo: !item.ativo }).eq('id', item.id).eq('cliente_id', CLIENTE_ID); if (result.error) notice(result.error.message); else await load() }}>{item.ativo ? 'Arquivar' : 'Ativar'}</button></td></tr>)}</tbody></table>
+    <table className="ap-table" style={{ marginTop: 16 }}><thead><tr><th>Preview</th><th>Nome</th><th>Status</th><th>Acoes</th></tr></thead><tbody>{sponsors.map(item => <tr key={item.id}><td><img src={assetPreviewUrl(supabase, { bucket: item.asset_bucket, path: item.asset_path })} alt="" style={{ height: 30, maxWidth: 90, objectFit: 'contain' }} /></td><td>{item.nome}</td><td>{item.ativo ? 'Ativo' : 'Arquivado'}</td><td><button type="button" className="ap-btn-sm" onClick={() => { setSponsor({ ...item }); setSponsorFile(null) }}>Editar</button><button type="button" className="ap-btn-sm" onClick={async () => { const result = await supabase.schema('ap').from('render_sponsors').update({ ativo: !item.ativo }).eq('id', item.id).eq('cliente_id', clienteId); if (result.error) notice(result.error.message); else await load() }}>{item.ativo ? 'Arquivar' : 'Ativar'}</button></td></tr>)}</tbody></table>
     <h3 style={{ marginTop: 22 }}>Campanhas e formatos da rotacao</h3><p style={{ color: '#64748b' }}>A ordem pertence a esta associacao. Ela nao altera templates, cursor ou fila legados.</p><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 12, alignItems: 'end' }}>
       <label>Patrocinador<select className="ap-select" value={membership.sponsor_id} onChange={event => setMembership({ ...membership, sponsor_id: event.target.value })}><option value="">Selecione</option>{sponsors.filter(item => item.ativo).map(item => <option key={item.id} value={item.id}>{item.nome}</option>)}</select></label>
       <label>Campanha<input className="ap-input" value={membership.template_set} onChange={event => setMembership({ ...membership, template_set: event.target.value })} /></label>

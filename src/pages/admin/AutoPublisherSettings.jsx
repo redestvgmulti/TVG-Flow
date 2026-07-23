@@ -3,14 +3,12 @@ import { supabase } from '../../services/supabase'
 import { Plus, Trash2, Globe } from 'lucide-react'
 import AutoPublisherMasterV1Settings from './AutoPublisherMasterV1Settings'
 
-const FIXED_CLIENT_ID = 'cd287e6e-f273-4d0f-a72d-2a8c391e40e9'
 
 // ──────────────────────────────────────────────────────────
 // AutoPublisherSettings — FlowOS V2 Design System
 // ──────────────────────────────────────────────────────────
 
-export default function AutoPublisherSettings() {
-    const clienteId = FIXED_CLIENT_ID
+export default function AutoPublisherSettings({ clienteId, clienteError }) {
     const [sources, setSources] = useState([])
     const [newSource, setNewSource] = useState({ nome: '', url: '', tipo: 'rss' })
     const [saving, setSaving] = useState(false)
@@ -152,7 +150,7 @@ export default function AutoPublisherSettings() {
                     </table>
                 </div>
             </div>
-            <AutoPublisherMasterV1Settings />
+            <AutoPublisherMasterV1Settings clienteId={clienteId} clienteError={clienteError} />
         </div>
     )
 }

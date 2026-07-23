@@ -12,8 +12,7 @@ import EditorialEngine from '../../features/editorial/EditorialEngine'
 import { SkeletonCard, SkeletonTable } from '../../components/Skeleton'
 import { toast } from 'sonner'
 import ArticleForm from '../../components/editorial/ArticleForm'
-
-const FIXED_CLIENT_ID = 'cd287e6e-f273-4d0f-a72d-2a8c391e40e9'
+import { resolveOperationalClienteId } from '../../services/visualTitleGroups'
 
 // ──────────────────────────────────────────────────────────
 // Tab config
@@ -49,7 +48,8 @@ const STATUS_TAB = {
 
 // ──────────────────────────────────────────────────────────
 export default function AutoPublisher() {
-    const clienteId = FIXED_CLIENT_ID
+    const [clienteId, setClienteId] = useState(null)
+    const [clienteError, setClienteError] = useState('')
 
     const [tab, setTab] = useState('pendentes')
     const [tabCounts, setTabCounts] = useState({})
@@ -89,6 +89,14 @@ export default function AutoPublisher() {
     const [editForm, setEditForm] = useState({ context_tag: '', headline: '', caption: '', imagem_url: '' })
     const [isSavingEdit, setIsSavingEdit] = useState(false)
     const [editSelectedFile, setEditSelectedFile] = useState(null)
+    useEffect(() => {
+        let active = true
+        resolveOperationalClienteId(supabase)
+            .then(id => { if (active) setClienteId(id) })
+            .catch(error => { if (active) setClienteError(error.message) })
+        return () => { active = false }
+    }, [])
+
     const [isEditDragging, setIsEditDragging] = useState(false)
 
 
@@ -216,7 +224,7 @@ export default function AutoPublisher() {
         }
     }, [formData.template_set, formData.content_type])
     useEffect(() => {
-        if (!isManualModalOpen) return
+        if (!isManualModalOpen || !clienteId) return
         supabase.schema('ap').from('visual_titles').select('id,nome,asset_bucket,asset_path,ordem,formatos').eq('cliente_id', clienteId).eq('ativo', true).contains('formatos', [formData.content_type]).order('ordem', { ascending: true }).then(({ data, error }) => {
             if (error) { console.error('[AutoPublisher] visual title fetch failed', error); setVisualTitles([]); return }
             setVisualTitles((data || []).map(title => ({ ...title, preview_url: supabase.storage.from(title.asset_bucket).getPublicUrl(title.asset_path).data.publicUrl })))
@@ -225,7 +233,7 @@ export default function AutoPublisher() {
 
     // ── Load campaigns (template_sets) every time the manual modal opens
     useEffect(() => {
-        if (!isManualModalOpen) return
+        if (!isManualModalOpen || !clienteId) return
         let cancelled = false
         async function loadMasterRuntime() {
             const [controlsResult, configsResult] = await Promise.all([
@@ -677,7 +685,7 @@ export default function AutoPublisher() {
                 {/* ── Content */}
                 {tab === 'editorial' && <EditorialEngine clienteId={clienteId} />}
                 {tab === 'templates' && <AutoPublisherTemplates clienteId={clienteId} />}
-                {tab === 'settings' && <AutoPublisherSettings clienteId={clienteId} />}
+                {tab === 'settings' && <AutoPublisherSettings clienteId={clienteId} clienteError={clienteError} />}
 
                 {/* ── Coletadas (leitura-only, tabela simples) */}
                 {tab === 'coletadas' && (
