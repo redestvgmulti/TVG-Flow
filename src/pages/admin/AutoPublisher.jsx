@@ -4,7 +4,7 @@ import '../../styles/AutoPublisher.css'
 import {
     Rss, RefreshCcw, Check, X, Copy, Download,
     ImageIcon, Zap, Info, MoreVertical, Brain, Heart, MessageCircle, Send, Bookmark, Plus, UploadCloud, Link2,
-    Video, CheckCircle2, ChevronDown, ChevronUp, Pencil, Loader2, AlertTriangle
+    Video, CheckCircle2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, ChevronsRight, Pencil, Loader2, AlertTriangle
 } from 'lucide-react'
 import AutoPublisherSettings from './AutoPublisherSettings'
 import AutoPublisherTemplates from './AutoPublisherTemplates'
@@ -14,6 +14,8 @@ import { toast } from 'sonner'
 import ArticleForm from '../../components/editorial/ArticleForm'
 
 const FIXED_CLIENT_ID = 'cd287e6e-f273-4d0f-a72d-2a8c391e40e9'
+const COLETADAS_PAGE_SIZE = 20
+const MAIN_TAB_KEYS = ['coletadas', 'pendentes', 'aprovadas', 'publicadas']
 
 // ──────────────────────────────────────────────────────────
 // Tab config
@@ -55,6 +57,8 @@ export default function AutoPublisher() {
     const [tabCounts, setTabCounts] = useState({})
     const [items, setItems] = useState([])
     const [loading, setLoading] = useState(false)
+    const [collectedPage, setCollectedPage] = useState(1)
+    const [collectedTotal, setCollectedTotal] = useState(0)
     const [ingestionEnabled, setIngestionEnabled] = useState(true)
     const [isProcessing, setIsProcessing] = useState(false)
 
@@ -69,10 +73,12 @@ export default function AutoPublisher() {
         image_url: '',
         content_type: 'feed',
         template_set: 'default',
-        placid_template_uuid: null
+        placid_template_uuid: null,
+        visual_title_id: null
     })
     const [availableTemplates, setAvailableTemplates] = useState([])
     const [availableCampaigns, setAvailableCampaigns] = useState(null) // null = not yet loaded
+    const [visualTitles, setVisualTitles] = useState([])
     const [manualFormErrors, setManualFormErrors] = useState({})
     const [isSubmittingManual, setIsSubmittingManual] = useState(false)
     const [selectedFile, setSelectedFile] = useState(null)
@@ -88,6 +94,10 @@ export default function AutoPublisher() {
 
 
 
+    function selectTab(nextTab) {
+        setTab(nextTab)
+        if (nextTab === 'coletadas') setCollectedPage(1)
+    }
     function resetManualModal() {
         setManualModalOpen(false)
         setSelectedFlow(1)
@@ -99,7 +109,8 @@ export default function AutoPublisher() {
             image_url: '',
             content_type: 'feed',
             template_set: 'default',
-            placid_template_uuid: null
+            placid_template_uuid: null,
+        visual_title_id: null
         })
         setAvailableTemplates([])
         setSelectedFile(null)
@@ -132,7 +143,7 @@ export default function AutoPublisher() {
     }, [clienteId])
 
     // ── Fetch items for current tab
-    const fetchItems = useCallback(async (currentTab) => {
+    const fetchItems = useCallback(async (currentTab, page = collectedPage) => {
         if (!clienteId) return
         setLoading(true)
 
@@ -144,27 +155,36 @@ export default function AutoPublisher() {
 
         if (statuses.length === 0) {
             setItems([])
+            if (currentTab === 'coletadas') setCollectedTotal(0)
             setLoading(false)
             return
         }
 
-        const { data, error } = await supabase
-            .schema('ap')
-            .from('candidate_news')
-            .select(`id, titulo, headline, caption, render_url, imagem_url, imagem_storage, image_external,
-                     status, created_at, context_tag, content_type,
-                     template_nome_snapshot, roteiro_studio, duracao_estimada, broll_sugestao,
-                     studio_media_image_url, studio_media_video_url, enviado_para_studio,
-                     instagram_post_id, horario_agendado`)
+        const fields = `id, titulo, headline, caption, render_url, imagem_url, imagem_storage, image_external,
+                        status, created_at, context_tag, content_type,
+                        template_nome_snapshot, roteiro_studio, duracao_estimada, broll_sugestao,
+                        studio_media_image_url, studio_media_video_url, enviado_para_studio,
+                        instagram_post_id, horario_agendado`
+        let query = currentTab === 'coletadas'
+            ? supabase.schema('ap').from('candidate_news').select(fields, { count: 'exact' })
+            : supabase.schema('ap').from('candidate_news').select(fields)
+
+        query = query
             .eq('cliente_id', clienteId)
             .in('status', statuses)
             .order('updated_at', { ascending: false })
 
-        if (error) { toast.error("Erro ao carregar itens.") }
-        setItems(data ?? [])
-        setLoading(false)
-    }, [clienteId])
+        if (currentTab === 'coletadas') {
+            const from = (page - 1) * COLETADAS_PAGE_SIZE
+            query = query.range(from, from + COLETADAS_PAGE_SIZE - 1)
+        }
 
+        const { data, error, count } = await query
+        if (error) toast.error('Erro ao carregar itens.')
+        setItems(data ?? [])
+        if (currentTab === 'coletadas') setCollectedTotal(count ?? 0)
+        setLoading(false)
+    }, [clienteId, collectedPage])
     // ── Load available templates for any non-default campaign
     useEffect(() => {
         if (formData.template_set && formData.template_set !== 'default' && formData.content_type) {
@@ -203,9 +223,17 @@ export default function AutoPublisher() {
             loadTemplates()
         } else {
             setAvailableTemplates([])
-            setFormData(prev => ({ ...prev, placid_template_uuid: null }))
+            setFormData(prev => ({ ...prev, placid_template_uuid: null,
+        visual_title_id: null }))
         }
     }, [formData.template_set, formData.content_type])
+    useEffect(() => {
+        if (!isManualModalOpen) return
+        supabase.schema('ap').from('visual_titles').select('id,nome,asset_bucket,asset_path,ordem,formatos').eq('cliente_id', clienteId).eq('ativo', true).contains('formatos', [formData.content_type]).order('ordem', { ascending: true }).order('nome', { ascending: true }).then(({ data, error }) => {
+            if (error) { console.error('[AutoPublisher] visual title fetch failed', error); setVisualTitles([]); return }
+            setVisualTitles((data || []).map(title => ({ ...title, preview_url: supabase.storage.from(title.asset_bucket).getPublicUrl(title.asset_path).data.publicUrl })))
+        })
+    }, [isManualModalOpen, clienteId, formData.content_type])
 
     // ── Load campaigns (template_sets) every time the manual modal opens
     useEffect(() => {
@@ -394,19 +422,23 @@ export default function AutoPublisher() {
     async function handleForceProcess() {
         if (isProcessing) return
         setIsProcessing(true)
-        toast.info("Iniciando pipeline... (Pode levar alguns segundos)");
+        // Toast único que evolui pelas etapas reais do pipeline
+        const toastId = toast.loading("1/4 · Buscando imagens...")
         try {
             await supabase.functions.invoke('ap-image-fetcher');
+            toast.loading("2/4 · Analisando e pontuando matérias...", { id: toastId });
             await supabase.functions.invoke('ap-scoring-engine');
+            toast.loading("3/4 · Montando feed do dia...", { id: toastId });
             await supabase.functions.invoke('ap-daily-feed-builder');
+            toast.loading("4/4 · Produzindo conteúdo...", { id: toastId });
             await supabase.functions.invoke('ap-content-production', { body: { action: 'process_selected' } });
             // NOTE: ap-render-engine is NOT called here.
             // It runs on its own cron schedule and will automatically pick up
             // items in 'pending_render' with idempotency guarantees.
-            toast.success("Pipeline iniciado. A renderização ocorrerá automaticamente.");
+            toast.success("Pipeline concluído. A renderização ocorrerá automaticamente.", { id: toastId });
             fetchCounts(); fetchItems(tab);
         } catch (err) {
-            toast.error("Erro ao processar.");
+            toast.error("Erro ao processar.", { id: toastId });
         } finally {
             setIsProcessing(false);
         }
@@ -532,6 +564,7 @@ export default function AutoPublisher() {
             imagem_url: formData.content_type === 'reels' ? null : finalImageUrl,
             template_set: formData.template_set || 'default',
             placid_template_uuid: formData.placid_template_uuid || null,
+            visual_title_id: formData.visual_title_id || null,
             // Hybrid fields for backend compatibility
             userHeadline: formData.titulo || null,
             userTag: formData.context_tag.toUpperCase(),
@@ -558,62 +591,60 @@ export default function AutoPublisher() {
                 <div className="ap-main">
                     {/* ── Page Header */}
                     <div className="ap-header">
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <Rss size={20} style={{ color: 'var(--color-primary)' }} />
+                        <div className="ap-header-id">
+                            <span className="ap-title-mark"><Rss size={16} /></span>
                             <h1 className="ap-header-title">AutoPublisher</h1>
-                            <span className="ap-badge-live" style={{ background: ingestionEnabled ? 'var(--color-success-bg)' : '#f3f4f6', color: ingestionEnabled ? 'var(--color-success-text)' : '#6b7280' }}>
+                            <span className={`ap-badge-live${ingestionEnabled ? '' : ' off'}`}>
                                 {ingestionEnabled ? 'Motor Ativo' : 'Desativado'}
                             </span>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '12px', padding: '4px 12px', background: '#fff', border: '1px solid #dbdbdb', borderRadius: '20px' }}>
-                                <div onClick={toggleIngestion} style={{ width: '36px', height: '20px', background: ingestionEnabled ? '#0095f6' : '#e5e7eb', borderRadius: '10px', position: 'relative', transition: 'background 0.2s', cursor: 'pointer' }}>
-                                    <div style={{ width: '16px', height: '16px', background: '#fff', borderRadius: '50%', position: 'absolute', top: '2px', left: ingestionEnabled ? '18px' : '2px', transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)', boxShadow: '0 1px 2px rgba(0,0,0,0.2)' }} />
-                                </div>
-                                <span style={{ fontSize: '13px', fontWeight: 600, color: '#262626', cursor: 'pointer' }} onClick={toggleIngestion}>Pausar Ingestão</span>
-                            </div>
                         </div>
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                            <button className="ap-btn-refresh" style={{ background: 'var(--color-primary)', color: '#fff', border: 'none' }} onClick={() => setManualModalOpen(true)}>
-                                <Plus size={14} /> Nova Matéria
-                            </button>
-                            <button
-                                className="ap-btn-refresh"
-                                style={{ background: isProcessing ? '#f3f4f6' : 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)', color: isProcessing ? '#9ca3af' : '#fff', border: 'none', opacity: isProcessing ? 0.7 : 1, cursor: isProcessing ? 'not-allowed' : 'pointer' }}
-                                onClick={handleForceProcess}
-                                disabled={isProcessing}
-                            >
-                                <Zap size={14} className={isProcessing ? 'spin-anim' : ''} />
-                                {isProcessing ? 'Processando...' : 'Processar Tudo'}
-                            </button>
+                        <div className="ap-header-actions">
+                            <label className="ap-ingest" title={ingestionEnabled ? 'Pausar ingestão automática' : 'Retomar ingestão automática'}>
+                                <input type="checkbox" checked={ingestionEnabled} onChange={toggleIngestion} />
+                                <span className="ap-ingest-track" />
+                                Ingestão
+                            </label>
                             <button className="ap-btn-refresh" onClick={() => { fetchCounts(); fetchItems(tab) }}>
                                 <RefreshCcw size={14} /> Atualizar
                             </button>
+                            <button className="ap-btn-refresh" onClick={handleForceProcess} disabled={isProcessing}>
+                                <Zap size={14} className={isProcessing ? 'ap-spin-icon' : ''} />
+                                {isProcessing ? 'Processando...' : 'Processar Tudo'}
+                            </button>
+                            <button className="ap-btn-refresh primary" onClick={() => setManualModalOpen(true)}>
+                                <Plus size={14} /> Nova Matéria
+                            </button>
                         </div>
                     </div>
 
-                    {/* ── Tabs com contadores */}
-                    <div className="ap-pipeline">
-                        {TABS.filter(t => ['coletadas', 'pendentes', 'aprovadas', 'publicadas'].includes(t.key)).map(({ key, label }) => (
-                            <button
-                                key={key}
-                                className={`ap-stage${tab === key ? ' active' : ''}`}
-                                onClick={() => setTab(key)}
-                            >
-                                <span className="ap-stage-count">{tabCounts[key] ?? 0}</span>
-                                <span className="ap-stage-label">{label}</span>
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* ── Sub tabs (Motor / Configurações) */}
-                    <div className="ap-tabs">
-                        {['coletadas', 'pendentes', 'aprovadas', 'publicadas'].map(key => (
-                            <button key={key} className={`ap-tab${tab === key ? ' active' : ''}`} onClick={() => setTab(key)}>
-                                {TABS.find(t => t.key === key)?.label}
-                            </button>
-                        ))}
-                        <button className={`ap-tab${tab === 'editorial' ? ' active' : ''}`} onClick={() => setTab('editorial')}>Motor Editorial</button>
-                        <button className={`ap-tab${tab === 'templates' ? ' active' : ''}`} onClick={() => setTab('templates')}>Templates</button>
-                        <button className={`ap-tab${tab === 'settings' ? ' active' : ''}`} onClick={() => setTab('settings')}>Configurações</button>
+                    {/* ── Navegação: pipeline segmentado + abas de gestão */}
+                    <div className="ap-nav">
+                        <div className="ap-seg" role="tablist" aria-label="Estágios do pipeline">
+                            <span
+                                className="ap-seg-pill"
+                                style={{
+                                    left: `calc(3px + ${Math.max(0, MAIN_TAB_KEYS.indexOf(tab))} * (100% - 6px) / 4)`,
+                                    opacity: MAIN_TAB_KEYS.includes(tab) ? 1 : 0
+                                }}
+                            />
+                            {MAIN_TAB_KEYS.map(key => (
+                                <button
+                                    key={key}
+                                    role="tab"
+                                    aria-selected={tab === key}
+                                    className={`ap-seg-btn${tab === key ? ' active' : ''}`}
+                                    onClick={() => selectTab(key)}
+                                >
+                                    {TABS.find(t => t.key === key)?.label}
+                                    <span className="ap-seg-count">{tabCounts[key] ?? 0}</span>
+                                </button>
+                            ))}
+                        </div>
+                        <div className="ap-aux-tabs">
+                            <button className={`ap-aux-tab${tab === 'editorial' ? ' active' : ''}`} onClick={() => selectTab('editorial')}>Motor Editorial</button>
+                            <button className={`ap-aux-tab${tab === 'templates' ? ' active' : ''}`} onClick={() => selectTab('templates')}>Templates</button>
+                            <button className={`ap-aux-tab${tab === 'settings' ? ' active' : ''}`} onClick={() => selectTab('settings')}>Configurações</button>
+                        </div>
                     </div>
                 </div>
 
@@ -623,36 +654,39 @@ export default function AutoPublisher() {
                 {tab === 'settings' && <AutoPublisherSettings clienteId={clienteId} />}
 
                 {/* ── Coletadas (leitura-only, tabela simples) */}
+                {/* ── Coletadas */}
                 {tab === 'coletadas' && (
                     loading ? <SkeletonTable rows={5} cols={4} /> :
                         items.length === 0 ? <EmptyStatePremium /> : (
-                            <div className="ap-table-container">
-                                <table className="ap-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Matéria</th>
-                                            <th style={{ width: 130 }}>Status</th>
-                                            <th style={{ width: 100 }}>Formato</th>
-                                            <th style={{ width: 150 }}>Coletada em</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {items.map(item => (
-                                            <tr key={item.id}>
-                                                <td style={{ fontWeight: 500, color: '#0f172a' }}>{item.titulo}</td>
-                                                <td><StatusBadge status={item.status} errorLog={item.error_log} /></td>
-                                                <td><FormatBadge type={item.content_type} /></td>
-                                                <td style={{ fontSize: 12, color: '#94a3b8' }}>
-                                                    {new Date(item.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
-                                                </td>
+                            <>
+                                <div className="ap-table-container">
+                                    <table className="ap-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Matéria</th>
+                                                <th style={{ width: 130 }}>Status</th>
+                                                <th style={{ width: 100 }}>Formato</th>
+                                                <th style={{ width: 150 }}>Coletada em</th>
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
+                                        </thead>
+                                        <tbody>
+                                            {items.map(item => (
+                                                <tr key={item.id}>
+                                                    <td className="ap-td-title">{item.titulo}</td>
+                                                    <td><StatusBadge status={item.status} errorLog={item.error_log} /></td>
+                                                    <td><FormatBadge type={item.content_type} /></td>
+                                                    <td className="ap-td-meta">
+                                                        {new Date(item.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <CollectedPagination page={collectedPage} total={collectedTotal} onPageChange={setCollectedPage} />
+                            </>
                         )
                 )}
-
                 {/* ── Pendentes (cards com Studio + Aprovar p/IG) */}
                 {tab === 'pendentes' && (
                     loading ? (
@@ -720,19 +754,19 @@ export default function AutoPublisher() {
                                                     {item.render_url ? (
                                                         <a href={item.render_url} target="_blank" rel="noreferrer">
                                                             {item.render_url.toLowerCase().includes('.mp4') ? (
-                                                                <video src={item.render_url} style={{ width: 80, height: 45, objectFit: 'cover', borderRadius: 6, border: '1px solid #e2e8f0' }} preload="metadata" muted playsInline />
+                                                                <video src={item.render_url} className="ap-table-thumb" preload="metadata" muted playsInline />
                                                             ) : (
-                                                                <img src={item.render_url} alt="" style={{ width: 80, height: 45, objectFit: 'cover', borderRadius: 6, border: '1px solid #e2e8f0' }} />
+                                                                <img src={item.render_url} alt="" className="ap-table-thumb" />
                                                             )}
                                                         </a>
-                                                    ) : <span style={{ color: '#94a3b8', fontSize: 12 }}>Sem arte</span>}
+                                                    ) : <span className="ap-td-meta">Sem arte</span>}
                                                 </td>
                                                 <td>
-                                                    <div style={{ fontWeight: 500, color: '#0f172a' }}>{item.headline ?? item.titulo}</div>
-                                                    {item.caption && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{item.caption}</div>}
+                                                    <div className="ap-td-title">{item.headline ?? item.titulo}</div>
+                                                    {item.caption && <div className="ap-td-caption">{item.caption}</div>}
                                                 </td>
                                                 <td><FormatBadge type={item.content_type} /></td>
-                                                <td style={{ fontSize: 12, color: '#94a3b8' }}>
+                                                <td className="ap-td-meta">
                                                     {item.horario_agendado
                                                         ? new Date(item.horario_agendado).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
                                                         : new Date(item.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
@@ -755,19 +789,19 @@ export default function AutoPublisher() {
 
             {/* ── Modal Nova Matéria */}
             {isManualModalOpen && (
-                <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-                    <div className="ap-modal-content" style={{ background: '#ffffff', padding: '0', borderRadius: '20px', width: '560px', maxWidth: '100%', boxShadow: '0 24px 48px rgba(0,0,0,0.15)', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #f0f0f0', background: '#fafafa', flexShrink: 0 }}>
-                            <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#111827', margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                <div style={{ background: '#eff6ff', color: '#3b82f6', padding: '8px', borderRadius: '10px', display: 'flex' }}><Brain size={18} /></div>
+                <div className="ap-modal-overlay">
+                    <div className="ap-modal-content">
+                        <div className="ap-modal-head">
+                            <h2 className="ap-modal-title">
+                                <span className="ap-modal-title-icon"><Brain size={18} /></span>
                                 Nova Matéria
                             </h2>
-                            <button onClick={() => { setManualModalOpen(false); setSelectedFile(null); setFormData({ url_original: '', titulo: '', conteudo: '', image_url: '', context_tag: '', content_type: 'feed', template_set: 'default' }) }} style={{ background: '#f3f4f6', border: 'none', cursor: 'pointer', color: '#6b7280', width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <button className="ap-modal-close" onClick={() => { setManualModalOpen(false); setSelectedFile(null); setFormData({ url_original: '', titulo: '', conteudo: '', image_url: '', context_tag: '', content_type: 'feed', template_set: 'default' }) }}>
                                 <X size={18} />
                             </button>
                         </div>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', padding: '20px', gap: '20px', overflowY: 'auto', flex: 1, maxHeight: '75vh', boxSizing: 'border-box' }}>
+                        <div className="ap-modal-body">
                             <ArticleForm
                                 mode="admin"
                                 formData={formData}
@@ -782,6 +816,7 @@ export default function AutoPublisher() {
                                 onCancel={() => { setManualModalOpen(false); setSelectedFile(null); }}
                                 availableTemplates={availableTemplates}
                                 availableCampaigns={availableCampaigns}
+                                visualTitles={visualTitles}
                                 selectedFile={selectedFile}
                                 setSelectedFile={setSelectedFile}
                             />
@@ -792,78 +827,72 @@ export default function AutoPublisher() {
 
             {/* ── Modal Edição de Matéria */}
             {editModalOpen && editingItem && (
-                <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-                    <div className="ap-modal-content" style={{ background: '#ffffff', padding: '0', borderRadius: '20px', width: '560px', maxWidth: '100%', boxShadow: '0 24px 48px rgba(0,0,0,0.15)', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #f0f0f0', background: '#fafafa', flexShrink: 0 }}>
-                            <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#111827', margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                <div style={{ background: '#f5f3ff', color: '#8b5cf6', padding: '8px', borderRadius: '10px', display: 'flex' }}><Pencil size={18} /></div>
+                <div className="ap-modal-overlay">
+                    <div className="ap-modal-content">
+                        <div className="ap-modal-head">
+                            <h2 className="ap-modal-title">
+                                <span className="ap-modal-title-icon"><Pencil size={18} /></span>
                                 Editar Matéria
                             </h2>
-                            <button onClick={() => { setEditModalOpen(false); setEditingItem(null) }} style={{ background: '#f3f4f6', border: 'none', cursor: 'pointer', color: '#6b7280', width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <button className="ap-modal-close" onClick={() => { setEditModalOpen(false); setEditingItem(null) }}>
                                 <X size={18} />
                             </button>
                         </div>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', padding: '20px', gap: '20px', overflowY: 'auto', flex: 1, maxHeight: '75vh', boxSizing: 'border-box' }}>
+                        <div className="ap-modal-body">
                             <form onSubmit={handleSaveEdit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', boxSizing: 'border-box' }}>
-                                    <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Tag de Editoria</label>
-                                    <input value={editForm.context_tag} onChange={e => setEditForm({ ...editForm, context_tag: e.target.value.toUpperCase() })} maxLength={20} required style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' }} />
+                                <div className="ap-field">
+                                    <label>Tag de Editoria</label>
+                                    <input value={editForm.context_tag} onChange={e => setEditForm({ ...editForm, context_tag: e.target.value.toUpperCase() })} maxLength={20} required />
                                 </div>
 
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', boxSizing: 'border-box' }}>
-                                    <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Headline (Texto do Card)</label>
-                                    <input value={editForm.headline} onChange={e => setEditForm({ ...editForm, headline: e.target.value })} required style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' }} />
+                                <div className="ap-field">
+                                    <label>Headline (Texto do Card)</label>
+                                    <input value={editForm.headline} onChange={e => setEditForm({ ...editForm, headline: e.target.value })} required />
                                 </div>
 
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', boxSizing: 'border-box' }}>
-                                    <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Legenda (Caption)</label>
-                                    <textarea value={editForm.caption} onChange={e => setEditForm({ ...editForm, caption: e.target.value })} rows={5} required style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', resize: 'vertical', minHeight: '100px', boxSizing: 'border-box' }} />
+                                <div className="ap-field">
+                                    <label>Legenda (Caption)</label>
+                                    <textarea value={editForm.caption} onChange={e => setEditForm({ ...editForm, caption: e.target.value })} rows={5} required />
                                 </div>
 
                                 {editingItem.content_type !== 'reels' && (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', boxSizing: 'border-box' }}>
-                                        <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Foto (Upload ou URL)</label>
+                                    <div className="ap-field">
+                                        <label>Foto (Upload ou URL)</label>
                                         <div
+                                            className={`ap-dropzone${isEditDragging ? ' dragging' : ''}`}
                                             onDragOver={e => { e.preventDefault(); setIsEditDragging(true) }}
                                             onDragLeave={() => setIsEditDragging(false)}
                                             onDrop={e => { e.preventDefault(); setIsEditDragging(false); if (e.dataTransfer.files && e.dataTransfer.files[0]) { setEditSelectedFile(e.dataTransfer.files[0]); setEditForm({ ...editForm, imagem_url: '' }) } }}
-                                            style={{ border: isEditDragging ? '2px dashed #8b5cf6' : '2px dashed #cbd5e1', borderRadius: '12px', padding: '16px', textAlign: 'center', background: isEditDragging ? '#f5f3ff' : '#f8fafc', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}
                                             onClick={() => document.getElementById('edit-file-upload').click()}
                                         >
                                             <input id="edit-file-upload" type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { if (e.target.files && e.target.files[0]) { setEditSelectedFile(e.target.files[0]); setEditForm({ ...editForm, imagem_url: '' }) } }} />
                                             {editSelectedFile ? (
-                                                <div style={{ background: '#dcfce7', color: '#166534', padding: '8px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <div className="ap-dropzone-file">
                                                     <CheckCircle2 size={16} /> {editSelectedFile.name}
                                                 </div>
                                             ) : (
                                                 <>
-                                                    <div style={{ background: '#e2e8f0', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                        <UploadCloud size={18} color="#64748b" />
+                                                    <div className="ap-dropzone-icon">
+                                                        <UploadCloud size={18} />
                                                     </div>
-                                                    <span style={{ fontSize: '13px', color: '#475569', fontWeight: 500 }}>Upload de Arquivo (Clique ou Arraste)</span>
+                                                    <span className="ap-dropzone-label">Upload de Arquivo (Clique ou Arraste)</span>
                                                 </>
                                             )}
                                         </div>
 
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', opacity: 0.6 }}>
-                                            <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
-                                            <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>OU</span>
-                                            <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
-                                        </div>
+                                        <div className="ap-divider-ou"><span>OU</span></div>
 
                                         {!editSelectedFile && (
-                                            <input value={editForm.imagem_url} onChange={e => setEditForm({ ...editForm, imagem_url: e.target.value })} placeholder="URL da imagem (ex: https://site.com/foto.jpg)" style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' }} />
+                                            <input value={editForm.imagem_url} onChange={e => setEditForm({ ...editForm, imagem_url: e.target.value })} placeholder="URL da imagem (ex: https://site.com/foto.jpg)" />
                                         )}
                                     </div>
                                 )}
 
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #e2e8f0' }}>
-                                    <button type="submit" disabled={isSavingEdit} style={{ width: '100%', background: '#8b5cf6', color: '#fff', border: 'none', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: isSavingEdit ? 'not-allowed' : 'pointer', opacity: isSavingEdit ? 0.7 : 1 }}>
-                                        {isSavingEdit ? 'Salvando...' : 'Salvar Alterações'}
-                                    </button>
-                                </div>
+                                <button type="submit" className="ap-modal-submit" disabled={isSavingEdit}>
+                                    {isSavingEdit ? 'Salvando...' : 'Salvar Alterações'}
+                                </button>
                             </form>
                         </div>
                     </div>
@@ -891,95 +920,95 @@ function PendenteCard({ item, onReject, onStudio, onApproveSelected, onEdit, isP
         }
     }
 
+    const missingFeedImage = item.content_type === 'feed' && !item.imagem_url && !item.imagem_storage && !item.render_url
+
     return (
-        <div className="ap-review-card insta-mock" style={{ maxWidth: '400px', margin: '0 auto', paddingBottom: '16px', border: (item.content_type === 'feed' && !item.imagem_url && !item.imagem_storage && !item.render_url) ? '2px solid #ef4444' : '' }}>
+        <div className={`ap-review-card insta-mock${missingFeedImage ? ' has-error' : ''}`} style={{ maxWidth: '400px', margin: '0 auto', paddingBottom: '16px' }}>
             {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid #efefef' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(45deg, #f09433 0%,#e6683c 25%,#dc2743 50%,#cc2366 75%,#bc1888 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <img src="/tvgmulti-logo.jpg" style={{ width: 24, height: 24, borderRadius: '50%' }} alt="Avatar" />
+            <div className="ap-ig-head">
+                <div className="ap-ig-id">
+                    <div className="ap-ig-ring">
+                        <div className="ap-ig-ring-inner">
+                            <img src="/tvgmulti-logo.jpg" className="ap-ig-avatar" alt="Avatar" />
                         </div>
                     </div>
                     <div>
-                        <span style={{ fontSize: '13px', fontWeight: 600, color: '#262626' }}>tvgmulti</span>
-                        <div style={{ fontSize: '11px', color: '#8e8e8e', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
-                            {item.context_tag && <span style={{ color: 'var(--color-primary)', fontWeight: 600 }}>{item.context_tag} •</span>}
+                        <span className="ap-ig-user">tvgmulti</span>
+                        <div className="ap-ig-meta">
+                            {item.context_tag && <span className="ap-ig-tag">{item.context_tag}</span>}
                             <StatusBadge status={item.status} small errorLog={item.error_log} />
-                            <div style={{ marginLeft: '4px' }}>
-                                <FormatBadge type={item.content_type} />
-                            </div>
+                            <FormatBadge type={item.content_type} />
                         </div>
                     </div>
                 </div>
-                <MoreVertical size={16} color="#262626" />
+                <MoreVertical size={16} className="ap-ig-more" />
             </div>
 
             {/* Part 3 - Dashboard Visual Alert */}
-            {(item.content_type === 'feed' && !item.imagem_url && !item.imagem_storage && !item.render_url && !['pending_render', 'processing', 'generating'].includes(item.status)) && (
-                <div style={{ padding: '6px 12px', background: '#fee2e2', color: '#ef4444', fontSize: '11px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', borderBottom: '1px solid #fca5a5' }}>
+            {(missingFeedImage && !['pending_render', 'processing', 'generating'].includes(item.status)) && (
+                <div className="ap-card-alert">
                     <AlertTriangle size={14} /> Erro: Post de Feed sem Imagem
                 </div>
             )}
 
             {/* Imagem */}
-            <div className="ap-card-img-wrap" style={{ aspectRatio: '4/5', width: '100%', background: '#fafafa', position: 'relative' }}>
+            <div className="ap-card-img-wrap">
                 {(() => {
                     const finalUrl = item.render_url ?? (item.imagem_storage ? supabase.storage.from('ap-images').getPublicUrl(item.imagem_storage).data.publicUrl : null) ?? item.imagem_url ?? item.studio_media_image_url;
                     if (!finalUrl) {
                         return (
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 8 }}>
-                                <ImageIcon size={32} color="#dbdbdb" />
+                            <div className="ap-card-img-empty">
+                                <ImageIcon size={32} />
                             </div>
                         );
                     }
                     if (finalUrl && finalUrl.toLowerCase().includes('.mp4')) {
                         return (
-                            <video className="ap-card-img" src={finalUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} autoPlay loop muted playsInline />
+                            <video className="ap-card-img" src={finalUrl} autoPlay loop muted playsInline />
                         );
                     }
                     return (
-                        <img className="ap-card-img" src={finalUrl} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <img className="ap-card-img" src={finalUrl} alt="" loading="lazy" />
                     );
                 })()}
             </div>
 
             {/* Ações Insta */}
-            <div style={{ padding: '12px 16px 8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', gap: '16px' }}>
-                    <Heart size={24} color="#262626" />
-                    <MessageCircle size={24} color="#262626" />
-                    <Send size={24} color="#262626" />
+            <div className="ap-ig-actions">
+                <div className="ap-ig-actions-left">
+                    <Heart size={24} />
+                    <MessageCircle size={24} />
+                    <Send size={24} />
                 </div>
-                <Bookmark size={24} color="#262626" />
+                <Bookmark size={24} />
             </div>
 
             {/* Caption */}
-            <div className="ap-card-body" style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
-                <p style={{ fontSize: '13px', margin: 0 }}>
-                    <span style={{ fontWeight: 600, color: '#262626', marginRight: '6px' }}>tvgmulti</span>
+            <div className="ap-card-body">
+                <p className="ap-card-headline">
+                    <b>tvgmulti</b>
                     {item.headline ?? item.titulo}
                 </p>
 
                 {/* Roteiro Studio */}
                 {isStudio && item.roteiro_studio && (
-                    <div style={{ marginTop: '8px', fontSize: '12px', color: '#262626', background: '#f5f5f5', padding: '12px', borderRadius: '4px', borderLeft: '3px solid #1c1c1e' }}>
-                        <div style={{ fontWeight: 600, marginBottom: '4px', display: 'flex', justifyContent: 'space-between' }}>
+                    <div className="ap-studio-script">
+                        <div className="ap-studio-script-head">
                             <span>Roteiro Teleprompter:</span><span>~{item.duracao_estimada}s</span>
                         </div>
-                        <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.4' }}>{item.roteiro_studio}</div>
-                        {item.broll_sugestao && <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #e0e0e0', color: '#555', fontStyle: 'italic' }}><span style={{ fontWeight: 600, color: '#000' }}>B-Roll:</span> {item.broll_sugestao}</div>}
+                        <div className="ap-studio-script-body">{item.roteiro_studio}</div>
+                        {item.broll_sugestao && <div className="ap-studio-broll"><b>B-Roll:</b> {item.broll_sugestao}</div>}
                     </div>
                 )}
 
                 {/* Caption */}
                 {item.caption && !isStudio && (
                     <>
-                        <p style={{ fontSize: '13px', color: '#262626', margin: '4px 0 0 0', display: isExpanded ? 'block' : '-webkit-box', WebkitLineClamp: isExpanded ? 'initial' : 3, WebkitBoxOrient: 'vertical', overflow: isExpanded ? 'visible' : 'hidden' }}>
+                        <p className={`ap-card-caption${isExpanded ? '' : ' clamped'}`}>
                             {item.caption}
                         </p>
                         {item.caption.length > 100 && (
-                            <button onClick={() => setIsExpanded(!isExpanded)} style={{ background: 'none', border: 'none', padding: 0, color: '#8e8e8e', fontSize: '12px', fontWeight: 600, cursor: 'pointer', textAlign: 'left', marginTop: '2px' }}>
+                            <button className="ap-card-more" onClick={() => setIsExpanded(!isExpanded)}>
                                 {isExpanded ? 'Ver menos' : '... mais'}
                             </button>
                         )}
@@ -990,10 +1019,10 @@ function PendenteCard({ item, onReject, onStudio, onApproveSelected, onEdit, isP
             {/* Botões de ação */}
             <div className="ap-card-actions-wrap">
                 <div className="ap-card-btn-row">
-                    <button className="ap-btn-reject" onClick={() => onReject(item)} title="Descartar" style={{ flexShrink: 0 }}>
+                    <button className="ap-btn-reject" onClick={() => onReject(item)} title="Descartar">
                         <X size={16} />
                     </button>
-                    <button onClick={() => onEdit(item)} disabled={isProcessing} title="Editar Matéria" style={{ padding: '0 12px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '8px', color: '#475569', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '13px' }}>
+                    <button className="ap-card-btn-ghost" onClick={() => onEdit(item)} disabled={isProcessing} title="Editar Matéria">
                         <Pencil size={14} /> Editar
                     </button>
                     <button className="ap-card-btn-black" onClick={() => onStudio(item)} disabled={isProcessing}>
@@ -1075,78 +1104,78 @@ function AprovadaCard({ item, onPublish, onReject, onEdit, isProcessing }) {
     return (
         <div className="ap-review-card insta-mock" style={{ maxWidth: '400px', margin: '0 auto', paddingBottom: '16px' }}>
             {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid #efefef' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(45deg, #f09433 0%,#e6683c 25%,#dc2743 50%,#cc2366 75%,#bc1888 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <img src="/tvgmulti-logo.jpg" style={{ width: 24, height: 24, borderRadius: '50%' }} alt="Avatar" />
+            <div className="ap-ig-head">
+                <div className="ap-ig-id">
+                    <div className="ap-ig-ring">
+                        <div className="ap-ig-ring-inner">
+                            <img src="/tvgmulti-logo.jpg" className="ap-ig-avatar" alt="Avatar" />
                         </div>
                     </div>
                     <div>
-                        <span style={{ fontSize: '13px', fontWeight: 600, color: '#262626' }}>tvgmulti</span>
-                        <div style={{ fontSize: '11px', color: '#8e8e8e', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            {item.context_tag && <span style={{ color: 'var(--color-primary)', fontWeight: 600 }}>{item.context_tag} •</span>}
-                            <span style={{ padding: '1px 6px', borderRadius: '4px', background: '#dcfce7', color: '#166534', fontSize: '10px', fontWeight: 700 }}>PRONTA</span>
-                            {item.content_type === 'reels' && <span style={{ padding: '1px 5px', background: '#ede9fe', color: '#6d28d9', borderRadius: '4px', fontSize: '10px', fontWeight: 700, border: '1px solid #ddd6fe', display: 'inline-flex', alignItems: 'center', gap: '3px' }}><Video size={9} />REELS</span>}
+                        <span className="ap-ig-user">tvgmulti</span>
+                        <div className="ap-ig-meta">
+                            {item.context_tag && <span className="ap-ig-tag">{item.context_tag}</span>}
+                            <span className="ap-chip tone-success">Pronta</span>
+                            {item.content_type === 'reels' && <span className="ap-chip tone-neutral no-dot"><Video size={9} /> Reels</span>}
                         </div>
                     </div>
                 </div>
-                <MoreVertical size={16} color="#262626" />
+                <MoreVertical size={16} className="ap-ig-more" />
             </div>
 
             {/* Imagem */}
-            <div className="ap-card-img-wrap" style={{ aspectRatio: '4/5', width: '100%', background: '#fafafa', position: 'relative' }}>
+            <div className="ap-card-img-wrap">
                 {isRendering ? (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: '12px', background: '#f8fafc' }}>
-                        <Loader2 size={40} color="#6366f1" className="animate-spin" style={{ animation: 'spin 1s linear infinite' }} />
-                        <span style={{ fontSize: '16px', color: '#334155', fontWeight: 600, textAlign: 'center', padding: '0 20px', lineHeight: '1.4' }}>
-                            ⏱️ Gerando design final<br/>
-                            <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>(leva ~15s)...</span>
+                    <div className="ap-card-rendering">
+                        <Loader2 size={40} color="var(--color-primary)" className="ap-spin-icon" />
+                        <span className="ap-card-rendering-title">
+                            Gerando design final<br/>
+                            <span className="ap-card-rendering-sub">(leva ~15s)...</span>
                         </span>
                     </div>
                 ) : (() => {
                     const finalUrl = item.render_url ?? (item.imagem_storage ? supabase.storage.from('ap-images').getPublicUrl(item.imagem_storage).data.publicUrl : null) ?? item.imagem_url ?? item.studio_media_image_url;
                     if (!finalUrl) {
                         return (
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 8 }}>
-                                <ImageIcon size={32} color="#dbdbdb" />
+                            <div className="ap-card-img-empty">
+                                <ImageIcon size={32} />
                             </div>
                         );
                     }
                     if (finalUrl && finalUrl.toLowerCase().includes('.mp4')) {
                         return (
-                            <video className="ap-card-img" src={finalUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} autoPlay loop muted playsInline />
+                            <video className="ap-card-img" src={finalUrl} autoPlay loop muted playsInline />
                         );
                     }
                     return (
-                        <img className="ap-card-img" src={finalUrl} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <img className="ap-card-img" src={finalUrl} alt="" loading="lazy" />
                     );
                 })()}
             </div>
 
             {/* Ações Insta */}
-            <div style={{ padding: '12px 16px 8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', gap: '16px' }}>
-                    <Heart size={24} color="#262626" />
-                    <MessageCircle size={24} color="#262626" />
-                    <Send size={24} color="#262626" />
+            <div className="ap-ig-actions">
+                <div className="ap-ig-actions-left">
+                    <Heart size={24} />
+                    <MessageCircle size={24} />
+                    <Send size={24} />
                 </div>
-                <Bookmark size={24} color="#262626" />
+                <Bookmark size={24} />
             </div>
 
             {/* Caption */}
-            <div className="ap-card-body" style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
-                <p style={{ fontSize: '13px', margin: 0 }}>
-                    <span style={{ fontWeight: 600, color: '#262626', marginRight: '6px' }}>tvgmulti</span>
+            <div className="ap-card-body">
+                <p className="ap-card-headline">
+                    <b>tvgmulti</b>
                     {item.headline ?? item.titulo}
                 </p>
                 {item.caption && (
                     <>
-                        <p style={{ fontSize: '13px', color: '#262626', margin: '4px 0 0 0', display: isExpanded ? 'block' : '-webkit-box', WebkitLineClamp: isExpanded ? 'initial' : 3, WebkitBoxOrient: 'vertical', overflow: isExpanded ? 'visible' : 'hidden' }}>
+                        <p className={`ap-card-caption${isExpanded ? '' : ' clamped'}`}>
                             {item.caption}
                         </p>
                         {item.caption.length > 100 && (
-                            <button onClick={() => setIsExpanded(!isExpanded)} style={{ background: 'none', border: 'none', padding: 0, color: '#8e8e8e', fontSize: '12px', fontWeight: 600, cursor: 'pointer', textAlign: 'left', marginTop: '2px' }}>
+                            <button className="ap-card-more" onClick={() => setIsExpanded(!isExpanded)}>
                                 {isExpanded ? 'Ver menos' : '... mais'}
                             </button>
                         )}
@@ -1156,13 +1185,13 @@ function AprovadaCard({ item, onPublish, onReject, onEdit, isProcessing }) {
 
             {/* Alerta de Renderização / Revisão */}
             {isAwaitingReview && (
-                <div style={{ margin: '12px 16px', padding: '10px', background: '#fff7ed', borderRadius: '8px', fontSize: '12px', color: '#c2410c', fontWeight: 600, textAlign: 'center', border: '1px solid #fdba74' }}>
-                    ⚠️ Aguardando Revisão — clique em Aprovar para renderizar
+                <div className="ap-card-review-note">
+                    Aguardando Revisão — clique em Aprovar para renderizar
                 </div>
             )}
-            
+
             {item.approved_by_name && ['ready_to_publish', 'approved', 'queued_for_posting', 'posted'].includes(item.status) && (
-                <div style={{ padding: '0 16px', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: '#16a34a', fontWeight: 'bold' }}>
+                <div className="ap-card-approved-by">
                     <Check size={12} /> Aprovado por {item.approved_by_name}
                 </div>
             )}
@@ -1170,26 +1199,22 @@ function AprovadaCard({ item, onPublish, onReject, onEdit, isProcessing }) {
             {/* Botões: Baixar Arte + Copiar Legenda */}
             <div className="ap-card-actions-wrap">
                 <div className="ap-card-btn-row">
-                    <button className="ap-btn-reject" onClick={() => onReject(item)} title="Descartar" disabled={isProcessing} style={{ flexShrink: 0, padding: '8px' }}>
+                    <button className="ap-btn-reject" onClick={() => onReject(item)} title="Descartar" disabled={isProcessing}>
                         <X size={16} />
                     </button>
-                    <button className="ap-card-btn-secondary" onClick={handleDownload} disabled={isRendering} title="Baixar Arte" style={{ fontSize: '12px', padding: '0 10px' }}>
+                    <button className="ap-card-btn-secondary" onClick={handleDownload} disabled={isRendering} title="Baixar Arte">
                         <Download size={12} /> Baixar
                     </button>
-                    <button className={`ap-card-btn-copy${copied ? ' copied' : ''}`} onClick={handleCopy} title="Copiar Legenda" style={{ fontSize: '12px', padding: '0 10px' }}>
+                    <button className={`ap-card-btn-copy${copied ? ' copied' : ''}`} onClick={handleCopy} title="Copiar Legenda">
                         {copied ? <Check size={12} /> : <Copy size={12} />}
-                        {copied ? 'Copiar' : 'Copiar'}
+                        {copied ? 'Copiado' : 'Copiar'}
                     </button>
                 </div>
             </div>
 
             {/* Botão Publicar */}
             <div className="ap-card-actions-wrap" style={{ paddingTop: 0 }}>
-                <button
-                    onClick={() => onPublish(item)}
-                    disabled={isRendering}
-                    style={{ width: '100%', margin: '0 16px', boxSizing: 'border-box', padding: '12px', borderRadius: '10px', border: 'none', background: '#111827', color: '#fff', fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: isRendering ? 'not-allowed' : 'pointer', opacity: isRendering ? 0.5 : 1, transition: 'opacity 0.2s' }}
-                >
+                <button className="ap-card-btn-publish" onClick={() => onPublish(item)} disabled={isRendering}>
                     <Check size={16} /> Publicar
                 </button>
             </div>
@@ -1200,31 +1225,46 @@ function AprovadaCard({ item, onPublish, onReject, onEdit, isProcessing }) {
 // ──────────────────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────────────────
+function CollectedPagination({ page, total, onPageChange }) {
+    const totalPages = Math.max(1, Math.ceil(total / COLETADAS_PAGE_SIZE))
+    if (totalPages <= 1) return null
+
+    const visible = Math.min(5, totalPages)
+    const start = Math.min(Math.max(1, page - Math.floor(visible / 2)), totalPages - visible + 1)
+    const pages = Array.from({ length: visible }, (_, index) => start + index)
+
+    return (
+        <nav aria-label="Paginação de matérias coletadas" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 6, marginTop: 18 }}>
+            <button className="ap-btn-sm" type="button" onClick={() => onPageChange(page - 1)} disabled={page === 1} aria-label="Página anterior" title="Página anterior"><ChevronLeft size={16} /></button>
+            {pages.map(number => <button key={number} className={number === page ? 'ap-btn-add' : 'ap-btn-outline'} type="button" onClick={() => onPageChange(number)} aria-label={`Página ${number}`} aria-current={number === page ? 'page' : undefined}>{number}</button>)}
+            <button className="ap-btn-sm" type="button" onClick={() => onPageChange(page + 1)} disabled={page === totalPages} aria-label="Próxima página" title="Próxima página"><ChevronRight size={16} /></button>
+            <button className="ap-btn-sm" type="button" onClick={() => onPageChange(totalPages)} disabled={page === totalPages} aria-label="Última página" title="Última página"><ChevronsRight size={16} /></button>
+        </nav>
+    )
+}
 function StatusBadge({ status, small, errorLog }) {
     const map = {
-        raw: { label: 'Ingerida', bg: '#f1f5f9', color: '#475569' },
-        ready_for_scoring: { label: 'Aguardando Score', bg: '#fef9c3', color: '#854d0e' },
-        scored: { label: 'Analisada', bg: '#dbeafe', color: '#1e40af' },
-        selected: { label: 'Selecionada', bg: '#ede9fe', color: '#6d28d9' },
-        pending_render: { label: 'Renderizando', bg: '#fef9c3', color: '#854d0e' },
-        processing: { label: 'IA Gerando', bg: '#f5f3ff', color: '#6d28d9' },
-        pending_review: { label: 'Pronta', bg: '#dcfce7', color: '#166534' },
-        ready_to_publish: { label: 'Pronta', bg: '#dcfce7', color: '#166534' },
-        approved: { label: 'Aprovada', bg: '#dcfce7', color: '#166534' },
-        queued_for_posting: { label: 'Na Fila', bg: '#e0f2fe', color: '#0369a1' },
-        posted: { label: 'Publicada', bg: '#dcfce7', color: '#166534' },
-        failed: { label: 'Falhou', bg: '#fee2e2', color: '#991b1b' },
-        rejected: { label: 'Descartada', bg: '#f1f5f9', color: '#6b7280' },
+        raw: { label: 'Ingerida', tone: 'neutral' },
+        ready_for_scoring: { label: 'Aguardando Score', tone: 'warn' },
+        scored: { label: 'Analisada', tone: 'brand' },
+        selected: { label: 'Selecionada', tone: 'brand' },
+        pending_render: { label: 'Renderizando', tone: 'warn' },
+        processing: { label: 'IA Gerando', tone: 'brand' },
+        pending_review: { label: 'Pronta', tone: 'success' },
+        ready_to_publish: { label: 'Pronta', tone: 'success' },
+        approved: { label: 'Aprovada', tone: 'success' },
+        queued_for_posting: { label: 'Na Fila', tone: 'brand' },
+        posted: { label: 'Publicada', tone: 'success' },
+        failed: { label: 'Falhou', tone: 'danger' },
+        rejected: { label: 'Descartada', tone: 'neutral' },
     }
-    const { label, bg, color } = map[status] || { label: status, bg: '#f1f5f9', color: '#475569' }
+    const { label, tone } = map[status] || { label: status, tone: 'neutral' }
     return (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span style={{ padding: small ? '1px 6px' : '3px 10px', borderRadius: '20px', fontSize: small ? '10px' : '11px', fontWeight: 700, background: bg, color, letterSpacing: '0.03em', whiteSpace: 'nowrap' }}>
-                {label}
-            </span>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+            <span className={`ap-chip tone-${tone}`}>{label}</span>
             {status === 'failed' && errorLog && (
-                <div title={errorLog} style={{ cursor: 'help' }}>
-                    <AlertTriangle size={small ? 12 : 14} color="#ef4444" />
+                <div title={errorLog} style={{ cursor: 'help', display: 'flex' }}>
+                    <AlertTriangle size={small ? 12 : 14} color="var(--color-danger)" />
                 </div>
             )}
         </div>
@@ -1233,14 +1273,14 @@ function StatusBadge({ status, small, errorLog }) {
 
 function FormatBadge({ type }) {
     const config = {
-        feed: { label: 'Feed', icon: <ImageIcon size={10} />, bg: '#f1f5f9', color: '#475569', border: '#e2e8f0' },
-        reels: { label: 'Reels', icon: <Video size={10} />, bg: '#ede9fe', color: '#6d28d9', border: '#ddd6fe' },
-        carousel: { label: 'Carrossel', icon: <Brain size={10} />, bg: '#eff6ff', color: '#2563eb', border: '#bfdbfe' },
-        sponsored: { label: 'Patrocinado', icon: <Zap size={10} />, bg: '#fef3c7', color: '#d97706', border: '#fde68a' },
+        feed: { label: 'Feed', icon: <ImageIcon size={10} /> },
+        reels: { label: 'Reels', icon: <Video size={10} /> },
+        carousel: { label: 'Carrossel', icon: <Brain size={10} /> },
+        sponsored: { label: 'Patrocinado', icon: <Zap size={10} /> },
     }
-    const { label, icon, bg, color, border } = config[type] || config.feed
+    const { label, icon } = config[type] || config.feed
     return (
-        <span style={{ padding: '3px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: 600, background: bg, color, border: `1px solid ${border}`, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+        <span className="ap-chip tone-neutral no-dot">
             {icon}{label}
         </span>
     )

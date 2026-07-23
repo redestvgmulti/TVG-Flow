@@ -1,14 +1,13 @@
 /* Skeleton Loader Styles - Mobile Optimized */
 
+/* Shimmer: brilho varre o gradiente em vez de pulsar opacidade */
 @keyframes skeleton-pulse {
-
-    0%,
-    100% {
-        opacity: 1;
+    0% {
+        background-position: 100% 0;
     }
 
-    50% {
-        opacity: 0.5;
+    100% {
+        background-position: -100% 0;
     }
 }
 
@@ -30,7 +29,7 @@
             #E5E7EB 50%,
             var(--color-bg-subtle) 100%);
     background-size: 200% 100%;
-    animation: skeleton-pulse 1.5s ease-in-out infinite;
+    animation: skeleton-pulse 1.5s linear infinite;
     border-radius: var(--radius-sm);
 }
 
