@@ -1,15 +1,15 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../services/supabase'
 import { Plus, Trash2, Globe } from 'lucide-react'
+import { toast } from 'sonner'
+import AutoPublisherMasterV1Settings from './AutoPublisherMasterV1Settings'
 
-const FIXED_CLIENT_ID = 'cd287e6e-f273-4d0f-a72d-2a8c391e40e9'
 
 // ──────────────────────────────────────────────────────────
 // AutoPublisherSettings — FlowOS V2 Design System
 // ──────────────────────────────────────────────────────────
 
 export default function AutoPublisherSettings() {
-    const clienteId = FIXED_CLIENT_ID
     const [sources, setSources] = useState([])
     const [newSource, setNewSource] = useState({ nome: '', url: '', tipo: 'rss' })
     const [saving, setSaving] = useState(false)
@@ -47,21 +47,31 @@ export default function AutoPublisherSettings() {
             await apConfig('sources', 'insert', newSource)
             setNewSource({ nome: '', url: '', tipo: 'rss' })
             await fetchData()
+            toast.success('Fonte adicionada.')
         } catch (err) {
             console.error('[Sources]', err)
+            toast.error('Não foi possível adicionar a fonte. Verifique a URL.')
         } finally {
             setSaving(false)
         }
     }
 
     async function deleteSource(id) {
-        await apConfig('sources', 'delete', { id })
-        fetchData()
+        try {
+            await apConfig('sources', 'delete', { id })
+            fetchData()
+        } catch (err) {
+            toast.error('Erro ao remover a fonte.')
+        }
     }
 
     async function toggleSource(id, ativo) {
-        await apConfig('sources', 'update', { id, ativo: !ativo })
-        fetchData()
+        try {
+            await apConfig('sources', 'update', { id, ativo: !ativo })
+            fetchData()
+        } catch (err) {
+            toast.error('Erro ao atualizar a fonte.')
+        }
     }
 
     return (
@@ -121,11 +131,9 @@ export default function AutoPublisherSettings() {
                             )}
                             {sources.map(s => (
                                 <tr key={s.id}>
-                                    <td style={{ fontWeight: 500 }}>{s.nome}</td>
+                                    <td className="ap-td-title">{s.nome}</td>
                                     <td>
-                                        <span style={{ fontSize: 11, background: 'var(--color-bg-secondary)', color: 'var(--color-text-secondary)', padding: '2px 6px', borderRadius: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                            {s.tipo}
-                                        </span>
+                                        <span className="ap-chip tone-neutral no-dot">{s.tipo}</span>
                                     </td>
                                     <td style={{ maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                         <a href={s.url} target="_blank" rel="noreferrer" style={{ color: 'var(--color-primary)', textDecoration: 'none' }}>
@@ -151,6 +159,7 @@ export default function AutoPublisherSettings() {
                     </table>
                 </div>
             </div>
+            <AutoPublisherMasterV1Settings />
         </div>
     )
 }
