@@ -16,10 +16,10 @@ test('somente patrocinador 1', () => assert.deepEqual(buildLayers({ legacyUuid: 
 test('somente patrocinador 2 não é movido', () => assert.deepEqual(buildLayers({ legacyUuid: 'legacy', map, sponsors: { sponsor_2: 'b' } }).layers, { 'patrocinador-2': { image: 'b' } }));
 test('slots vazios são omitidos', () => assert.deepEqual(buildLayers({ legacyUuid: 'legacy', map, sponsors: { sponsor_1: '', sponsor_2: null } }).layers, {}));
 test('tag png só é enviada com layer e URL', () => assert.deepEqual(buildLayers({ legacyUuid: 'legacy', map, titleUrl: 'title' }).layers, { 'tag-png': { image: 'title' } }));
-test('renderer uses the approved default layer names and omits unmapped text layers', async () => {
+test('renderer delegates snapshot contracts to the production helper', async () => {
   const source = await readFile(new URL('../../supabase/functions/ap-render-engine/index.ts', import.meta.url), 'utf8');
-  assert.match(source, /visual_title: "tag-png"/);
-  assert.match(source, /if \(item\.headline && map\.headline\)/);
-  assert.match(source, /if \(map\.tag\) nextLayers\[map\.tag\]/);
-  assert.match(source, /if \(layer && url\) layers\[layer\] = \{ image: url \}/);
+  assert.match(source, /from "\.\/renderContract\.ts"/);
+  assert.match(source, /prepareRotationV1Render\(item, supabaseUrl\)/);
+  assert.match(source, /buildProfileMasterLayers/);
+  assert.match(source, /buildLegacyLayers/);
 });
