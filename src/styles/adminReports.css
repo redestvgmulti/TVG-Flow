@@ -57,7 +57,7 @@
 }
 
 .date-range-btn.active {
-    background: var(--color-bg-primary);
+    background: var(--color-bg-surface, #ffffff);
     color: var(--color-primary);
     box-shadow: var(--shadow-sm);
     font-weight: 600;
@@ -102,7 +102,7 @@
 .reports-content,
 .reports-empty,
 .reports-loading {
-    background: var(--color-bg-primary);
+    background: var(--color-bg-surface, #ffffff);
     border: 1px solid var(--color-border);
     box-shadow: var(--shadow-sm);
     border-radius: var(--radius-lg);
@@ -137,7 +137,7 @@
 }
 
 .empty-icon {
-    color: var(--color-text-disabled);
+    color: var(--color-text-tertiary);
     margin-bottom: var(--space-4);
 }
 
@@ -300,7 +300,7 @@
 }
 
 .role-card {
-    background: var(--color-bg-primary);
+    background: var(--color-bg-surface, #ffffff);
     padding: var(--space-5);
     border-radius: var(--radius-lg);
     border: 1px solid var(--color-border);

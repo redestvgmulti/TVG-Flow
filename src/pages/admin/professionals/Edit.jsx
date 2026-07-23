@@ -79,7 +79,7 @@ export default function ProfessionalEdit() {
     }
 
     if (loading) {
-        return <div className="p-10 text-center text-slate-500">Carregando dados...</div>
+        return <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--color-text-secondary)' }}>Carregando dados...</div>
     }
 
     return (
@@ -118,20 +118,20 @@ export default function ProfessionalEdit() {
             </div>
 
             {/* Danger Zone */}
-            <div className="bg-red-50 rounded-xl border border-red-100 p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div style={{ background: 'var(--color-danger-bg)', borderRadius: '16px', border: '1px solid #FCA5A5', padding: '24px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
                 <div>
-                    <h3 className="text-red-800 font-bold flex items-center gap-2">
+                    <h3 style={{ color: 'var(--color-danger)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
                         <AlertOctagon size={18} />
                         Zona de Perigo
                     </h3>
-                    <p className="text-red-600/80 text-sm mt-1">
+                    <p style={{ color: 'var(--color-text-secondary)', fontSize: '13px', marginTop: '6px', marginBottom: 0 }}>
                         A exclusão é irreversível e removerá todo o histórico de acesso deste usuário.
                     </p>
                 </div>
                 <button
                     onClick={handleDelete}
                     disabled={isDeleting}
-                    className="px-4 py-2 bg-white border border-red-200 text-red-600 hover:bg-red-600 hover:text-white rounded-lg transition-colors font-medium flex items-center gap-2 shadow-sm"
+                    className="btn btn-danger"
                 >
                     {isDeleting ? 'Excluindo...' : (
                         <>

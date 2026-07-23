@@ -7,6 +7,7 @@ import {
 import { toast } from 'sonner'
 import { professionalsService } from '../../../services/professionals'
 import ProfessionalForm from './ProfessionalForm'
+import { SkeletonTable } from '../../../components/Skeleton'
 import '../../../styles/professionals.css'
 
 export default function ProfessionalsList() {
@@ -143,23 +144,13 @@ export default function ProfessionalsList() {
                         <h2>Gestão de Profissionais</h2>
                     </div>
                 </div>
-                <div className="card loading-card">
-                    <p className="loading-text-primary">Carregando equipe...</p>
-                </div>
+                <SkeletonTable rows={5} cols={4} />
             </div>
         )
     }
 
     return (
         <div className="professionals-page animation-fade-in">
-            {/* Metric Card */}
-            <div style={{ marginBottom: '1.5rem' }}>
-                <div className="card metric-card" style={{ maxWidth: '300px' }}>
-                    <h3 className="metric-label">Profissionais</h3>
-                    <p className="metric-value" style={{ color: '#3b82f6' }}>{professionals.length}</p>
-                </div>
-            </div>
-
             {/* Header */}
             <div className="professionals-header">
                 <div className="professionals-header__content">
@@ -172,62 +163,53 @@ export default function ProfessionalsList() {
                         setCreatedName('')
                         setIsCreateModalOpen(true)
                     }}
-                    className="btn btn-primary flex items-center gap-2 shadow-lg shadow-blue-200/50"
+                    className="btn btn-primary"
                 >
                     <UserPlus size={18} />
                     Novo Profissional
                 </button>
             </div>
 
-            {/* Toolbar - Detached Elements */}
-            <div className="professionals-toolbar">
-                <div className="professionals-search">
-                    {!searchTerm && (
-                        <Search
-                            size={18}
-                            style={{
-                                position: 'absolute',
-                                left: '12px',
-                                top: '50%',
-                                transform: 'translateY(-50%)',
-                                pointerEvents: 'none',
-                                color: '#94a3b8'
-                            }}
-                        />
-                    )}
+            {/* Barra de busca premium (mesma das Tarefas) + contador integrado */}
+            <div className="admin-tasks-filterbar" style={{ marginTop: 0, marginBottom: '1.5rem' }}>
+                <div className="filterbar-search">
+                    <Search size={15} />
                     <input
                         type="text"
+                        aria-label="Buscar por nome ou e-mail"
                         placeholder="Buscar por nome ou e-mail..."
-                        className="input"
                         value={searchTerm}
                         onChange={e => setSearchTerm(e.target.value)}
-                        style={{
-                            width: '100%',
-                            paddingLeft: !searchTerm ? '40px' : '16px'
-                        }}
                     />
                 </div>
                 <div className="professionals-count">
-                    Mostrando <strong>{filtered.length}</strong> membros
+                    {searchTerm
+                        ? <><strong>{filtered.length}</strong> de {professionals.length} membros</>
+                        : <><strong>{professionals.length}</strong> membros</>}
                 </div>
+                {searchTerm && (
+                    <button type="button" className="filterbar-clear" style={{ marginLeft: 0 }} onClick={() => setSearchTerm('')}>
+                        <X size={13} /> Limpar
+                    </button>
+                )}
             </div>
 
             {/* Table Card */}
             <div className="table-card">
                 <div className="table-header border-b border-slate-100">
                     <h3 className="table-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <Users size={18} className="text-muted" />
-                        <span className="font-semibold text-slate-700">Equipe Cadastrada</span>
+                        <Users size={18} style={{ color: 'var(--color-text-tertiary)' }} />
+                        <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>Equipe Cadastrada</span>
                     </h3>
                 </div>
 
                 {filtered.length === 0 ? (
-                    <div className="empty-state py-12">
-                        <div className="empty-icon mb-4" style={{ opacity: 0.1 }}><Users size={64} /></div>
-                        <p className="empty-text text-lg font-medium text-slate-600">Nenhum profissional encontrado</p>
-                        <p className="text-slate-400 mb-6">Tente ajustar sua busca ou adicione um novo membro.</p>
+                    <div className="empty-state">
+                        <div className="empty-icon" style={{ opacity: 0.2 }}><Users size={64} /></div>
+                        <p className="empty-text" style={{ fontWeight: 500, color: 'var(--color-text-primary)' }}>Nenhum profissional encontrado</p>
+                        <p style={{ color: 'var(--color-text-tertiary)', marginBottom: '1.5rem' }}>Tente ajustar sua busca ou adicione um novo membro.</p>
                         {searchTerm && (
-                            <button onClick={() => setSearchTerm('')} className="btn btn-ghost text-primary hover:bg-blue-50">
+                            <button onClick={() => setSearchTerm('')} className="btn btn-ghost" style={{ color: 'var(--color-primary)' }}>
                                 Limpar busca
                             </button>
                         )}
@@ -245,23 +227,23 @@ export default function ProfessionalsList() {
                             </thead>
                             <tbody>
                                 {filtered.map(prof => (
-                                    <tr key={prof.id} className="hover:bg-slate-50/80 transition-all border-b border-slate-50 last:border-0">
+                                    <tr key={prof.id}>
                                         <td style={{ padding: '1.5rem', paddingLeft: '2rem' }}>
-                                            <div className="flex flex-col gap-1.5">
-                                                <div className="font-bold text-slate-800 text-base">{prof.nome}</div>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }} className="text-sm text-slate-500">
-                                                    <Mail size={14} className="text-slate-400" />
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                <div style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>{prof.nome}</div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '13px', color: 'var(--color-text-tertiary)' }}>
+                                                    <Mail size={14} />
                                                     {prof.email}
                                                 </div>
                                             </div>
                                         </td>
                                         <td style={{ padding: '1.5rem' }}>
-                                            <span className="text-sm text-slate-600">
+                                            <span style={{ fontSize: '13px', color: 'var(--color-text-secondary)' }}>
                                                 Ativo em <strong>{prof.company_count || 0}</strong> {prof.company_count === 1 ? 'empresa' : 'empresas'}
                                             </span>
                                         </td>
                                         <td style={{ padding: '1.5rem' }}>
-                                            <span className={`badge ${prof.ativo ? 'badge-success' : 'badge-danger'} gap-1.5 px-3 py-1.5 ring-1 ring-inset ${prof.ativo ? 'ring-green-100' : 'ring-red-100'}`}>
+                                            <span className={`ap-chip no-dot ${prof.ativo ? 'tone-success' : 'tone-neutral'}`}>
                                                 {prof.ativo ? <CheckCircle size={12} /> : <XCircle size={12} />}
                                                 {prof.ativo ? 'Ativo' : 'Inativo'}
                                             </span>
@@ -269,7 +251,7 @@ export default function ProfessionalsList() {
                                         <td style={{ padding: '1.5rem', paddingRight: '2rem', textAlign: 'right' }}>
                                             <button
                                                 onClick={() => handleEditClick(prof)}
-                                                className="btn-icon p-2.5 hover:bg-white hover:text-blue-600 hover:shadow-md border border-transparent hover:border-slate-100 rounded-lg transition-all text-slate-400 bg-slate-50"
+                                                className="btn-icon"
                                                 title="Editar"
                                             >
                                                 <Edit size={18} />
@@ -324,24 +306,24 @@ export default function ProfessionalsList() {
                         className="modal max-w-md"
                         onClick={e => e.stopPropagation()}
                     >
-                        <div className="modal-header border-b border-red-100 bg-red-50">
+                        <div className="modal-header">
                             <div>
-                                <h3 className="text-red-800 font-bold">Confirmar Exclusão</h3>
-                                <p className="text-sm text-red-600 mt-1">Esta ação não pode ser desfeita</p>
+                                <h3 style={{ color: 'var(--color-danger)', fontWeight: 700 }}>Confirmar Exclusão</h3>
+                                <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', marginTop: '4px' }}>Esta ação não pode ser desfeita</p>
                             </div>
                         </div>
 
                         <div className="modal-body">
-                            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-                                <p className="text-slate-700 font-medium mb-2">
+                            <div style={{ background: 'var(--color-danger-bg)', border: '1px solid #FCA5A5', borderRadius: '10px', padding: '16px', marginBottom: '16px' }}>
+                                <p style={{ color: 'var(--color-text-primary)', fontWeight: 500, marginBottom: '8px' }}>
                                     Tem certeza que deseja excluir <strong>{selectedProfessional.nome}</strong>?
                                 </p>
-                                <p className="text-sm text-slate-600">
+                                <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', margin: 0 }}>
                                     Esta ação removerá permanentemente o acesso ao sistema e não pode ser desfeita.
                                 </p>
                             </div>
 
-                            <div className="flex gap-3 justify-end">
+                            <div className="flex gap-3" style={{ justifyContent: 'flex-end' }}>
                                 <button
                                     onClick={handleDeleteCancel}
                                     disabled={isSubmitting}
@@ -352,14 +334,7 @@ export default function ProfessionalsList() {
                                 <button
                                     onClick={handleDeleteConfirm}
                                     disabled={isSubmitting}
-                                    className="btn shadow-lg shadow-red-200/50 hover:shadow-xl hover:shadow-red-300/60 transition-all"
-                                    style={{
-                                        backgroundColor: '#dc2626',
-                                        color: 'white',
-                                        borderColor: '#dc2626'
-                                    }}
-                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#b91c1c'}
-                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#dc2626'}
+                                    className="btn btn-danger"
                                 >
                                     {isSubmitting ? 'Excluindo...' : 'Sim, Excluir'}
                                 </button>
@@ -401,11 +376,11 @@ export default function ProfessionalsList() {
                                 <div className="space-y-5">
                                     {/* Título de sucesso */}
                                     <div>
-                                        <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#0f172a', margin: 0 }}>
+                                        <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--color-text-primary)', margin: 0 }}>
                                             Profissional Criado!
                                         </h3>
-                                        <p style={{ fontSize: '13px', color: '#64748b', marginTop: '6px', marginBottom: 0 }}>
-                                            Envie o link de acesso abaixo para <strong style={{ color: '#334155' }}>{createdName}</strong>.
+                                        <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', marginTop: '6px', marginBottom: 0 }}>
+                                            Envie o link de acesso abaixo para <strong style={{ color: 'var(--color-text-primary)' }}>{createdName}</strong>.
                                         </p>
                                     </div>
 
@@ -415,17 +390,17 @@ export default function ProfessionalsList() {
                                         flexDirection: 'column',
                                         gap: '12px',
                                         padding: '16px',
-                                        backgroundColor: '#f0fdf4',
-                                        borderRadius: '8px',
-                                        border: '1px solid #bbf7d0'
+                                        backgroundColor: 'var(--color-success-bg)',
+                                        borderRadius: '10px',
+                                        border: '1px solid var(--color-success)'
                                     }}>
                                         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-                                            <CheckCircle size={16} style={{ color: '#16a34a', marginTop: '2px', flexShrink: 0 }} />
+                                            <CheckCircle size={16} style={{ color: 'var(--color-success)', marginTop: '2px', flexShrink: 0 }} />
                                             <div style={{ flex: 1 }}>
-                                                <p style={{ margin: 0, fontSize: '13px', color: '#15803d', fontWeight: 500 }}>
+                                                <p style={{ margin: 0, fontSize: '13px', color: 'var(--color-success)', fontWeight: 600 }}>
                                                     Link de convite gerado.
                                                 </p>
-                                                <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#16a34a' }}>
+                                                <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: 'var(--color-text-secondary)' }}>
                                                     Use o botão abaixo para copiar e enviar ao usuário.
                                                 </p>
                                             </div>
@@ -433,30 +408,14 @@ export default function ProfessionalsList() {
 
                                         <button
                                             onClick={copyToClipboard}
-                                            style={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                gap: '8px',
-                                                padding: '10px 16px',
-                                                backgroundColor: '#3b82f6',
-                                                color: 'white',
-                                                border: 'none',
-                                                borderRadius: '8px',
-                                                fontSize: '14px',
-                                                fontWeight: 500,
-                                                cursor: 'pointer',
-                                                transition: 'background-color 0.2s',
-                                                boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.05)'
-                                            }}
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#2563eb'}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#3b82f6'}
+                                            className="btn btn-primary"
+                                            style={{ width: '100%' }}
                                         >
                                             <Copy size={16} />
                                             Copiar link de convite
                                         </button>
 
-                                        <p style={{ margin: 0, fontSize: '11px', color: '#64748b', textAlign: 'center' }}>
+                                        <p style={{ margin: 0, fontSize: '11px', color: 'var(--color-text-tertiary)', textAlign: 'center' }}>
                                             O link expira automaticamente por segurança.
                                         </p>
                                     </div>

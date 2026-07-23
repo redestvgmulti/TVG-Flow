@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
 import { Building2, Users, Plus, Search, Edit2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { SkeletonCard } from '../../components/Skeleton'
 import '../../styles/companies.css'
 
 function Companies() {
@@ -182,8 +183,8 @@ function Companies() {
                 <div className="companies-header">
                     <h2 className="companies-title">Empresas</h2>
                 </div>
-                <div className="card loading-card">
-                    <p className="loading-text-primary">Carregando empresas...</p>
+                <div className="companies-grid">
+                    {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
                 </div>
             </div>
         )
@@ -196,13 +197,13 @@ function Companies() {
                 <div style={{ marginBottom: '1.5rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
                     <div className="card metric-card" style={{ flex: '1 1 200px', minWidth: '180px' }}>
                         <h3 className="metric-label">Ativas</h3>
-                        <p className="metric-value" style={{ color: '#10b981' }}>
+                        <p className="metric-value" style={{ color: 'var(--color-success)' }}>
                             {companies.filter(c => c.ativo).length}
                         </p>
                     </div>
                     <div className="card metric-card" style={{ flex: '1 1 200px', minWidth: '180px' }}>
                         <h3 className="metric-label">Suspensas</h3>
-                        <p className="metric-value" style={{ color: '#6b7280' }}>
+                        <p className="metric-value" style={{ color: 'var(--color-text-tertiary)' }}>
                             {companies.filter(c => !c.ativo).length}
                         </p>
                     </div>
@@ -244,7 +245,7 @@ function Companies() {
                                     <div>
                                         <h3 className="company-name">{company.nome}</h3>
                                         {company.cnpj && (
-                                            <p style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+                                            <p style={{ fontSize: '12px', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
                                                 CNPJ: {company.cnpj}
                                             </p>
                                         )}
