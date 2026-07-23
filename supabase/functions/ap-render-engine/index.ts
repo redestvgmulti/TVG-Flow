@@ -1,194 +1,78 @@
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// AutoPublisher — Render Engine Worker (With Telemetry & Reels Video API)
-// Refactored: 2026-03-25 — Reels Video Integration & Translucency Audit.
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
-import { Telemetry } from "../_shared/telemetry.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-    "Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE",
-};
+const corsHeaders = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", "Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE" };
+const DEFAULT_LAYER_MAP = { news_image: "news-image", headline: "headline_news", tag: "tag_news", visual_title: "tag-png", sponsor_1: "patrocinador-1", sponsor_2: "patrocinador-2" };
 
-const BATCH_LIMIT = 5;
-const LOCK_EXPIRY_MINUTES = 10;
+function assetUrl(base: string, asset: any) {
+  if (!asset || typeof asset !== "object" || !asset.bucket || !asset.path) return null;
+  return `${base}/storage/v1/object/public/${asset.bucket}/${asset.path}`;
+}
+function addImage(layers: Record<string, any>, layer: string | undefined, url: string | null) { if (layer && url) layers[layer] = { image: url }; }
 
-Deno.serve(async (req: Request) => {
-    if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+async function resolveMaster(supabase: any, item: any) {
+  const snapshot = item.render_snapshot;
+  if (!snapshot || snapshot.render_contract_version !== "master_v1" || !item.template_id) return { enabled: false, reason: "snapshot_absent_or_legacy" };
+  const { data: control } = await supabase.schema("ap").from("master_render_controls").select("kill_switch").eq("cliente_id", item.cliente_id).maybeSingle();
+  if (control?.kill_switch) return { enabled: false, reason: "kill_switch" };
+  const { data: configs } = await supabase.schema("ap").from("master_render_configs").select("*").eq("cliente_id", item.cliente_id).eq("content_type", item.content_type || "feed").eq("enabled", true).or(`template_set.eq.${item.template_set || "default"},template_set.is.null`);
+  const config = (configs || []).sort((a: any, b: any) => Number(Boolean(b.template_set)) - Number(Boolean(a.template_set)))[0];
+  if (!config?.master_template_uuid || !config.layer_map || typeof config.layer_map !== "object" || !config.layer_map.visual_title) return { enabled: false, reason: "master_config_invalid" };
+  const title = snapshot.visual_title;
+  if (!title?.bucket || !title?.path || !title?.sha256) return { enabled: false, reason: "visual_title_missing" };
+  return { enabled: true, config, snapshot };
+}
 
-    const supabase = createClient(
-        Deno.env.get("SUPABASE_URL")!,
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-        { auth: { autoRefreshToken: false, persistSession: false } }
-    );
-
-    const workerId = crypto.randomUUID();
-    const renderApiKey = Deno.env.get("RENDER_API_KEY");
-    const globalTemplateId = Deno.env.get("RENDER_TEMPLATE_ID");
-    const lockExpiryCutoff = new Date(Date.now() - LOCK_EXPIRY_MINUTES * 60 * 1000).toISOString();
-
-    let targetNewsId: string | null = null;
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { autoRefreshToken: false, persistSession: false } });
+  const reqBody = await req.json().catch(() => ({}));
+  const targetId = reqBody.newsId || reqBody.news_id;
+  const lockExpiry = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  let query = supabase.schema("ap").from("candidate_news").select("*").eq("status", "pending_render").is("render_url", null);
+  if (targetId) query = query.eq("id", targetId); else query = query.or(`render_started_at.is.null,render_started_at.lt.${lockExpiry}`).limit(5);
+  const { data: items } = await query;
+  if (!items?.length) return new Response(JSON.stringify({ ok: true, message: "No items" }), { headers: corsHeaders });
+  const results = [];
+  for (const item of items) {
+    const { data: lock } = await supabase.schema("ap").from("candidate_news").update({ render_started_at: new Date().toISOString() }).eq("id", item.id).eq("status", "pending_render").is("render_url", null).select("id");
+    if (!lock?.length) continue;
     try {
-        if (req.method === "POST") {
-            const body = await req.json().catch(() => null);
-            if (body?.action === "render_one" && typeof body.newsId === "string") {
-                targetNewsId = body.newsId;
-            }
-        }
-    } catch (_) { /* silent */ }
-
-    let query = supabase.schema("ap").from("candidate_news")
-        .select("*")
-        .eq("status", "pending_render")
-        .is("render_url", null)
-        .or(`render_started_at.is.null,render_started_at.lt.${lockExpiryCutoff}`)
-        .order("created_at", { ascending: true });
-
-    if (targetNewsId) query = query.eq("id", targetNewsId);
-    else query = query.limit(BATCH_LIMIT);
-
-    const { data: eligibleItems } = await query;
-    const results = [];
-
-    for (const item of eligibleItems ?? []) {
-        const isReels = item.content_type === "reels";
-        const telemetry = new Telemetry(supabase);
-        await telemetry.logStart({
-            worker_name: "ap-render-engine",
-            worker_id: workerId,
-            news_id: item.id,
-            cliente_id: item.cliente_id,
-            metadata: { content_type: item.content_type }
-        });
-
-        const lockTime = new Date().toISOString();
-        const { data: lockData } = await supabase
-            .schema("ap").from("candidate_news")
-            .update({
-                render_started_at: lockTime,
-                worker_id: workerId,
-                render_attempts: (item.render_attempts ?? 0) + 1,
-            })
-            .eq("id", item.id)
-            .eq("status", "pending_render")
-            .is("render_url", null)
-            .or(`render_started_at.is.null,render_started_at.lt.${lockExpiryCutoff}`)
-            .select("id");
-
-        if (!lockData?.length) {
-            await telemetry.logError("acquire_failed_lock_contention");
-            continue;
-        }
-
-        try {
-            // 1. Template Selection
-            let activeTemplateId = item.placid_template_uuid;
-            if (!activeTemplateId) {
-                const { data: templateData } = await supabase.rpc("get_and_advance_template", {
-                    p_empresa_id: item.cliente_id,
-                    p_tipo: item.content_type || "feed",
-                    p_template_set: item.template_set || "default"
-                });
-                activeTemplateId = templateData?.placid_template_uuid || globalTemplateId;
-            }
-            if (!activeTemplateId || !item.headline) throw new Error("Template or Headline missing.");
-
-            // 2. Build Layers (REELS AUDIT: Skip Image Layer for Reels)
-            const layers: Record<string, any> = {
-                "headline_news": { text: item.headline },
-                "tag_news": { text: item.context_tag || "DESTAQUE" },
-            };
-
-            if (!isReels && (item.imagem_url || item.imagem_storage)) {
-                layers["news-image"] = { 
-                    image: item.imagem_storage 
-                        ? `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/public/ap-images/${item.imagem_storage}` 
-                        : item.imagem_url 
-                };
-            } else if (isReels) {
-                console.log(`[Reels-Audit] Enforcing image-free layers for Reels item ${item.id}`);
-            }
-
-            // 3. Choice of API Endpoint
-            const apiEndpoint = isReels 
-                ? "https://api.placid.app/api/rest/videos" 
-                : "https://api.placid.app/api/rest/images";
-
-            const renderRes = await fetch(apiEndpoint, {
-                method: "POST",
-                headers: { "Authorization": `Bearer ${renderApiKey}`, "Content-Type": "application/json" },
-                body: JSON.stringify({ template_uuid: activeTemplateId, layers }),
-            });
-            
-            if (!renderRes.ok) throw new Error(`Placid API error: ${renderRes.status}`);
-            const { polling_url } = await renderRes.json();
-
-            // 4. Polling for Completion
-            let mediaUrl = null;
-            const maxPolls = isReels ? 30 : 15; // Videos take longer
-            for (let i = 0; i < maxPolls; i++) {
-                await new Promise(r => setTimeout(r, 2000));
-                const pollRes = await fetch(polling_url, { headers: { "Authorization": `Bearer ${renderApiKey}` } });
-                const pollData = await pollRes.json();
-                
-                if (pollData.status === "success") {
-                    mediaUrl = isReels ? pollData.video_url : pollData.image_url;
-                    if (mediaUrl) break;
-                } else if (pollData.status === "failed") {
-                    throw new Error(`Placid Render Failed: ${pollData.error_message || "Unknown error"}`);
-                }
-            }
-            if (!mediaUrl) throw new Error("Render timeout.");
-
-            // 5. Internalize to Storage
-            const dlRes = await fetch(mediaUrl);
-            const contentType = dlRes.headers.get("content-type") || (isReels ? "video/mp4" : "image/jpeg");
-            const extension = isReels ? "mp4" : (contentType.includes("png") ? "png" : "jpg");
-            const storagePath = `${item.cliente_id}/${item.id}.${extension}`;
-            
-            await supabase.storage.from("ap-renders").upload(storagePath, new Uint8Array(await dlRes.arrayBuffer()), { 
-                contentType, 
-                upsert: true 
-            });
-            const publicRenderUrl = `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/public/ap-renders/${storagePath}`;
-
-            // 6. Release (CAS Guard)
-            const { data: relData } = await supabase
-                .schema("ap").from("candidate_news")
-                .update({
-                    render_url: publicRenderUrl,
-                    render_completed_at: new Date().toISOString(),
-                    render_started_at: null,
-                    status: "pending_review",
-                    worker_id: null
-                })
-                .eq("id", item.id)
-                .eq("render_started_at", lockTime)
-                .select("id");
-
-            if (!relData?.length) throw new Error("Release FAILED (Lost Update Lock)");
-
-            const cost = isReels ? 0.10 : 0.05;
-            await telemetry.logSuccess(cost, { template_id: activeTemplateId, content_type: item.content_type });
-            results.push({ id: item.id, status: "success", url: publicRenderUrl });
-
-        } catch (err: any) {
-            console.error(`[Render-Error] Item ${item.id}: ${err.message}`);
-            await supabase.schema("ap").from("candidate_news")
-                .update({ 
-                    render_started_at: null, 
-                    error_log: err.message.substring(0, 500) 
-                })
-                .eq("id", item.id)
-                .eq("render_started_at", lockTime);
-            
-            await telemetry.logError(err.message, 0);
-            results.push({ id: item.id, status: "error", error: err.message });
-        }
-    }
-
-    return new Response(JSON.stringify({ ok: true, results }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      let ownerId = item.cliente_id;
+      const { data: emp } = await supabase.from("empresas").select("id").eq("id", ownerId).single();
+      if (!emp) { const { data: cli } = await supabase.from("clientes").select("empresa_id").eq("id", ownerId).single(); if (cli?.empresa_id) ownerId = cli.empresa_id; }
+      let legacyTemplateId = item.placid_template_uuid;
+      if (!legacyTemplateId) { const { data: tpl } = await supabase.schema("ap").rpc("get_and_advance_template", { p_empresa_id: ownerId, p_tipo: item.content_type || "feed", p_template_set: item.template_set || "default" }); legacyTemplateId = tpl?.placid_template_uuid; }
+      if (!legacyTemplateId) throw new Error("No template");
+      const background = item.imagem_url || (item.imagem_storage ? `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/public/ap-images/${item.imagem_storage}` : null);
+      let templateId = legacyTemplateId;
+      let layers: Record<string, any> = { "headline_news": { text: item.headline }, "tag_news": { text: item.context_tag || "DESTAQUE" } };
+      if (background) layers["news-image"] = { image: background };
+      const master = await resolveMaster(supabase, item);
+      if (master.enabled) {
+        const map = { ...DEFAULT_LAYER_MAP, ...master.config.layer_map };
+        const snapshot = master.snapshot;
+        const nextLayers: Record<string, any> = {};
+        if (item.headline && map.headline) nextLayers[map.headline] = { text: item.headline };
+        if (map.tag) nextLayers[map.tag] = { text: item.context_tag || "DESTAQUE" };
+        addImage(nextLayers, map.news_image, background);
+        addImage(nextLayers, map.visual_title, assetUrl(Deno.env.get("SUPABASE_URL")!, snapshot.visual_title));
+        for (const [slot, asset] of Object.entries(snapshot.sponsor_profile?.slots || {})) addImage(nextLayers, map[slot], assetUrl(Deno.env.get("SUPABASE_URL")!, asset));
+        templateId = master.config.master_template_uuid;
+        layers = nextLayers;
+      } else if (item.render_snapshot?.render_contract_version === "master_v1") {
+        console.warn(`[master_v1] legacy fallback for ${item.id}: ${master.reason}`);
+      }
+      const response = await fetch("https://api.placid.app/api/rest/images", { method: "POST", headers: { "Authorization": `Bearer ${Deno.env.get("RENDER_API_KEY")}`, "Content-Type": "application/json" }, body: JSON.stringify({ template_uuid: templateId, layers }) });
+      const render = await response.json(); let finalUrl = render.image_url;
+      if (!finalUrl && render.polling_url) for (let i = 0; i < 30; i++) { await new Promise(r => setTimeout(r, 2000)); const poll = await fetch(render.polling_url, { headers: { "Authorization": `Bearer ${Deno.env.get("RENDER_API_KEY")}` } }).then(r => r.json()); if (poll.status === "finished") { finalUrl = poll.image_url; break; } if (poll.status === "error") throw new Error(`Placid render error: ${poll.error || "unknown"}`); }
+      if (!finalUrl) throw new Error("Render timeout after 60s");
+      const download = await fetch(finalUrl); const contentType = download.headers.get("content-type") || "image/jpeg"; const path = `${item.cliente_id}/${item.id}.${contentType.includes("png") ? "png" : "jpg"}`;
+      await supabase.storage.from("ap-renders").upload(path, new Uint8Array(await download.arrayBuffer()), { contentType, upsert: true });
+      const renderUrl = `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/public/ap-renders/${path}`;
+      await supabase.schema("ap").from("candidate_news").update({ render_url: renderUrl, imagem_url: renderUrl, status: "approved", render_started_at: null, completed_at: new Date().toISOString() }).eq("id", item.id);
+      results.push({ id: item.id, status: "success", url: renderUrl });
+    } catch (error: any) { await supabase.schema("ap").from("candidate_news").update({ status: "failed", error_log: error.message, render_started_at: null }).eq("id", item.id); results.push({ id: item.id, status: "error", error: error.message }); }
+  }
+  return new Response(JSON.stringify({ ok: true, results }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 });

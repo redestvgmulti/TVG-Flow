@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ImageIcon, Video, UploadCloud, CheckCircle2, Brain, Zap } from 'lucide-react';
+import { ImageIcon, Video, UploadCloud, CheckCircle2 } from 'lucide-react';
 
 // Static fallback used only when parent hasn't loaded campaigns from DB yet.
 // Ensures backward compatibility if a parent doesn't pass availableCampaigns.
@@ -24,6 +24,7 @@ export default function ArticleForm({
     // []    → loaded from DB, bank has no non-default campaigns
     // [...]  → loaded from DB, render these
     availableCampaigns = null,
+    visualTitles = [],
     selectedFile,
     setSelectedFile
 }) {
@@ -36,10 +37,8 @@ export default function ArticleForm({
             {/* Formato */}
             <div style={{ display: 'flex', gap: '8px', background: '#f1f5f9', padding: '6px', borderRadius: '16px', flexWrap: 'wrap' }}>
                 {[
-                    ['feed', 'Estático', <ImageIcon size={18} key="feed" />],
+                    ['feed', 'Feed', <ImageIcon size={18} key="feed" />],
                     ['reels', 'Reels', <Video size={18} key="reels" />],
-                    ['carousel', 'Carrossel', <Brain size={18} key="carousel" />],
-                    ['sponsored', 'Patrocinado', <Zap size={18} key="sponsored" />]
                 ].map(([val, lbl, icon]) => (
                     <button key={val} type="button" onClick={() => setFormData({ ...formData, content_type: val })}
                         style={{ flex: '1 1 120px', padding: '10px 8px', borderRadius: '12px', border: 'none', background: formData.content_type === val ? '#fff' : 'transparent', color: formData.content_type === val ? '#0f172a' : '#64748b', fontWeight: 600, fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', boxShadow: formData.content_type === val ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', cursor: 'pointer', transition: 'all 0.2s' }}>
@@ -92,6 +91,15 @@ export default function ArticleForm({
                 />
             </div>
 
+            {/* Título visual: asset independente de headline e editoria. */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
+                <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Título visual <span style={{ color: '#64748b', fontWeight: 400 }}>(opcional)</span></label>
+                <select value={formData.visual_title_id || ''} onChange={e => setFormData({ ...formData, visual_title_id: e.target.value || null })} style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', background: '#fff' }}>
+                    <option value="">Sem título visual</option>
+                    {visualTitles.map(title => <option key={title.id} value={title.id}>{title.nome}</option>)}
+                </select>
+                {formData.visual_title_id && visualTitles.find(title => title.id === formData.visual_title_id)?.preview_url && <img src={visualTitles.find(title => title.id === formData.visual_title_id).preview_url} alt="Preview do título visual" style={{ maxHeight: 72, maxWidth: '100%', objectFit: 'contain', objectPosition: 'left', borderRadius: 8 }} />}
+            </div>
             {/* Link Origem */}
             <div style={{ padding: '16px', background: '#e0f2fe', border: '1px solid #bae6fd', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
                 <label style={{ fontSize: '14px', fontWeight: 700, color: '#0284c7', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Link Origem <span style={{ color: '#ef4444' }}>*</span></label>

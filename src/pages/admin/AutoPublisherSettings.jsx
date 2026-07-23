@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../services/supabase'
 import { Plus, Trash2, Globe } from 'lucide-react'
+import AutoPublisherMasterV1Settings from './AutoPublisherMasterV1Settings'
 
 const FIXED_CLIENT_ID = 'cd287e6e-f273-4d0f-a72d-2a8c391e40e9'
 

@@ -69,10 +69,12 @@ export default function AutoPublisher() {
         image_url: '',
         content_type: 'feed',
         template_set: 'default',
-        placid_template_uuid: null
+        placid_template_uuid: null,
+        visual_title_id: null
     })
     const [availableTemplates, setAvailableTemplates] = useState([])
     const [availableCampaigns, setAvailableCampaigns] = useState(null) // null = not yet loaded
+    const [visualTitles, setVisualTitles] = useState([])
     const [manualFormErrors, setManualFormErrors] = useState({})
     const [isSubmittingManual, setIsSubmittingManual] = useState(false)
     const [selectedFile, setSelectedFile] = useState(null)
@@ -99,7 +101,8 @@ export default function AutoPublisher() {
             image_url: '',
             content_type: 'feed',
             template_set: 'default',
-            placid_template_uuid: null
+            placid_template_uuid: null,
+        visual_title_id: null
         })
         setAvailableTemplates([])
         setSelectedFile(null)
@@ -203,9 +206,17 @@ export default function AutoPublisher() {
             loadTemplates()
         } else {
             setAvailableTemplates([])
-            setFormData(prev => ({ ...prev, placid_template_uuid: null }))
+            setFormData(prev => ({ ...prev, placid_template_uuid: null,
+        visual_title_id: null }))
         }
     }, [formData.template_set, formData.content_type])
+    useEffect(() => {
+        if (!isManualModalOpen) return
+        supabase.schema('ap').from('visual_titles').select('id,nome,asset_bucket,asset_path,ordem,formatos').eq('cliente_id', clienteId).eq('ativo', true).contains('formatos', [formData.content_type]).order('ordem', { ascending: true }).then(({ data, error }) => {
+            if (error) { console.error('[AutoPublisher] visual title fetch failed', error); setVisualTitles([]); return }
+            setVisualTitles((data || []).map(title => ({ ...title, preview_url: supabase.storage.from(title.asset_bucket).getPublicUrl(title.asset_path).data.publicUrl })))
+        })
+    }, [isManualModalOpen, clienteId, formData.content_type])
 
     // ── Load campaigns (template_sets) every time the manual modal opens
     useEffect(() => {
@@ -532,6 +543,7 @@ export default function AutoPublisher() {
             imagem_url: formData.content_type === 'reels' ? null : finalImageUrl,
             template_set: formData.template_set || 'default',
             placid_template_uuid: formData.placid_template_uuid || null,
+            visual_title_id: formData.visual_title_id || null,
             // Hybrid fields for backend compatibility
             userHeadline: formData.titulo || null,
             userTag: formData.context_tag.toUpperCase(),
@@ -782,6 +794,7 @@ export default function AutoPublisher() {
                                 onCancel={() => { setManualModalOpen(false); setSelectedFile(null); }}
                                 availableTemplates={availableTemplates}
                                 availableCampaigns={availableCampaigns}
+                                visualTitles={visualTitles}
                                 selectedFile={selectedFile}
                                 setSelectedFile={setSelectedFile}
                             />
