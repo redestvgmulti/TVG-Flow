@@ -1,6 +1,11 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { runEditorialWorkflow } from "../_shared/editorialWorkflow.ts";
+import {
+  resolveVisualTitleForCreation,
+  shouldResolveVisualTitleForCreation,
+  VisualTitleResolutionError,
+} from "./visualTitleResolution.ts";
 const corsHeaders = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", "Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE" };
 const isUUID = (value: unknown) => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 const isUrl = (value: unknown) => { try { new URL(String(value)); return true; } catch { return false; } };
@@ -28,6 +33,14 @@ const responseForNews = (news: any, reused = false) => ({
   context_tag: news.context_tag ?? null,
   render_pending: news.status === 'pending_render',
 });
+const visualTitleErrorResponse = (error: VisualTitleResolutionError) =>
+  new Response(
+    JSON.stringify({
+      error: error.code,
+      message: "O selo da mat\u00e9ria n\u00e3o est\u00e1 dispon\u00edvel para esta cria\u00e7\u00e3o.",
+    }),
+    { status: 400, headers: corsHeaders },
+  );
 async function getActiveMasterConfig(supabase: any, clienteId: string, contentType: string, templateSet: string) {
   const { data, error } = await supabase.schema('ap').from('master_render_configs').select('*').eq('cliente_id', clienteId).eq('content_type', contentType).eq('enabled', true).or('template_set.eq.' + templateSet + ',template_set.is.null');
   if (error) throw error;
@@ -63,9 +76,30 @@ Deno.serve(async (req: Request) => {
       if (imageUrlForRotation && !isUrl(imageUrlForRotation)) return new Response(JSON.stringify({ error: 'VALIDATION_ERROR', message: 'imagem_url invalida' }), { status: 400, headers: corsHeaders });
       if (!isUUID(visual_title_id)) return new Response(JSON.stringify({ error: 'VALIDATION_ERROR', message: 'visual_title_id e obrigatorio para sponsor_rotation_v1' }), { status: 400, headers: corsHeaders });
 
-      const { data: title, error: titleError } = await supabase.schema('ap').from('visual_titles').select('id,nome,slug,asset_bucket,asset_path,asset_version,sha256,formatos,ativo').eq('id', visual_title_id).eq('cliente_id', cliente_id).eq('ativo', true).maybeSingle();
-      if (titleError) throw titleError;
-      if (!title || !Array.isArray(title.formatos) || !title.formatos.includes(content_type)) return new Response(JSON.stringify({ error: 'VALIDATION_ERROR', message: 'Titulo visual nao encontrado, inativo ou incompativel' }), { status: 400, headers: corsHeaders });
+      const { data: existingCandidate, error: existingCandidateError } =
+        await supabase
+          .schema("ap")
+          .from("candidate_news")
+          .select("id")
+          .eq("cliente_id", cliente_id)
+          .eq("idempotency_key", idempotency_key)
+          .maybeSingle();
+      if (existingCandidateError) throw existingCandidateError;
+
+      if (shouldResolveVisualTitleForCreation(existingCandidate)) {
+        try {
+          await resolveVisualTitleForCreation(supabase, {
+            visualTitleId: visual_title_id,
+            clienteId: cliente_id,
+            contentType: content_type,
+          });
+        } catch (error) {
+          if (error instanceof VisualTitleResolutionError) {
+            return visualTitleErrorResponse(error);
+          }
+          throw error;
+        }
+      }
 
       const { data: control, error: controlError } = await supabase.schema('ap').from('master_render_controls').select('kill_switch').eq('cliente_id', cliente_id).maybeSingle();
       if (controlError) throw controlError;
@@ -88,7 +122,7 @@ Deno.serve(async (req: Request) => {
         p_imagem_url: imageUrlForRotation,
         p_context_tag: userTagForRotation || 'DESTAQUE',
         p_auth_user_id: isUUID(auth_user_id) ? auth_user_id : null,
-        p_visual_title_id: title.id,
+        p_visual_title_id: visual_title_id,
         p_render_contract_version: 'master_v1',
         p_render_snapshot_base: {
           master_config: { id: config.id, master_template_uuid: config.master_template_uuid, enabled: config.enabled },
@@ -119,7 +153,7 @@ Deno.serve(async (req: Request) => {
     if (manualUuid) {
       const { data: rows } = await supabase.schema("ap").from("templates").select("id,placid_template_uuid,ordem,nome,template_set").eq("empresa_id", ownerId).eq("tipo", content_type).eq("template_set", requestedSet).eq("placid_template_uuid", manualUuid).limit(2);
       if (rows?.length === 1) resolved = rows[0];
-      else if (rows?.length > 1) console.warn(`[master_v1] manual UUID ${manualUuid} is ambiguous; preserving legacy UUID without template snapshot`);
+      else if ((rows?.length ?? 0) > 1) console.warn(`[master_v1] manual UUID ${manualUuid} is ambiguous; preserving legacy UUID without template snapshot`);
       else console.warn(`[master_v1] manual UUID ${manualUuid} has no scoped template row; preserving legacy UUID`);
       resolved = resolved || { id: null, placid_template_uuid: manualUuid, ordem: null, nome: null, template_set: requestedSet };
     } else {
@@ -131,10 +165,24 @@ Deno.serve(async (req: Request) => {
     let visualTitle: any = null;
     if (visual_title_id) {
       if (!isUUID(visual_title_id)) return new Response(JSON.stringify({ error: "VALIDATION_ERROR", message: "visual_title_id inválido" }), { status: 400, headers: corsHeaders });
-      const { data: title } = await supabase.schema("ap").from("visual_titles").select("id,nome,slug,asset_bucket,asset_path,asset_version,sha256,formatos,ativo").eq("id", visual_title_id).eq("cliente_id", cliente_id).eq("ativo", true).maybeSingle();
-      if (!title) return new Response(JSON.stringify({ error: "VALIDATION_ERROR", message: "Título visual não encontrado ou inativo" }), { status: 400, headers: corsHeaders });
-      if (!Array.isArray(title.formatos) || !title.formatos.includes(content_type)) return new Response(JSON.stringify({ error: "VALIDATION_ERROR", message: "Título visual incompatível com o formato" }), { status: 400, headers: corsHeaders });
-      visualTitle = { id: title.id, nome: title.nome, slug: title.slug, bucket: title.asset_bucket, path: title.asset_path, version: title.asset_version, sha256: title.sha256 };
+      try {
+        const title = await resolveVisualTitleForCreation(supabase, {
+          visualTitleId: visual_title_id,
+          clienteId: cliente_id,
+          contentType: content_type,
+        });
+        visualTitle = title
+          ? {
+            ...title,
+            nome: title.name,
+          }
+          : null;
+      } catch (error) {
+        if (error instanceof VisualTitleResolutionError) {
+          return visualTitleErrorResponse(error);
+        }
+        throw error;
+      }
     }
     const { data: control } = await supabase.schema("ap").from("master_render_controls").select("kill_switch").eq("cliente_id", cliente_id).maybeSingle();
     const { data: configs } = await supabase.schema("ap").from("master_render_configs").select("*").eq("cliente_id", cliente_id).eq("content_type", content_type).eq("enabled", true).or(`template_set.eq.${resolved.template_set || requestedSet},template_set.is.null`);
