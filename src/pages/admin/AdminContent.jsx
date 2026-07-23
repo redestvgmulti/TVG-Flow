@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../services/supabase'
 import { FolderOpen, CheckCircle, AlertCircle, ExternalLink, Settings, Building2, Plus, X } from 'lucide-react'
 import { toast } from 'sonner'
+import { SkeletonCard } from '../../components/Skeleton'
 import '../../styles/content.css'
 
 function Content() {
@@ -112,8 +113,8 @@ function Content() {
                 <div className="companies-header">
                     <h2 className="companies-title">Conteúdo</h2>
                 </div>
-                <div className="card loading-card">
-                    <p className="loading-text-primary">Carregando empresas...</p>
+                <div className="companies-grid">
+                    {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
                 </div>
             </div>
         )
@@ -264,17 +265,18 @@ function Content() {
                                                 Status da Empresa
                                             </label>
                                         </div>
-                                        <label className="checkbox-wrapper">
+                                        <label className="ap-switch" style={{ marginTop: 8 }}>
                                             <input
                                                 type="checkbox"
                                                 checked={configData.ativo}
                                                 onChange={(e) => setConfigData({ ...configData, ativo: e.target.checked })}
                                             />
-                                            <span>Empresa ativa</span>
+                                            <span className="ap-switch-track" />
+                                            <span className="ap-switch-body">
+                                                <span className="ap-switch-label">Empresa ativa</span>
+                                                <span className="ap-switch-hint">Apenas empresas ativas ficam visíveis para a equipe.</span>
+                                            </span>
                                         </label>
-                                        <span className="config-help-text">
-                                            Apenas empresas ativas ficam visíveis para a equipe
-                                        </span>
                                     </div>
                                 </div>
 

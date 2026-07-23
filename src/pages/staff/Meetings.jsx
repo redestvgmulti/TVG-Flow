@@ -59,15 +59,15 @@ export default function StaffMeetings() {
     const getStatusBadge = (status) => {
         switch (status) {
             case 'agendada':
-                return <span className="badge badge-primary">Agendada</span>
+                return <span className="ap-chip tone-brand">Agendada</span>
             case 'em_andamento':
-                return <span className="badge badge-info text-white">Em Andamento</span>
+                return <span className="ap-chip tone-warn">Em Andamento</span>
             case 'realizada':
-                return <span className="badge badge-success">Realizada</span>
+                return <span className="ap-chip tone-success">Realizada</span>
             case 'cancelada':
-                return <span className="badge badge-neutral">Cancelada</span>
+                return <span className="ap-chip tone-neutral">Cancelada</span>
             default:
-                return <span className="badge badge-neutral">{status}</span>
+                return <span className="ap-chip tone-neutral">{status}</span>
         }
     }
 

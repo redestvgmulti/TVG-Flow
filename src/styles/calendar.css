@@ -9,34 +9,34 @@
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
 :root {
-    /* Calendar-specific tokens */
-    --cal-bg: #fafbfc;
-    --cal-surface: #ffffff;
-    --cal-border: #e5e7eb;
-    --cal-border-light: #f3f4f6;
-    --cal-hover: #f9fafb;
-    --cal-today-bg: #eff6ff;
+    /* Calendar aliases — fonte única: tokens CityOS (tokens.css) */
+    --cal-bg: var(--color-bg-app, #F5F7FA);
+    --cal-surface: var(--color-bg-surface, #ffffff);
+    --cal-border: var(--color-border, #E5E7EB);
+    --cal-border-light: #EDF0F3;
+    --cal-hover: var(--color-bg-app, #F5F7FA);
+    --cal-today-bg: var(--color-primary-light, #EFF6FF);
 
-    /* STATUS-BASED COLORS (temporal state, not event type) */
+    /* STATUS-BASED COLORS (temporal state, not type-based) */
     /* Normal - future/ongoing */
-    --status-normal-bg: #ffffff;
-    --status-normal-border: #9ca3af;
-    --status-normal-text: #374151;
+    --status-normal-bg: var(--color-bg-surface, #ffffff);
+    --status-normal-border: var(--color-text-tertiary, #9CA3AF);
+    --status-normal-text: var(--color-text-secondary, #4B5563);
 
     /* Attention - approaching deadline */
-    --status-attention-bg: #fffbeb;
-    --status-attention-border: #f59e0b;
-    --status-attention-text: #92400e;
+    --status-attention-bg: var(--color-warning-bg, #FEF3C7);
+    --status-attention-border: var(--color-warning, #D97706);
+    --status-attention-text: var(--color-warning, #D97706);
 
     /* Overdue - past deadline, not completed */
-    --status-overdue-bg: #fef2f2;
-    --status-overdue-border: #ef4444;
-    --status-overdue-text: #991b1b;
+    --status-overdue-bg: var(--color-danger-bg, #FEE2E2);
+    --status-overdue-border: var(--color-danger, #DC2626);
+    --status-overdue-text: var(--color-danger, #DC2626);
 
     /* Completed */
-    --status-completed-bg: #f3f4f6;
-    --status-completed-border: #10b981;
-    --status-completed-text: #6b7280;
+    --status-completed-bg: var(--color-bg-subtle, #F0F2F5);
+    --status-completed-border: var(--color-success, #059669);
+    --status-completed-text: var(--color-text-tertiary, #9CA3AF);
 
     /* Typography */
     --cal-font-xs: 0.6875rem;
@@ -55,12 +55,12 @@
     /* Radius */
     --cal-radius-sm: 0.375rem;
     --cal-radius-md: 0.5rem;
-    --cal-radius-lg: 0.75rem;
+    --cal-radius-lg: 1rem;
 
-    /* Shadows */
-    --cal-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-    --cal-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-    --cal-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    /* Shadows — camadas do sistema */
+    --cal-shadow-sm: var(--shadow-1, 0 1px 2px 0 rgba(15, 23, 42, 0.05));
+    --cal-shadow-md: var(--shadow-2, 0 4px 14px rgba(15, 23, 42, 0.07));
+    --cal-shadow-lg: var(--shadow-3, 0 14px 30px -8px rgba(15, 23, 42, 0.16));
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -71,7 +71,7 @@
     background: var(--cal-surface);
     border-radius: var(--cal-radius-lg);
     padding: var(--cal-space-6);
-    box-shadow: var(--cal-shadow-sm);
+    box-shadow: var(--cal-shadow-md);
     border: 1px solid var(--cal-border);
     overflow: visible;
 }
@@ -83,8 +83,8 @@
 
 /* Override react-big-calendar */
 .rbc-calendar {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-    color: #1f2937;
+    font-family: var(--font-body, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif);
+    color: var(--color-text-primary);
     font-size: var(--cal-font-base);
 }
 
@@ -104,42 +104,84 @@
 }
 
 .rbc-toolbar-label {
+    font-family: var(--font-display, inherit);
     font-size: var(--cal-font-lg);
-    font-weight: 600;
-    color: #111827;
-    letter-spacing: -0.01em;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    letter-spacing: -0.015em;
+    text-transform: capitalize;
 }
 
+/* Controle segmentado — mesmo padrão do AutoPublisher */
 .rbc-btn-group {
     display: flex;
-    gap: var(--cal-space-2);
-    background: var(--cal-bg);
-    padding: var(--cal-space-1);
-    border-radius: var(--cal-radius-md);
+    gap: 2px;
+    background: var(--color-bg-subtle, #F0F2F5);
+    border: 1px solid var(--color-border, #E5E7EB);
+    padding: 3px;
+    border-radius: 11px;
 }
 
 .rbc-btn-group button {
-    padding: var(--cal-space-2) var(--cal-space-4);
+    padding: 7px 14px;
     border: none;
     background: transparent;
-    color: #6b7280;
-    border-radius: var(--cal-radius-sm);
+    color: var(--color-text-secondary);
+    border-radius: 8px;
     font-size: var(--cal-font-sm);
-    font-weight: 500;
+    font-weight: 600;
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: all 0.18s ease;
 }
 
 .rbc-btn-group button:hover {
-    background: white;
-    color: #111827;
+    color: var(--color-text-primary);
 }
 
 .rbc-btn-group button.rbc-active {
-    background: white;
-    color: #3b82f6;
+    background: var(--color-bg-surface, #fff);
+    color: var(--color-text-primary);
     box-shadow: var(--cal-shadow-sm);
 }
+
+/* Header da página: título + legenda de status */
+.calendar-page-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px 24px;
+    flex-wrap: wrap;
+}
+
+.calendar-legend {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    padding-bottom: 4px;
+}
+
+.calendar-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+}
+
+.calendar-legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 2.5px;
+    flex-shrink: 0;
+}
+
+.calendar-legend-dot--normal { background: var(--status-normal-border); }
+.calendar-legend-dot--attention { background: var(--status-attention-border); }
+.calendar-legend-dot--overdue { background: var(--status-overdue-border); }
+.calendar-legend-dot--completed { background: var(--status-completed-border); }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    MONTH VIEW
@@ -160,7 +202,7 @@
     font-size: var(--cal-font-xs);
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: #9ca3af;
+    color: var(--color-text-tertiary);
     border-bottom: 1px solid var(--cal-border-light);
     background: var(--cal-bg);
 }
@@ -196,9 +238,7 @@
 }
 
 .rbc-today {
-    background-color: #fafbfc;
-    outline: 2px solid #d1d5db;
-    outline-offset: -2px;
+    background-color: var(--cal-today-bg);
 }
 
 .rbc-date-cell {
@@ -206,16 +246,17 @@
     text-align: right;
     font-size: var(--cal-font-sm);
     font-weight: 500;
-    color: #6b7280;
+    color: var(--color-text-secondary);
+    font-variant-numeric: tabular-nums;
 }
 
 .rbc-today .rbc-date-cell {
-    color: #111827;
-    font-weight: 600;
+    color: var(--color-primary);
+    font-weight: 700;
 }
 
 .rbc-off-range .rbc-date-cell {
-    color: #d1d5db;
+    color: var(--color-border-hover);
 }
 
 /* Events in month view */
@@ -229,7 +270,7 @@
     border: none;
     border-left: 3px solid var(--status-normal-border);
     background: white;
-    color: #374151;
+    color: var(--color-text-secondary);
     cursor: pointer;
     transition: all 0.15s ease;
     white-space: normal;
@@ -240,14 +281,14 @@
 }
 
 .rbc-event:hover {
-    background: #f9fafb;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    transform: translateY(-1px);
+    box-shadow: var(--cal-shadow-sm);
 }
 
 .rbc-show-more {
     background: transparent;
-    color: #6b7280;
-    font-weight: 500;
+    color: var(--color-primary);
+    font-weight: 600;
     font-size: var(--cal-font-xs);
     padding: var(--cal-space-1) var(--cal-space-2);
     margin-top: var(--cal-space-2);
@@ -256,7 +297,7 @@
 }
 
 .rbc-show-more:hover {
-    color: #111827;
+    color: var(--color-primary-hover, #1D4ED8);
     text-decoration: underline;
 }
 
@@ -290,7 +331,7 @@
 
 .rbc-time-gutter {
     font-size: var(--cal-font-xs);
-    color: #9ca3af;
+    color: var(--color-text-tertiary);
     font-weight: 500;
 }
 
@@ -299,7 +340,7 @@
 }
 
 .rbc-current-time-indicator {
-    background-color: #ef4444;
+    background-color: var(--color-danger);
     height: 2px;
     box-shadow: 0 0 4px rgba(239, 68, 68, 0.4);
 }
@@ -312,7 +353,7 @@
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background-color: #ef4444;
+    background-color: var(--color-danger);
     box-shadow: 0 0 4px rgba(239, 68, 68, 0.6);
 }
 
@@ -347,7 +388,7 @@
     text-align: left;
     font-weight: 600;
     font-size: var(--cal-font-sm);
-    color: #6b7280;
+    color: var(--color-text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.05em;
     border-bottom: 2px solid var(--cal-border);
@@ -375,7 +416,7 @@
 
 .rbc-agenda-date-cell {
     font-weight: 600;
-    color: #6b7280;
+    color: var(--color-text-secondary);
     white-space: nowrap;
     min-width: 100px;
     font-size: var(--cal-font-xs);
@@ -384,7 +425,7 @@
 }
 
 .rbc-agenda-time-cell {
-    color: #374151;
+    color: var(--color-text-secondary);
     font-size: var(--cal-font-sm);
     font-weight: 500;
     white-space: nowrap;
@@ -392,7 +433,7 @@
 }
 
 .rbc-agenda-event-cell {
-    color: #111827;
+    color: var(--color-text-primary);
     font-weight: 500;
     padding-left: var(--cal-space-4);
     border-left: 4px solid var(--status-normal-border);
@@ -406,7 +447,7 @@
 .rbc-agenda-empty {
     padding: var(--cal-space-8);
     text-align: center;
-    color: #9ca3af;
+    color: var(--color-text-tertiary);
     font-style: italic;
 }
 
@@ -436,31 +477,33 @@
 
 /* STATUS: Normal (future/ongoing) */
 .calendar-event--normal {
-    background: white;
+    background: var(--status-normal-bg);
     border-left-color: var(--status-normal-border);
     color: var(--status-normal-text);
 }
 
-/* STATUS: Attention (approaching) */
+/* STATUS: Attention (approaching) — fundo tintado para leitura imediata */
 .calendar-event--attention {
-    background: white !important;
+    background: var(--status-attention-bg) !important;
     border-left-color: var(--status-attention-border) !important;
     color: var(--status-attention-text) !important;
 }
 
 /* STATUS: Overdue (past, not completed) */
 .calendar-event--overdue {
-    background: white !important;
+    background: var(--status-overdue-bg) !important;
     border-left-color: var(--status-overdue-border) !important;
     color: var(--status-overdue-text) !important;
 }
 
 /* STATUS: Completed */
 .calendar-event--completed {
-    background: white !important;
+    background: var(--status-completed-bg) !important;
     border-left-color: var(--status-completed-border) !important;
     color: var(--status-completed-text) !important;
     opacity: 0.75;
+    text-decoration: line-through;
+    text-decoration-color: rgba(0, 0, 0, 0.25);
 }
 
 /* Type badges (discrete, no color emphasis) */
@@ -470,7 +513,7 @@
     display: inline-block;
     margin-left: var(--cal-space-2);
     font-size: var(--cal-font-xs);
-    color: #9ca3af;
+    color: var(--color-text-tertiary);
     font-weight: 400;
 }
 
@@ -490,7 +533,7 @@
 .task-detail-title {
     font-size: 1.875rem;
     font-weight: 700;
-    color: #111827;
+    color: var(--color-text-primary);
     margin-bottom: var(--cal-space-4);
     line-height: 1.2;
     letter-spacing: -0.02em;
@@ -511,7 +554,7 @@
     font-size: var(--cal-font-xs);
     font-weight: 600;
     background: #f3f4f6;
-    color: #6b7280;
+    color: var(--color-text-secondary);
 }
 
 .task-detail-deadline {
@@ -526,7 +569,7 @@
 }
 
 .task-detail-deadline-icon {
-    color: #6b7280;
+    color: var(--color-text-secondary);
     flex-shrink: 0;
     margin-top: 2px;
 }
@@ -534,7 +577,7 @@
 .task-detail-deadline-text {
     font-size: var(--cal-font-base);
     font-weight: 600;
-    color: #111827;
+    color: var(--color-text-primary);
     line-height: 1.5;
 }
 
@@ -556,14 +599,14 @@
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    color: #9ca3af;
+    color: var(--color-text-tertiary);
     margin-bottom: var(--cal-space-2);
 }
 
 .task-detail-section-content {
     font-size: var(--cal-font-base);
     line-height: 1.6;
-    color: #374151;
+    color: var(--color-text-secondary);
     white-space: pre-wrap;
 }
 
@@ -586,12 +629,12 @@
     width: 36px;
     height: 36px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
+    background: var(--color-primary-light, #EFF6FF);
+    color: var(--color-primary, #2563EB);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-weight: 600;
+    font-weight: 700;
     font-size: var(--cal-font-sm);
     flex-shrink: 0;
 }

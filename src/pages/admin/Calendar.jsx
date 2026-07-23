@@ -74,7 +74,7 @@ function Calendar() {
         return (
             <div className="animation-fade-in">
                 <div className="dashboard-header">
-                    <h2>Calendário de Tarefas</h2>
+                    <h2>Agenda</h2>
                 </div>
                 <div className="card">
                     <SkeletonTable />
@@ -85,11 +85,14 @@ function Calendar() {
 
     return (
         <div className="animation-fade-in">
-            <div className="dashboard-header">
-                <h2>Calendário de Tarefas</h2>
-                <p className="text-secondary">
-                    Visualize macro tasks (referência) e micro tasks (operacionais)
-                </p>
+            <div className="dashboard-header calendar-page-header">
+                <h2>Agenda</h2>
+                <div className="calendar-legend">
+                    <span className="calendar-legend-item"><i className="calendar-legend-dot calendar-legend-dot--normal" /> No prazo</span>
+                    <span className="calendar-legend-item"><i className="calendar-legend-dot calendar-legend-dot--attention" /> Vence em breve</span>
+                    <span className="calendar-legend-item"><i className="calendar-legend-dot calendar-legend-dot--overdue" /> Atrasada</span>
+                    <span className="calendar-legend-item"><i className="calendar-legend-dot calendar-legend-dot--completed" /> Concluída</span>
+                </div>
             </div>
 
             <div className="card calendar-container">
@@ -173,7 +176,7 @@ function TaskDetailModal({ event, onClose }) {
 
                         <div className="task-detail-metadata">
                             <span className={`task-detail-badge task-detail-badge--${isMacro ? 'macro' : 'micro'}`}>
-                                {isMacro ? '📋 Macro Task' : '⚡ Micro Task'}
+                                {isMacro ? 'Tarefa Macro' : 'Tarefa Micro'}
                             </span>
                             <span className={`badge badge-${getStatusClass(task.status)}`}>
                                 {task.status === 'concluida' && <CheckCircle size={12} />}
@@ -187,7 +190,7 @@ function TaskDetailModal({ event, onClose }) {
                         <Clock size={20} className="task-detail-deadline-icon" />
                         <div>
                             <div className="task-detail-deadline-text">
-                                {isOverdue ? '🔴 ATRASADA - ' : ''}
+                                {isOverdue ? 'Atrasada — ' : ''}
                                 Prazo: {deadlineDate.toLocaleDateString('pt-BR')} às {deadlineDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                             </div>
                             {task.started_at && (

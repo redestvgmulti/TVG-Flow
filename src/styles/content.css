@@ -1,11 +1,13 @@
-/* Content Tab Styles - CityOS Premium */
+/* Content Tab Styles — CityOS Premium (v2.1)
+   Tokens fantasma corrigidos: --color-bg-primary → --color-bg-surface,
+   --color-primary-alpha → --color-primary-light, --color-success-alpha → --color-success-bg. */
 
 /* Company Avatar */
 .company-avatar {
     width: 48px;
     height: 48px;
     border-radius: var(--radius-md);
-    background: var(--color-bg-subtle);
+    background: var(--color-primary-light, #EFF6FF);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -16,44 +18,59 @@
     flex-shrink: 0;
 }
 
-
-
 /* Base Company Card (Premium Dense) */
 .company-card {
     display: flex;
     flex-direction: column;
     padding: 20px;
-    background: var(--color-bg-primary);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+    background: var(--color-bg-surface, #ffffff);
+    border: 1px solid var(--color-border, #E9EDF2);
+    border-radius: var(--radius-lg, 16px);
+    box-shadow: var(--shadow-2, 0 4px 14px rgba(15, 23, 42, 0.07));
     transition: transform 0.2s ease, box-shadow 0.2s ease;
     height: auto !important;
-    /* Force auto height override */
+    /* Overrides .content-card (staff-dashboard.css) min-height cross-file */
     min-height: 0 !important;
+}
+
+.company-card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-3, 0 14px 30px -8px rgba(15, 23, 42, 0.16));
 }
 
 .company-card:active {
     transform: scale(0.99);
 }
 
+/* Pendente de configuração — acento de alerta (classe era usada e nunca definida) */
+.content-card-pending {
+    border-color: var(--color-warning, #D97706);
+}
+
+/* Status como chip (vinculado / pendente) */
 .content-status {
     display: inline-flex;
     align-items: center;
     justify-content: flex-start;
-    /* Ensure left alignment */
-    gap: 6px;
-    font-size: var(--text-xs);
-    font-weight: var(--weight-medium);
-    margin-top: 4px;
+    gap: 5px;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 3px 10px;
+    border-radius: var(--radius-full, 9999px);
+    margin-top: 6px;
+    white-space: nowrap;
 }
 
 .content-status-linked {
-    color: var(--color-success);
+    background: var(--color-success-bg, #D1FAE5);
+    color: var(--color-success, #059669);
 }
 
 .content-status-pending {
-    color: var(--color-warning);
+    background: var(--color-warning-bg, #FEF3C7);
+    color: var(--color-warning, #D97706);
 }
 
 /* Content Access Button */
@@ -75,7 +92,6 @@
 .company-card-header {
     display: flex;
     align-items: center;
-    /* Center vertically with avatar */
     gap: 16px;
     margin-bottom: 0;
 }
@@ -85,7 +101,6 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    /* Left align text */
 }
 
 .company-name {
@@ -93,6 +108,20 @@
     font-weight: 600;
     color: var(--color-text-primary);
     line-height: 1.2;
+}
+
+/* Loading (texto usado pela versão staff) */
+.loading-card {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-12, 48px);
+}
+
+.loading-text-primary {
+    color: var(--color-text-secondary);
+    font-size: var(--text-sm);
+    margin: 0;
 }
 
 /* ============================================================================
@@ -162,15 +191,16 @@
     border-radius: var(--radius-md);
     font-size: var(--text-sm);
     font-family: var(--font-body);
-    background: var(--color-bg-primary);
+    background: var(--color-bg-surface, #ffffff);
     color: var(--color-text-primary);
-    transition: all 0.2s ease;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    box-sizing: border-box;
 }
 
 .config-input:focus {
     outline: none;
     border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px var(--color-primary-alpha);
+    box-shadow: 0 0 0 3px var(--color-primary-light, #EFF6FF);
 }
 
 .config-input::placeholder {
@@ -179,7 +209,7 @@
 
 .config-help-text {
     font-size: var(--text-xs);
-    color: var(--color-text-secondary);
+    color: var(--color-text-tertiary);
     line-height: 1.4;
 }
 
@@ -189,7 +219,7 @@
     align-items: center;
     gap: var(--space-3);
     padding: var(--space-4);
-    background: var(--color-success-alpha);
+    background: var(--color-success-bg, #D1FAE5);
     border: 1px solid var(--color-success);
     border-radius: var(--radius-md);
     margin-top: var(--space-4);
@@ -252,6 +282,7 @@
     margin: 0;
 }
 
+/* Mantido para compatibilidade (telas que ainda usem checkbox nativo) */
 .checkbox-wrapper {
     margin-top: 8px;
     display: flex;
@@ -289,4 +320,13 @@
     gap: var(--space-3);
     border-bottom-left-radius: var(--radius-lg);
     border-bottom-right-radius: var(--radius-lg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .company-card,
+    .company-card:hover,
+    .modal-close-icon {
+        transition: none;
+        transform: none;
+    }
 }

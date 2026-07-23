@@ -10,6 +10,7 @@ import {
     validateMeetingData
 } from '../../services/meetingService'
 import { useAuth } from '../../contexts/AuthContext'
+import { SkeletonList } from '../../components/Skeleton'
 import '../../styles/components.css'
 import '../../styles/meetings.css'
 
@@ -227,15 +228,15 @@ function Meetings() {
     function getStatusBadge(status) {
         switch (status) {
             case 'agendada':
-                return <span className="badge badge-primary">Agendada</span>
+                return <span className="ap-chip tone-brand">Agendada</span>
             case 'em_andamento':
-                return <span className="badge badge-info text-white">Em Andamento</span>
+                return <span className="ap-chip tone-warn">Em Andamento</span>
             case 'realizada':
-                return <span className="badge badge-success">Realizada</span>
+                return <span className="ap-chip tone-success">Realizada</span>
             case 'cancelada':
-                return <span className="badge badge-danger">Cancelada</span>
+                return <span className="ap-chip tone-neutral">Cancelada</span>
             default:
-                return <span className="badge badge-neutral">{status}</span>
+                return <span className="ap-chip tone-neutral">{status}</span>
         }
     }
 
@@ -245,9 +246,10 @@ function Meetings() {
                 <div className="meetings-page-header">
                     <div className="meetings-title">
                         <h1>Reuniões</h1>
-                        <p>Carregando...</p>
+                        <p>Gerencie reuniões presenciais da equipe</p>
                     </div>
                 </div>
+                <SkeletonList count={4} />
             </div>
         )
     }
@@ -441,13 +443,10 @@ function Meetings() {
                                                             checked={isParticipant}
                                                             onChange={() => handleParticipantToggle(professional.id)}
                                                         />
-                                                        <span className="participant-label">
+                                                        <span className="participant-label" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                                                             {professional.nome}
                                                             {selectedMeeting && isParticipant && (
-                                                                <span className={`ml-2 text-xs font-medium px-2 py-0.5 rounded-full ${hasParticipated
-                                                                    ? 'bg-green-100 text-green-700'
-                                                                    : 'bg-gray-100 text-gray-600'
-                                                                    }`}>
+                                                                <span className={`ap-chip no-dot ${hasParticipated ? 'tone-success' : 'tone-neutral'}`}>
                                                                     {hasParticipated ? 'Presente' : 'Pendente'}
                                                                 </span>
                                                             )}
@@ -466,7 +465,7 @@ function Meetings() {
                                         <button
                                             type="button"
                                             className="btn btn-ghost"
-                                            style={{ color: '#dc2626' }}
+                                            style={{ color: 'var(--color-danger)' }}
                                             onClick={handleCancelClick}
                                             disabled={submitting}
                                         >
@@ -505,26 +504,16 @@ function Meetings() {
                 <div className="modal-backdrop" style={{ zIndex: 1100 }}>
                     <div className="modal" style={{ maxWidth: '400px', height: 'auto' }} onClick={(e) => e.stopPropagation()}>
                         <div className="modal-body" style={{ textAlign: 'center', padding: '24px' }}>
-                            <div style={{
-                                width: '48px',
-                                height: '48px',
-                                background: '#FEE2E2',
-                                borderRadius: '50%',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                margin: '0 auto 16px',
-                                color: '#DC2626'
-                            }}>
+                            <div className="admin-tasks-delete-modal-icon">
                                 <AlertTriangle size={24} />
                             </div>
-                            <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '8px' }}>
+                            <h3 className="admin-tasks-delete-modal-title">
                                 Cancelar Reunião
                             </h3>
-                            <p style={{ color: 'var(--color-text-secondary)', marginBottom: '24px', lineHeight: '1.5' }}>
+                            <p className="admin-tasks-delete-modal-message" style={{ marginBottom: '24px' }}>
                                 Tem certeza que deseja cancelar esta reunião? Os participantes serão notificados automaticamente.
                             </p>
-                            <div className="flex gap-3 justify-center">
+                            <div className="flex gap-3 justify-center" style={{ justifyContent: 'center' }}>
                                 <button
                                     className="btn btn-secondary"
                                     onClick={() => setShowCancelConfirmation(false)}
@@ -533,12 +522,7 @@ function Meetings() {
                                     Voltar
                                 </button>
                                 <button
-                                    className="btn"
-                                    style={{
-                                        backgroundColor: '#DC2626',
-                                        color: 'white',
-                                        border: 'none'
-                                    }}
+                                    className="btn btn-danger"
                                     onClick={handleConfirmCancel}
                                     disabled={submitting}
                                 >

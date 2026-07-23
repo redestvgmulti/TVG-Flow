@@ -28,8 +28,10 @@
 }
 
 .meetings-title h1 {
+    font-family: var(--font-display, inherit);
     font-size: 24px;
     font-weight: 700;
+    letter-spacing: -0.02em;
     color: var(--color-text-primary);
     margin: 0 0 4px 0;
     line-height: 1.2;
@@ -169,26 +171,26 @@
     border: 1px solid transparent;
 }
 
-/* Map specific colors if vars exist, else hardcode premium fallbacks */
+/* Badges mapeados para os tokens CityOS (antes: sky-blue fora da marca) */
 .badge-primary {
     /* Agendada */
-    background-color: #f0f9ff;
-    color: #0369a1;
-    border-color: rgba(3, 105, 161, 0.1);
+    background-color: var(--color-primary-light, #EFF6FF);
+    color: var(--color-primary, #2563EB);
+    border-color: transparent;
 }
 
 .badge-success {
     /* Concluída */
-    background-color: #f0fdf4;
-    color: #15803d;
-    border-color: rgba(21, 128, 61, 0.1);
+    background-color: var(--color-success-bg, #D1FAE5);
+    color: var(--color-success, #059669);
+    border-color: transparent;
 }
 
 .badge-neutral {
     /* Cancelada */
-    background-color: #f9fafb;
-    color: #4b5563;
-    border-color: rgba(75, 85, 99, 0.1);
+    background-color: var(--color-bg-subtle, #F0F2F5);
+    color: var(--color-text-secondary, #4B5563);
+    border-color: transparent;
 }
 
 /* Actions Footer */
@@ -231,12 +233,12 @@
 
 /* Participant List (Admin) - Restored & Polished */
 .participants-list-container {
-    border: 1px solid var(--color-border-subtle, #e5e7eb);
-    border-radius: 8px;
+    border: 1px solid var(--color-border, #E5E7EB);
+    border-radius: 10px;
     padding: 8px;
     max-height: 200px;
     overflow-y: auto;
-    background-color: #f9fafb;
+    background-color: var(--color-bg-app, #F5F7FA);
     display: flex;
     flex-direction: column;
     gap: 4px;
@@ -248,16 +250,16 @@
     align-items: center;
     padding: 8px 12px;
     cursor: pointer;
-    border-radius: 6px;
-    transition: background-color 0.15s ease;
+    border-radius: 8px;
+    transition: background-color 0.15s ease, box-shadow 0.15s ease;
     user-select: none;
     font-size: 14px;
     color: var(--color-text-primary, #374151);
 }
 
 .participant-option:hover {
-    background-color: #ffffff;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    background-color: var(--color-bg-surface, #ffffff);
+    box-shadow: var(--shadow-1, 0 1px 2px rgba(15, 23, 42, 0.05));
 }
 
 .participant-checkbox {
