@@ -6,6 +6,10 @@ import {
   shouldResolveVisualTitleForCreation,
   VisualTitleResolutionError,
 } from "./visualTitleResolution.ts";
+import {
+  authorizeOperationalTenant,
+  TenantAuthorizationError,
+} from "./tenantAuthorization.ts";
 const corsHeaders = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", "Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE" };
 const isUUID = (value: unknown) => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 const isUrl = (value: unknown) => { try { new URL(String(value)); return true; } catch { return false; } };
@@ -41,6 +45,25 @@ const visualTitleErrorResponse = (error: VisualTitleResolutionError) =>
     }),
     { status: 400, headers: corsHeaders },
   );
+const tenantAuthorizationErrorResponse = (error: TenantAuthorizationError) =>
+  new Response(
+    JSON.stringify({
+      error: error.code,
+      message: error.code === "AUTH_REQUIRED"
+        ? "Autenticação obrigatória."
+        : error.code === "AUTH_INVALID"
+        ? "Autenticação inválida."
+        : error.code === "AUTH_USER_MISMATCH"
+        ? "A identidade informada não corresponde ao usuário autenticado."
+        : error.code === "TENANT_FORBIDDEN"
+        ? "Cliente não autorizado para este usuário."
+        : "Nenhum cliente operacional autorizado foi encontrado.",
+    }),
+    {
+      status: error.status,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    },
+  );
 async function getActiveMasterConfig(supabase: any, clienteId: string, contentType: string, templateSet: string) {
   const { data, error } = await supabase.schema('ap').from('master_render_configs').select('*').eq('cliente_id', clienteId).eq('content_type', contentType).eq('enabled', true).or('template_set.eq.' + templateSet + ',template_set.is.null');
   if (error) throw error;
@@ -56,8 +79,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
     const body = await req.json();
-    const { titulo, conteudo, imagem_url: rawImage, image_url: rawImageAlias, cliente_id, auth_user_id, url_original, content_type = "feed", userHeadline: rawHeadline, userTag: rawTag, context_tag: rawContextTag, userText: rawText, template_set: rawTemplateSet = "default", placid_template_uuid: manualUuid = null, visual_title_id = null, sponsor_count: rawSponsorCount, idempotency_key = null } = body;
-    if (!isUUID(cliente_id)) return new Response(JSON.stringify({ error: "VALIDATION_ERROR", message: "cliente_id é obrigatório e deve ser UUID" }), { status: 400, headers: corsHeaders });
+    const { titulo, conteudo, imagem_url: rawImage, image_url: rawImageAlias, cliente_id: requestedClienteId, auth_user_id, url_original, content_type = "feed", userHeadline: rawHeadline, userTag: rawTag, context_tag: rawContextTag, userText: rawText, template_set: rawTemplateSet = "default", placid_template_uuid: manualUuid = null, visual_title_id = null, sponsor_count: rawSponsorCount, idempotency_key = null } = body;
     if (!["feed", "reels"].includes(content_type)) return new Response(JSON.stringify({ error: "VALIDATION_ERROR", message: "content_type inválido" }), { status: 400, headers: corsHeaders });
     if (!titulo || String(titulo).trim().length < 2 || !conteudo || String(conteudo).trim().length < 5) return new Response(JSON.stringify({ error: "VALIDATION_ERROR", message: "titulo e conteudo são obrigatórios" }), { status: 400, headers: corsHeaders });
     const sponsorCountRequested = rawSponsorCount !== undefined && rawSponsorCount !== null && rawSponsorCount !== '';
@@ -66,7 +88,37 @@ Deno.serve(async (req: Request) => {
     if (sponsorCountRequested && !isUUID(idempotency_key)) return new Response(JSON.stringify({ error: 'VALIDATION_ERROR', message: 'idempotency_key e obrigatorio e deve ser UUID quando sponsor_count for informado' }), { status: 400, headers: corsHeaders });
     if (sponsorCountRequested && manualUuid) return new Response(JSON.stringify({ error: 'VALIDATION_ERROR', message: 'placid_template_uuid manual nao e compativel com sponsor_rotation_v1' }), { status: 400, headers: corsHeaders });
 
-    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    let authorization;
+    try {
+      authorization = await authorizeOperationalTenant({
+        authorization: req.headers.get("Authorization"),
+        requestedClienteId,
+        requestedAuthUserId: auth_user_id,
+        createUserClient: (token) =>
+          createClient(
+            Deno.env.get("SUPABASE_URL")!,
+            Deno.env.get("SUPABASE_ANON_KEY")!,
+            {
+              global: { headers: { Authorization: `Bearer ${token}` } },
+              auth: { autoRefreshToken: false, persistSession: false },
+            },
+          ),
+      });
+    } catch (error) {
+      if (error instanceof TenantAuthorizationError) {
+        return tenantAuthorizationErrorResponse(error);
+      }
+      throw error;
+    }
+    const cliente_id = authorization.clienteId;
+    const authenticatedUserId = authorization.userId;
+
+    // Service role is created only after the caller JWT and requested tenant
+    // have both been validated with the user-scoped client above.
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
 
     // Explicit opt-in: existing clients omit sponsor_count and preserve the legacy generator path below.
     if (sponsorCountRequested) {
@@ -121,7 +173,7 @@ Deno.serve(async (req: Request) => {
         p_url_original: url_original || null,
         p_imagem_url: imageUrlForRotation,
         p_context_tag: userTagForRotation || 'DESTAQUE',
-        p_auth_user_id: isUUID(auth_user_id) ? auth_user_id : null,
+        p_auth_user_id: authenticatedUserId,
         p_visual_title_id: visual_title_id,
         p_render_contract_version: 'master_v1',
         p_render_snapshot_base: {
@@ -196,7 +248,7 @@ Deno.serve(async (req: Request) => {
     const userText = typeof rawText === "string" && rawText.trim() ? rawText.trim() : null;
     const resolvedTitle = userHeadline || titulo;
     if (!url_original) { const { data: duplicate } = await supabase.schema("ap").from("candidate_news").select("id").eq("cliente_id", cliente_id).eq("titulo", resolvedTitle).eq("conteudo", conteudo).gte("created_at", new Date(Date.now() - 86400000).toISOString()).limit(1); if (duplicate?.length) return new Response(JSON.stringify({ error: "DUPLICATE_ENTRY", message: "Uma matéria idêntica já foi gerada nas últimas 24h." }), { status: 409, headers: corsHeaders }); }
-    const { data: news, error: insertError } = await supabase.schema("ap").from("candidate_news").insert(normalize({ cliente_id, titulo: resolvedTitle, conteudo: userText || conteudo, url_original: url_original || null, context_tag: userTag || "DESTAQUE", status: "processing", source: "employee", imagem_url: imageUrl, content_type, criado_por_user_id: isUUID(auth_user_id) ? auth_user_id : null, role_criador: "employee", generated_by: "employee", origin: "manual", template_id: resolved.id, template_ordem: resolved.ordem, placid_template_uuid: resolved.placid_template_uuid, template_nome_snapshot: resolved.nome, template_set: requestedSet, visual_title_id: visualTitle?.id || null, render_contract_version: snapshot.render_contract_version, render_snapshot: snapshot, gerado_em: new Date().toISOString() })).select("id").single();
+    const { data: news, error: insertError } = await supabase.schema("ap").from("candidate_news").insert(normalize({ cliente_id, titulo: resolvedTitle, conteudo: userText || conteudo, url_original: url_original || null, context_tag: userTag || "DESTAQUE", status: "processing", source: "employee", imagem_url: imageUrl, content_type, criado_por_user_id: authenticatedUserId, role_criador: "employee", generated_by: "employee", origin: "manual", template_id: resolved.id, template_ordem: resolved.ordem, placid_template_uuid: resolved.placid_template_uuid, template_nome_snapshot: resolved.nome, template_set: requestedSet, visual_title_id: visualTitle?.id || null, render_contract_version: snapshot.render_contract_version, render_snapshot: snapshot, gerado_em: new Date().toISOString() })).select("id").single();
     if (insertError) throw insertError;
     const result = await runEditorialWorkflow(supabase, { newsId: news.id, clienteId: cliente_id, userHeadline, userTag, userText, contentType: content_type as any });
     await supabase.schema("ap").from("candidate_news").update({ status: "pending_render", headline: result.headline, caption: result.caption, context_tag: result.context_tag, roteiro_json: result.roteiro_json, processing_started_at: null }).eq("id", news.id);

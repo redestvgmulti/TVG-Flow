@@ -1,0 +1,2 @@
+[functions.ap-employee-generator]
+verify_jwt = true
