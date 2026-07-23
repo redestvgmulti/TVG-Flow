@@ -25,6 +25,7 @@ export default function ArticleForm({
     // [...]  → loaded from DB, render these
     availableCampaigns = null,
     visualTitles = [],
+    sponsorRotationEnabled = false,
     selectedFile,
     setSelectedFile
 }) {
@@ -62,7 +63,7 @@ export default function ArticleForm({
                         ))}
                     </select>
                 </div>
-                {formData.template_set && formData.template_set !== 'default' && (
+                {!sponsorRotationEnabled && formData.template_set && formData.template_set !== 'default' && (
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px', animation: 'fadeIn 0.2s ease-out' }}>
                         <label style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>Selecionar Template</label>
                         <select
@@ -98,8 +99,18 @@ export default function ArticleForm({
                     <option value="">Sem título visual</option>
                     {visualTitles.map(title => <option key={title.id} value={title.id}>{title.nome}</option>)}
                 </select>
+                {typeof errors.visual_title_id === 'string' && <span style={{ color: '#ef4444', fontSize: '12px', fontWeight: 600 }}>{errors.visual_title_id}</span>}
                 {formData.visual_title_id && visualTitles.find(title => title.id === formData.visual_title_id)?.preview_url && <img src={visualTitles.find(title => title.id === formData.visual_title_id).preview_url} alt="Preview do título visual" style={{ maxHeight: 72, maxWidth: '100%', objectFit: 'contain', objectPosition: 'left', borderRadius: 8 }} />}
             </div>
+            {sponsorRotationEnabled && <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
+                <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Quantidade de patrocinadores</label>
+                <select value={String(formData.sponsor_count ?? 0)} onChange={event => setFormData({ ...formData, sponsor_count: Number(event.target.value) })} style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', background: '#fff' }}>
+                    <option value="0">Nenhum</option>
+                    <option value="1">1 patrocinador</option>
+                    <option value="2">2 patrocinadores</option>
+                </select>
+                <small style={{ color: '#64748b' }}>A selecao e automatica pela rotacao da campanha.</small>
+            </div>}
             {/* Link Origem */}
             <div style={{ padding: '16px', background: '#e0f2fe', border: '1px solid #bae6fd', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
                 <label style={{ fontSize: '14px', fontWeight: 700, color: '#0284c7', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Link Origem <span style={{ color: '#ef4444' }}>*</span></label>

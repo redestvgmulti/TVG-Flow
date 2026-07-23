@@ -152,6 +152,7 @@ export default function AutoPublisherSettings() {
                     </table>
                 </div>
             </div>
+            <AutoPublisherMasterV1Settings />
         </div>
     )
 }

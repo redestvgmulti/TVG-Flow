@@ -12,16 +12,105 @@ async function rotateTemplate(supabase: any, ownerId: string, contentType: strin
   return { id: data.id ?? null, placid_template_uuid: data.placid_template_uuid, ordem: data.ordem ?? null, nome: data.nome ?? null, template_set: data.template_set ?? templateSet };
 }
 function profileSlots(profile: any) { return { sponsor_top: profile?.sponsor_top ?? null, sponsor_footer_1: profile?.sponsor_footer_1 ?? null, sponsor_footer_2: profile?.sponsor_footer_2 ?? null, sponsor_footer_3: profile?.sponsor_footer_3 ?? null, ...(profile?.other_slots || {}) }; }
+const parseSponsorCount = (value: unknown) => {
+  if (value === undefined || value === null || value === '') return null;
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isInteger(parsed) && [0, 1, 2].includes(parsed) ? parsed : null;
+};
+const hasLayerName = (map: any, key: string) => typeof map?.[key] === 'string' && Boolean(map[key].trim());
+const responseForNews = (news: any, reused = false) => ({
+  success: true,
+  reused,
+  news_id: news.id,
+  status: news.status,
+  headline: news.headline ?? null,
+  caption: news.caption ?? null,
+  context_tag: news.context_tag ?? null,
+  render_pending: news.status === 'pending_render',
+});
+async function getActiveMasterConfig(supabase: any, clienteId: string, contentType: string, templateSet: string) {
+  const { data, error } = await supabase.schema('ap').from('master_render_configs').select('*').eq('cliente_id', clienteId).eq('content_type', contentType).eq('enabled', true).or('template_set.eq.' + templateSet + ',template_set.is.null');
+  if (error) throw error;
+  return (data || []).sort((a: any, b: any) => Number(Boolean(b.template_set)) - Number(Boolean(a.template_set)))[0] || null;
+}
+async function claimEditorialProcessing(supabase: any, newsId: string) {
+  const { data, error } = await supabase.schema('ap').from('candidate_news').update({ processing_started_at: new Date().toISOString() }).eq('id', newsId).eq('status', 'processing').is('processing_started_at', null).select('id').maybeSingle();
+  if (error) throw error;
+  return Boolean(data?.id);
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
     const body = await req.json();
-    const { titulo, conteudo, imagem_url: rawImage, image_url: rawImageAlias, cliente_id, auth_user_id, url_original, content_type = "feed", userHeadline: rawHeadline, userTag: rawTag, context_tag: rawContextTag, userText: rawText, template_set: rawTemplateSet = "default", placid_template_uuid: manualUuid = null, visual_title_id = null } = body;
+    const { titulo, conteudo, imagem_url: rawImage, image_url: rawImageAlias, cliente_id, auth_user_id, url_original, content_type = "feed", userHeadline: rawHeadline, userTag: rawTag, context_tag: rawContextTag, userText: rawText, template_set: rawTemplateSet = "default", placid_template_uuid: manualUuid = null, visual_title_id = null, sponsor_count: rawSponsorCount, idempotency_key = null } = body;
     if (!isUUID(cliente_id)) return new Response(JSON.stringify({ error: "VALIDATION_ERROR", message: "cliente_id é obrigatório e deve ser UUID" }), { status: 400, headers: corsHeaders });
     if (!["feed", "reels"].includes(content_type)) return new Response(JSON.stringify({ error: "VALIDATION_ERROR", message: "content_type inválido" }), { status: 400, headers: corsHeaders });
     if (!titulo || String(titulo).trim().length < 2 || !conteudo || String(conteudo).trim().length < 5) return new Response(JSON.stringify({ error: "VALIDATION_ERROR", message: "titulo e conteudo são obrigatórios" }), { status: 400, headers: corsHeaders });
+    const sponsorCountRequested = rawSponsorCount !== undefined && rawSponsorCount !== null && rawSponsorCount !== '';
+    const sponsorCount = parseSponsorCount(rawSponsorCount);
+    if (sponsorCountRequested && sponsorCount === null) return new Response(JSON.stringify({ error: 'VALIDATION_ERROR', message: 'sponsor_count deve ser 0, 1 ou 2' }), { status: 400, headers: corsHeaders });
+    if (sponsorCountRequested && !isUUID(idempotency_key)) return new Response(JSON.stringify({ error: 'VALIDATION_ERROR', message: 'idempotency_key e obrigatorio e deve ser UUID quando sponsor_count for informado' }), { status: 400, headers: corsHeaders });
+    if (sponsorCountRequested && manualUuid) return new Response(JSON.stringify({ error: 'VALIDATION_ERROR', message: 'placid_template_uuid manual nao e compativel com sponsor_rotation_v1' }), { status: 400, headers: corsHeaders });
+
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+
+    // Explicit opt-in: existing clients omit sponsor_count and preserve the legacy generator path below.
+    if (sponsorCountRequested) {
+      const sponsorRotationSet = String(rawTemplateSet || 'default').trim().toLowerCase();
+      if (!/^[a-z0-9][a-z0-9_-]*$/.test(sponsorRotationSet)) return new Response(JSON.stringify({ error: 'VALIDATION_ERROR', message: 'template_set invalido para sponsor_rotation_v1' }), { status: 400, headers: corsHeaders });
+      const imageUrlForRotation = rawImage || rawImageAlias || null;
+      if (imageUrlForRotation && !isUrl(imageUrlForRotation)) return new Response(JSON.stringify({ error: 'VALIDATION_ERROR', message: 'imagem_url invalida' }), { status: 400, headers: corsHeaders });
+      if (!isUUID(visual_title_id)) return new Response(JSON.stringify({ error: 'VALIDATION_ERROR', message: 'visual_title_id e obrigatorio para sponsor_rotation_v1' }), { status: 400, headers: corsHeaders });
+
+      const { data: title, error: titleError } = await supabase.schema('ap').from('visual_titles').select('id,nome,slug,asset_bucket,asset_path,asset_version,sha256,formatos,ativo').eq('id', visual_title_id).eq('cliente_id', cliente_id).eq('ativo', true).maybeSingle();
+      if (titleError) throw titleError;
+      if (!title || !Array.isArray(title.formatos) || !title.formatos.includes(content_type)) return new Response(JSON.stringify({ error: 'VALIDATION_ERROR', message: 'Titulo visual nao encontrado, inativo ou incompativel' }), { status: 400, headers: corsHeaders });
+
+      const { data: control, error: controlError } = await supabase.schema('ap').from('master_render_controls').select('kill_switch').eq('cliente_id', cliente_id).maybeSingle();
+      if (controlError) throw controlError;
+      if (control?.kill_switch) return new Response(JSON.stringify({ error: 'MASTER_V1_DISABLED', message: 'master_v1 esta bloqueado para este cliente' }), { status: 409, headers: corsHeaders });
+      const config = await getActiveMasterConfig(supabase, cliente_id, content_type, sponsorRotationSet);
+      if (!config?.master_template_uuid || !hasLayerName(config.layer_map, 'visual_title')) return new Response(JSON.stringify({ error: 'MASTER_V1_DISABLED', message: 'Configuracao master_v1 incompleta ou desativada' }), { status: 409, headers: corsHeaders });
+
+      const userHeadlineForRotation = typeof rawHeadline === 'string' && rawHeadline.trim() ? rawHeadline.trim() : null;
+      const userTagForRotation = rawTag || rawContextTag ? String(rawTag || rawContextTag).toUpperCase().trim() : null;
+      const userTextForRotation = typeof rawText === 'string' && rawText.trim() ? rawText.trim() : null;
+      const { data: rpcResult, error: rotationError } = await supabase.schema('ap').rpc('create_candidate_with_sponsors', {
+        p_cliente_id: cliente_id,
+        p_idempotency_key: idempotency_key,
+        p_content_type: content_type,
+        p_template_set: sponsorRotationSet,
+        p_sponsor_count: sponsorCount,
+        p_titulo: userHeadlineForRotation || titulo,
+        p_conteudo: userTextForRotation || conteudo,
+        p_url_original: url_original || null,
+        p_imagem_url: imageUrlForRotation,
+        p_context_tag: userTagForRotation || 'DESTAQUE',
+        p_auth_user_id: isUUID(auth_user_id) ? auth_user_id : null,
+        p_visual_title_id: title.id,
+        p_render_contract_version: 'master_v1',
+        p_render_snapshot_base: {
+          master_config: { id: config.id, master_template_uuid: config.master_template_uuid, enabled: config.enabled },
+          layer_map: config.layer_map,
+        },
+      });
+      if (rotationError) throw rotationError;
+      const news = rpcResult?.candidate_news;
+      if (!news?.id) throw new Error('SPONSOR_ROTATION_RPC_INVALID_RESPONSE');
+      if (rpcResult.reused && ['pending_render', 'pending_review', 'approved'].includes(news.status)) return new Response(JSON.stringify(responseForNews(news, true)), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      if (!await claimEditorialProcessing(supabase, news.id)) return new Response(JSON.stringify(responseForNews(news, true)), { status: 202, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+
+      try {
+        const result = await runEditorialWorkflow(supabase, { newsId: news.id, clienteId: cliente_id, userHeadline: userHeadlineForRotation, userTag: userTagForRotation, userText: userTextForRotation, contentType: content_type as any });
+        await supabase.schema('ap').from('candidate_news').update({ status: 'pending_render', headline: result.headline, caption: result.caption, context_tag: result.context_tag, roteiro_json: result.roteiro_json, processing_started_at: null }).eq('id', news.id);
+        return new Response(JSON.stringify(responseForNews({ ...news, status: 'pending_render', headline: result.headline, caption: result.caption, context_tag: result.context_tag }, Boolean(rpcResult.reused))), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      } catch (editorialError) {
+        await supabase.schema('ap').from('candidate_news').update({ processing_started_at: null }).eq('id', news.id).eq('status', 'processing');
+        throw editorialError;
+      }
+    }
+
     const { data: empresa } = await supabase.from("empresas").select("tenant_id").eq("id", cliente_id).maybeSingle();
     let ownerId = empresa?.tenant_id || null;
     if (!ownerId) { const { data: cliente } = await supabase.from("clientes").select("empresa_id").eq("id", cliente_id).maybeSingle(); ownerId = cliente?.empresa_id || cliente_id; }

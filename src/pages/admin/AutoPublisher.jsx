@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '../../services/supabase'
 import '../../styles/AutoPublisher.css'
 import {
@@ -70,11 +70,14 @@ export default function AutoPublisher() {
         content_type: 'feed',
         template_set: 'default',
         placid_template_uuid: null,
-        visual_title_id: null
+        visual_title_id: null,
+        sponsor_count: null,
+        idempotency_key: null
     })
     const [availableTemplates, setAvailableTemplates] = useState([])
     const [availableCampaigns, setAvailableCampaigns] = useState(null) // null = not yet loaded
     const [visualTitles, setVisualTitles] = useState([])
+    const [masterRuntime, setMasterRuntime] = useState({ configs: [], killSwitch: false })
     const [manualFormErrors, setManualFormErrors] = useState({})
     const [isSubmittingManual, setIsSubmittingManual] = useState(false)
     const [selectedFile, setSelectedFile] = useState(null)
@@ -102,7 +105,9 @@ export default function AutoPublisher() {
             content_type: 'feed',
             template_set: 'default',
             placid_template_uuid: null,
-        visual_title_id: null
+            visual_title_id: null,
+            sponsor_count: null,
+            idempotency_key: null
         })
         setAvailableTemplates([])
         setSelectedFile(null)
@@ -219,6 +224,34 @@ export default function AutoPublisher() {
     }, [isManualModalOpen, clienteId, formData.content_type])
 
     // ── Load campaigns (template_sets) every time the manual modal opens
+    useEffect(() => {
+        if (!isManualModalOpen) return
+        let cancelled = false
+        async function loadMasterRuntime() {
+            const [controlsResult, configsResult] = await Promise.all([
+                supabase.schema('ap').from('master_render_controls').select('kill_switch').eq('cliente_id', clienteId).maybeSingle(),
+                supabase.schema('ap').from('master_render_configs').select('id,content_type,template_set,master_template_uuid,enabled,layer_map').eq('cliente_id', clienteId).eq('enabled', true),
+            ])
+            if (cancelled) return
+            if (controlsResult.error || configsResult.error) {
+                console.warn('[AutoPublisher] master_v1 config unavailable; keeping legacy form path.', controlsResult.error || configsResult.error)
+                setMasterRuntime({ configs: [], killSwitch: false })
+                return
+            }
+            setMasterRuntime({ configs: configsResult.data || [], killSwitch: Boolean(controlsResult.data?.kill_switch) })
+        }
+        loadMasterRuntime()
+        return () => { cancelled = true }
+    }, [clienteId, isManualModalOpen])
+
+    const masterConfig = useMemo(() => {
+        if (masterRuntime.killSwitch) return null
+        const requestedSet = formData.template_set || 'default'
+        const candidates = masterRuntime.configs.filter(config => config.content_type === formData.content_type && config.master_template_uuid && config.layer_map?.visual_title)
+        return candidates.find(config => config.template_set === requestedSet) || candidates.find(config => !config.template_set) || null
+    }, [formData.content_type, formData.template_set, masterRuntime])
+    const sponsorRotationEnabled = Boolean(masterConfig)
+
     useEffect(() => {
         if (!isManualModalOpen) {
             setAvailableCampaigns(null) // reset so next open re-fetches
@@ -436,7 +469,11 @@ export default function AutoPublisher() {
             newErrors.context_tag = 'Tag é obrigatória.'
         }
 
-        if (formData.template_set === 'individuais' && !formData.placid_template_uuid) {
+        if (sponsorRotationEnabled && !formData.visual_title_id) {
+            newErrors.visual_title_id = 'Selecione o selo da arte para usar a rotacao de patrocinadores.'
+        }
+
+        if (!sponsorRotationEnabled && formData.template_set === 'individuais' && !formData.placid_template_uuid) {
             newErrors.placid_template_uuid = 'Selecione um template para a campanha individual.'
         }
 
@@ -548,6 +585,14 @@ export default function AutoPublisher() {
             userHeadline: formData.titulo || null,
             userTag: formData.context_tag.toUpperCase(),
             userText: formData.conteudo || null
+        }
+
+        if (sponsorRotationEnabled) {
+            const idempotencyKey = formData.idempotency_key || crypto.randomUUID()
+            if (!formData.idempotency_key) setFormData(previous => ({ ...previous, idempotency_key: idempotencyKey }))
+            payload.sponsor_count = Number(formData.sponsor_count ?? 0)
+            payload.idempotency_key = idempotencyKey
+            payload.placid_template_uuid = null
         }
 
         try {
@@ -795,6 +840,7 @@ export default function AutoPublisher() {
                                 availableTemplates={availableTemplates}
                                 availableCampaigns={availableCampaigns}
                                 visualTitles={visualTitles}
+                                sponsorRotationEnabled={sponsorRotationEnabled}
                                 selectedFile={selectedFile}
                                 setSelectedFile={setSelectedFile}
                             />
