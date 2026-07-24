@@ -16,6 +16,16 @@ BEGIN
 END;
 $$;
 
+-- Fixtures: both tenants must exist so the cliente_id foreign keys on templates,
+-- render_sponsors, visual_title_groups and visual_titles resolve. The RPC calls
+-- below run with a service_role JWT claim, so no cliente_profissionais link is
+-- required for the client-access check.
+INSERT INTO public.clientes (id, nome)
+VALUES
+    ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Client A'),
+    ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'Client B')
+ON CONFLICT (id) DO NOTHING;
+
 INSERT INTO ap.templates (
     id,
     empresa_id,

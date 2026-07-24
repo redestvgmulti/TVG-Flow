@@ -1,5 +1,13 @@
 \set ON_ERROR_STOP on
 
+-- This contract certifies the visual_title_groups migration (20260723213210):
+-- the Geral backfill, the group schema/constraints/indexes/trigger, tenant RLS
+-- and the immutable storage paths. It runs against the fully migrated schema, so
+-- it seeds the legacy pre-migration state itself and replays the backfill inside
+-- a single transaction that is rolled back at the end (reliable cleanup).
+
+BEGIN;
+
 CREATE OR REPLACE FUNCTION pg_temp.assert_true(
     p_condition boolean,
     p_message text
@@ -40,6 +48,125 @@ BEGIN
     END IF;
 END;
 $$;
+
+CREATE OR REPLACE FUNCTION pg_temp.assert_no_effect(
+    p_sql text,
+    p_message text
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_rows integer;
+BEGIN
+    EXECUTE p_sql;
+    GET DIAGNOSTICS v_rows = ROW_COUNT;
+    IF v_rows <> 0 THEN
+        RAISE EXCEPTION 'ASSERTION_FAILED: % (% row(s) affected)', p_message, v_rows;
+    END IF;
+END;
+$$;
+
+-- Replays the migration's deterministic Geral backfill. Kept in a function so the
+-- idempotency scenario below can invoke it exactly like a migration re-run.
+CREATE OR REPLACE FUNCTION pg_temp.run_geral_backfill()
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_cliente_id uuid;
+    v_group_id uuid;
+    v_slug text;
+    v_suffix integer;
+BEGIN
+    FOR v_cliente_id IN
+        SELECT DISTINCT cliente_id
+        FROM ap.visual_titles
+        WHERE group_id IS NULL
+    LOOP
+        SELECT id
+        INTO v_group_id
+        FROM ap.visual_title_groups
+        WHERE cliente_id = v_cliente_id
+          AND nome = 'Geral'
+        ORDER BY CASE WHEN slug = 'geral' THEN 0 ELSE 1 END, slug
+        LIMIT 1;
+
+        IF v_group_id IS NULL THEN
+            v_slug := 'geral';
+            v_suffix := 0;
+
+            WHILE EXISTS (
+                SELECT 1
+                FROM ap.visual_title_groups
+                WHERE cliente_id = v_cliente_id
+                  AND slug = v_slug
+            ) LOOP
+                v_suffix := v_suffix + 1;
+                v_slug := format(
+                    'geral-%s%s',
+                    substr(md5(v_cliente_id::text), 1, 8),
+                    CASE WHEN v_suffix = 1 THEN '' ELSE '-' || v_suffix::text END
+                );
+            END LOOP;
+
+            INSERT INTO ap.visual_title_groups (
+                cliente_id, nome, slug, ordem, ativo
+            )
+            VALUES (v_cliente_id, 'Geral', v_slug, 0, true)
+            RETURNING id INTO v_group_id;
+        END IF;
+
+        UPDATE ap.visual_titles
+        SET group_id = v_group_id
+        WHERE cliente_id = v_cliente_id
+          AND group_id IS NULL;
+    END LOOP;
+END;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Legacy pre-migration state: two clients own visual titles (still ungrouped),
+-- a third owns none. The auth provisioning trigger fills profissionais.nome, so
+-- inserting auth.users provisions the professionals that back the tenant links.
+-- ---------------------------------------------------------------------------
+INSERT INTO public.clientes (id, nome)
+VALUES
+    ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Client A'),
+    ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'Client B'),
+    ('cccccccc-cccc-4ccc-8ccc-cccccccccccc', 'Client C');
+
+INSERT INTO auth.users (id, email)
+VALUES
+    ('11111111-1111-4111-8111-111111111111', 'prof-a@vtg.test'),
+    ('22222222-2222-4222-8222-222222222222', 'prof-b@vtg.test');
+
+INSERT INTO public.cliente_profissionais (cliente_id, profissional_id, funcao, ativo)
+VALUES
+    ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '11111111-1111-4111-8111-111111111111', 'editor', true),
+    ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', '22222222-2222-4222-8222-222222222222', 'editor', true);
+
+INSERT INTO ap.visual_titles (
+    id, cliente_id, nome, slug, asset_bucket, asset_path, asset_version, sha256,
+    formatos, ativo, ordem
+)
+VALUES
+    (
+        'd0000000-0000-4000-8000-000000000001',
+        'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        'Esporte', 'esporte', 'ap-images',
+        'visual-titles/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/esporte/a.png',
+        'version-a', repeat('a', 64), ARRAY['feed', 'reels']::text[], true, 3
+    ),
+    (
+        'd0000000-0000-4000-8000-000000000002',
+        'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+        'Urgente', 'urgente', 'ap-images',
+        'visual-titles/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/urgente/b.png',
+        'version-b', repeat('b', 64), ARRAY['feed']::text[], false, 7
+    );
+
+SELECT pg_temp.run_geral_backfill();
 
 -- The original two titles receive a normal, editable Geral group; the client
 -- without titles receives no synthetic group.
@@ -111,12 +238,22 @@ VALUES (
     2
 );
 
+-- now() is the transaction timestamp and is frozen for this whole transaction,
+-- so force an older updated_at (with the trigger paused) before capturing the
+-- baseline; the subsequent UPDATE must then advance updated_at via the trigger.
+ALTER TABLE ap.visual_title_groups
+    DISABLE TRIGGER trg_ap_visual_title_groups_updated_at;
+UPDATE ap.visual_title_groups
+SET updated_at = now() - interval '1 hour'
+WHERE id = 'e0000000-0000-4000-8000-000000000001';
+ALTER TABLE ap.visual_title_groups
+    ENABLE TRIGGER trg_ap_visual_title_groups_updated_at;
+
 CREATE TEMP TABLE group_audit_time AS
 SELECT id, created_at, updated_at
 FROM ap.visual_title_groups
 WHERE id = 'e0000000-0000-4000-8000-000000000001';
 
-SELECT pg_sleep(0.01);
 UPDATE ap.visual_title_groups
 SET descricao = 'Grupo de cidades atualizado'
 WHERE id = 'e0000000-0000-4000-8000-000000000001';
@@ -234,11 +371,12 @@ VALUES (
     ARRAY['reels']::text[],
     NULL
 );
-INSERT INTO ap.candidate_news (id, cliente_id, titulo, placid_template_uuid)
+INSERT INTO ap.candidate_news (id, cliente_id, titulo, url_original, placid_template_uuid)
 VALUES (
     'f0000000-0000-4000-8000-000000000001',
     'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
     'Legacy candidate',
+    '',
     'legacy-template'
 );
 SELECT pg_temp.assert_true(
@@ -251,7 +389,7 @@ SELECT pg_temp.assert_true(
 );
 
 -- RLS: a real authenticated session for client A sees and writes only client A.
-BEGIN;
+SAVEPOINT rls_groups;
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', '11111111-1111-4111-8111-111111111111', true);
 SELECT pg_temp.assert_true(
@@ -276,7 +414,8 @@ SELECT pg_temp.assert_raises(
     '42501',
     'authenticated user retained DELETE on visual_title_groups'
 );
-ROLLBACK;
+RESET ROLE;
+ROLLBACK TO SAVEPOINT rls_groups;
 SELECT pg_temp.assert_true(
     (SELECT nome = 'Cidades'
      FROM ap.visual_title_groups
@@ -295,14 +434,15 @@ SELECT pg_temp.assert_true(
     AND has_table_privilege('service_role', 'ap.visual_titles', 'SELECT'),
     'service_role lacks catalogue SELECT grants'
 );
-BEGIN;
+SAVEPOINT svc_read;
 SET LOCAL ROLE service_role;
 SELECT pg_temp.assert_true(
     (SELECT count(*) > 0 FROM ap.visual_title_groups),
     'service_role cannot read visual_title_groups'
 );
-ROLLBACK;
-BEGIN;
+RESET ROLE;
+ROLLBACK TO SAVEPOINT svc_read;
+SAVEPOINT anon_write;
 SET LOCAL ROLE anon;
 SELECT pg_temp.assert_raises(
     $$INSERT INTO ap.visual_title_groups (cliente_id,nome,slug)
@@ -310,11 +450,13 @@ SELECT pg_temp.assert_raises(
     '42501',
     'anon inserted a visual-title group'
 );
-ROLLBACK;
+RESET ROLE;
+ROLLBACK TO SAVEPOINT anon_write;
 
--- Storage policy exercises the actual path convention. Other legacy paths retain
--- their historical write behavior, while visual-title assets are immutable.
-BEGIN;
+-- Storage policy exercises the actual path convention. Visual-title assets are
+-- immutable: UPDATE has no policy (RLS filters it to zero rows) and DELETE is
+-- refused by storage.protect_delete() with 42501.
+SAVEPOINT storage_auth;
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', '11111111-1111-4111-8111-111111111111', true);
 INSERT INTO storage.objects (bucket_id, name)
@@ -325,35 +467,27 @@ SELECT pg_temp.assert_raises(
     '42501',
     'authenticated user wrote a visual-title asset for another client'
 );
-UPDATE storage.objects
-SET name = 'visual-titles/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/esporte/changed.png'
-WHERE bucket_id = 'ap-images'
-  AND name = 'visual-titles/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/esporte/' || repeat('a',64) || '.png';
-SELECT pg_temp.assert_true(
-    EXISTS (
-        SELECT 1 FROM storage.objects
-        WHERE bucket_id = 'ap-images'
-          AND name = 'visual-titles/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/esporte/' || repeat('a',64) || '.png'
-    ),
+-- Immutability: UPDATE has no visual-title policy (RLS filters to zero rows) and
+-- DELETE is refused by storage.protect_delete() with 42501.
+SELECT pg_temp.assert_no_effect(
+    $$UPDATE storage.objects
+      SET name = name || '.changed'
+      WHERE bucket_id = 'ap-images'
+        AND name LIKE 'visual-titles/aaaaaaaa-%'$$,
     'visual-title asset update was permitted'
 );
-DELETE FROM storage.objects
-WHERE bucket_id = 'ap-images'
-  AND name = 'visual-titles/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/esporte/' || repeat('a',64) || '.png';
-SELECT pg_temp.assert_true(
-    EXISTS (
-        SELECT 1 FROM storage.objects
-        WHERE bucket_id = 'ap-images'
-          AND name = 'visual-titles/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/esporte/' || repeat('a',64) || '.png'
-    ),
+SELECT pg_temp.assert_raises(
+    $$DELETE FROM storage.objects
+      WHERE bucket_id = 'ap-images'
+        AND name LIKE 'visual-titles/aaaaaaaa-%'$$,
+    '42501',
     'visual-title asset delete was permitted'
 );
 INSERT INTO storage.objects (bucket_id, name)
 VALUES ('ap-images', 'admin_uploads/legacy-compatible.png');
-DELETE FROM storage.objects
-WHERE bucket_id = 'ap-images' AND name = 'admin_uploads/legacy-compatible.png';
-ROLLBACK;
-BEGIN;
+RESET ROLE;
+ROLLBACK TO SAVEPOINT storage_auth;
+SAVEPOINT storage_anon;
 SET LOCAL ROLE anon;
 SELECT pg_temp.assert_raises(
     $$INSERT INTO storage.objects (bucket_id,name)
@@ -361,9 +495,10 @@ SELECT pg_temp.assert_raises(
     '42501',
     'anon wrote a visual-title asset'
 );
-ROLLBACK;
+RESET ROLE;
+ROLLBACK TO SAVEPOINT storage_anon;
 
--- Simulate a pre-existing slug conflict and rerun the exact migration. It must
+-- Simulate a pre-existing slug conflict and rerun the exact backfill. It must
 -- create a deterministic fallback Geral group without replacing visual-title IDs.
 UPDATE ap.visual_titles
 SET group_id = NULL
@@ -373,7 +508,7 @@ WHERE cliente_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
   AND nome = 'Geral';
 INSERT INTO ap.visual_title_groups (cliente_id, nome, slug)
 VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Grupo existente', 'geral');
-\ir ../../supabase/migrations/20260723213210_visual_title_groups.sql
+SELECT pg_temp.run_geral_backfill();
 SELECT pg_temp.assert_true(
     (SELECT group_id IS NOT NULL
      FROM ap.visual_titles
@@ -406,5 +541,7 @@ SELECT pg_temp.assert_true(
      WHERE schemaname = 'ap' AND tablename = 'visual_title_groups'),
     'visual_title_groups does not have exactly SELECT/INSERT/UPDATE policies'
 );
+
+ROLLBACK;
 
 \echo 'visual-title-groups-contract.sql: PASS'

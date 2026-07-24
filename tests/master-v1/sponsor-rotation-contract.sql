@@ -21,20 +21,32 @@ VALUES
     ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Client A'),
     ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'Client B');
 
+-- Fixtures: the authenticated identities backing the tenant memberships. The
+-- auth provisioning trigger now fills profissionais.nome, so inserting auth.users
+-- provisions the professional; cliente_profissionais then links each to a tenant
+-- with a funcao (NOT NULL).
+INSERT INTO auth.users (id, email)
+VALUES
+    ('11111111-1111-4111-8111-111111111111', 'prof-a@rotation.test'),
+    ('22222222-2222-4222-8222-222222222222', 'prof-b@rotation.test');
+
 INSERT INTO public.cliente_profissionais (
     cliente_id,
     profissional_id,
+    funcao,
     ativo
 )
 VALUES
     (
         'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
         '11111111-1111-4111-8111-111111111111',
+        'editor',
         true
     ),
     (
         'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
         '22222222-2222-4222-8222-222222222222',
+        'editor',
         true
     );
 
@@ -997,12 +1009,14 @@ BEGIN
             cliente_id,
             status,
             titulo,
+            url_original,
             sponsor_count
         )
         VALUES (
             'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
             'raw',
             'Invalid count',
+            '',
             3
         );
         RAISE EXCEPTION 'expected sponsor count check';
@@ -1251,10 +1265,12 @@ SELECT pg_temp.assert_true(
     'service_role lacks RPC execute grant'
 );
 
--- Legacy structures remain structurally intact.
+-- Legacy structures remain structurally intact. The migrated ap.patrocinadores
+-- has 8 columns (id, cliente_id, nome, template_id, logo_url, ativo,
+-- ultimo_uso_at, created_at); the sprint did not touch it.
 SELECT pg_temp.assert_true(
     (
-        SELECT count(*) = 9
+        SELECT count(*) = 8
         FROM information_schema.columns
         WHERE table_schema = 'ap'
           AND table_name = 'patrocinadores'
