@@ -3,26 +3,43 @@
 
 DROP POLICY IF EXISTS "Give auth insert access to ap-images"
     ON storage.objects;
+
 DROP POLICY IF EXISTS "Give auth update access to ap-images"
     ON storage.objects;
+
 DROP POLICY IF EXISTS "Give auth delete access to ap-images"
     ON storage.objects;
+
 DROP POLICY IF EXISTS ap_images_authenticated_insert_scoped
     ON storage.objects;
+
 DROP POLICY IF EXISTS ap_images_authenticated_update_non_visual_titles
     ON storage.objects;
+
 DROP POLICY IF EXISTS ap_images_authenticated_delete_non_visual_titles
     ON storage.objects;
+
 DROP POLICY IF EXISTS ap_images_authenticated_insert_immutable_assets
     ON storage.objects;
+
 DROP POLICY IF EXISTS ap_images_authenticated_insert_legacy_uploads
     ON storage.objects;
 
-REVOKE UPDATE, DELETE ON storage.objects FROM authenticated;
-REVOKE INSERT, UPDATE, DELETE ON storage.objects FROM anon;
+REVOKE UPDATE, DELETE
+    ON storage.objects
+    FROM authenticated;
 
-GRANT SELECT, INSERT ON storage.objects TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON storage.objects TO service_role;
+REVOKE INSERT, UPDATE, DELETE
+    ON storage.objects
+    FROM anon;
+
+GRANT SELECT, INSERT
+    ON storage.objects
+    TO authenticated;
+
+GRANT SELECT, INSERT, UPDATE, DELETE
+    ON storage.objects
+    TO service_role;
 
 CREATE POLICY ap_images_authenticated_insert_immutable_assets
     ON storage.objects
@@ -61,13 +78,3 @@ CREATE POLICY ap_images_authenticated_insert_legacy_uploads
         AND (storage.foldername(name))[1]
             IN ('admin_uploads', 'employee_uploads')
     );
-
-COMMENT ON POLICY ap_images_authenticated_insert_immutable_assets
-    ON storage.objects IS
-    'Allows immutable PNG upload only to visual-titles or sponsors for a '
-    'cliente authorized by the caller JWT; UPDATE and DELETE are denied.';
-
-COMMENT ON POLICY ap_images_authenticated_insert_legacy_uploads
-    ON storage.objects IS
-    'Keeps the two explicit legacy upload families insert-only; no arbitrary '
-    'ap-images path is writable by authenticated users.';
