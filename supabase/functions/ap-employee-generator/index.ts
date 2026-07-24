@@ -1,391 +1,68 @@
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// AutoPublisher — Employee Generator Worker (Hybrid Editorial Engine)
-// Responsabilidade: Criar registro + LLM → pending_render
-// NÃO gera arte final. NÃO faz upload de imagem renderizada.
-// Apenas salva a URL externa de background. ap-render-engine gera a arte.
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { runEditorialWorkflow } from "../_shared/editorialWorkflow.ts";
+const corsHeaders = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", "Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE" };
+const isUUID = (value: unknown) => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+const isUrl = (value: unknown) => { try { new URL(String(value)); return true; } catch { return false; } };
+const normalize = (payload: Record<string, any>) => Object.fromEntries(Object.entries(payload).map(([key, value]) => [key, value === undefined || value === "" ? null : value]));
 
-const corsHeaders = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-    "Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE",
-};
-
-const OPENAI_MODEL_G = "gpt-4o-mini";
-declare const Deno: any;
-
-async function fetchWithTimeout(resource: URL | RequestInfo, options = {}) {
-    const { timeout = 8000, ...fetchOptions } = options as any;
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), timeout);
-    const response = await fetch(resource, { ...fetchOptions, signal: controller.signal });
-    clearTimeout(id);
-    return response;
+async function rotateTemplate(supabase: any, ownerId: string, contentType: string, templateSet: string) {
+  const { data, error } = await supabase.schema("ap").rpc("get_and_advance_template", { p_empresa_id: ownerId, p_tipo: contentType, p_template_set: templateSet });
+  if (error || !data?.placid_template_uuid) return null;
+  return { id: data.id ?? null, placid_template_uuid: data.placid_template_uuid, ordem: data.ordem ?? null, nome: data.nome ?? null, template_set: data.template_set ?? templateSet };
 }
-
-function isUUID(str: string) {
-    if (!str || typeof str !== 'string') return false;
-    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
-}
-
-function isValidUrl(str: string) {
-    if (!str || typeof str !== 'string') return false;
-    try {
-        new URL(str);
-        return true;
-    } catch {
-        return false;
-    }
-}
-
-function normalizePayload(payload: any) {
-    const normalized: any = {};
-    for (const key in payload) {
-        const val = payload[key];
-        normalized[key] = (val === undefined || val === "") ? null : val;
-    }
-    return normalized;
-}
-
-async function resolveTemplate(supabase: any, template_set: string, empresa_id: string, content_type: string) {
-    console.log(`[AUDIT] [ap-employee-generator] Resolvendo template automático via RPC get_and_advance_template para set=${template_set}, empresa=${empresa_id}, tipo=${content_type}`);
-    
-    // ATENTION: ap-employee-generator must actively advance the queue 
-    // to prevent the same template (e.g. Luiza Medeiros) from being used repeatedly
-    const { data: templateData, error } = await supabase.schema("ap")
-        .rpc("get_and_advance_template", {
-            p_empresa_id: empresa_id,
-            p_tipo: content_type,
-            p_template_set: template_set
-        });
-
-    if (error || !templateData) {
-        console.error("[GENERATOR_ERROR] Erro ao rotacionar template via RPC:", error?.message || "Sem dados");
-        return null;
-    }
-
-    const resolved = templateData.placid_template_uuid || null;
-    const resolved_id = templateData.id || null;
-    
-    console.log("[AUDIT][TEMPLATE_ROTATED]", {
-        template_id: resolved_id,
-        placid_template_uuid: resolved,
-        ordem: templateData.ordem,
-        nome: templateData.nome,
-        content_type: content_type,
-        template_set,
-        empresa_id
-    });
-    
-    return resolved;
-}
+function profileSlots(profile: any) { return { sponsor_top: profile?.sponsor_top ?? null, sponsor_footer_1: profile?.sponsor_footer_1 ?? null, sponsor_footer_2: profile?.sponsor_footer_2 ?? null, sponsor_footer_3: profile?.sponsor_footer_3 ?? null, ...(profile?.other_slots || {}) }; }
 
 Deno.serve(async (req: Request) => {
-    if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-
-    try {
-        const body = await req.json();
-        console.log("[AUDIT][GENERATOR_REQUEST_BODY]", body);
-        const {
-            titulo,
-            conteudo,
-            imagem_url: raw_imagem_url,
-            image_url: raw_image_url,
-            cliente_id,
-            auth_user_id,
-            url_original,
-            content_type = 'feed',
-            userHeadline: rawUserHeadline,
-            userTag: rawUserTag,
-            context_tag: rawContextTag,
-            userText: rawUserText,
-            template_set: raw_template_set = 'default',
-            placid_template_uuid: raw_placid_uuid = null
-        } = body;
-
-        let placid_template_uuid = raw_placid_uuid;
-        const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-
-        console.log("[AUDIT][GENERATOR_PAYLOAD]", body);
-
-        // 1. Validation & Tenant Resolution
-        if (!cliente_id) {
-            const reason = "cliente_id é obrigatório no novo contrato";
-            console.error("[GENERATOR_ERROR]", reason);
-            return new Response(JSON.stringify({ error: "VALIDATION_ERROR", message: reason }), { status: 400, headers: corsHeaders });
-        }
-        if (!isUUID(cliente_id)) {
-            const reason = `UUID inválido para cliente_id: ${cliente_id}`;
-            console.error("[GENERATOR_ERROR]", reason);
-            return new Response(JSON.stringify({ error: "VALIDATION_ERROR", message: reason }), { status: 400, headers: corsHeaders });
-        }
-
-        // Derive (TENANT) from client details
-        const { data: tenantData, error: tenantErr } = await supabase
-            .from("empresas")
-            .select("tenant_id")
-            .eq("id", cliente_id)
-            .single();
-
-        if (tenantErr || !tenantData?.tenant_id) {
-            const reason = `Não foi possível derivar o Tenant (empresa_id) para o cliente: ${cliente_id}`;
-            console.error("[GENERATOR_ERROR]", reason);
-            return new Response(JSON.stringify({ error: "VALIDATION_ERROR", message: reason }), { status: 400, headers: corsHeaders });
-        }
-        
-        const empresa_id = tenantData.tenant_id;
-        
-        if (auth_user_id && auth_user_id !== 'null' && !isUUID(auth_user_id)) {
-            console.warn(`[AUDIT] [ap-employee-generator] UUID inválido para auth_user_id: ${auth_user_id}. Ignorando.`);
-        }
-        const finalAuthUserId = (auth_user_id && auth_user_id !== 'null' && isUUID(auth_user_id)) ? auth_user_id : null;
-
-        const validTypes = ["feed", "reels"];
-        if (!validTypes.includes(content_type)) {
-            const reason = `content_type inválido: ${content_type}`;
-            console.error("[GENERATOR_ERROR]", reason);
-            return new Response(JSON.stringify({ error: "VALIDATION_ERROR", message: reason }), { status: 400, headers: corsHeaders });
-        }
-
-        // 1b. titulo & conteudo validation
-        if (!titulo || String(titulo).trim().length < 2) {
-            const reason = "titulo é obrigatório para geração (mínimo 2 caracteres)";
-            console.error("[GENERATOR_ERROR]", { reason, payload: body });
-            return new Response(JSON.stringify({ error: "VALIDATION_ERROR", message: reason }), { status: 400, headers: corsHeaders });
-        }
-        if (!conteudo || String(conteudo).trim().length < 5) {
-            const reason = "conteudo é muito curto ou ausente (mínimo 5 caracteres)";
-            console.error("[GENERATOR_ERROR]", { reason, payload: body });
-            return new Response(JSON.stringify({ error: "VALIDATION_ERROR", message: reason }), { status: 400, headers: corsHeaders });
-        }
-
-        if (!placid_template_uuid) {
-            const resolved = await resolveTemplate(supabase, raw_template_set || 'default', empresa_id, content_type);
-            if (!resolved) {
-                console.error("[GENERATOR_ERROR] Template not found", {
-                    empresa_id,
-                    template_set: raw_template_set,
-                    content_type
-                });
-                return new Response(JSON.stringify({ 
-                    error: "TEMPLATE_NOT_FOUND", 
-                    message: "No active template available for feed generation" 
-                }), { status: 400, headers: corsHeaders });
-            }
-            placid_template_uuid = resolved;
-        }
-
-        const imagem_url = raw_imagem_url || raw_image_url || null;
-        if (imagem_url && !isValidUrl(imagem_url)) {
-            const reason = `Formato de imagem_url inválido: ${imagem_url}`;
-            console.error("[GENERATOR_ERROR]", reason);
-            return new Response(JSON.stringify({ error: "VALIDATION_ERROR", message: reason }), { status: 400, headers: corsHeaders });
-        }
-
-        const userHeadline = (typeof rawUserHeadline === 'string' && rawUserHeadline.trim()) ? rawUserHeadline.trim() : null;
-        const userTag = (rawUserTag || rawContextTag) ? String(rawUserTag || rawContextTag).toUpperCase().trim() : null;
-        const userText = (typeof rawUserText === 'string' && rawUserText.trim()) ? rawUserText.trim() : null;
-        const contextTagForInsert = userTag ?? 'DESTAQUE';
-
-        // Imagem não é obrigatória — scraping tentará buscar do url_original
-        if (!url_original && !imagem_url) {
-            console.warn("[AUDIT] [ap-employee-generator] Nenhuma imagem ou link fornecido. Prosseguindo sem imagem.");
-        }
-
-        // 1. Resolver Template (Manual ou Automático via Render Engine)
-        let template_id = null;
-        let template_ordem = null;
-        let template_nome_snapshot = null;
-        const template_set = raw_template_set || 'default';
-
-        if (placid_template_uuid) {
-            console.log(`[AUDIT] [ap-employee-generator] Template Manual detectado: ${placid_template_uuid}`);
-            const { data: tData } = await supabase.schema("ap").from("templates")
-                .select("id, nome, ordem")
-                .eq("placid_template_uuid", placid_template_uuid)
-                .limit(1)
-                .single();
-
-            if (tData) {
-                template_id = tData.id;
-                template_ordem = tData.ordem;
-                template_nome_snapshot = tData.nome;
-            }
-        } else {
-            console.log(`[AUDIT] [ap-employee-generator] Rotação automática solicitada (UUID nulo).`);
-        }
-
-        const resolvedTitulo = userHeadline || titulo || "Pauta OMNI";
-
-        // 2b. Backend Deduplication Check (for manual entries without URL)
-        if (!url_original && resolvedTitulo && conteudo) {
-            const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-            const { data: existingDup } = await supabase.schema("ap").from("candidate_news")
-                .select("id")
-                .eq("cliente_id", cliente_id)
-                .eq("titulo", resolvedTitulo)
-                .eq("conteudo", conteudo)
-                .gte("created_at", twentyFourHoursAgo)
-                .limit(1);
-
-            if (existingDup && existingDup.length > 0) {
-                const dupMessage = `Uma matéria idêntica já foi gerada nas últimas 24h.`;
-                console.warn("[AUDIT] [ap-employee-generator] Blocked duplicate submission:", resolvedTitulo);
-                return new Response(JSON.stringify({ 
-                    error: "DUPLICATE_ENTRY", 
-                    message: dupMessage 
-                }), { status: 409, headers: corsHeaders });
-            }
-        }
-
-        // 3. Criar registro inicial como 'processing' para esconder do UI e travar
-        let newsItem = null;
-        let normalizedPayload = null;
-        try {
-            const rawPayload = {
-                cliente_id: cliente_id,
-                titulo: resolvedTitulo,
-                conteudo: userText || conteudo || "",
-                url_original: url_original || null,
-                context_tag: contextTagForInsert,
-                status: "processing",
-                source: "employee",
-                imagem_url: imagem_url,
-                content_type: content_type,
-                criado_por_user_id: finalAuthUserId,
-                role_criador: "employee",
-                generated_by: "employee",
-                origin: "manual",
-                template_id: template_id,
-                template_ordem: template_ordem,
-                placid_template_uuid: placid_template_uuid,
-                template_nome_snapshot: template_nome_snapshot,
-                template_set: template_set,
-                gerado_em: new Date().toISOString()
-            };
-
-            normalizedPayload = normalizePayload(rawPayload);
-
-            const { data, error: insertError } = await supabase.schema("ap").from("candidate_news")
-                .insert(normalizedPayload)
-                .select("id")
-                .single();
-
-            if (insertError) throw insertError;
-            newsItem = data;
-        } catch (dbErr: any) {
-            console.error("[GENERATOR_ERROR][DB_INSERT_FAILED]", { 
-                error: dbErr.message, 
-                payload: normalizedPayload 
-            });
-            return new Response(JSON.stringify({ 
-                error: "Falha ao criar registro no banco.", 
-                details: dbErr.message 
-            }), { status: 400, headers: corsHeaders });
-        }
-
-        const newsId = newsItem.id;
-        console.log(`[AUDIT] [ap-employee-generator] Registro criado! ID: ${newsId}`);
-
-        // 3. Background Image — Scraping Fallback Only
-        // ARCHITECTURE CONTRACT: ap-employee-generator does NOT upload or internalize images.
-        // It only saves the raw external URL. ap-image-fetcher handles internalization for
-        // auto-ingested items. ap-render-engine is the sole producer of the final rendered art.
-        let finalImage = imagem_url;
-
-        // Scraping fallback: if no image was provided but a source URL exists, try to extract OG image
-        if (!finalImage && url_original) {
-            console.log(`[AUDIT] [ap-employee-generator] Scraping OG image fallback for: ${url_original}`);
-            try {
-                const scrapeRes = await fetchWithTimeout(`${Deno.env.get("SUPABASE_URL")}/functions/v1/ap-link-scraper`, {
-                    method: "POST",
-                    headers: {
-                        "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({ url: url_original }),
-                    timeout: 5000
-                });
-                if (scrapeRes.ok) {
-                    const scrapeData = await scrapeRes.json();
-                    if (scrapeData.image_url) finalImage = scrapeData.image_url;
-                }
-            } catch (e: any) { console.warn("[AUDIT] OG image scraping failed:", e.message); }
-        }
-
-        // Persist the external image URL (background only — render engine will use this)
-        await supabase.schema("ap").from("candidate_news")
-            .update({
-                imagem_url: finalImage,
-                imagem_storage: null,           // Storage internalization handled by ap-image-fetcher
-                image_external: !!finalImage,
-            })
-            .eq("id", newsId);
-
-        console.log(`[AUDIT] [ap-employee-generator] Background image URL saved for ${newsId}: ${finalImage ?? "(none)"}`);
-        if (!finalImage) {
-            console.warn(`[AUDIT] [ap-employee-generator] No image source for ${newsId}. Render engine will reject feed posts.`);
-        }
-
-        const failProcess = async (msg: string) => {
-            console.error(`[AUDIT] [ap-employee-generator] Falha: ${msg}`);
-            try {
-                await supabase.schema("ap").from("candidate_news")
-                    .update({ status: "failed", processing_started_at: null })
-                    .eq("id", newsId);
-            } catch (err) {
-                console.error(`[AUDIT] [ap-employee-generator] Erro ao marcar como falha:`, err);
-            }
-            return new Response(JSON.stringify({ error: msg }), { status: 400, headers: corsHeaders });
-        };
-
-        // 4. Shared Editorial Workflow (AI Processing)
-        console.log(`[FLOW] Triggering shared editorial workflow for ${newsId}`);
-        const result = await runEditorialWorkflow(supabase, {
-            newsId,
-            clienteId: cliente_id,
-            userHeadline,
-            userTag,
-            userText,
-            contentType: content_type as any
-        });
-
-        // 6. Salvamento Final — Employee items agora vão para 'pending_render' (bypass aprovação)
-        const { error: finalUpdErr } = await supabase.schema("ap").from("candidate_news")
-            .update({
-                status: "pending_render", // Pula a aprovação humana
-                headline: result.headline,
-                caption: result.caption,
-                context_tag: result.context_tag,
-                roteiro_json: result.roteiro_json,
-                processing_started_at: null
-            })
-            .eq("id", newsId);
-
-        if (finalUpdErr) throw finalUpdErr;
-
-        console.log(`[FLOW] [ap-employee-generator] Item ${newsId} -> pending_render. Queued for worker.`);
-
-        return new Response(JSON.stringify({
-            success: true,
-            news_id: newsId,
-            status: "pending_render",
-            headline: result.headline,
-            caption: result.caption,
-            context_tag: result.context_tag,
-            render_pending: true // Inicia polling no frontend
-        }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-
-    } catch (e: any) {
-        console.error(`[GENERATOR_ERROR]`, e.message);
-        return new Response(JSON.stringify({ 
-            error: "INTERNAL_ERROR",
-            message: e.message || "Erro interno no servidor",
-            stack: Deno.env.get("ENVIRONMENT") === "development" ? e.stack : undefined
-        }), { status: 400, headers: corsHeaders });
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  try {
+    const body = await req.json();
+    const { titulo, conteudo, imagem_url: rawImage, image_url: rawImageAlias, cliente_id, auth_user_id, url_original, content_type = "feed", userHeadline: rawHeadline, userTag: rawTag, context_tag: rawContextTag, userText: rawText, template_set: rawTemplateSet = "default", placid_template_uuid: manualUuid = null, visual_title_id = null } = body;
+    if (!isUUID(cliente_id)) return new Response(JSON.stringify({ error: "VALIDATION_ERROR", message: "cliente_id é obrigatório e deve ser UUID" }), { status: 400, headers: corsHeaders });
+    if (!["feed", "reels"].includes(content_type)) return new Response(JSON.stringify({ error: "VALIDATION_ERROR", message: "content_type inválido" }), { status: 400, headers: corsHeaders });
+    if (!titulo || String(titulo).trim().length < 2 || !conteudo || String(conteudo).trim().length < 5) return new Response(JSON.stringify({ error: "VALIDATION_ERROR", message: "titulo e conteudo são obrigatórios" }), { status: 400, headers: corsHeaders });
+    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const { data: empresa } = await supabase.from("empresas").select("tenant_id").eq("id", cliente_id).maybeSingle();
+    let ownerId = empresa?.tenant_id || null;
+    if (!ownerId) { const { data: cliente } = await supabase.from("clientes").select("empresa_id").eq("id", cliente_id).maybeSingle(); ownerId = cliente?.empresa_id || cliente_id; }
+    const requestedSet = rawTemplateSet || "default";
+    let resolved: any = null;
+    if (manualUuid) {
+      const { data: rows } = await supabase.schema("ap").from("templates").select("id,placid_template_uuid,ordem,nome,template_set").eq("empresa_id", ownerId).eq("tipo", content_type).eq("template_set", requestedSet).eq("placid_template_uuid", manualUuid).limit(2);
+      if (rows?.length === 1) resolved = rows[0];
+      else if (rows?.length > 1) console.warn(`[master_v1] manual UUID ${manualUuid} is ambiguous; preserving legacy UUID without template snapshot`);
+      else console.warn(`[master_v1] manual UUID ${manualUuid} has no scoped template row; preserving legacy UUID`);
+      resolved = resolved || { id: null, placid_template_uuid: manualUuid, ordem: null, nome: null, template_set: requestedSet };
+    } else {
+      resolved = await rotateTemplate(supabase, ownerId, content_type, requestedSet);
+      if (!resolved) return new Response(JSON.stringify({ error: "TEMPLATE_NOT_FOUND", message: "No active template available" }), { status: 400, headers: corsHeaders });
     }
+    const imageUrl = rawImage || rawImageAlias || null;
+    if (imageUrl && !isUrl(imageUrl)) return new Response(JSON.stringify({ error: "VALIDATION_ERROR", message: "imagem_url inválida" }), { status: 400, headers: corsHeaders });
+    let visualTitle: any = null;
+    if (visual_title_id) {
+      if (!isUUID(visual_title_id)) return new Response(JSON.stringify({ error: "VALIDATION_ERROR", message: "visual_title_id inválido" }), { status: 400, headers: corsHeaders });
+      const { data: title } = await supabase.schema("ap").from("visual_titles").select("id,nome,slug,asset_bucket,asset_path,asset_version,sha256,formatos,ativo").eq("id", visual_title_id).eq("cliente_id", cliente_id).eq("ativo", true).maybeSingle();
+      if (!title) return new Response(JSON.stringify({ error: "VALIDATION_ERROR", message: "Título visual não encontrado ou inativo" }), { status: 400, headers: corsHeaders });
+      if (!Array.isArray(title.formatos) || !title.formatos.includes(content_type)) return new Response(JSON.stringify({ error: "VALIDATION_ERROR", message: "Título visual incompatível com o formato" }), { status: 400, headers: corsHeaders });
+      visualTitle = { id: title.id, nome: title.nome, slug: title.slug, bucket: title.asset_bucket, path: title.asset_path, version: title.asset_version, sha256: title.sha256 };
+    }
+    const { data: control } = await supabase.schema("ap").from("master_render_controls").select("kill_switch").eq("cliente_id", cliente_id).maybeSingle();
+    const { data: configs } = await supabase.schema("ap").from("master_render_configs").select("*").eq("cliente_id", cliente_id).eq("content_type", content_type).eq("enabled", true).or(`template_set.eq.${resolved.template_set || requestedSet},template_set.is.null`);
+    const config = (configs || []).sort((a: any, b: any) => Number(Boolean(b.template_set)) - Number(Boolean(a.template_set)))[0];
+    let profile: any = null; if (resolved.id) { const { data } = await supabase.schema("ap").from("template_render_profiles").select("*").eq("template_id", resolved.id).eq("ativo", true).maybeSingle(); profile = data; }
+    const canMaster = Boolean(!control?.kill_switch && config?.master_template_uuid && config?.layer_map && visualTitle && resolved.id && profile);
+    const fallbackReason = canMaster ? null : (!config?.enabled ? "master_disabled" : control?.kill_switch ? "kill_switch" : !visualTitle ? "visual_title_missing" : !resolved.id ? "template_row_unresolved" : !profile ? "profile_missing" : "master_config_invalid");
+    const snapshot = { resolved_at: new Date().toISOString(), render_contract_version: canMaster ? "master_v1" : "legacy", format: content_type, template_id: resolved.id, legacy_placid_template_uuid: resolved.placid_template_uuid, template_nome_snapshot: resolved.nome, template_ordem: resolved.ordem, template_set_requested: requestedSet, template_set_effective: resolved.template_set || requestedSet, visual_title: visualTitle, sponsor_profile: profile ? { profile_version: profile.profile_version, slots: profileSlots(profile) } : null, layer_map: config?.layer_map || null, master_config: config ? { id: config.id, master_template_uuid: config.master_template_uuid, enabled: config.enabled } : null, fallback_reason: fallbackReason };
+    const userHeadline = typeof rawHeadline === "string" && rawHeadline.trim() ? rawHeadline.trim() : null;
+    const userTag = rawTag || rawContextTag ? String(rawTag || rawContextTag).toUpperCase().trim() : null;
+    const userText = typeof rawText === "string" && rawText.trim() ? rawText.trim() : null;
+    const resolvedTitle = userHeadline || titulo;
+    if (!url_original) { const { data: duplicate } = await supabase.schema("ap").from("candidate_news").select("id").eq("cliente_id", cliente_id).eq("titulo", resolvedTitle).eq("conteudo", conteudo).gte("created_at", new Date(Date.now() - 86400000).toISOString()).limit(1); if (duplicate?.length) return new Response(JSON.stringify({ error: "DUPLICATE_ENTRY", message: "Uma matéria idêntica já foi gerada nas últimas 24h." }), { status: 409, headers: corsHeaders }); }
+    const { data: news, error: insertError } = await supabase.schema("ap").from("candidate_news").insert(normalize({ cliente_id, titulo: resolvedTitle, conteudo: userText || conteudo, url_original: url_original || null, context_tag: userTag || "DESTAQUE", status: "processing", source: "employee", imagem_url: imageUrl, content_type, criado_por_user_id: isUUID(auth_user_id) ? auth_user_id : null, role_criador: "employee", generated_by: "employee", origin: "manual", template_id: resolved.id, template_ordem: resolved.ordem, placid_template_uuid: resolved.placid_template_uuid, template_nome_snapshot: resolved.nome, template_set: requestedSet, visual_title_id: visualTitle?.id || null, render_contract_version: snapshot.render_contract_version, render_snapshot: snapshot, gerado_em: new Date().toISOString() })).select("id").single();
+    if (insertError) throw insertError;
+    const result = await runEditorialWorkflow(supabase, { newsId: news.id, clienteId: cliente_id, userHeadline, userTag, userText, contentType: content_type as any });
+    await supabase.schema("ap").from("candidate_news").update({ status: "pending_render", headline: result.headline, caption: result.caption, context_tag: result.context_tag, roteiro_json: result.roteiro_json, processing_started_at: null }).eq("id", news.id);
+    return new Response(JSON.stringify({ success: true, news_id: news.id, status: "pending_render", headline: result.headline, caption: result.caption, context_tag: result.context_tag, render_pending: true }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  } catch (error: any) { return new Response(JSON.stringify({ error: "INTERNAL_ERROR", message: error.message || "Erro interno" }), { status: 400, headers: corsHeaders }); }
 });
