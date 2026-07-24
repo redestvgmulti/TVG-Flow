@@ -1,119 +1,336 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../services/supabase'
-import { assetPreviewUrl, uploadImmutablePng } from '../../services/masterV1Assets'
+import {
+  assetPreviewUrl,
+  uploadImmutablePng,
+} from '../../services/masterV1Assets'
 import VisualTitlesManager from '../../components/editorial/VisualTitlesManager'
 
-const DEFAULT_MAP = { news_image: '', headline: '', tag: '', visual_title: 'tag-png', sponsor_1: 'patrocinador-1', sponsor_2: 'patrocinador-2' }
-const emptySponsor = { id: null, nome: '', slug: '', ativo: true }
-const emptyMembership = { sponsor_id: '', template_set: 'default', content_type: 'feed', ordem: 0, ativo: true }
-
-function slugify(value) {
-  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+const EMPTY_SPONSOR = {
+  id: null,
+  nome: '',
+  slug: '',
+  ativo: true,
 }
 
-function PngField({ label, file, currentAsset, onFileChange }) {
-  const [dragging, setDragging] = useState(false)
-  const preview = useMemo(() => file ? URL.createObjectURL(file) : assetPreviewUrl(supabase, currentAsset), [file, currentAsset])
+const EMPTY_MEMBERSHIP = {
+  id: null,
+  sponsor_id: '',
+  template_set: 'default',
+  content_type: 'feed',
+  ordem: 0,
+  ativo: true,
+}
 
-  useEffect(() => () => { if (file && preview) URL.revokeObjectURL(preview) }, [file, preview])
+const TABS = [
+  ['titles', 'Selos da matéria'],
+  ['sponsors', 'Patrocinadores'],
+]
+
+function slugify(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+}
+
+function PngField({
+  label,
+  file,
+  currentAsset,
+  onFileChange,
+}) {
+  const [dragging, setDragging] = useState(false)
+
+  const preview = useMemo(() => {
+    if (file) {
+      return URL.createObjectURL(file)
+    }
+
+    return assetPreviewUrl(supabase, currentAsset)
+  }, [file, currentAsset])
+
+  useEffect(() => {
+    return () => {
+      if (file && preview) {
+        URL.revokeObjectURL(preview)
+      }
+    }
+  }, [file, preview])
 
   function choose(candidate) {
-    if (!candidate) return
-    if (candidate.type !== 'image/png' || !candidate.name.toLowerCase().endsWith('.png')) {
+    if (!candidate) {
+      return
+    }
+
+    const isPng =
+      candidate.type === 'image/png' &&
+      candidate.name.toLowerCase().endsWith('.png')
+
+    if (!isPng) {
       onFileChange(null, 'Envie somente arquivos PNG.')
       return
     }
+
     if (candidate.size > 5 * 1024 * 1024) {
-      onFileChange(null, 'O PNG deve ter no maximo 5 MB.')
+      onFileChange(
+        null,
+        'O arquivo PNG deve ter no máximo 5 MB.',
+      )
       return
     }
+
     onFileChange(candidate, '')
   }
 
-  return <label style={{ display: 'grid', gap: 8 }}>
-    <strong style={{ fontSize: 13 }}>{label}</strong>
-    <span
-      onDragOver={event => { event.preventDefault(); setDragging(true) }}
-      onDragLeave={() => setDragging(false)}
-      onDrop={event => { event.preventDefault(); setDragging(false); choose(event.dataTransfer.files?.[0]) }}
-      style={{ border: '2px dashed ' + (dragging ? '#2563eb' : '#cbd5e1'), borderRadius: 10, padding: 12, background: dragging ? '#eff6ff' : '#f8fafc', cursor: 'pointer', minHeight: 78, display: 'grid', alignItems: 'center', justifyItems: 'start' }}
-    >
-      <input type="file" accept="image/png" onChange={event => choose(event.target.files?.[0])} style={{ display: 'none' }} />
-      {preview ? <img src={preview} alt={label} style={{ maxHeight: 58, maxWidth: 180, objectFit: 'contain' }} /> : <span>Arraste o PNG aqui ou clique para selecionar</span>}
-      {file && <small>{file.name}</small>}
-    </span>
-  </label>
+  return (
+    <label style={{ display: 'grid', gap: 8 }}>
+      <strong style={{ fontSize: 13 }}>
+        {label}
+      </strong>
+
+      <span
+        onDragOver={event => {
+          event.preventDefault()
+          setDragging(true)
+        }}
+        onDragLeave={() => {
+          setDragging(false)
+        }}
+        onDrop={event => {
+          event.preventDefault()
+          setDragging(false)
+          choose(event.dataTransfer.files?.[0])
+        }}
+        style={{
+          border: `2px dashed ${
+            dragging ? '#2563eb' : '#cbd5e1'
+          }`,
+          borderRadius: 10,
+          padding: 12,
+          background: dragging
+            ? '#eff6ff'
+            : '#f8fafc',
+          cursor: 'pointer',
+          minHeight: 78,
+          display: 'grid',
+          alignItems: 'center',
+          justifyItems: 'start',
+        }}
+      >
+        <input
+          type="file"
+          accept="image/png"
+          style={{ display: 'none' }}
+          onChange={event => {
+            choose(event.target.files?.[0])
+          }}
+        />
+
+        {preview ? (
+          <img
+            src={preview}
+            alt={label}
+            style={{
+              maxHeight: 58,
+              maxWidth: 180,
+              objectFit: 'contain',
+            }}
+          />
+        ) : (
+          <span>
+            Arraste o PNG aqui ou clique para selecionar
+          </span>
+        )}
+
+        {file && <small>{file.name}</small>}
+      </span>
+    </label>
+  )
 }
 
-export default function AutoPublisherMasterV1Settings({ clienteId, clienteError }) {
+export default function AutoPublisherMasterV1Settings({
+  clienteId,
+  clienteError,
+}) {
   const [tab, setTab] = useState('titles')
-  const [titles, setTitles] = useState([])
   const [sponsors, setSponsors] = useState([])
   const [memberships, setMemberships] = useState([])
-  const [configs, setConfigs] = useState([])
-  const [control, setControl] = useState({ kill_switch: false })
-  const [sponsor, setSponsor] = useState(emptySponsor)
+
+  const [sponsor, setSponsor] = useState(
+    EMPTY_SPONSOR,
+  )
   const [sponsorFile, setSponsorFile] = useState(null)
-  const [membership, setMembership] = useState(emptyMembership)
-  const [format, setFormat] = useState('feed')
-  const [masterUuid, setMasterUuid] = useState('')
-  const [templateSet, setTemplateSet] = useState('')
-  const [enabled, setEnabled] = useState(false)
-  const [layerMap, setLayerMap] = useState(DEFAULT_MAP)
-  const [previewSponsor1, setPreviewSponsor1] = useState('')
-  const [previewSponsor2, setPreviewSponsor2] = useState('')
+
+  const [membership, setMembership] = useState(
+    EMPTY_MEMBERSHIP,
+  )
+
   const [message, setMessage] = useState('')
   const [saving, setSaving] = useState(false)
 
-  const notice = text => setMessage(text)
+  const notice = text => {
+    setMessage(text)
+  }
 
   const load = useCallback(async () => {
-    const [titlesResult, sponsorsResult, membershipsResult, configsResult, controlResult] = await Promise.all([
-      supabase.schema('ap').from('visual_titles').select('*').eq('cliente_id', clienteId).order('ordem'),
-      supabase.schema('ap').from('render_sponsors').select('*').eq('cliente_id', clienteId).order('nome'),
-      supabase.schema('ap').from('render_sponsor_scope_memberships').select('*').eq('cliente_id', clienteId).order('template_set').order('content_type').order('ordem'),
-      supabase.schema('ap').from('master_render_configs').select('*').eq('cliente_id', clienteId),
-      supabase.schema('ap').from('master_render_controls').select('*').eq('cliente_id', clienteId).maybeSingle(),
+    if (!clienteId) {
+      return
+    }
+
+    const [
+      sponsorsResult,
+      membershipsResult,
+    ] = await Promise.all([
+      supabase
+        .schema('ap')
+        .from('render_sponsors')
+        .select('*')
+        .eq('cliente_id', clienteId)
+        .order('nome'),
+
+      supabase
+        .schema('ap')
+        .from('render_sponsor_scope_memberships')
+        .select('*')
+        .eq('cliente_id', clienteId)
+        .order('template_set')
+        .order('content_type')
+        .order('ordem'),
     ])
-    const failure = [titlesResult, sponsorsResult, membershipsResult, configsResult, controlResult].find(result => result.error)
-    if (failure?.error) throw failure.error
-    setTitles(titlesResult.data || [])
+
+    const failure = [
+      sponsorsResult,
+      membershipsResult,
+    ].find(result => result.error)
+
+    if (failure?.error) {
+      throw failure.error
+    }
+
     setSponsors(sponsorsResult.data || [])
     setMemberships(membershipsResult.data || [])
-    setConfigs(configsResult.data || [])
-    setControl(controlResult.data || { kill_switch: false })
   }, [clienteId])
 
-  useEffect(() => { if (clienteId) load().catch(error => notice(error.message)) }, [clienteId, load])
-
   useEffect(() => {
-    const current = configs.find(config => config.content_type === format && (config.template_set || '') === templateSet)
-    setMasterUuid(current?.master_template_uuid || '')
-    setEnabled(Boolean(current?.enabled))
-    setLayerMap({ ...DEFAULT_MAP, ...(current?.layer_map || {}) })
-  }, [configs, format, templateSet])
+    if (!clienteId) {
+      return
+    }
 
-  const activeTitle = titles.find(item => item.ativo)
-  const selectedSponsor = sponsors.find(item => item.id === membership.sponsor_id)
-  const sponsorById = useMemo(() => new Map(sponsors.map(item => [item.id, item])), [sponsors])
+    load().catch(error => {
+      notice(error.message)
+    })
+  }, [clienteId, load])
+
+  const sponsorById = useMemo(() => {
+    return new Map(
+      sponsors.map(item => [item.id, item]),
+    )
+  }, [sponsors])
+
+  const selectedSponsor = sponsors.find(
+    item => item.id === membership.sponsor_id,
+  )
 
   async function saveSponsor() {
     setSaving(true)
+
     try {
-      const normalizedSlug = slugify(sponsor.slug || sponsor.nome)
-      if (!sponsor.nome.trim() || !normalizedSlug) throw new Error('Nome do patrocinador e obrigatorio.')
-      if (!sponsor.id && !sponsorFile) throw new Error('Envie o PNG do patrocinador.')
+      const normalizedSlug = slugify(
+        sponsor.slug || sponsor.nome,
+      )
+
+      if (!sponsor.nome.trim() || !normalizedSlug) {
+        throw new Error(
+          'O nome do patrocinador é obrigatório.',
+        )
+      }
+
+      if (!sponsor.id && !sponsorFile) {
+        throw new Error(
+          'Envie o PNG do patrocinador.',
+        )
+      }
+
       let asset = null
-      if (sponsorFile) asset = await uploadImmutablePng({ supabase, file: sponsorFile, clienteId, kind: 'sponsors', slug: normalizedSlug })
-      const payload = { nome: sponsor.nome.trim(), slug: normalizedSlug, ativo: Boolean(sponsor.ativo) }
-      if (asset) Object.assign(payload, { asset_bucket: asset.bucket, asset_path: asset.path, asset_version: asset.version, sha256: asset.sha256 })
+
+      if (sponsorFile) {
+        asset = await uploadImmutablePng({
+          supabase,
+          file: sponsorFile,
+          clienteId,
+          kind: 'sponsors',
+          slug: normalizedSlug,
+        })
+      }
+
+      const payload = {
+        nome: sponsor.nome.trim(),
+        slug: normalizedSlug,
+        ativo: Boolean(sponsor.ativo),
+      }
+
+      if (asset) {
+        Object.assign(payload, {
+          asset_bucket: asset.bucket,
+          asset_path: asset.path,
+          asset_version: asset.version,
+          sha256: asset.sha256,
+        })
+      }
+
       const result = sponsor.id
-        ? await supabase.schema('ap').from('render_sponsors').update(payload).eq('id', sponsor.id).eq('cliente_id', clienteId)
-        : await supabase.schema('ap').from('render_sponsors').insert({ ...payload, cliente_id: clienteId })
-      if (result.error) throw result.error
-      setSponsor(emptySponsor)
+        ? await supabase
+            .schema('ap')
+            .from('render_sponsors')
+            .update(payload)
+            .eq('id', sponsor.id)
+            .eq('cliente_id', clienteId)
+        : await supabase
+            .schema('ap')
+            .from('render_sponsors')
+            .insert({
+              ...payload,
+              cliente_id: clienteId,
+            })
+
+      if (result.error) {
+        throw result.error
+      }
+
+      setSponsor(EMPTY_SPONSOR)
       setSponsorFile(null)
-      notice('Patrocinador salvo. O catalogo nao altera a rotacao de templates legada.')
+
+      notice('Patrocinador salvo.')
+
+      await load()
+    } catch (error) {
+      notice(error.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function toggleSponsor(item) {
+    setSaving(true)
+
+    try {
+      const result = await supabase
+        .schema('ap')
+        .from('render_sponsors')
+        .update({
+          ativo: !item.ativo,
+        })
+        .eq('id', item.id)
+        .eq('cliente_id', clienteId)
+
+      if (result.error) {
+        throw result.error
+      }
+
       await load()
     } catch (error) {
       notice(error.message)
@@ -124,14 +341,74 @@ export default function AutoPublisherMasterV1Settings({ clienteId, clienteError 
 
   async function saveMembership() {
     setSaving(true)
+
     try {
-      if (!membership.sponsor_id) throw new Error('Selecione um patrocinador.')
-      const scope = String(membership.template_set || '').trim().toLowerCase()
-      if (!/^[a-z0-9][a-z0-9_-]*$/.test(scope)) throw new Error('Campanha invalida.')
-      const result = await supabase.schema('ap').from('render_sponsor_scope_memberships').upsert({ cliente_id: clienteId, sponsor_id: membership.sponsor_id, template_set: scope, content_type: membership.content_type, ordem: Number(membership.ordem) || 0, ativo: Boolean(membership.ativo) }, { onConflict: 'cliente_id,template_set,content_type,sponsor_id' })
-      if (result.error) throw result.error
-      setMembership(emptyMembership)
-      notice('Escopo de rotacao salvo.')
+      if (!membership.sponsor_id) {
+        throw new Error(
+          'Selecione um patrocinador.',
+        )
+      }
+
+      const templateSet = String(
+        membership.template_set || '',
+      )
+        .trim()
+        .toLowerCase()
+
+      if (
+        !/^[a-z0-9][a-z0-9_-]*$/.test(
+          templateSet,
+        )
+      ) {
+        throw new Error(
+          'Use apenas letras minúsculas, números, hífen ou sublinhado na campanha.',
+        )
+      }
+
+      const payload = {
+        cliente_id: clienteId,
+        sponsor_id: membership.sponsor_id,
+        template_set: templateSet,
+        content_type: membership.content_type,
+        ordem: Number(membership.ordem) || 0,
+        ativo: Boolean(membership.ativo),
+      }
+
+      let result
+
+      if (membership.id) {
+        result = await supabase
+          .schema('ap')
+          .from(
+            'render_sponsor_scope_memberships',
+          )
+          .update(payload)
+          .eq('id', membership.id)
+          .eq('cliente_id', clienteId)
+      } else {
+        result = await supabase
+          .schema('ap')
+          .from(
+            'render_sponsor_scope_memberships',
+          )
+          .upsert(payload, {
+            onConflict:
+              'cliente_id,template_set,content_type,sponsor_id',
+          })
+      }
+
+      if (result.error) {
+        throw result.error
+      }
+
+      setMembership(EMPTY_MEMBERSHIP)
+
+      notice(
+        membership.id
+          ? 'Associação atualizada.'
+          : 'Patrocinador adicionado à campanha.',
+      )
+
       await load()
     } catch (error) {
       notice(error.message)
@@ -140,17 +417,25 @@ export default function AutoPublisherMasterV1Settings({ clienteId, clienteError 
     }
   }
 
-  async function saveMaster() {
+  async function toggleMembership(item) {
     setSaving(true)
+
     try {
-      const duplicateNames = Object.values(layerMap).filter(Boolean)
-      if (new Set(duplicateNames).size !== duplicateNames.length) throw new Error('O layer map possui nomes duplicados.')
-      if (enabled && (!masterUuid || !layerMap.visual_title || !activeTitle)) throw new Error('Ativacao exige UUID, layer do selo e pelo menos um selo ativo.')
-      const current = configs.find(config => config.content_type === format && (config.template_set || '') === templateSet)
-      const payload = { cliente_id: clienteId, content_type: format, template_set: templateSet || null, master_template_uuid: masterUuid || null, enabled, layer_map: layerMap }
-      const result = current ? await supabase.schema('ap').from('master_render_configs').update(payload).eq('id', current.id) : await supabase.schema('ap').from('master_render_configs').insert(payload)
-      if (result.error) throw result.error
-      notice('Configuracao master salva. Nenhuma ativacao e feita automaticamente.')
+      const result = await supabase
+        .schema('ap')
+        .from(
+          'render_sponsor_scope_memberships',
+        )
+        .update({
+          ativo: !item.ativo,
+        })
+        .eq('id', item.id)
+        .eq('cliente_id', clienteId)
+
+      if (result.error) {
+        throw result.error
+      }
+
       await load()
     } catch (error) {
       notice(error.message)
@@ -159,77 +444,481 @@ export default function AutoPublisherMasterV1Settings({ clienteId, clienteError 
     }
   }
 
-  async function saveKillSwitch() {
-    setSaving(true)
-    try {
-      const result = await supabase.schema('ap').from('master_render_controls').upsert({ cliente_id: clienteId, kill_switch: Boolean(control.kill_switch) }, { onConflict: 'cliente_id' })
-      if (result.error) throw result.error
-      notice('Kill switch salvo.')
-      await load()
-    } catch (error) {
-      notice(error.message)
-    } finally {
-      setSaving(false)
-    }
+  if (!clienteId) {
+    return (
+      <div
+        className="ap-form-section"
+        role={clienteError ? 'alert' : 'status'}
+      >
+        {clienteError ||
+          'Carregando cliente operacional...'}
+      </div>
+    )
   }
 
-  async function archiveMembership(item) {
-    const { error } = await supabase.schema('ap').from('render_sponsor_scope_memberships').update({ ativo: !item.ativo }).eq('id', item.id).eq('cliente_id', clienteId)
-    if (error) notice(error.message)
-    else await load()
-  }
+  return (
+    <div
+      className="ap-settings"
+      style={{ marginTop: 24 }}
+    >
+      <div className="ap-form-section">
+        <h2>Configurações das artes</h2>
 
-  const logicalPayload = useMemo(() => {
-    const config = configs.find(item => item.content_type === format && (item.template_set || '') === templateSet)
-    const titleAsset = activeTitle && layerMap.visual_title ? { image: assetPreviewUrl(supabase, { bucket: activeTitle.asset_bucket, path: activeTitle.asset_path }) } : null
-    const first = sponsorById.get(previewSponsor1)
-    const second = sponsorById.get(previewSponsor2)
-    const layers = {}
-    if (titleAsset) layers[layerMap.visual_title] = titleAsset
-    if (first?.asset_bucket && first?.asset_path && layerMap.sponsor_1) layers[layerMap.sponsor_1] = { image: assetPreviewUrl(supabase, { bucket: first.asset_bucket, path: first.asset_path }) }
-    if (second?.asset_bucket && second?.asset_path && layerMap.sponsor_2) layers[layerMap.sponsor_2] = { image: assetPreviewUrl(supabase, { bucket: second.asset_bucket, path: second.asset_path }) }
-    return { template_uuid: enabled && masterUuid ? masterUuid : '<UUID legado>', contract: enabled && masterUuid && !control.kill_switch ? 'master_v1' : 'legacy', selected_config: config?.id || null, layers }
-  }, [activeTitle, configs, control.kill_switch, enabled, format, layerMap, masterUuid, previewSponsor1, previewSponsor2, sponsorById, templateSet])
+        <p style={{ color: '#64748b' }}>
+          Gerencie os selos e patrocinadores usados
+          automaticamente nas artes das matérias.
+        </p>
 
-  const tabs = [['titles', 'Selos da mat\u00e9ria'], ['sponsors', 'Patrocinadores'], ['masters', 'Templates master'], ['diagnostic', 'Diagnostico']]
+        <div
+          style={{
+            display: 'flex',
+            gap: 8,
+            flexWrap: 'wrap',
+            marginBottom: 16,
+          }}
+        >
+          {TABS.map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              className={
+                tab === key
+                  ? 'ap-btn-add'
+                  : 'ap-btn-outline'
+              }
+              onClick={() => {
+                setTab(key)
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
 
-  if (!clienteId) return <div className="ap-form-section" role={clienteError ? "alert" : "status"}>{clienteError || "Carregando cliente operacional..."}</div>
+        {message && (
+          <p
+            role="status"
+            style={{ color: '#475569' }}
+          >
+            {message}
+          </p>
+        )}
 
-  return <div className="ap-settings" style={{ marginTop: 24 }}><div className="ap-form-section">
-    <h2>Configuracoes das artes</h2>
-    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>{tabs.map(([key, label]) => <button key={key} type="button" className={tab === key ? 'ap-btn-add' : 'ap-btn-outline'} onClick={() => setTab(key)}>{label}</button>)}</div>
-    {message && <p role="status" style={{ color: '#475569' }}>{message}</p>}
+        {tab === 'titles' && (
+          <VisualTitlesManager
+            clienteId={clienteId}
+            onChanged={load}
+          />
+        )}
 
-    {tab === 'titles' && <VisualTitlesManager clienteId={clienteId} onChanged={load} />}
+        {tab === 'sponsors' && (
+          <>
+            <h3>Catálogo de patrocinadores</h3>
 
-    {tab === 'sponsors' && <><h3>Catalogo de patrocinadores</h3><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 12, alignItems: 'end' }}>
-      <label>Nome<input className="ap-input" value={sponsor.nome} onChange={event => setSponsor({ ...sponsor, nome: event.target.value, slug: sponsor.slug || slugify(event.target.value) })} /></label>
-      <label>Slug<input className="ap-input" value={sponsor.slug} onChange={event => setSponsor({ ...sponsor, slug: slugify(event.target.value) })} /></label>
-      <label><input type="checkbox" checked={sponsor.ativo} onChange={event => setSponsor({ ...sponsor, ativo: event.target.checked })} /> Ativo</label>
-      <PngField label="Logo PNG" file={sponsorFile} currentAsset={sponsor.id ? sponsor : null} onFileChange={(file, error) => { setSponsorFile(file); if (error) notice(error) }} />
-    </div><div style={{ display: 'flex', gap: 8, marginTop: 12 }}><button type="button" className="ap-btn-add" disabled={saving} onClick={saveSponsor}>{sponsor.id ? 'Salvar alteracoes' : 'Cadastrar patrocinador'}</button>{sponsor.id && <button type="button" className="ap-btn-outline" onClick={() => { setSponsor(emptySponsor); setSponsorFile(null) }}>Cancelar edicao</button>}</div>
-    <table className="ap-table" style={{ marginTop: 16 }}><thead><tr><th>Preview</th><th>Nome</th><th>Status</th><th>Acoes</th></tr></thead><tbody>{sponsors.map(item => <tr key={item.id}><td><img src={assetPreviewUrl(supabase, { bucket: item.asset_bucket, path: item.asset_path })} alt="" style={{ height: 30, maxWidth: 90, objectFit: 'contain' }} /></td><td>{item.nome}</td><td>{item.ativo ? 'Ativo' : 'Arquivado'}</td><td><button type="button" className="ap-btn-sm" onClick={() => { setSponsor({ ...item }); setSponsorFile(null) }}>Editar</button><button type="button" className="ap-btn-sm" onClick={async () => { const result = await supabase.schema('ap').from('render_sponsors').update({ ativo: !item.ativo }).eq('id', item.id).eq('cliente_id', clienteId); if (result.error) notice(result.error.message); else await load() }}>{item.ativo ? 'Arquivar' : 'Ativar'}</button></td></tr>)}</tbody></table>
-    <h3 style={{ marginTop: 22 }}>Campanhas e formatos da rotacao</h3><p style={{ color: '#64748b' }}>A ordem pertence a esta associacao. Ela nao altera templates, cursor ou fila legados.</p><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 12, alignItems: 'end' }}>
-      <label>Patrocinador<select className="ap-select" value={membership.sponsor_id} onChange={event => setMembership({ ...membership, sponsor_id: event.target.value })}><option value="">Selecione</option>{sponsors.filter(item => item.ativo).map(item => <option key={item.id} value={item.id}>{item.nome}</option>)}</select></label>
-      <label>Campanha<input className="ap-input" value={membership.template_set} onChange={event => setMembership({ ...membership, template_set: event.target.value })} /></label>
-      <label>Formato<select className="ap-select" value={membership.content_type} onChange={event => setMembership({ ...membership, content_type: event.target.value })}><option value="feed">Feed</option><option value="reels">Reels</option></select></label>
-      <label>Ordem<input className="ap-input" type="number" min="0" value={membership.ordem} onChange={event => setMembership({ ...membership, ordem: event.target.value })} /></label>
-      <label><input type="checkbox" checked={membership.ativo} onChange={event => setMembership({ ...membership, ativo: event.target.checked })} /> Ativo</label>
-      <button type="button" className="ap-btn-add" disabled={saving || !selectedSponsor} onClick={saveMembership}>Adicionar ao escopo</button>
-    </div><table className="ap-table" style={{ marginTop: 16 }}><thead><tr><th>Patrocinador</th><th>Campanha</th><th>Formato</th><th>Ordem</th><th>Status</th><th>Acoes</th></tr></thead><tbody>{memberships.map(item => <tr key={item.id}><td>{sponsorById.get(item.sponsor_id)?.nome || 'Catalogo indisponivel'}</td><td>{item.template_set}</td><td>{item.content_type}</td><td>{item.ordem}</td><td>{item.ativo ? 'Ativo' : 'Pausado'}</td><td><button type="button" className="ap-btn-sm" onClick={() => setMembership({ ...item })}>Editar</button><button type="button" className="ap-btn-sm" onClick={() => archiveMembership(item)}>{item.ativo ? 'Pausar' : 'Ativar'}</button></td></tr>)}</tbody></table></>}
+            <p style={{ color: '#64748b' }}>
+              Cadastre cada patrocinador uma única vez
+              e associe-o às campanhas e formatos em
+              que poderá aparecer.
+            </p>
 
-    {tab === 'masters' && <><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12, alignItems: 'end' }}>
-      <label>Formato<select className="ap-select" value={format} onChange={event => setFormat(event.target.value)}><option value="feed">Feed</option><option value="reels">Reels</option></select></label>
-      <label>Campanha (opcional)<input className="ap-input" value={templateSet} onChange={event => setTemplateSet(event.target.value.trim().toLowerCase())} /></label>
-      <label>UUID master<input className="ap-input" placeholder="Vazio enquanto nao configurado" value={masterUuid} onChange={event => setMasterUuid(event.target.value.trim())} /></label>
-      <label><input type="checkbox" checked={enabled} onChange={event => setEnabled(event.target.checked)} /> Ativar master para este escopo</label>
-    </div><h3 style={{ marginTop: 20 }}>Layer map</h3><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 8 }}>{Object.keys(DEFAULT_MAP).map(key => <label key={key}>{key}<input className="ap-input" value={layerMap[key] || ''} placeholder="Ausente" onChange={event => setLayerMap({ ...layerMap, [key]: event.target.value.trim() })} /></label>)}</div><button type="button" className="ap-btn-add" disabled={saving} style={{ marginTop: 12 }} onClick={saveMaster}>Salvar configuracao master</button>
-    <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #e2e8f0' }}><label><input type="checkbox" checked={control.kill_switch} onChange={event => setControl({ ...control, kill_switch: event.target.checked })} /> Kill switch global</label><button type="button" className="ap-btn-outline" disabled={saving} style={{ marginLeft: 8 }} onClick={saveKillSwitch}>Salvar kill switch</button></div></>}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns:
+                  'repeat(auto-fit,minmax(190px,1fr))',
+                gap: 12,
+                alignItems: 'end',
+              }}
+            >
+              <label>
+                Nome
+                <input
+                  className="ap-input"
+                  value={sponsor.nome}
+                  onChange={event => {
+                    const nome = event.target.value
 
-    {tab === 'diagnostic' && <><p style={{ color: '#64748b' }}>Preview logico: nao chama Placid e nao executa rotacao.</p><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 12 }}>
-      <label>Formato<select className="ap-select" value={format} onChange={event => setFormat(event.target.value)}><option value="feed">Feed</option><option value="reels">Reels</option></select></label>
-      <label>Patrocinador 1<select className="ap-select" value={previewSponsor1} onChange={event => setPreviewSponsor1(event.target.value)}><option value="">Nenhum</option>{sponsors.filter(item => item.ativo && item.id !== previewSponsor2).map(item => <option key={item.id} value={item.id}>{item.nome}</option>)}</select></label>
-      <label>Patrocinador 2<select className="ap-select" value={previewSponsor2} onChange={event => setPreviewSponsor2(event.target.value)}><option value="">Nenhum</option>{sponsors.filter(item => item.ativo && item.id !== previewSponsor1).map(item => <option key={item.id} value={item.id}>{item.nome}</option>)}</select></label>
-    </div><pre style={{ background: '#0f172a', color: '#e2e8f0', padding: 16, borderRadius: 10, overflow: 'auto', marginTop: 16 }}>{JSON.stringify(logicalPayload, null, 2)}</pre></>}
-  </div></div>
+                    setSponsor(previous => ({
+                      ...previous,
+                      nome,
+                      slug:
+                        previous.slug ||
+                        slugify(nome),
+                    }))
+                  }}
+                />
+              </label>
+
+              <label>
+                Identificador
+                <input
+                  className="ap-input"
+                  value={sponsor.slug}
+                  onChange={event => {
+                    setSponsor(previous => ({
+                      ...previous,
+                      slug: slugify(
+                        event.target.value,
+                      ),
+                    }))
+                  }}
+                />
+              </label>
+
+              <label>
+                <input
+                  type="checkbox"
+                  checked={sponsor.ativo}
+                  onChange={event => {
+                    setSponsor(previous => ({
+                      ...previous,
+                      ativo: event.target.checked,
+                    }))
+                  }}
+                />{' '}
+                Ativo
+              </label>
+
+              <PngField
+                label="Logo em PNG"
+                file={sponsorFile}
+                currentAsset={
+                  sponsor.id ? sponsor : null
+                }
+                onFileChange={(file, error) => {
+                  setSponsorFile(file)
+
+                  if (error) {
+                    notice(error)
+                  }
+                }}
+              />
+            </div>
+
+            <div
+              style={{
+                display: 'flex',
+                gap: 8,
+                marginTop: 12,
+              }}
+            >
+              <button
+                type="button"
+                className="ap-btn-add"
+                disabled={saving}
+                onClick={saveSponsor}
+              >
+                {sponsor.id
+                  ? 'Salvar alterações'
+                  : 'Cadastrar patrocinador'}
+              </button>
+
+              {sponsor.id && (
+                <button
+                  type="button"
+                  className="ap-btn-outline"
+                  disabled={saving}
+                  onClick={() => {
+                    setSponsor(EMPTY_SPONSOR)
+                    setSponsorFile(null)
+                  }}
+                >
+                  Cancelar edição
+                </button>
+              )}
+            </div>
+
+            <table
+              className="ap-table"
+              style={{ marginTop: 16 }}
+            >
+              <thead>
+                <tr>
+                  <th>Logo</th>
+                  <th>Nome</th>
+                  <th>Status</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {sponsors.length === 0 && (
+                  <tr>
+                    <td colSpan={4}>
+                      Nenhum patrocinador cadastrado.
+                    </td>
+                  </tr>
+                )}
+
+                {sponsors.map(item => (
+                  <tr key={item.id}>
+                    <td>
+                      <img
+                        src={assetPreviewUrl(
+                          supabase,
+                          {
+                            bucket:
+                              item.asset_bucket,
+                            path: item.asset_path,
+                          },
+                        )}
+                        alt={item.nome}
+                        style={{
+                          height: 30,
+                          maxWidth: 90,
+                          objectFit: 'contain',
+                        }}
+                      />
+                    </td>
+
+                    <td>{item.nome}</td>
+
+                    <td>
+                      {item.ativo
+                        ? 'Ativo'
+                        : 'Arquivado'}
+                    </td>
+
+                    <td>
+                      <button
+                        type="button"
+                        className="ap-btn-sm"
+                        disabled={saving}
+                        onClick={() => {
+                          setSponsor({ ...item })
+                          setSponsorFile(null)
+                        }}
+                      >
+                        Editar
+                      </button>
+
+                      <button
+                        type="button"
+                        className="ap-btn-sm"
+                        disabled={saving}
+                        onClick={() => {
+                          toggleSponsor(item)
+                        }}
+                      >
+                        {item.ativo
+                          ? 'Arquivar'
+                          : 'Ativar'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <h3 style={{ marginTop: 22 }}>
+              Campanhas e formatos
+            </h3>
+
+            <p style={{ color: '#64748b' }}>
+              Defina quais patrocinadores participam
+              de cada campanha, em Feed ou Reels, e em
+              qual ordem serão considerados.
+            </p>
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns:
+                  'repeat(auto-fit,minmax(160px,1fr))',
+                gap: 12,
+                alignItems: 'end',
+              }}
+            >
+              <label>
+                Patrocinador
+                <select
+                  className="ap-select"
+                  value={membership.sponsor_id}
+                  onChange={event => {
+                    setMembership(previous => ({
+                      ...previous,
+                      sponsor_id:
+                        event.target.value,
+                    }))
+                  }}
+                >
+                  <option value="">
+                    Selecione
+                  </option>
+
+                  {sponsors
+                    .filter(item => item.ativo)
+                    .map(item => (
+                      <option
+                        key={item.id}
+                        value={item.id}
+                      >
+                        {item.nome}
+                      </option>
+                    ))}
+                </select>
+              </label>
+
+              <label>
+                Campanha
+                <input
+                  className="ap-input"
+                  value={
+                    membership.template_set
+                  }
+                  onChange={event => {
+                    setMembership(previous => ({
+                      ...previous,
+                      template_set:
+                        event.target.value,
+                    }))
+                  }}
+                />
+              </label>
+
+              <label>
+                Formato
+                <select
+                  className="ap-select"
+                  value={
+                    membership.content_type
+                  }
+                  onChange={event => {
+                    setMembership(previous => ({
+                      ...previous,
+                      content_type:
+                        event.target.value,
+                    }))
+                  }}
+                >
+                  <option value="feed">
+                    Feed
+                  </option>
+                  <option value="reels">
+                    Reels
+                  </option>
+                </select>
+              </label>
+
+              <label>
+                Ordem
+                <input
+                  className="ap-input"
+                  type="number"
+                  min="0"
+                  value={membership.ordem}
+                  onChange={event => {
+                    setMembership(previous => ({
+                      ...previous,
+                      ordem: event.target.value,
+                    }))
+                  }}
+                />
+              </label>
+
+              <label>
+                <input
+                  type="checkbox"
+                  checked={membership.ativo}
+                  onChange={event => {
+                    setMembership(previous => ({
+                      ...previous,
+                      ativo: event.target.checked,
+                    }))
+                  }}
+                />{' '}
+                Ativo
+              </label>
+
+              <button
+                type="button"
+                className="ap-btn-add"
+                disabled={
+                  saving || !selectedSponsor
+                }
+                onClick={saveMembership}
+              >
+                {membership.id
+                  ? 'Salvar associação'
+                  : 'Adicionar à campanha'}
+              </button>
+            </div>
+
+            <table
+              className="ap-table"
+              style={{ marginTop: 16 }}
+            >
+              <thead>
+                <tr>
+                  <th>Patrocinador</th>
+                  <th>Campanha</th>
+                  <th>Formato</th>
+                  <th>Ordem</th>
+                  <th>Status</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {memberships.length === 0 && (
+                  <tr>
+                    <td colSpan={6}>
+                      Nenhuma associação cadastrada.
+                    </td>
+                  </tr>
+                )}
+
+                {memberships.map(item => (
+                  <tr key={item.id}>
+                    <td>
+                      {sponsorById.get(
+                        item.sponsor_id,
+                      )?.nome ||
+                        'Patrocinador indisponível'}
+                    </td>
+
+                    <td>{item.template_set}</td>
+                    <td>{item.content_type}</td>
+                    <td>{item.ordem}</td>
+
+                    <td>
+                      {item.ativo
+                        ? 'Ativo'
+                        : 'Pausado'}
+                    </td>
+
+                    <td>
+                      <button
+                        type="button"
+                        className="ap-btn-sm"
+                        disabled={saving}
+                        onClick={() => {
+                          setMembership({ ...item })
+                        }}
+                      >
+                        Editar
+                      </button>
+
+                      <button
+                        type="button"
+                        className="ap-btn-sm"
+                        disabled={saving}
+                        onClick={() => {
+                          toggleMembership(item)
+                        }}
+                      >
+                        {item.ativo
+                          ? 'Pausar'
+                          : 'Ativar'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
+      </div>
+    </div>
+  )
 }
