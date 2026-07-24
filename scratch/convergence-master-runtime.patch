@@ -1,0 +1,23 @@
+diff --git a/src/pages/admin/AutoPublisher.jsx b/src/pages/admin/AutoPublisher.jsx
+--- a/src/pages/admin/AutoPublisher.jsx
++++ b/src/pages/admin/AutoPublisher.jsx
+@@ -253,6 +253,6 @@ export default function AutoPublisher() {
+             const [controlsResult, configsResult] = await Promise.all([
+                 supabase.schema('ap').from('master_render_controls').select('kill_switch').eq('cliente_id', clienteId).maybeSingle(),
+-                supabase.schema('ap').from('master_render_configs').select('id,content_type,template_set,master_template_uuid,enabled,layer_map').eq('cliente_id', clienteId).eq('enabled', true),
++                supabase.schema('ap').from('master_render_configs').select('id,content_type,master_template_uuid,enabled,layer_map').eq('cliente_id', clienteId).eq('enabled', true),
+             ])
+             if (controlsResult.error) throw controlsResult.error
+             if (configsResult.error) throw configsResult.error
+@@ -269,9 +269,7 @@ export default function AutoPublisher() {
+     const activeMasterConfig = useMemo(() => {
+         if (!masterRuntime || masterRuntime.killSwitch) return null
+-        const requestedSet = formData.template_set || 'default'
+-        const candidates = masterRuntime.configs.filter(config => config.content_type === formData.content_type)
+-        return candidates.find(config => config.template_set === requestedSet) || candidates.find(config => !config.template_set) || null
+-    }, [formData.content_type, formData.template_set, masterRuntime])
++        return masterRuntime.configs.find(config => config.content_type === formData.content_type) || null
++    }, [formData.content_type, masterRuntime])
+ 
+     const loadTemplateSets = useCallback(async () => {
+         setLoadingSets(true)

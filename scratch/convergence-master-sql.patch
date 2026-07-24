@@ -1,0 +1,48 @@
+diff --git a/supabase/migrations/20260724000942_enforce_one_master_per_format.sql b/supabase/migrations/20260724000942_enforce_one_master_per_format.sql
+index e69de29..2ddc9e8 100644
+--- a/supabase/migrations/20260724000942_enforce_one_master_per_format.sql
++++ b/supabase/migrations/20260724000942_enforce_one_master_per_format.sql
+@@ -0,0 +1,42 @@
++-- Product invariant: each cliente has at most one Feed master and one Reels
++-- master. Campaign remains a sponsor/template rotation scope, not a master ID.
++
++DO $migration$
++DECLARE
++    v_duplicate_count integer;
++BEGIN
++    SELECT count(*)
++    INTO v_duplicate_count
++    FROM (
++        SELECT cliente_id, content_type
++        FROM ap.master_render_configs
++        GROUP BY cliente_id, content_type
++        HAVING count(*) > 1
++    ) duplicates;
++
++    IF v_duplicate_count > 0 THEN
++        RAISE EXCEPTION
++            'MASTER_RENDER_CONFIG_DUPLICATES_BY_FORMAT count=%',
++            v_duplicate_count
++            USING ERRCODE = '23505',
++                  HINT =
++                    'Reconcile duplicate rows explicitly before rerunning.';
++    END IF;
++END;
++$migration$;
++
++DROP INDEX IF EXISTS ap.uq_master_render_config_scope;
++DROP INDEX IF EXISTS ap.idx_master_render_configs_lookup;
++
++CREATE UNIQUE INDEX uq_master_render_config_per_format
++    ON ap.master_render_configs (cliente_id, content_type);
++
++CREATE INDEX idx_master_render_configs_enabled_lookup
++    ON ap.master_render_configs (cliente_id, content_type)
++    WHERE enabled;
++
++COMMENT ON COLUMN ap.master_render_configs.template_set IS
++    'Deprecated compatibility field. Master identity is cliente_id + '
++    'content_type; campaign remains a sponsor/template rotation scope.';
++
++COMMENT ON INDEX ap.uq_master_render_config_per_format IS
++    'Enforces at most one Feed and one Reels master per cliente.';

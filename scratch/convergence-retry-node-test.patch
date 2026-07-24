@@ -1,0 +1,93 @@
+diff --git a/tests/master-v1/generator-sponsor-rotation.test.mjs b/tests/master-v1/generator-sponsor-rotation.test.mjs
+--- a/tests/master-v1/generator-sponsor-rotation.test.mjs
++++ b/tests/master-v1/generator-sponsor-rotation.test.mjs
+@@ -17,20 +17,26 @@ async function runGeneratorModel({
+   killSwitch = false,
+   rpcResult = { reused: false, candidate_news: CREATED },
+   claim = true,
++  existingCandidate = null,
+ } = {}) {
+-  const calls = { legacyTemplateRotation: 0, sponsorRpc: 0, editorial: 0, profileLookup: 0 }
++  const calls = { legacyTemplateRotation: 0, sponsorRpc: 0, editorial: 0, profileLookup: 0, titleLookup: 0, masterControl: 0, masterConfig: 0 }
+   const requested = sponsorCount !== undefined && sponsorCount !== null && sponsorCount !== ''
+   if (!requested) {
+     calls.legacyTemplateRotation += 1
+     calls.profileLookup += 1
+     return { mode: 'legacy', calls }
+   }
+   const count = resolveSponsorCount(sponsorCount)
+   if (count === null) throw new Error('SPONSOR_COUNT_INVALID')
+   if (!idempotencyKey) throw new Error('IDEMPOTENCY_KEY_REQUIRED')
+   if (manualUuid) throw new Error('MANUAL_UUID_UNSUPPORTED')
+-  if (!title?.ativo || !title?.formatos.includes('feed')) throw new Error('VISUAL_TITLE_INVALID')
+-  if (killSwitch || !config?.enabled || !config.master_template_uuid || !config.layer_map?.visual_title) throw new Error('MASTER_V1_DISABLED')
++  if (!existingCandidate) {
++    calls.titleLookup += 1
++    calls.masterControl += 1
++    calls.masterConfig += 1
++    if (!title?.ativo || !title?.formatos.includes('feed')) throw new Error('VISUAL_TITLE_INVALID')
++    if (killSwitch || !config?.enabled || !config.master_template_uuid || !config.layer_map?.visual_title) throw new Error('MASTER_V1_DISABLED')
++  }
+ 
+   calls.sponsorRpc += 1
+   const params = {
+@@ -37,7 +43,9 @@ async function runGeneratorModel({
+     p_sponsor_count: count,
+     p_visual_title_id: title.id,
+     p_render_contract_version: 'master_v1',
+-    p_render_snapshot_base: { master_config: { id: config.id, master_template_uuid: config.master_template_uuid, enabled: true }, layer_map: config.layer_map },
++    p_render_snapshot_base: existingCandidate
++      ? {}
++      : { master_config: { id: config.id, master_template_uuid: config.master_template_uuid, enabled: true }, layer_map: config.layer_map },
+   }
+   const news = rpcResult.candidate_news
+   if (rpcResult.reused && ['pending_render', 'pending_review', 'approved'].includes(news.status)) return { mode: 'reused_terminal', calls, params }
+@@ -78,8 +86,29 @@ test('invalid count, missing key, manual UUID, inactive title, kill switch, and
+   for (const [input, expected] of cases) await assert.rejects(() => runGeneratorModel(input), new RegExp(expected))
+ })
+ 
++test('committed retries do not consult live title, master config or kill switch', async () => {
++  const actual = await runGeneratorModel({
++    sponsorCount: 1,
++    existingCandidate: CREATED,
++    title: { ...TITLE, ativo: false },
++    config: { ...CONFIG, master_template_uuid: null, layer_map: null },
++    killSwitch: true,
++    rpcResult: { reused: true, candidate_news: { ...CREATED, status: 'pending_render' } },
++  })
++  assert.equal(actual.mode, 'reused_terminal')
++  assert.deepEqual(
++    {
++      titleLookup: actual.calls.titleLookup,
++      masterControl: actual.calls.masterControl,
++      masterConfig: actual.calls.masterConfig,
++    },
++    { titleLookup: 0, masterControl: 0, masterConfig: 0 },
++  )
++  assert.deepEqual(actual.params.p_render_snapshot_base, {})
++})
++
+ test('terminal idempotent retries do not invoke editorial or any rotation again', async () => {
+-  const actual = await runGeneratorModel({ sponsorCount: 2, rpcResult: { reused: true, candidate_news: { ...CREATED, status: 'pending_render' } } })
++  const actual = await runGeneratorModel({ sponsorCount: 2, existingCandidate: CREATED, rpcResult: { reused: true, candidate_news: { ...CREATED, status: 'pending_render' } } })
+   assert.equal(actual.mode, 'reused_terminal')
+   assert.equal(actual.calls.sponsorRpc, 1)
+   assert.equal(actual.calls.editorial, 0)
+@@ -87,7 +116,7 @@ test('terminal idempotent retries do not invoke editorial or any rotation again
+ })
+ 
+ test('a concurrent retry with an existing processing claim does not invoke a second editorial workflow', async () => {
+-  const actual = await runGeneratorModel({ sponsorCount: 1, rpcResult: { reused: true, candidate_news: CREATED }, claim: false })
++  const actual = await runGeneratorModel({ sponsorCount: 1, existingCandidate: CREATED, rpcResult: { reused: true, candidate_news: CREATED }, claim: false })
+   assert.equal(actual.mode, 'already_processing')
+   assert.equal(actual.calls.editorial, 0)
+   assert.equal(actual.calls.sponsorRpc, 1)
+@@ -95,7 +124,7 @@ test('a concurrent retry with an existing processing claim does not invoke a se
+ })
+ 
+ test('a retry after an interrupted editorial stage may claim the same candidate without re-rotating', async () => {
+-  const actual = await runGeneratorModel({ sponsorCount: 1, rpcResult: { reused: true, candidate_news: CREATED }, claim: true })
++  const actual = await runGeneratorModel({ sponsorCount: 1, existingCandidate: CREATED, rpcResult: { reused: true, candidate_news: CREATED }, claim: true })
+   assert.equal(actual.mode, 'editorial')
+   assert.equal(actual.calls.editorial, 1)
+   assert.equal(actual.calls.sponsorRpc, 1)
