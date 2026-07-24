@@ -1,0 +1,73 @@
+-- Replace G1's negative catch-all Storage policies with explicit path
+-- families. Sponsor and visual-title assets are immutable and tenant scoped.
+
+DROP POLICY IF EXISTS "Give auth insert access to ap-images"
+    ON storage.objects;
+DROP POLICY IF EXISTS "Give auth update access to ap-images"
+    ON storage.objects;
+DROP POLICY IF EXISTS "Give auth delete access to ap-images"
+    ON storage.objects;
+DROP POLICY IF EXISTS ap_images_authenticated_insert_scoped
+    ON storage.objects;
+DROP POLICY IF EXISTS ap_images_authenticated_update_non_visual_titles
+    ON storage.objects;
+DROP POLICY IF EXISTS ap_images_authenticated_delete_non_visual_titles
+    ON storage.objects;
+DROP POLICY IF EXISTS ap_images_authenticated_insert_immutable_assets
+    ON storage.objects;
+DROP POLICY IF EXISTS ap_images_authenticated_insert_legacy_uploads
+    ON storage.objects;
+
+REVOKE UPDATE, DELETE ON storage.objects FROM authenticated;
+REVOKE INSERT, UPDATE, DELETE ON storage.objects FROM anon;
+
+GRANT SELECT, INSERT ON storage.objects TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON storage.objects TO service_role;
+
+CREATE POLICY ap_images_authenticated_insert_immutable_assets
+    ON storage.objects
+    FOR INSERT
+    TO authenticated
+    WITH CHECK (
+        bucket_id = 'ap-images'
+        AND (storage.foldername(name))[1]
+            IN ('visual-titles', 'sponsors')
+        AND (storage.foldername(name))[2] IN (
+            SELECT ap.get_user_cliente_ids()::text
+        )
+        AND (
+            (
+                (storage.foldername(name))[1] = 'visual-titles'
+                AND name ~
+                    '^visual-titles/[0-9a-fA-F-]{36}/[^/]+/[0-9a-fA-F]{64}[.]png$'
+            )
+            OR
+            (
+                (storage.foldername(name))[1] = 'sponsors'
+                AND name ~
+                    '^sponsors/[0-9a-fA-F-]{36}/[^/]+/[0-9a-fA-F]{64}[.]png$'
+            )
+        )
+    );
+
+-- Existing manual/EmployeeMode uploads use unique immutable names and remain
+-- insert-only. No catch-all policy is retained for arbitrary ap-images paths.
+CREATE POLICY ap_images_authenticated_insert_legacy_uploads
+    ON storage.objects
+    FOR INSERT
+    TO authenticated
+    WITH CHECK (
+        bucket_id = 'ap-images'
+        AND (storage.foldername(name))[1]
+            IN ('admin_uploads', 'employee_uploads')
+    );
+
+COMMENT ON POLICY ap_images_authenticated_insert_immutable_assets
+    ON storage.objects IS
+    'Allows immutable PNG upload only to visual-titles or sponsors for a '
+    'cliente authorized by the caller JWT; UPDATE and DELETE are denied.';
+
+COMMENT ON POLICY ap_images_authenticated_insert_legacy_uploads
+    ON storage.objects IS
+    'Keeps the two explicit legacy upload families insert-only; no arbitrary '
+    'ap-images path is writable by authenticated users.';
