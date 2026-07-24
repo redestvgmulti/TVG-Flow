@@ -1,267 +1,198 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { assetPreviewUrl, slugify, uploadImmutablePng, validatePng } from '../../services/masterV1Assets'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { ArrowLeft, Edit3, FolderOpen, ImagePlus, Plus, Search } from 'lucide-react'
 import { supabase } from '../../services/supabase'
-import { toast } from 'sonner'
-import { UploadCloud, CheckCircle2 } from 'lucide-react'
+import { assetPreviewUrl, uploadImmutablePng } from '../../services/masterV1Assets'
+import {
+  archiveVisualTitle,
+  archiveVisualTitleGroup,
+  createVisualTitle,
+  createVisualTitleGroup,
+  groupVisualTitles,
+  listVisualTitleGroups,
+  listVisualTitles,
+  reactivateVisualTitle,
+  reactivateVisualTitleGroup,
+  slugifyVisualTitleGroup,
+  updateVisualTitle,
+  updateVisualTitleGroup,
+} from '../../services/visualTitleGroups'
 
-const EMPTY_FORM = { nome: '', formatos: ['feed', 'reels'], ordem: 0, ativo: true }
+const emptyGroup = { nome: '', descricao: '', ordem: 0, ativo: true }
+const emptyTitle = { nome: '', formatos: ['feed', 'reels'], ordem: 0, ativo: true, group_id: '' }
 
-function formatsLabel(formatos) {
-  return formatos.map(format => (format === 'feed' ? 'Feed' : 'Reels')).join(', ')
+function statusLabel(ativo) {
+  return ativo ? 'Disponivel' : 'Arquivado'
+}
+
+function titleCount(titles) {
+  if (!titles.length) return 'Nenhum selo'
+  return `${titles.length} ${titles.length === 1 ? 'selo' : 'selos'}`
+}
+
+function toggleFormat(form, format) {
+  const formatos = form.formatos.includes(format)
+    ? form.formatos.filter(item => item !== format)
+    : [...form.formatos, format]
+  return { ...form, formatos }
+}
+
+function PngDrop({ file, asset, onChange, disabled }) {
+  const [dragging, setDragging] = useState(false)
+  const [error, setError] = useState('')
+  const preview = useMemo(() => file ? URL.createObjectURL(file) : assetPreviewUrl(supabase, asset), [asset, file])
+
+  useEffect(() => () => {
+    if (file && preview) URL.revokeObjectURL(preview)
+  }, [file, preview])
+
+  function choose(candidate) {
+    if (!candidate) return
+    if (candidate.type !== 'image/png' || !candidate.name.toLowerCase().endsWith('.png')) {
+      setError('Envie somente arquivos PNG.')
+      return
+    }
+    if (candidate.size > 5 * 1024 * 1024) {
+      setError('Use uma imagem PNG de ate 5 MB.')
+      return
+    }
+    setError('')
+    onChange(candidate)
+  }
+
+  return <div>
+    <label style={{ display: 'grid', gap: 8 }}>
+      <strong>Adicione a imagem do selo</strong>
+      <span
+        tabIndex={0}
+        onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') event.currentTarget.querySelector('input')?.click() }}
+        onDragOver={event => { event.preventDefault(); setDragging(true) }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={event => { event.preventDefault(); setDragging(false); choose(event.dataTransfer.files?.[0]) }}
+        style={{ border: `2px dashed ${dragging ? '#2563eb' : '#cbd5e1'}`, borderRadius: 12, minHeight: 120, padding: 16, cursor: disabled ? 'not-allowed' : 'pointer', display: 'grid', gap: 8, placeItems: 'center', background: dragging ? '#eff6ff' : '#f8fafc' }}
+      >
+        <input type="file" accept="image/png" disabled={disabled} onChange={event => choose(event.target.files?.[0])} style={{ display: 'none' }} />
+        {preview ? <img src={preview} alt="Previa do selo" style={{ maxHeight: 90, maxWidth: '100%', objectFit: 'contain' }} /> : <ImagePlus size={30} aria-hidden="true" />}
+        <span>Arraste o arquivo aqui ou clique para escolher</span>
+        <small>Use uma imagem PNG de ate 5 MB, preferencialmente com fundo transparente.</small>
+      </span>
+    </label>
+    {file && <small>{file.name}</small>}
+    {error && <p role="alert" style={{ color: '#b91c1c' }}>{error}</p>}
+  </div>
+}
+
+function GroupForm({ value, saving, onChange, onSave, onCancel }) {
+  return <form onSubmit={event => { event.preventDefault(); onSave() }} style={{ display: 'grid', gap: 12 }}>
+    <label>Nome do grupo<input className="ap-input" required placeholder="Ex.: Cidades" value={value.nome} onChange={event => onChange({ ...value, nome: event.target.value })} /></label>
+    <label>Descricao<textarea className="ap-input" placeholder="Ex.: Selos das cidades atendidas pelo portal" value={value.descricao || ''} onChange={event => onChange({ ...value, descricao: event.target.value })} /></label>
+    <label>Ordem de exibicao<input className="ap-input" type="number" min="0" value={value.ordem} onChange={event => onChange({ ...value, ordem: event.target.value })} /><small>Define a posicao deste grupo na lista.</small></label>
+    <label><strong>Disponibilidade</strong><span><input type="checkbox" checked={value.ativo} onChange={event => onChange({ ...value, ativo: event.target.checked })} /> Grupo disponivel para uso</span></label>
+    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><button className="ap-btn-add" disabled={saving}>{value.id ? 'Salvar alteracoes' : 'Criar grupo'}</button><button type="button" className="ap-btn-outline" onClick={onCancel}>Cancelar</button></div>
+  </form>
 }
 
 export default function VisualTitlesManager({ clienteId, onChanged }) {
-  const inputRef = useRef(null)
+  const [groups, setGroups] = useState([])
   const [titles, setTitles] = useState([])
-  const [form, setForm] = useState(EMPTY_FORM)
-  const [editing, setEditing] = useState(null)
-  const [file, setFile] = useState(null)
-  const [previewUrl, setPreviewUrl] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  const [groupQuery, setGroupQuery] = useState('')
+  const [groupFilter, setGroupFilter] = useState('all')
+  const [selectedGroupId, setSelectedGroupId] = useState(null)
+  const [groupForm, setGroupForm] = useState(null)
+  const [titleForm, setTitleForm] = useState(null)
+  const [titleFile, setTitleFile] = useState(null)
+  const [titleQuery, setTitleQuery] = useState('')
+  const [titleFilter, setTitleFilter] = useState('all')
   const [saving, setSaving] = useState(false)
-  const [dragging, setDragging] = useState(false)
+  const [confirmArchive, setConfirmArchive] = useState(null)
 
-  const loadTitles = useCallback(async () => {
-    setLoading(true)
-    const { data, error } = await supabase
-      .schema('ap')
-      .from('visual_titles')
-      .select('*')
-      .eq('cliente_id', clienteId)
-      .order('ordem', { ascending: true })
-      .order('nome', { ascending: true })
-
-    if (error) toast.error(error.message)
-    else setTitles(data || [])
-    setLoading(false)
+  const load = useCallback(async () => {
+    if (!clienteId) { setLoading(false); setError('Nenhum cliente operacional autorizado foi encontrado.'); return }
+    setLoading(true); setError('')
+    try {
+      const [nextGroups, nextTitles] = await Promise.all([listVisualTitleGroups(supabase, clienteId), listVisualTitles(supabase, clienteId)])
+      setGroups(nextGroups); setTitles(nextTitles)
+    } catch (loadError) {
+      setError(loadError.message || 'Nao foi possivel carregar os selos da materia. Tente novamente.')
+    } finally { setLoading(false) }
   }, [clienteId])
 
-  useEffect(() => { loadTitles() }, [loadTitles])
+  useEffect(() => { load() }, [load])
 
-  useEffect(() => {
-    if (!file) {
-      setPreviewUrl(null)
-      return undefined
-    }
-    const url = URL.createObjectURL(file)
-    setPreviewUrl(url)
-    return () => URL.revokeObjectURL(url)
-  }, [file])
+  const grouped = useMemo(() => groupVisualTitles(groups, titles), [groups, titles])
+  const selectedGroup = grouped.find(group => group.id === selectedGroupId) || null
+  const visibleGroups = useMemo(() => grouped.filter(group => {
+    const matchesSearch = `${group.nome} ${group.descricao || ''}`.toLowerCase().includes(groupQuery.toLowerCase())
+    const matchesStatus = groupFilter === 'all' || (groupFilter === 'active' ? group.ativo : !group.ativo)
+    return matchesSearch && matchesStatus
+  }), [grouped, groupFilter, groupQuery])
+  const visibleTitles = useMemo(() => (selectedGroup?.titles || []).filter(title => {
+    const matchesSearch = title.nome.toLowerCase().includes(titleQuery.toLowerCase())
+    const matchesFilter = titleFilter === 'all' || (titleFilter === 'feed' ? title.formatos.includes('feed') : titleFilter === 'reels' ? title.formatos.includes('reels') : titleFilter === 'active' ? title.ativo : !title.ativo)
+    return matchesSearch && matchesFilter
+  }).sort((a, b) => a.ordem - b.ordem || a.nome.localeCompare(b.nome, 'pt-BR')), [selectedGroup, titleFilter, titleQuery])
 
-  function resetForm() {
-    setForm(EMPTY_FORM)
-    setEditing(null)
-    setFile(null)
-    if (inputRef.current) inputRef.current.value = ''
-  }
-
-  function setFormats(format, checked) {
-    setForm(current => ({
-      ...current,
-      formatos: checked
-        ? [...new Set([...current.formatos, format])]
-        : current.formatos.filter(item => item !== format),
-    }))
-  }
-
-  function chooseFile(nextFile) {
+  async function saveGroup() {
+    setSaving(true); setError('')
     try {
-      validatePng(nextFile)
-      setFile(nextFile)
-    } catch (error) {
-      toast.error(error.message)
-    }
+      if (groupForm.id) await updateVisualTitleGroup(supabase, clienteId, groupForm.id, groupForm)
+      else await createVisualTitleGroup(supabase, clienteId, groupForm)
+      setNotice(groupForm.id ? 'Altera...?es salvas.' : 'Grupo criado com sucesso.')
+      setGroupForm(null); await load(); onChanged?.()
+    } catch (saveError) { setError(saveError.message) } finally { setSaving(false) }
   }
 
-  function onDrop(event) {
-    event.preventDefault()
-    setDragging(false)
-    chooseFile(event.dataTransfer.files?.[0])
-  }
-
-  function beginEdit(item) {
-    setEditing(item)
-    setForm({ nome: item.nome, formatos: item.formatos, ordem: item.ordem, ativo: item.ativo })
-    setFile(null)
-    window.scrollTo?.({ top: 0, behavior: 'smooth' })
-  }
-
-  async function saveTitle(event) {
-    event.preventDefault()
-    const nome = form.nome.trim()
-    const slug = slugify(nome)
-
-    if (!nome) return toast.error('Informe como o selo será chamado.')
-    if (!form.formatos.length) return toast.error('Escolha Feed, Reels ou ambos.')
-    if (!editing && !file) return toast.error('Adicione a imagem PNG do selo.')
-
-    setSaving(true)
+  async function saveTitle() {
+    setSaving(true); setError('')
     try {
-      let asset = editing
-        ? {
-            bucket: editing.asset_bucket,
-            path: editing.asset_path,
-            version: editing.asset_version,
-            sha256: editing.sha256,
-          }
-        : null
-
-      if (file) {
-        asset = await uploadImmutablePng({
-          supabase,
-          file,
-          clienteId,
-          kind: 'visual-titles',
-          slug: editing?.slug || slug,
-        })
-      }
-
-      const payload = {
-        cliente_id: clienteId,
-        nome,
-        slug: editing?.slug || slug,
-        asset_bucket: asset.bucket,
-        asset_path: asset.path,
-        asset_version: asset.version,
-        sha256: asset.sha256,
-        formatos: form.formatos,
-        ativo: form.ativo,
-        ordem: Number(form.ordem) || 0,
-      }
-
-      const query = editing
-        ? supabase.schema('ap').from('visual_titles').update(payload).eq('id', editing.id).eq('cliente_id', clienteId)
-        : supabase.schema('ap').from('visual_titles').insert(payload)
-      const { error } = await query
-      if (error) throw error
-
-      resetForm()
-      await loadTitles()
-      onChanged?.()
-      toast.success(editing ? 'Alterações salvas.' : 'Selo cadastrado.')
-    } catch (error) {
-      toast.error(error.message || 'Não foi possível salvar o selo. O arquivo anterior foi preservado.')
-    } finally {
-      setSaving(false)
-    }
+      if (!titleForm.group_id) throw new Error('Escolha um grupo antes de cadastrar o selo.')
+      if (!titleForm.nome.trim()) throw new Error('Informe como este selo sera chamado.')
+      if (!titleForm.formatos.length) throw new Error('Escolha Feed, Reels ou ambos.')
+      if (!titleForm.id && !titleFile) throw new Error('Adicione a imagem PNG do selo.')
+      const slug = slugifyVisualTitleGroup(titleForm.nome)
+      let asset = null
+      if (titleFile) asset = await uploadImmutablePng({ supabase, file: titleFile, clienteId, kind: 'visual-titles', slug })
+      const payload = { nome: titleForm.nome.trim(), slug, group_id: titleForm.group_id, formatos: titleForm.formatos, ordem: Number(titleForm.ordem) || 0, ativo: Boolean(titleForm.ativo) }
+      if (asset) Object.assign(payload, { asset_bucket: asset.bucket, asset_path: asset.path, asset_version: asset.version, sha256: asset.sha256 })
+      const moved = titleForm.id && titleForm.group_id !== titleForm.original_group_id
+      if (titleForm.id) await updateVisualTitle(supabase, clienteId, titleForm.id, payload)
+      else await createVisualTitle(supabase, clienteId, payload)
+      setNotice(moved ? 'Selo movido para o grupo selecionado.' : titleForm.id ? 'Altera...?es salvas.' : 'Selo cadastrado com sucesso.')
+      setTitleForm(null); setTitleFile(null); await load(); onChanged?.()
+    } catch (saveError) { setError(saveError.message) } finally { setSaving(false) }
   }
 
-  async function setActive(item, ativo) {
-    const { error } = await supabase
-      .schema('ap')
-      .from('visual_titles')
-      .update({ ativo })
-      .eq('id', item.id)
-      .eq('cliente_id', clienteId)
-    if (error) toast.error(error.message)
-    else {
-      await loadTitles()
-      onChanged?.()
-    }
+  async function toggleArchive(item) {
+    setSaving(true); setError('')
+    try {
+      if (item.type === 'group') item.ativo ? await archiveVisualTitleGroup(supabase, clienteId, item.id) : await reactivateVisualTitleGroup(supabase, clienteId, item.id)
+      else item.ativo ? await archiveVisualTitle(supabase, clienteId, item.id) : await reactivateVisualTitle(supabase, clienteId, item.id)
+      setNotice(item.ativo ? 'Item arquivado. Nenhum historico ou PNG foi apagado.' : 'Item reativado.')
+      setConfirmArchive(null); await load(); onChanged?.()
+    } catch (archiveError) { setError(archiveError.message) } finally { setSaving(false) }
   }
 
-  return (
-    <section style={{ display: 'grid', gap: 18 }}>
-      <div>
-        <h3 className="ap-form-card-title">Selos da matéria</h3>
-        <p className="ap-config-intro" style={{ margin: '6px 0 0' }}>Cadastre uma vez os selos que identificam cada tipo de conteúdo. Depois, basta escolhê-los ao criar uma matéria.</p>
-      </div>
+  if (loading) return <p role="status">Carregando grupos de selos...</p>
+  if (error && !groups.length && !titles.length) return <div><p role="alert">Nao foi possivel carregar os selos da materia. Tente novamente.</p><button className="ap-btn-outline" onClick={load}>Tentar novamente</button></div>
 
-      <form onSubmit={saveTitle} className="ap-form-card">
-        <div className="ap-field-grid">
-          <label className="ap-field-label">
-            Como este selo será chamado?
-            <input className="ap-input" value={form.nome} placeholder="Ex.: Esporte, Urgente ou Política" onChange={event => setForm(current => ({ ...current, nome: event.target.value }))} />
-          </label>
-          <label className="ap-field-label">
-            Ordem de exibição
-            <input className="ap-input" type="number" min="0" value={form.ordem} onChange={event => setForm(current => ({ ...current, ordem: event.target.value }))} />
-            <small>Define a posição em que o selo aparecerá na lista.</small>
-          </label>
-        </div>
+  if (selectedGroup) return <section className="ap-form-section">
+    <button type="button" className="ap-btn-outline" onClick={() => { setSelectedGroupId(null); setTitleForm(null) }}><ArrowLeft size={15} /> Selos da materia</button>
+    <p style={{ color: '#64748b', margin: '12px 0 4px' }}>Selos da materia ... {selectedGroup.nome}</p>
+    <div style={{ display: 'flex', gap: 12, justifyContent: 'space-between', flexWrap: 'wrap', alignItems: 'center' }}><div><h2>{selectedGroup.nome}</h2><p>Cadastre e organize os selos deste grupo.</p></div><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{!selectedGroup.virtual && <button type="button" className="ap-btn-outline" onClick={() => setGroupForm({ ...selectedGroup })}><Edit3 size={15} /> Editar grupo</button>}{!selectedGroup.virtual && <button type="button" className="ap-btn-outline" onClick={() => selectedGroup.ativo ? setConfirmArchive({ type: 'group', ...selectedGroup }) : toggleArchive({ type: 'group', ...selectedGroup })}>{selectedGroup.ativo ? 'Arquivar grupo' : 'Reativar grupo'}</button>}<button type="button" className="ap-btn-add" disabled={selectedGroup.virtual || !selectedGroup.ativo} onClick={() => { setTitleForm({ ...emptyTitle, group_id: selectedGroup.id }); setTitleFile(null) }}>Novo selo</button></div></div>
+    {!selectedGroup.ativo && !selectedGroup.virtual && <p role="status" style={{ background: '#fff7ed', padding: 12, borderRadius: 8 }}>Este grupo esta arquivado e nao aparecera nas novas selecoes.</p>}
+    {groupForm && <div role="dialog" aria-modal="true" aria-label="Editar grupo" style={{ background: '#f8fafc', padding: 16, borderRadius: 12, marginTop: 12 }}><GroupForm value={groupForm} saving={saving} onChange={setGroupForm} onSave={saveGroup} onCancel={() => setGroupForm(null)} /></div>}
+    {titleForm && <div role="dialog" aria-modal="true" aria-label={titleForm.id ? 'Editar selo' : 'Novo selo'} style={{ background: '#f8fafc', padding: 16, borderRadius: 12, marginTop: 16 }}><h3>{titleForm.id ? 'Editar selo' : 'Novo selo'}</h3><form onSubmit={event => { event.preventDefault(); saveTitle() }} style={{ display: 'grid', gap: 12 }}><label>Como este selo sera chamado?<input className="ap-input" required placeholder="Ex.: Goiatuba" value={titleForm.nome} onChange={event => setTitleForm({ ...titleForm, nome: event.target.value })} /></label><label>Mover para outro grupo<select className="ap-select" value={titleForm.group_id} onChange={event => setTitleForm({ ...titleForm, group_id: event.target.value })}>{groups.map(group => <option key={group.id} value={group.id}>{group.nome}{group.ativo ? '' : ' (arquivado)'}</option>)}</select></label><label>Ordem de exibicao<input className="ap-input" type="number" min="0" value={titleForm.ordem} onChange={event => setTitleForm({ ...titleForm, ordem: event.target.value })} /></label><fieldset><legend>Onde este selo podera ser usado?</legend><label><input type="checkbox" checked={titleForm.formatos.includes('feed')} onChange={() => setTitleForm(toggleFormat(titleForm, 'feed'))} /> Feed</label><label><input type="checkbox" checked={titleForm.formatos.includes('reels')} onChange={() => setTitleForm(toggleFormat(titleForm, 'reels'))} /> Reels</label></fieldset><label><strong>Disponibilidade</strong><span><input type="checkbox" checked={titleForm.ativo} onChange={event => setTitleForm({ ...titleForm, ativo: event.target.checked })} /> Selo disponivel para uso</span></label><PngDrop file={titleFile} asset={titleForm.id ? { bucket: titleForm.asset_bucket, path: titleForm.asset_path } : null} onChange={setTitleFile} disabled={saving} /><div style={{ display: 'flex', gap: 8 }}><button className="ap-btn-add" disabled={saving}>{titleForm.id ? 'Salvar alteracoes' : 'Cadastrar selo'}</button><button type="button" className="ap-btn-outline" onClick={() => { setTitleForm(null); setTitleFile(null) }}>Cancelar</button></div></form></div>}
+    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 16 }}><label><Search size={14} /><input className="ap-input" placeholder="Buscar selo" value={titleQuery} onChange={event => setTitleQuery(event.target.value)} /></label><select className="ap-select" value={titleFilter} onChange={event => setTitleFilter(event.target.value)}><option value="all">Todos</option><option value="feed">Feed</option><option value="reels">Reels</option><option value="active">Disponiveis</option><option value="archived">Arquivados</option></select></div>
+    {!visibleTitles.length ? <div style={{ padding: 24, textAlign: 'center' }}><p>Este grupo ainda nao possui selos.</p><small>Cadastre o primeiro selo para que ele possa ser usado nas materias.</small></div> : <div className="ap-table-container"><table className="ap-table"><thead><tr><th>Imagem</th><th>Selo</th><th>Usado em</th><th>Posicao</th><th>Disponibilidade</th><th>Opcoes</th></tr></thead><tbody>{visibleTitles.map(title => <tr key={title.id}><td><img src={assetPreviewUrl(supabase, { bucket: title.asset_bucket, path: title.asset_path })} alt={`Previa do selo ${title.nome}`} style={{ height: 36, maxWidth: 90, objectFit: 'contain' }} /></td><td>{title.nome}</td><td>{title.formatos.length === 2 ? 'Feed e Reels' : title.formatos.join(', ')}</td><td>{title.ordem}</td><td>{statusLabel(title.ativo)}</td><td><button className="ap-btn-sm" onClick={() => { setTitleForm({ ...title, original_group_id: title.group_id }); setTitleFile(null) }}>Editar</button><button className="ap-btn-sm" onClick={() => title.ativo ? setConfirmArchive({ type: 'title', ...title }) : toggleArchive({ type: 'title', ...title })}>{title.ativo ? 'Arquivar' : 'Reativar'}</button></td></tr>)}</tbody></table></div>}
+    {error && <p role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}{confirmArchive && <div role="dialog" aria-modal="true" aria-label="Confirmar arquivamento" style={{ background: '#fff7ed', padding: 16, borderRadius: 12, marginTop: 16 }}><h3>Arquivar este {confirmArchive.type === 'group' ? 'grupo' : 'selo'}?</h3><p>{confirmArchive.type === 'group' ? 'Os selos continuarao salvos, mas o grupo deixara de aparecer em novas selecoes.' : 'Este selo ficara indisponivel para novas materias, mas continuara preservado no historico.'}</p><button className="ap-btn-add" disabled={saving} onClick={() => toggleArchive(confirmArchive)}>{confirmArchive.type === 'group' ? 'Arquivar grupo' : 'Arquivar selo'}</button><button className="ap-btn-outline" onClick={() => setConfirmArchive(null)}>Cancelar</button></div>}
+  </section>
 
-        <div style={{ display: 'grid', gap: 10 }}>
-          <strong style={{ fontSize: 13, color: 'var(--color-text-primary)' }}>Onde este selo poderá ser usado?</strong>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
-            <label className="ap-switch">
-              <input type="checkbox" checked={form.formatos.includes('feed')} onChange={event => setFormats('feed', event.target.checked)} />
-              <span className="ap-switch-track" />
-              <span className="ap-switch-label">Feed</span>
-            </label>
-            <label className="ap-switch">
-              <input type="checkbox" checked={form.formatos.includes('reels')} onChange={event => setFormats('reels', event.target.checked)} />
-              <span className="ap-switch-track" />
-              <span className="ap-switch-label">Reels</span>
-            </label>
-          </div>
-        </div>
-
-        <label className="ap-switch">
-          <input type="checkbox" checked={form.ativo} onChange={event => setForm(current => ({ ...current, ativo: event.target.checked }))} />
-          <span className="ap-switch-track" />
-          <span className="ap-switch-body">
-            <span className="ap-switch-label">Selo disponível para uso</span>
-            <span className="ap-switch-hint">Selos indisponíveis não aparecem na criação de matérias.</span>
-          </span>
-        </label>
-
-        <div
-          role="button"
-          tabIndex={0}
-          className={`ap-dropzone${dragging ? ' dragging' : ''}`}
-          onClick={() => inputRef.current?.click()}
-          onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') inputRef.current?.click() }}
-          onDragEnter={event => { event.preventDefault(); setDragging(true) }}
-          onDragOver={event => event.preventDefault()}
-          onDragLeave={() => setDragging(false)}
-          onDrop={onDrop}
-        >
-          {file ? (
-            <div className="ap-dropzone-file"><CheckCircle2 size={16} /> {file.name}</div>
-          ) : (
-            <>
-              <div className="ap-dropzone-icon"><UploadCloud size={18} /></div>
-              <span className="ap-dropzone-label">Adicione a imagem do selo — clique ou arraste</span>
-            </>
-          )}
-          <small style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>PNG de até 5 MB, preferencialmente com fundo transparente.</small>
-          <input ref={inputRef} type="file" accept="image/png,.png" hidden onChange={event => chooseFile(event.target.files?.[0])} />
-        </div>
-
-        {(previewUrl || editing) && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-            <img src={previewUrl || assetPreviewUrl(supabase, { bucket: editing.asset_bucket, path: editing.asset_path })} alt="Imagem do selo da matéria" className="ap-vt-preview" />
-            {editing && !file && <span style={{ color: 'var(--color-text-tertiary)', fontSize: 13 }}>Adicione uma nova imagem PNG para criar outra versão.</span>}
-          </div>
-        )}
-
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <button className="ap-btn-add" disabled={saving}>{saving ? 'Enviando PNG...' : editing ? 'Salvar alterações' : 'Cadastrar selo'}</button>
-          {editing && <button type="button" className="ap-btn-outline" onClick={resetForm} disabled={saving}>Cancelar edição</button>}
-        </div>
-      </form>
-
-      <div className="ap-table-container">
-        <table className="ap-table">
-          <thead><tr><th>Imagem</th><th>Selo</th><th>Usado em</th><th>Posição</th><th>Disponibilidade</th><th>Opções</th></tr></thead>
-          <tbody>
-            {!loading && titles.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--color-text-tertiary)' }}><div>Você ainda não cadastrou nenhum selo.</div><small style={{ display: 'block', marginTop: 6 }}>Cadastre o primeiro selo para que ele apareça na criação de matérias.</small></td></tr>}
-            {loading && <tr><td colSpan={6} style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--color-text-tertiary)' }}>Carregando selos…</td></tr>}
-            {titles.map(item => <tr key={item.id}>
-              <td><img src={assetPreviewUrl(supabase, { bucket: item.asset_bucket, path: item.asset_path })} alt={`Preview de ${item.nome}`} className="ap-vt-thumb" /></td>
-              <td className="ap-td-title" style={{ fontWeight: 600 }}>{item.nome}</td>
-              <td>{formatsLabel(item.formatos)}</td>
-              <td>{item.ordem}</td>
-              <td><span className={`ap-chip no-dot ${item.ativo ? 'tone-success' : 'tone-neutral'}`}>{item.ativo ? 'Ativo' : 'Arquivado'}</span></td>
-              <td style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button type="button" className="ap-btn-sm" onClick={() => beginEdit(item)}>Editar</button>
-                <button type="button" className="ap-btn-sm" onClick={() => setActive(item, !item.ativo)}>{item.ativo ? 'Desativar' : 'Ativar'}</button>
-                {item.ativo && <button type="button" className="ap-btn-sm" onClick={() => setActive(item, false)}>Arquivar</button>}
-              </td>
-            </tr>)}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  )
+  return <section className="ap-form-section"><div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}><div><h2>Selos da materia</h2><p>Organize os selos em grupos para encontra-los com facilidade ao criar uma materia.</p></div><button type="button" className="ap-btn-add" onClick={() => setGroupForm({ ...emptyGroup })}><Plus size={16} /> Novo grupo</button></div>
+    {groupForm && <div role="dialog" aria-modal="true" aria-label={groupForm.id ? 'Editar grupo' : 'Novo grupo'} style={{ background: '#f8fafc', padding: 16, borderRadius: 12, marginTop: 16 }}><GroupForm value={groupForm} saving={saving} onChange={setGroupForm} onSave={saveGroup} onCancel={() => setGroupForm(null)} /></div>}
+    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 16 }}><label><Search size={14} /><input className="ap-input" placeholder="Buscar grupo" value={groupQuery} onChange={event => setGroupQuery(event.target.value)} /></label><select className="ap-select" value={groupFilter} onChange={event => setGroupFilter(event.target.value)}><option value="all">Todos</option><option value="active">Disponiveis</option><option value="archived">Arquivados</option></select></div>
+    {!visibleGroups.length ? <div style={{ padding: 28, textAlign: 'center' }}><p>Voce ainda nao criou nenhum grupo.</p><small>Crie um grupo para organizar os selos das materias, como Cidades, Esportes ou Eventos.</small><div style={{ marginTop: 12 }}><button className="ap-btn-add" onClick={() => setGroupForm({ ...emptyGroup })}>Criar primeiro grupo</button></div></div> : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 12, marginTop: 16 }}>{visibleGroups.map(group => { const archived = group.titles.filter(title => !title.ativo).length; return <article key={group.id} style={{ border: '1px solid #e2e8f0', borderRadius: 12, padding: 16, display: 'grid', gap: 10 }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><div><h3 style={{ margin: 0 }}>{group.nome}</h3>{group.descricao && <p style={{ margin: '4px 0', color: '#64748b' }}>{group.descricao}</p>}</div><span>{statusLabel(group.ativo)}</span></div><small>{titleCount(group.titles)}{archived ? ` - ${archived} arquivado${archived > 1 ? 's' : ''}` : ''} - Ordem {group.ordem}</small><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><button className="ap-btn-add" onClick={() => setSelectedGroupId(group.id)}><FolderOpen size={15} /> Abrir</button>{!group.virtual && <><button className="ap-btn-sm" onClick={() => setGroupForm({ ...group })}>Editar</button><button className="ap-btn-sm" onClick={() => group.ativo ? setConfirmArchive({ type: 'group', ...group }) : toggleArchive({ type: 'group', ...group })}>{group.ativo ? 'Arquivar' : 'Reativar'}</button></>}</div></article> })}</div>}
+    {error && <p role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}{confirmArchive && <div role="dialog" aria-modal="true" aria-label="Confirmar arquivamento" style={{ background: '#fff7ed', padding: 16, borderRadius: 12, marginTop: 16 }}><h3>Arquivar este grupo?</h3><p>Os selos continuarao salvos, mas o grupo deixara de aparecer em novas selecoes.</p><button className="ap-btn-add" disabled={saving} onClick={() => toggleArchive(confirmArchive)}>Arquivar grupo</button><button className="ap-btn-outline" onClick={() => setConfirmArchive(null)}>Cancelar</button></div>}
+  </section>
 }

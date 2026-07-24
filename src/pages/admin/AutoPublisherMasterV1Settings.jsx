@@ -1,213 +1,922 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../services/supabase'
-import { toast } from 'sonner'
-import { assetPreviewUrl, uploadImmutablePng } from '../../services/masterV1Assets'
+import {
+  assetPreviewUrl,
+  uploadImmutablePng,
+} from '../../services/masterV1Assets'
 import VisualTitlesManager from '../../components/editorial/VisualTitlesManager'
 
-const CLIENTE_ID = 'cd287e6e-f273-4d0f-a72d-2a8c391e40e9'
-const DEFAULT_FEED_LAYER_MAP = { news_image: 'news-image', headline: 'headline_news', tag: 'tag_news', visual_title: 'tag-png', sponsor_1: 'patrocinador-1', sponsor_2: 'patrocinador-2' }
-const DEFAULT_REELS_LAYER_MAP = { news_image: '', headline: 'headline_news', tag: '', visual_title: 'tag-png', sponsor_1: 'patrocinador-1', sponsor_2: 'patrocinador-2' }
-const defaultLayerMapFor = format => ({ ...(format === 'reels' ? DEFAULT_REELS_LAYER_MAP : DEFAULT_FEED_LAYER_MAP) })
-
-// Rótulos amigáveis para as camadas do template master
-const LAYER_LABELS = {
-  news_image: 'Imagem da notícia',
-  headline: 'Manchete',
-  tag: 'Tag',
-  visual_title: 'Selo',
-  sponsor_1: 'Patrocinador 1',
-  sponsor_2: 'Patrocinador 2',
+const EMPTY_SPONSOR = {
+  id: null,
+  nome: '',
+  slug: '',
+  ativo: true,
 }
 
-const SUBTABS = [
+const EMPTY_MEMBERSHIP = {
+  id: null,
+  sponsor_id: '',
+  template_set: 'default',
+  content_type: 'feed',
+  ordem: 0,
+  ativo: true,
+}
+
+const TABS = [
   ['titles', 'Selos da matéria'],
-  ['profiles', 'Patrocinadores'],
-  ['masters', 'Templates master'],
-  ['diagnostic', 'Diagnóstico'],
+  ['sponsors', 'Patrocinadores'],
 ]
 
-function Slot({ label, asset, onChange }) {
-  const preview = asset ? assetPreviewUrl(supabase, asset) : null
+function slugify(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+}
+
+function PngField({
+  label,
+  file,
+  currentAsset,
+  onFileChange,
+}) {
+  const [dragging, setDragging] = useState(false)
+
+  const preview = useMemo(() => {
+    if (file) {
+      return URL.createObjectURL(file)
+    }
+
+    return assetPreviewUrl(supabase, currentAsset)
+  }, [file, currentAsset])
+
+  useEffect(() => {
+    return () => {
+      if (file && preview) {
+        URL.revokeObjectURL(preview)
+      }
+    }
+  }, [file, preview])
+
+  function choose(candidate) {
+    if (!candidate) {
+      return
+    }
+
+    const isPng =
+      candidate.type === 'image/png' &&
+      candidate.name.toLowerCase().endsWith('.png')
+
+    if (!isPng) {
+      onFileChange(null, 'Envie somente arquivos PNG.')
+      return
+    }
+
+    if (candidate.size > 5 * 1024 * 1024) {
+      onFileChange(
+        null,
+        'O arquivo PNG deve ter no máximo 5 MB.',
+      )
+      return
+    }
+
+    onFileChange(candidate, '')
+  }
+
   return (
-    <div className="ap-slot">
-      <strong>{label}</strong>
-      {preview && <img src={preview} alt={label} className="ap-slot-preview" />}
-      <input type="file" accept="image/png" className="ap-file-input" onChange={e => onChange(e.target.files?.[0] || null)} />
-      {asset && <button className="ap-btn-sm" onClick={() => onChange(null)}>Limpar slot</button>}
-    </div>
+    <label style={{ display: 'grid', gap: 8 }}>
+      <strong style={{ fontSize: 13 }}>
+        {label}
+      </strong>
+
+      <span
+        onDragOver={event => {
+          event.preventDefault()
+          setDragging(true)
+        }}
+        onDragLeave={() => {
+          setDragging(false)
+        }}
+        onDrop={event => {
+          event.preventDefault()
+          setDragging(false)
+          choose(event.dataTransfer.files?.[0])
+        }}
+        style={{
+          border: `2px dashed ${
+            dragging ? '#2563eb' : '#cbd5e1'
+          }`,
+          borderRadius: 10,
+          padding: 12,
+          background: dragging
+            ? '#eff6ff'
+            : '#f8fafc',
+          cursor: 'pointer',
+          minHeight: 78,
+          display: 'grid',
+          alignItems: 'center',
+          justifyItems: 'start',
+        }}
+      >
+        <input
+          type="file"
+          accept="image/png"
+          style={{ display: 'none' }}
+          onChange={event => {
+            choose(event.target.files?.[0])
+          }}
+        />
+
+        {preview ? (
+          <img
+            src={preview}
+            alt={label}
+            style={{
+              maxHeight: 58,
+              maxWidth: 180,
+              objectFit: 'contain',
+            }}
+          />
+        ) : (
+          <span>
+            Arraste o PNG aqui ou clique para selecionar
+          </span>
+        )}
+
+        {file && <small>{file.name}</small>}
+      </span>
+    </label>
   )
 }
 
-export default function AutoPublisherMasterV1Settings() {
+export default function AutoPublisherMasterV1Settings({
+  clienteId,
+  clienteError,
+}) {
   const [tab, setTab] = useState('titles')
-  const [titles, setTitles] = useState([])
-  const [templates, setTemplates] = useState([])
-  const [profiles, setProfiles] = useState([])
-  const [configs, setConfigs] = useState([])
-  const [control, setControl] = useState({ kill_switch: false })
-  const [selectedTemplate, setSelectedTemplate] = useState('')
-  const [profileAssets, setProfileAssets] = useState({ sponsor_1: undefined, sponsor_2: undefined })
-  const [format, setFormat] = useState('feed')
-  const [masterUuid, setMasterUuid] = useState('')
-  const [templateSet, setTemplateSet] = useState('')
-  const [enabled, setEnabled] = useState(false)
-  const [layerMap, setLayerMap] = useState(DEFAULT_FEED_LAYER_MAP)
+  const [sponsors, setSponsors] = useState([])
+  const [memberships, setMemberships] = useState([])
 
-  async function load() {
-    const [a, b, c, d, e] = await Promise.all([
-      supabase.schema('ap').from('visual_titles').select('*').eq('cliente_id', CLIENTE_ID).order('ordem'),
-      supabase.schema('ap').from('templates').select('id,nome,tipo,template_set,ordem,placid_template_uuid,ativo,uso_total').eq('empresa_id', CLIENTE_ID).order('ordem'),
-      supabase.schema('ap').from('template_render_profiles').select('*'),
-      supabase.schema('ap').from('master_render_configs').select('*').eq('cliente_id', CLIENTE_ID),
-      supabase.schema('ap').from('master_render_controls').select('*').eq('cliente_id', CLIENTE_ID).maybeSingle(),
+  const [sponsor, setSponsor] = useState(
+    EMPTY_SPONSOR,
+  )
+  const [sponsorFile, setSponsorFile] = useState(null)
+
+  const [membership, setMembership] = useState(
+    EMPTY_MEMBERSHIP,
+  )
+
+  const [message, setMessage] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const notice = text => {
+    setMessage(text)
+  }
+
+  const load = useCallback(async () => {
+    if (!clienteId) {
+      return
+    }
+
+    const [
+      sponsorsResult,
+      membershipsResult,
+    ] = await Promise.all([
+      supabase
+        .schema('ap')
+        .from('render_sponsors')
+        .select('*')
+        .eq('cliente_id', clienteId)
+        .order('nome'),
+
+      supabase
+        .schema('ap')
+        .from('render_sponsor_scope_memberships')
+        .select('*')
+        .eq('cliente_id', clienteId)
+        .order('template_set')
+        .order('content_type')
+        .order('ordem'),
     ])
-    setTitles(a.data || [])
-    setTemplates(b.data || [])
-    setProfiles(c.data || [])
-    setConfigs(d.data || [])
-    setControl(e.data || { kill_switch: false })
-  }
 
-  useEffect(() => { load().catch(error => toast.error(error.message)) }, [])
+    const failure = [
+      sponsorsResult,
+      membershipsResult,
+    ].find(result => result.error)
 
-  const activeTitle = titles.find(item => item.ativo)
+    if (failure?.error) {
+      throw failure.error
+    }
 
-  async function saveProfile() {
+    setSponsors(sponsorsResult.data || [])
+    setMemberships(membershipsResult.data || [])
+  }, [clienteId])
+
+  useEffect(() => {
+    if (!clienteId) {
+      return
+    }
+
+    load().catch(error => {
+      notice(error.message)
+    })
+  }, [clienteId, load])
+
+  const sponsorById = useMemo(() => {
+    return new Map(
+      sponsors.map(item => [item.id, item]),
+    )
+  }, [sponsors])
+
+  const selectedSponsor = sponsors.find(
+    item => item.id === membership.sponsor_id,
+  )
+
+  async function saveSponsor() {
+    setSaving(true)
+
     try {
-      if (!selectedTemplate) throw new Error('Selecione uma linha de template.')
-      const current = profiles.find(p => p.template_id === selectedTemplate)
-      const slots = { ...(current?.other_slots || {}) }
-      for (const slot of ['sponsor_1', 'sponsor_2']) {
-        const input = profileAssets[slot]
-        if (input === undefined) continue
-        if (input === null) delete slots[slot]
-        else slots[slot] = await uploadImmutablePng({ supabase, file: input, clienteId: CLIENTE_ID, kind: 'sponsors', slug: `${selectedTemplate}-${slot}` })
+      const normalizedSlug = slugify(
+        sponsor.slug || sponsor.nome,
+      )
+
+      if (!sponsor.nome.trim() || !normalizedSlug) {
+        throw new Error(
+          'O nome do patrocinador é obrigatório.',
+        )
       }
-      const payload = { template_id: selectedTemplate, profile_version: new Date().toISOString(), other_slots: slots, ativo: true }
-      const query = current
-        ? supabase.schema('ap').from('template_render_profiles').update(payload).eq('id', current.id)
-        : supabase.schema('ap').from('template_render_profiles').insert(payload)
-      const { error } = await query
-      if (error) throw error
-      setProfileAssets({ sponsor_1: undefined, sponsor_2: undefined })
-      toast.success('Perfil salvo.')
-      load()
+
+      if (!sponsor.id && !sponsorFile) {
+        throw new Error(
+          'Envie o PNG do patrocinador.',
+        )
+      }
+
+      let asset = null
+
+      if (sponsorFile) {
+        asset = await uploadImmutablePng({
+          supabase,
+          file: sponsorFile,
+          clienteId,
+          kind: 'sponsors',
+          slug: normalizedSlug,
+        })
+      }
+
+      const payload = {
+        nome: sponsor.nome.trim(),
+        slug: normalizedSlug,
+        ativo: Boolean(sponsor.ativo),
+      }
+
+      if (asset) {
+        Object.assign(payload, {
+          asset_bucket: asset.bucket,
+          asset_path: asset.path,
+          asset_version: asset.version,
+          sha256: asset.sha256,
+        })
+      }
+
+      const result = sponsor.id
+        ? await supabase
+            .schema('ap')
+            .from('render_sponsors')
+            .update(payload)
+            .eq('id', sponsor.id)
+            .eq('cliente_id', clienteId)
+        : await supabase
+            .schema('ap')
+            .from('render_sponsors')
+            .insert({
+              ...payload,
+              cliente_id: clienteId,
+            })
+
+      if (result.error) {
+        throw result.error
+      }
+
+      setSponsor(EMPTY_SPONSOR)
+      setSponsorFile(null)
+
+      notice('Patrocinador salvo.')
+
+      await load()
     } catch (error) {
-      toast.error(error.message)
+      notice(error.message)
+    } finally {
+      setSaving(false)
     }
   }
 
-  async function saveMaster() {
+  async function toggleSponsor(item) {
+    setSaving(true)
+
     try {
-      const duplicates = Object.entries(layerMap).filter(([, value]) => value).map(([, value]) => value)
-      if (new Set(duplicates).size !== duplicates.length) throw new Error('O mapeamento de camadas tem nomes duplicados.')
-      if (enabled && (!masterUuid || !layerMap.visual_title || !activeTitle)) throw new Error('Para ativar é preciso: UUID, mapeamento do selo e um selo de matéria disponível.')
-      const current = configs.find(c => c.content_type === format && (c.template_set || '') === templateSet)
-      const payload = { cliente_id: CLIENTE_ID, content_type: format, template_set: templateSet || null, master_template_uuid: masterUuid || null, enabled, layer_map: layerMap }
-      const { error } = current
-        ? await supabase.schema('ap').from('master_render_configs').update(payload).eq('id', current.id)
-        : await supabase.schema('ap').from('master_render_configs').insert(payload)
-      if (error) throw error
-      toast.success('Configuração master salva.')
-      load()
+      const result = await supabase
+        .schema('ap')
+        .from('render_sponsors')
+        .update({
+          ativo: !item.ativo,
+        })
+        .eq('id', item.id)
+        .eq('cliente_id', clienteId)
+
+      if (result.error) {
+        throw result.error
+      }
+
+      await load()
     } catch (error) {
-      toast.error(error.message)
+      notice(error.message)
+    } finally {
+      setSaving(false)
     }
   }
 
-  async function saveKill() {
-    const { error } = await supabase.schema('ap').from('master_render_controls').upsert({ cliente_id: CLIENTE_ID, kill_switch: control.kill_switch })
-    if (error) toast.error(error.message)
-    else toast.success(control.kill_switch ? 'Kill switch ativado.' : 'Kill switch desativado.')
+  async function saveMembership() {
+    setSaving(true)
+
+    try {
+      if (!membership.sponsor_id) {
+        throw new Error(
+          'Selecione um patrocinador.',
+        )
+      }
+
+      const templateSet = String(
+        membership.template_set || '',
+      )
+        .trim()
+        .toLowerCase()
+
+      if (
+        !/^[a-z0-9][a-z0-9_-]*$/.test(
+          templateSet,
+        )
+      ) {
+        throw new Error(
+          'Use apenas letras minúsculas, números, hífen ou sublinhado na campanha.',
+        )
+      }
+
+      const payload = {
+        cliente_id: clienteId,
+        sponsor_id: membership.sponsor_id,
+        template_set: templateSet,
+        content_type: membership.content_type,
+        ordem: Number(membership.ordem) || 0,
+        ativo: Boolean(membership.ativo),
+      }
+
+      let result
+
+      if (membership.id) {
+        result = await supabase
+          .schema('ap')
+          .from(
+            'render_sponsor_scope_memberships',
+          )
+          .update(payload)
+          .eq('id', membership.id)
+          .eq('cliente_id', clienteId)
+      } else {
+        result = await supabase
+          .schema('ap')
+          .from(
+            'render_sponsor_scope_memberships',
+          )
+          .upsert(payload, {
+            onConflict:
+              'cliente_id,template_set,content_type,sponsor_id',
+          })
+      }
+
+      if (result.error) {
+        throw result.error
+      }
+
+      setMembership(EMPTY_MEMBERSHIP)
+
+      notice(
+        membership.id
+          ? 'Associação atualizada.'
+          : 'Patrocinador adicionado à campanha.',
+      )
+
+      await load()
+    } catch (error) {
+      notice(error.message)
+    } finally {
+      setSaving(false)
+    }
   }
 
-  const previewProfile = profiles.find(p => p.template_id === selectedTemplate)
-  const previewSlots = useMemo(() => previewProfile?.other_slots || {}, [previewProfile])
-  const payload = useMemo(() => ({
-    template_uuid: enabled && masterUuid ? masterUuid : (templates.find(t => t.id === selectedTemplate)?.placid_template_uuid || '<UUID legado>'),
-    layers: Object.fromEntries([
-      ['visual_title', activeTitle && layerMap.visual_title ? [layerMap.visual_title, { image: assetPreviewUrl(supabase, { bucket: activeTitle.asset_bucket, path: activeTitle.asset_path }) }] : null],
-      ...['sponsor_1', 'sponsor_2'].map(slot => previewSlots[slot] && layerMap[slot] ? [layerMap[slot], { image: assetPreviewUrl(supabase, previewSlots[slot]) }] : null),
-    ].filter(Boolean)),
-  }), [enabled, masterUuid, templates, selectedTemplate, activeTitle, layerMap, previewSlots])
+  async function toggleMembership(item) {
+    setSaving(true)
+
+    try {
+      const result = await supabase
+        .schema('ap')
+        .from(
+          'render_sponsor_scope_memberships',
+        )
+        .update({
+          ativo: !item.ativo,
+        })
+        .eq('id', item.id)
+        .eq('cliente_id', clienteId)
+
+      if (result.error) {
+        throw result.error
+      }
+
+      await load()
+    } catch (error) {
+      notice(error.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!clienteId) {
+    return (
+      <div
+        className="ap-form-section"
+        role={clienteError ? 'alert' : 'status'}
+      >
+        {clienteError ||
+          'Carregando cliente operacional...'}
+      </div>
+    )
+  }
 
   return (
-    <div className="ap-settings">
+    <div
+      className="ap-settings"
+      style={{ marginTop: 24 }}
+    >
       <div className="ap-form-section">
-        <h2>Configuração das Artes</h2>
-        <p className="ap-config-intro">Cadastre os elementos que o sistema usará automaticamente nas artes das matérias.</p>
+        <h2>Configurações das artes</h2>
 
-        <div className="ap-subtabs">
-          {SUBTABS.map(([key, label]) => (
-            <button key={key} className={`ap-subtab${tab === key ? ' active' : ''}`} onClick={() => setTab(key)}>{label}</button>
+        <p style={{ color: '#64748b' }}>
+          Gerencie os selos e patrocinadores usados
+          automaticamente nas artes das matérias.
+        </p>
+
+        <div
+          style={{
+            display: 'flex',
+            gap: 8,
+            flexWrap: 'wrap',
+            marginBottom: 16,
+          }}
+        >
+          {TABS.map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              className={
+                tab === key
+                  ? 'ap-btn-add'
+                  : 'ap-btn-outline'
+              }
+              onClick={() => {
+                setTab(key)
+              }}
+            >
+              {label}
+            </button>
           ))}
         </div>
 
-        {tab === 'titles' && <VisualTitlesManager clienteId={CLIENTE_ID} onChanged={load} />}
-
-        {tab === 'profiles' && (
-          <div style={{ display: 'grid', gap: 12 }}>
-            <select className="ap-select" value={selectedTemplate} onChange={e => { setSelectedTemplate(e.target.value); setProfileAssets({ sponsor_1: undefined, sponsor_2: undefined }) }}>
-              <option value="">Selecione o template rotacionado</option>
-              {templates.map(t => <option key={t.id} value={t.id}>{t.nome} · {t.tipo} · {t.template_set} · #{t.ordem}</option>)}
-            </select>
-            {selectedTemplate && (
-              <>
-                <div className="ap-field-grid">
-                  <Slot label="Patrocinador 1" asset={previewSlots.sponsor_1} onChange={file => setProfileAssets({ ...profileAssets, sponsor_1: file })} />
-                  <Slot label="Patrocinador 2" asset={previewSlots.sponsor_2} onChange={file => setProfileAssets({ ...profileAssets, sponsor_2: file })} />
-                </div>
-                <div><button className="ap-btn-add" onClick={saveProfile}>Salvar perfil</button></div>
-              </>
-            )}
-          </div>
+        {message && (
+          <p
+            role="status"
+            style={{ color: '#475569' }}
+          >
+            {message}
+          </p>
         )}
 
-        {tab === 'masters' && (
-          <div style={{ display: 'grid', gap: 16 }}>
-            <div className="ap-form-row">
-              <select className="ap-select" value={format} onChange={e => { const nextFormat = e.target.value; setFormat(nextFormat); setLayerMap(defaultLayerMapFor(nextFormat)) }}>
-                <option value="feed">Feed</option>
-                <option value="reels">Reels</option>
-              </select>
-              <input className="ap-input" placeholder="UUID master (opcional)" value={masterUuid} onChange={e => setMasterUuid(e.target.value.trim())} />
-              <input className="ap-input" placeholder="Campanha (template_set, opcional)" value={templateSet} onChange={e => setTemplateSet(e.target.value)} />
-              <label className="ap-switch">
-                <input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} />
-                <span className="ap-switch-track" />
-                <span className="ap-switch-label">Ativado</span>
-              </label>
-              <button className="ap-btn-add" onClick={saveMaster}>Salvar</button>
-            </div>
-
-            <div className="ap-field-grid">
-              {Object.keys(DEFAULT_FEED_LAYER_MAP).map(key => (
-                <label key={key} className="ap-field-label">
-                  {LAYER_LABELS[key] || key}
-                  <input className="ap-input" value={layerMap[key] || ''} placeholder="Ausente" onChange={e => setLayerMap({ ...layerMap, [key]: e.target.value.trim() })} />
-                </label>
-              ))}
-            </div>
-
-            <div className="ap-config-card" style={{ gap: 12 }}>
-              <label className="ap-switch">
-                <input type="checkbox" checked={control.kill_switch} onChange={e => setControl({ ...control, kill_switch: e.target.checked })} />
-                <span className="ap-switch-track" />
-                <span className="ap-switch-body">
-                  <span className="ap-switch-label">Kill switch global</span>
-                  <span className="ap-switch-hint">Interrompe toda a renderização master deste cliente.</span>
-                </span>
-              </label>
-              <div><button className="ap-btn-outline" onClick={saveKill}>Salvar kill switch</button></div>
-            </div>
-          </div>
+        {tab === 'titles' && (
+          <VisualTitlesManager
+            clienteId={clienteId}
+            onChanged={load}
+          />
         )}
 
-        {tab === 'diagnostic' && (
-          <div style={{ display: 'grid', gap: 12 }}>
-            <p className="ap-config-intro" style={{ margin: 0 }}>Selecione um template na aba Patrocinadores para simular os quatro cenários de slots sem chamar o Placid.</p>
-            <pre className="ap-code-block">{JSON.stringify({ format, legacy_uuid: templates.find(t => t.id === selectedTemplate)?.placid_template_uuid || null, master_uuid: masterUuid || null, contract: enabled && masterUuid ? 'master_v1' : 'legacy', payload }, null, 2)}</pre>
-          </div>
+        {tab === 'sponsors' && (
+          <>
+            <h3>Catálogo de patrocinadores</h3>
+
+            <p style={{ color: '#64748b' }}>
+              Cadastre cada patrocinador uma única vez
+              e associe-o às campanhas e formatos em
+              que poderá aparecer.
+            </p>
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns:
+                  'repeat(auto-fit,minmax(190px,1fr))',
+                gap: 12,
+                alignItems: 'end',
+              }}
+            >
+              <label>
+                Nome
+                <input
+                  className="ap-input"
+                  value={sponsor.nome}
+                  onChange={event => {
+                    const nome = event.target.value
+
+                    setSponsor(previous => ({
+                      ...previous,
+                      nome,
+                      slug:
+                        previous.slug ||
+                        slugify(nome),
+                    }))
+                  }}
+                />
+              </label>
+
+              <label>
+                Identificador
+                <input
+                  className="ap-input"
+                  value={sponsor.slug}
+                  onChange={event => {
+                    setSponsor(previous => ({
+                      ...previous,
+                      slug: slugify(
+                        event.target.value,
+                      ),
+                    }))
+                  }}
+                />
+              </label>
+
+              <label>
+                <input
+                  type="checkbox"
+                  checked={sponsor.ativo}
+                  onChange={event => {
+                    setSponsor(previous => ({
+                      ...previous,
+                      ativo: event.target.checked,
+                    }))
+                  }}
+                />{' '}
+                Ativo
+              </label>
+
+              <PngField
+                label="Logo em PNG"
+                file={sponsorFile}
+                currentAsset={
+                  sponsor.id ? sponsor : null
+                }
+                onFileChange={(file, error) => {
+                  setSponsorFile(file)
+
+                  if (error) {
+                    notice(error)
+                  }
+                }}
+              />
+            </div>
+
+            <div
+              style={{
+                display: 'flex',
+                gap: 8,
+                marginTop: 12,
+              }}
+            >
+              <button
+                type="button"
+                className="ap-btn-add"
+                disabled={saving}
+                onClick={saveSponsor}
+              >
+                {sponsor.id
+                  ? 'Salvar alterações'
+                  : 'Cadastrar patrocinador'}
+              </button>
+
+              {sponsor.id && (
+                <button
+                  type="button"
+                  className="ap-btn-outline"
+                  disabled={saving}
+                  onClick={() => {
+                    setSponsor(EMPTY_SPONSOR)
+                    setSponsorFile(null)
+                  }}
+                >
+                  Cancelar edição
+                </button>
+              )}
+            </div>
+
+            <table
+              className="ap-table"
+              style={{ marginTop: 16 }}
+            >
+              <thead>
+                <tr>
+                  <th>Logo</th>
+                  <th>Nome</th>
+                  <th>Status</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {sponsors.length === 0 && (
+                  <tr>
+                    <td colSpan={4}>
+                      Nenhum patrocinador cadastrado.
+                    </td>
+                  </tr>
+                )}
+
+                {sponsors.map(item => (
+                  <tr key={item.id}>
+                    <td>
+                      <img
+                        src={assetPreviewUrl(
+                          supabase,
+                          {
+                            bucket:
+                              item.asset_bucket,
+                            path: item.asset_path,
+                          },
+                        )}
+                        alt={item.nome}
+                        style={{
+                          height: 30,
+                          maxWidth: 90,
+                          objectFit: 'contain',
+                        }}
+                      />
+                    </td>
+
+                    <td>{item.nome}</td>
+
+                    <td>
+                      {item.ativo
+                        ? 'Ativo'
+                        : 'Arquivado'}
+                    </td>
+
+                    <td>
+                      <button
+                        type="button"
+                        className="ap-btn-sm"
+                        disabled={saving}
+                        onClick={() => {
+                          setSponsor({ ...item })
+                          setSponsorFile(null)
+                        }}
+                      >
+                        Editar
+                      </button>
+
+                      <button
+                        type="button"
+                        className="ap-btn-sm"
+                        disabled={saving}
+                        onClick={() => {
+                          toggleSponsor(item)
+                        }}
+                      >
+                        {item.ativo
+                          ? 'Arquivar'
+                          : 'Ativar'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <h3 style={{ marginTop: 22 }}>
+              Campanhas e formatos
+            </h3>
+
+            <p style={{ color: '#64748b' }}>
+              Defina quais patrocinadores participam
+              de cada campanha, em Feed ou Reels, e em
+              qual ordem serão considerados.
+            </p>
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns:
+                  'repeat(auto-fit,minmax(160px,1fr))',
+                gap: 12,
+                alignItems: 'end',
+              }}
+            >
+              <label>
+                Patrocinador
+                <select
+                  className="ap-select"
+                  value={membership.sponsor_id}
+                  onChange={event => {
+                    setMembership(previous => ({
+                      ...previous,
+                      sponsor_id:
+                        event.target.value,
+                    }))
+                  }}
+                >
+                  <option value="">
+                    Selecione
+                  </option>
+
+                  {sponsors
+                    .filter(item => item.ativo)
+                    .map(item => (
+                      <option
+                        key={item.id}
+                        value={item.id}
+                      >
+                        {item.nome}
+                      </option>
+                    ))}
+                </select>
+              </label>
+
+              <label>
+                Campanha
+                <input
+                  className="ap-input"
+                  value={
+                    membership.template_set
+                  }
+                  onChange={event => {
+                    setMembership(previous => ({
+                      ...previous,
+                      template_set:
+                        event.target.value,
+                    }))
+                  }}
+                />
+              </label>
+
+              <label>
+                Formato
+                <select
+                  className="ap-select"
+                  value={
+                    membership.content_type
+                  }
+                  onChange={event => {
+                    setMembership(previous => ({
+                      ...previous,
+                      content_type:
+                        event.target.value,
+                    }))
+                  }}
+                >
+                  <option value="feed">
+                    Feed
+                  </option>
+                  <option value="reels">
+                    Reels
+                  </option>
+                </select>
+              </label>
+
+              <label>
+                Ordem
+                <input
+                  className="ap-input"
+                  type="number"
+                  min="0"
+                  value={membership.ordem}
+                  onChange={event => {
+                    setMembership(previous => ({
+                      ...previous,
+                      ordem: event.target.value,
+                    }))
+                  }}
+                />
+              </label>
+
+              <label>
+                <input
+                  type="checkbox"
+                  checked={membership.ativo}
+                  onChange={event => {
+                    setMembership(previous => ({
+                      ...previous,
+                      ativo: event.target.checked,
+                    }))
+                  }}
+                />{' '}
+                Ativo
+              </label>
+
+              <button
+                type="button"
+                className="ap-btn-add"
+                disabled={
+                  saving || !selectedSponsor
+                }
+                onClick={saveMembership}
+              >
+                {membership.id
+                  ? 'Salvar associação'
+                  : 'Adicionar à campanha'}
+              </button>
+            </div>
+
+            <table
+              className="ap-table"
+              style={{ marginTop: 16 }}
+            >
+              <thead>
+                <tr>
+                  <th>Patrocinador</th>
+                  <th>Campanha</th>
+                  <th>Formato</th>
+                  <th>Ordem</th>
+                  <th>Status</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {memberships.length === 0 && (
+                  <tr>
+                    <td colSpan={6}>
+                      Nenhuma associação cadastrada.
+                    </td>
+                  </tr>
+                )}
+
+                {memberships.map(item => (
+                  <tr key={item.id}>
+                    <td>
+                      {sponsorById.get(
+                        item.sponsor_id,
+                      )?.nome ||
+                        'Patrocinador indisponível'}
+                    </td>
+
+                    <td>{item.template_set}</td>
+                    <td>{item.content_type}</td>
+                    <td>{item.ordem}</td>
+
+                    <td>
+                      {item.ativo
+                        ? 'Ativo'
+                        : 'Pausado'}
+                    </td>
+
+                    <td>
+                      <button
+                        type="button"
+                        className="ap-btn-sm"
+                        disabled={saving}
+                        onClick={() => {
+                          setMembership({ ...item })
+                        }}
+                      >
+                        Editar
+                      </button>
+
+                      <button
+                        type="button"
+                        className="ap-btn-sm"
+                        disabled={saving}
+                        onClick={() => {
+                          toggleMembership(item)
+                        }}
+                      >
+                        {item.ativo
+                          ? 'Pausar'
+                          : 'Ativar'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
         )}
       </div>
     </div>

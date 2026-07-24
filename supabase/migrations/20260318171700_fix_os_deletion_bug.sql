@@ -1,24 +1,43 @@
 -- ==============================================================================
--- CORREÇÃO CRÍTICA DE RLS - DELEÇÃO E EDIÇÃO GLOBAIS DE OS PARA ADMINS
--- Garantir que super_admin e admin tenham permissões irrestritas (CRUD) nas Tarefas
+-- CORREÇÃO CRÍTICA DE RLS
+-- Permite que admins, criador, responsável direto e participantes do workflow
+-- modifiquem tarefas às quais realmente pertencem.
 -- ==============================================================================
 
--- Remover política anterior que causava o bloqueio silencioso (0 rows deleted)
-DROP POLICY IF EXISTS "RLS: modificar apenas envolvidos" ON public.tarefas;
-DROP POLICY IF EXISTS "Admins and creators can delete tasks" ON public.tarefas;
+DROP POLICY IF EXISTS "RLS: modificar apenas envolvidos"
+    ON public.tarefas;
 
--- Criar policy atualizada
+DROP POLICY IF EXISTS "Admins and creators can delete tasks"
+    ON public.tarefas;
+
+DROP POLICY IF EXISTS "RLS: admin ou envolvidos podem modificar"
+    ON public.tarefas;
+
 CREATE POLICY "RLS: admin ou envolvidos podem modificar"
-ON public.tarefas
-FOR ALL
-USING (
-  -- Super Admins e Admins do Tenant têm poder global (mesmo se não criaram)
-  public.is_admin_safe() 
-  OR public.is_super_admin()
-
-  -- Criador da OS tem permissão
-  OR created_by = auth.uid()
-
-  -- Profissionais atribuídos ou engajados na OS podem acessar/modificar
-  OR public.is_user_assigned_to_task(tarefas.id)
-);
+    ON public.tarefas
+    FOR ALL
+    TO authenticated
+    USING (
+        public.is_admin_safe()
+        OR public.is_super_admin()
+        OR created_by = auth.uid()
+        OR assigned_to = auth.uid()
+        OR EXISTS (
+            SELECT 1
+            FROM public.tarefas_micro AS tm
+            WHERE tm.tarefa_id = tarefas.id
+              AND tm.profissional_id = auth.uid()
+        )
+    )
+    WITH CHECK (
+        public.is_admin_safe()
+        OR public.is_super_admin()
+        OR created_by = auth.uid()
+        OR assigned_to = auth.uid()
+        OR EXISTS (
+            SELECT 1
+            FROM public.tarefas_micro AS tm
+            WHERE tm.tarefa_id = tarefas.id
+              AND tm.profissional_id = auth.uid()
+        )
+    );

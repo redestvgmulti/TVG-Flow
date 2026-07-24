@@ -1,0 +1,13 @@
+# The AutoPublisher client talks to PostgREST with `supabase.schema('ap')`, so
+# the ap schema must be exposed. Production exposes it via the dashboard's
+# "Exposed schemas" setting; locally it has to be declared here or every ap
+# request fails with PGRST106 (schema not exposed).
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public", "ap"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[functions.ap-employee-generator]
+verify_jwt = true
