@@ -635,68 +635,123 @@ export default function AutoPublisher() {
         <>
             <div className="ap-page">
                 <div className="ap-main">
-                    {/* ── Page Header */}
                     <div className="ap-header">
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <Rss size={20} style={{ color: 'var(--color-primary)' }} />
+                        <div className="ap-header-id">
+                            <span className="ap-title-mark"><Rss size={16} /></span>
                             <h1 className="ap-header-title">AutoPublisher</h1>
-                            <span className="ap-badge-live" style={{ background: ingestionEnabled ? 'var(--color-success-bg)' : '#f3f4f6', color: ingestionEnabled ? 'var(--color-success-text)' : '#6b7280' }}>
+                            <span className={`ap-badge-live${ingestionEnabled ? '' : ' off'}`}>
                                 {ingestionEnabled ? 'Motor Ativo' : 'Desativado'}
                             </span>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '12px', padding: '4px 12px', background: '#fff', border: '1px solid #dbdbdb', borderRadius: '20px' }}>
-                                <div onClick={toggleIngestion} style={{ width: '36px', height: '20px', background: ingestionEnabled ? '#0095f6' : '#e5e7eb', borderRadius: '10px', position: 'relative', transition: 'background 0.2s', cursor: 'pointer' }}>
-                                    <div style={{ width: '16px', height: '16px', background: '#fff', borderRadius: '50%', position: 'absolute', top: '2px', left: ingestionEnabled ? '18px' : '2px', transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)', boxShadow: '0 1px 2px rgba(0,0,0,0.2)' }} />
-                                </div>
-                                <span style={{ fontSize: '13px', fontWeight: 600, color: '#262626', cursor: 'pointer' }} onClick={toggleIngestion}>Pausar Ingestão</span>
-                            </div>
                         </div>
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                            <button className="ap-btn-refresh" style={{ background: 'var(--color-primary)', color: '#fff', border: 'none' }} onClick={() => setManualModalOpen(true)}>
-                                <Plus size={14} /> Nova Matéria
-                            </button>
+
+                        <div className="ap-header-actions">
+                            <label
+                                className="ap-ingest"
+                                title={ingestionEnabled ? 'Pausar ingestão automática' : 'Retomar ingestão automática'}
+                            >
+                                <input
+                                    type="checkbox"
+                                    checked={ingestionEnabled}
+                                    onChange={toggleIngestion}
+                                />
+                                <span className="ap-ingest-track" />
+                                Ingestão
+                            </label>
+
                             <button
                                 className="ap-btn-refresh"
-                                style={{ background: isProcessing ? '#f3f4f6' : 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)', color: isProcessing ? '#9ca3af' : '#fff', border: 'none', opacity: isProcessing ? 0.7 : 1, cursor: isProcessing ? 'not-allowed' : 'pointer' }}
+                                onClick={() => {
+                                    fetchCounts()
+                                    fetchItems(tab)
+                                }}
+                            >
+                                <RefreshCcw size={14} />
+                                Atualizar
+                            </button>
+
+                            <button
+                                className="ap-btn-refresh"
                                 onClick={handleForceProcess}
                                 disabled={isProcessing}
                             >
-                                <Zap size={14} className={isProcessing ? 'spin-anim' : ''} />
+                                <Zap
+                                    size={14}
+                                    className={isProcessing ? 'ap-spin-icon' : ''}
+                                />
                                 {isProcessing ? 'Processando...' : 'Processar Tudo'}
                             </button>
-                            <button className="ap-btn-refresh" onClick={() => { fetchCounts(); fetchItems(tab) }}>
-                                <RefreshCcw size={14} /> Atualizar
+
+                            <button
+                                className="ap-btn-refresh primary"
+                                onClick={() => setManualModalOpen(true)}
+                            >
+                                <Plus size={14} />
+                                Nova Matéria
                             </button>
                         </div>
                     </div>
 
-                    {/* ── Tabs com contadores */}
-                    <div className="ap-pipeline">
-                        {TABS.filter(t => ['coletadas', 'pendentes', 'aprovadas', 'publicadas'].includes(t.key)).map(({ key, label }) => (
-                            <button
-                                key={key}
-                                className={`ap-stage${tab === key ? ' active' : ''}`}
-                                onClick={() => setTab(key)}
-                            >
-                                <span className="ap-stage-count">{tabCounts[key] ?? 0}</span>
-                                <span className="ap-stage-label">{label}</span>
-                            </button>
-                        ))}
-                    </div>
+                    <div className="ap-nav">
+                        <div
+                            className="ap-seg"
+                            role="tablist"
+                            aria-label="Estágios do pipeline"
+                        >
+                            <span
+                                className="ap-seg-pill"
+                                style={{
+                                    left: `calc(3px + ${Math.max(
+                                        0,
+                                        ['coletadas', 'pendentes', 'aprovadas', 'publicadas'].indexOf(tab)
+                                    )} * (100% - 6px) / 4)`,
+                                    opacity: ['coletadas', 'pendentes', 'aprovadas', 'publicadas'].includes(tab)
+                                        ? 1
+                                        : 0
+                                }}
+                            />
 
-                    {/* ── Sub tabs (Motor / Configurações) */}
-                    <div className="ap-tabs">
-                        {['coletadas', 'pendentes', 'aprovadas', 'publicadas'].map(key => (
-                            <button key={key} className={`ap-tab${tab === key ? ' active' : ''}`} onClick={() => setTab(key)}>
-                                {TABS.find(t => t.key === key)?.label}
+                            {['coletadas', 'pendentes', 'aprovadas', 'publicadas'].map(key => (
+                                <button
+                                    key={key}
+                                    role="tab"
+                                    aria-selected={tab === key}
+                                    className={`ap-seg-btn${tab === key ? ' active' : ''}`}
+                                    onClick={() => setTab(key)}
+                                >
+                                    {TABS.find(item => item.key === key)?.label}
+                                    <span className="ap-seg-count">
+                                        {tabCounts[key] ?? 0}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="ap-aux-tabs">
+                            <button
+                                className={`ap-aux-tab${tab === 'editorial' ? ' active' : ''}`}
+                                onClick={() => setTab('editorial')}
+                            >
+                                Motor Editorial
                             </button>
-                        ))}
-                        <button className={`ap-tab${tab === 'editorial' ? ' active' : ''}`} onClick={() => setTab('editorial')}>Motor Editorial</button>
-                        <button className={`ap-tab${tab === 'templates' ? ' active' : ''}`} onClick={() => setTab('templates')}>Templates</button>
-                        <button className={`ap-tab${tab === 'settings' ? ' active' : ''}`} onClick={() => setTab('settings')}>Configurações</button>
+
+                            <button
+                                className={`ap-aux-tab${tab === 'templates' ? ' active' : ''}`}
+                                onClick={() => setTab('templates')}
+                            >
+                                Templates
+                            </button>
+
+                            <button
+                                className={`ap-aux-tab${tab === 'settings' ? ' active' : ''}`}
+                                onClick={() => setTab('settings')}
+                            >
+                                Configurações
+                            </button>
+                        </div>
                     </div>
                 </div>
 
-                {/* ── Content */}
+                {/* Content */}
                 {tab === 'editorial' && <EditorialEngine clienteId={clienteId} />}
                 {tab === 'templates' && <AutoPublisherTemplates clienteId={clienteId} />}
                 {tab === 'settings' && <AutoPublisherSettings clienteId={clienteId} clienteError={clienteError} />}
