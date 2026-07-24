@@ -138,6 +138,14 @@ Deno.serve(async (req: Request) => {
           .maybeSingle();
       if (existingCandidateError) throw existingCandidateError;
 
+      const userHeadlineForRotation = typeof rawHeadline === 'string' && rawHeadline.trim() ? rawHeadline.trim() : null;
+      const userTagForRotation = rawTag || rawContextTag ? String(rawTag || rawContextTag).toUpperCase().trim() : null;
+      const userTextForRotation = typeof rawText === 'string' && rawText.trim() ? rawText.trim() : null;
+      let renderSnapshotBase: Record<string, unknown> = {};
+
+      // A committed candidate is the source of truth. Retries intentionally
+      // skip every live catalog/configuration lookup and let the public RPC
+      // compare only the immutable semantic request before returning it.
       if (shouldResolveVisualTitleForCreation(existingCandidate)) {
         try {
           await resolveVisualTitleForCreation(supabase, {
@@ -151,17 +159,18 @@ Deno.serve(async (req: Request) => {
           }
           throw error;
         }
+
+        const { data: control, error: controlError } = await supabase.schema('ap').from('master_render_controls').select('kill_switch').eq('cliente_id', cliente_id).maybeSingle();
+        if (controlError) throw controlError;
+        if (control?.kill_switch) return new Response(JSON.stringify({ error: 'MASTER_V1_DISABLED', message: 'master_v1 esta bloqueado para este cliente' }), { status: 409, headers: corsHeaders });
+        const config = await getActiveMasterConfig(supabase, cliente_id, content_type, sponsorRotationSet);
+        if (!config?.master_template_uuid || !hasLayerName(config.layer_map, 'visual_title')) return new Response(JSON.stringify({ error: 'MASTER_V1_DISABLED', message: 'Configuracao master_v1 incompleta ou desativada' }), { status: 409, headers: corsHeaders });
+        renderSnapshotBase = {
+          master_config: { id: config.id, master_template_uuid: config.master_template_uuid, enabled: config.enabled },
+          layer_map: config.layer_map,
+        };
       }
 
-      const { data: control, error: controlError } = await supabase.schema('ap').from('master_render_controls').select('kill_switch').eq('cliente_id', cliente_id).maybeSingle();
-      if (controlError) throw controlError;
-      if (control?.kill_switch) return new Response(JSON.stringify({ error: 'MASTER_V1_DISABLED', message: 'master_v1 esta bloqueado para este cliente' }), { status: 409, headers: corsHeaders });
-      const config = await getActiveMasterConfig(supabase, cliente_id, content_type, sponsorRotationSet);
-      if (!config?.master_template_uuid || !hasLayerName(config.layer_map, 'visual_title')) return new Response(JSON.stringify({ error: 'MASTER_V1_DISABLED', message: 'Configuracao master_v1 incompleta ou desativada' }), { status: 409, headers: corsHeaders });
-
-      const userHeadlineForRotation = typeof rawHeadline === 'string' && rawHeadline.trim() ? rawHeadline.trim() : null;
-      const userTagForRotation = rawTag || rawContextTag ? String(rawTag || rawContextTag).toUpperCase().trim() : null;
-      const userTextForRotation = typeof rawText === 'string' && rawText.trim() ? rawText.trim() : null;
       const { data: rpcResult, error: rotationError } = await supabase.schema('ap').rpc('create_candidate_with_sponsors', {
         p_cliente_id: cliente_id,
         p_idempotency_key: idempotency_key,
@@ -176,10 +185,7 @@ Deno.serve(async (req: Request) => {
         p_auth_user_id: authenticatedUserId,
         p_visual_title_id: visual_title_id,
         p_render_contract_version: 'master_v1',
-        p_render_snapshot_base: {
-          master_config: { id: config.id, master_template_uuid: config.master_template_uuid, enabled: config.enabled },
-          layer_map: config.layer_map,
-        },
+        p_render_snapshot_base: renderSnapshotBase,
       });
       if (rotationError) throw rotationError;
       const news = rpcResult?.candidate_news;

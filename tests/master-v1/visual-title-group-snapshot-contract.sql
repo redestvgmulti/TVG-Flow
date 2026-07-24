@@ -388,7 +388,10 @@ BEGIN
         NULL,
         '50000000-0000-4000-8000-000000000001',
         'master_v1',
-        '{}'::jsonb
+        '{
+          "master_config":{"master_template_uuid":"master-feed-original"},
+          "layer_map":{"headline":"headline_news"}
+        }'::jsonb
     );
     v_snapshot := v_first -> 'render_snapshot';
 
@@ -403,6 +406,13 @@ BEGIN
         asset_version = 'v2',
         sha256 = repeat('e', 64)
     WHERE id = '50000000-0000-4000-8000-000000000001';
+
+    UPDATE ap.render_sponsors
+    SET ativo = false,
+        asset_path = 'sponsors/a/sponsor-a/new-hash.png',
+        asset_version = 'v2',
+        sha256 = repeat('f', 64)
+    WHERE id = '20000000-0000-4000-8000-000000000001';
 
     SELECT uso_total
     INTO v_usage
@@ -435,7 +445,10 @@ BEGIN
         NULL,
         '50000000-0000-4000-8000-000000000001',
         'master_v1',
-        '{}'::jsonb
+        '{
+          "master_config":{"master_template_uuid":"master-feed-changed"},
+          "layer_map":{"headline":"changed-live-layer"}
+        }'::jsonb
     );
 
     PERFORM pg_temp.assert_true(
@@ -455,6 +468,21 @@ BEGIN
         v_retry #>> '{render_snapshot,visual_title,path}'
             = 'visual-titles/a/goiatuba/hash.png',
         'retry used current asset path'
+    );
+    PERFORM pg_temp.assert_true(
+        v_retry #>> '{render_snapshot,master_config,master_template_uuid}'
+            = 'master-feed-original',
+        'retry used current master UUID'
+    );
+    PERFORM pg_temp.assert_true(
+        v_retry #>> '{render_snapshot,layer_map,headline}'
+            = 'headline_news',
+        'retry used current layer map'
+    );
+    PERFORM pg_temp.assert_true(
+        v_retry #>> '{render_snapshot,sponsor_selection,items,0,path}'
+            = 'sponsors/a/sponsor-a/hash.png',
+        'retry used current sponsor asset'
     );
     PERFORM pg_temp.assert_true(
         (SELECT uso_total FROM ap.templates
@@ -477,6 +505,40 @@ BEGIN
            AND template_set = 'default')
             = v_sponsor_cursor,
         'retry advanced sponsor cursor'
+    );
+
+    BEGIN
+        PERFORM ap.create_candidate_with_sponsors(
+            'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+            '60000000-0000-4000-8000-000000000005',
+            'feed',
+            'default',
+            2::smallint,
+            'Retry imutável',
+            'Conteúdo',
+            NULL,
+            NULL,
+            'Cidades',
+            NULL,
+            '50000000-0000-4000-8000-000000000001',
+            'master_v1',
+            '{}'::jsonb
+        );
+        RAISE EXCEPTION 'expected semantic payload mismatch';
+    EXCEPTION
+        WHEN SQLSTATE '22023' THEN
+            IF SQLERRM <> 'IDEMPOTENCY_KEY_PAYLOAD_MISMATCH' THEN
+                RAISE;
+            END IF;
+    END;
+
+    PERFORM pg_temp.assert_true(
+        v_snapshot #>> '{idempotency,request_fingerprint}' IS NOT NULL,
+        'new candidate did not persist a request fingerprint'
+    );
+    PERFORM pg_temp.assert_true(
+        v_snapshot #> '{idempotency,semantic_request,master_config}' IS NULL,
+        'semantic request contains live master configuration'
     );
 
     BEGIN

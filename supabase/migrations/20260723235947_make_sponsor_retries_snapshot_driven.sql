@@ -1,0 +1,304 @@
+-- Idempotent retries must reproduce the committed candidate and snapshot.
+-- Live master/catalog state is consulted only for a new idempotency key.
+
+DO $migration$
+BEGIN
+    IF to_regprocedure(
+        'ap.create_candidate_with_sponsors_group_v1(uuid,uuid,text,text,smallint,text,text,text,text,text,uuid,uuid,text,jsonb)'
+    ) IS NULL THEN
+        ALTER FUNCTION ap.create_candidate_with_sponsors(
+            uuid,
+            uuid,
+            text,
+            text,
+            smallint,
+            text,
+            text,
+            text,
+            text,
+            text,
+            uuid,
+            uuid,
+            text,
+            jsonb
+        ) RENAME TO create_candidate_with_sponsors_group_v1;
+    END IF;
+END;
+$migration$;
+
+CREATE OR REPLACE FUNCTION ap.create_candidate_with_sponsors(
+    p_cliente_id uuid,
+    p_idempotency_key uuid,
+    p_content_type text,
+    p_template_set text,
+    p_sponsor_count smallint,
+    p_titulo text,
+    p_conteudo text DEFAULT NULL,
+    p_url_original text DEFAULT NULL,
+    p_imagem_url text DEFAULT NULL,
+    p_context_tag text DEFAULT NULL,
+    p_auth_user_id uuid DEFAULT NULL,
+    p_visual_title_id uuid DEFAULT NULL,
+    p_render_contract_version text DEFAULT 'legacy',
+    p_render_snapshot_base jsonb DEFAULT '{}'::jsonb
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog
+AS $function$
+DECLARE
+    v_jwt_role text := COALESCE(auth.jwt() ->> 'role', '');
+    v_content_type text := lower(btrim(p_content_type));
+    v_template_set text := lower(btrim(p_template_set));
+    v_existing ap.candidate_news%ROWTYPE;
+    v_existing_request jsonb;
+    v_existing_semantic jsonb;
+    v_current_semantic jsonb;
+    v_result jsonb;
+    v_snapshot jsonb;
+    v_candidate jsonb;
+    v_candidate_id uuid;
+BEGIN
+    IF p_cliente_id IS NULL OR NOT EXISTS (
+        SELECT 1
+        FROM public.clientes c
+        WHERE c.id = p_cliente_id
+    ) THEN
+        RAISE EXCEPTION 'CLIENTE_NOT_FOUND'
+            USING ERRCODE = '23503';
+    END IF;
+
+    IF v_jwt_role <> 'service_role'
+       AND NOT EXISTS (
+           SELECT 1
+           FROM ap.get_user_cliente_ids() AS allowed(cliente_id)
+           WHERE allowed.cliente_id = p_cliente_id
+       ) THEN
+        RAISE EXCEPTION 'CLIENT_ACCESS_DENIED'
+            USING ERRCODE = '42501';
+    END IF;
+
+    IF v_jwt_role <> 'service_role'
+       AND p_auth_user_id IS NOT NULL
+       AND p_auth_user_id IS DISTINCT FROM auth.uid() THEN
+        RAISE EXCEPTION 'AUTH_USER_MISMATCH'
+            USING ERRCODE = '42501';
+    END IF;
+
+    IF p_idempotency_key IS NULL THEN
+        RAISE EXCEPTION 'IDEMPOTENCY_KEY_REQUIRED'
+            USING ERRCODE = '22023';
+    END IF;
+
+    v_current_semantic := jsonb_build_object(
+        'cliente_id', p_cliente_id,
+        'content_type', v_content_type,
+        'template_set', v_template_set,
+        'sponsor_count', p_sponsor_count,
+        'titulo', btrim(p_titulo),
+        'conteudo', p_conteudo,
+        'url_original', p_url_original,
+        'imagem_url', p_imagem_url,
+        'context_tag', p_context_tag,
+        'visual_title_id', p_visual_title_id,
+        'render_contract_version', p_render_contract_version
+    );
+
+    -- Serialize before the first read. No catalog, master configuration or
+    -- rotation object is touched on the retry branch.
+    PERFORM pg_advisory_xact_lock(
+        hashtextextended(
+            p_cliente_id::text || ':' || p_idempotency_key::text,
+            0
+        )
+    );
+
+    SELECT *
+    INTO v_existing
+    FROM ap.candidate_news n
+    WHERE n.cliente_id = p_cliente_id
+      AND n.idempotency_key = p_idempotency_key
+    FOR UPDATE;
+
+    IF FOUND THEN
+        v_existing_semantic := v_existing.render_snapshot
+            #> ARRAY['idempotency', 'semantic_request'];
+
+        -- Compatibility for candidates created before this convergence
+        -- migration. Explicitly ignore live master configuration and the
+        -- original operator identity when deriving the semantic request.
+        IF v_existing_semantic IS NULL THEN
+            v_existing_request := v_existing.render_snapshot
+                #> ARRAY['idempotency', 'request'];
+
+            IF v_existing_request IS NULL THEN
+                RAISE EXCEPTION 'IDEMPOTENCY_KEY_PAYLOAD_MISMATCH'
+                    USING ERRCODE = '22023';
+            END IF;
+
+            v_existing_semantic := jsonb_build_object(
+                'cliente_id', p_cliente_id,
+                'content_type', v_existing_request -> 'content_type',
+                'template_set', v_existing_request -> 'template_set',
+                'sponsor_count', v_existing_request -> 'sponsor_count',
+                'titulo', v_existing_request -> 'titulo',
+                'conteudo', v_existing_request -> 'conteudo',
+                'url_original', v_existing_request -> 'url_original',
+                'imagem_url', v_existing_request -> 'imagem_url',
+                'context_tag', v_existing_request -> 'context_tag',
+                'visual_title_id', v_existing_request -> 'visual_title_id',
+                'render_contract_version',
+                    v_existing_request -> 'render_contract_version'
+            );
+        END IF;
+
+        IF v_existing_semantic IS DISTINCT FROM v_current_semantic THEN
+            RAISE EXCEPTION 'IDEMPOTENCY_KEY_PAYLOAD_MISMATCH'
+                USING ERRCODE = '22023';
+        END IF;
+
+        RETURN jsonb_build_object(
+            'reused', true,
+            'candidate_news', to_jsonb(v_existing),
+            'template', v_existing.render_snapshot -> 'template',
+            'sponsor_selection',
+                v_existing.render_snapshot -> 'sponsor_selection',
+            'render_snapshot', v_existing.render_snapshot
+        );
+    END IF;
+
+    -- New requests retain all G4 validation and transactional rotation in the
+    -- frozen internal wrapper.
+    v_result := ap.create_candidate_with_sponsors_group_v1(
+        p_cliente_id,
+        p_idempotency_key,
+        p_content_type,
+        p_template_set,
+        p_sponsor_count,
+        p_titulo,
+        p_conteudo,
+        p_url_original,
+        p_imagem_url,
+        p_context_tag,
+        p_auth_user_id,
+        p_visual_title_id,
+        p_render_contract_version,
+        p_render_snapshot_base
+    );
+
+    v_snapshot := v_result -> 'render_snapshot';
+    v_snapshot := jsonb_set(
+        v_snapshot,
+        ARRAY['idempotency', 'semantic_request'],
+        v_current_semantic,
+        true
+    );
+    v_snapshot := jsonb_set(
+        v_snapshot,
+        ARRAY['idempotency', 'request_fingerprint'],
+        to_jsonb(md5(v_current_semantic::text)),
+        true
+    );
+    v_candidate_id := (v_result #>> ARRAY['candidate_news', 'id'])::uuid;
+
+    UPDATE ap.candidate_news n
+    SET render_snapshot = v_snapshot
+    WHERE n.id = v_candidate_id
+      AND n.cliente_id = p_cliente_id
+    RETURNING to_jsonb(n)
+    INTO v_candidate;
+
+    IF v_candidate IS NULL THEN
+        RAISE EXCEPTION 'CANDIDATE_SNAPSHOT_UPDATE_FAILED'
+            USING ERRCODE = 'P0001';
+    END IF;
+
+    v_result := jsonb_set(
+        v_result,
+        ARRAY['render_snapshot'],
+        v_snapshot,
+        true
+    );
+    v_result := jsonb_set(
+        v_result,
+        ARRAY['candidate_news'],
+        v_candidate,
+        true
+    );
+
+    RETURN v_result;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION ap.create_candidate_with_sponsors_group_v1(
+    uuid,
+    uuid,
+    text,
+    text,
+    smallint,
+    text,
+    text,
+    text,
+    text,
+    text,
+    uuid,
+    uuid,
+    text,
+    jsonb
+) FROM PUBLIC, anon, authenticated, service_role;
+
+REVOKE ALL ON FUNCTION ap.create_candidate_with_sponsors(
+    uuid,
+    uuid,
+    text,
+    text,
+    smallint,
+    text,
+    text,
+    text,
+    text,
+    text,
+    uuid,
+    uuid,
+    text,
+    jsonb
+) FROM PUBLIC, anon;
+
+GRANT EXECUTE ON FUNCTION ap.create_candidate_with_sponsors(
+    uuid,
+    uuid,
+    text,
+    text,
+    smallint,
+    text,
+    text,
+    text,
+    text,
+    text,
+    uuid,
+    uuid,
+    text,
+    jsonb
+) TO authenticated, service_role;
+
+COMMENT ON FUNCTION ap.create_candidate_with_sponsors(
+    uuid,
+    uuid,
+    text,
+    text,
+    smallint,
+    text,
+    text,
+    text,
+    text,
+    text,
+    uuid,
+    uuid,
+    text,
+    jsonb
+) IS
+    'Creates sponsor_rotation_v1 candidates; retries compare only the '
+    'immutable semantic request and return the committed snapshot.';
+
+NOTIFY pgrst, 'reload schema';
