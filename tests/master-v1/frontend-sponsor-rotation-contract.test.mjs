@@ -31,15 +31,22 @@ test('sponsor administration uses the isolated catalog and campaign-format membe
   assert.match(settings, /from\('render_sponsors'\)/)
   assert.match(settings, /from\('render_sponsor_scope_memberships'\)/)
   assert.match(settings, /kind: 'sponsors'/)
-  assert.match(settings, /onConflict: 'cliente_id,template_set,content_type,sponsor_id'/)
+  // The upsert target is unchanged; only tolerate the formatter wrapping the
+  // onConflict key and its value onto separate lines.
+  assert.match(settings, /onConflict:\s*'cliente_id,template_set,content_type,sponsor_id'/)
   assert.doesNotMatch(settings, /template_render_profiles/)
   assert.doesNotMatch(settings, /from\('templates'\)/)
 })
 
-test('diagnostic keeps sponsor slots independent and omits an absent slot', async () => {
+test('settings page hides the technical master controls from operators', async () => {
+  // fdd927c intentionally removed the raw layer-map editor and the logical
+  // sponsor-slot diagnostic from the operator settings page. The sponsor-slot
+  // independence invariant itself now lives in the render pipeline and is
+  // certified by renderer-snapshot-contract.test.mjs / generator-sponsor-rotation,
+  // so the operator UI must no longer expose these technical controls.
   const settings = await source('src/pages/admin/AutoPublisherMasterV1Settings.jsx')
-  assert.match(settings, /if \(first\?\.asset_bucket && first\?\.asset_path && layerMap\.sponsor_1\)/)
-  assert.match(settings, /if \(second\?\.asset_bucket && second\?\.asset_path && layerMap\.sponsor_2\)/)
-  assert.match(settings, /item\.id !== previewSponsor1/)
-  assert.match(settings, /item\.id !== previewSponsor2/)
+  assert.doesNotMatch(settings, /layerMap/)
+  assert.doesNotMatch(settings, /previewSponsor[12]/)
+  assert.doesNotMatch(settings, /'diagnostic'/)
+  assert.doesNotMatch(settings, /Layer map/)
 })
