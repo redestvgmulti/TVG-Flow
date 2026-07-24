@@ -84,7 +84,6 @@ export default function AutoPublisher() {
     const [manualFormErrors, setManualFormErrors] = useState({})
     const [isSubmittingManual, setIsSubmittingManual] = useState(false)
     const [selectedFile, setSelectedFile] = useState(null)
-    const [isDragging, setIsDragging] = useState(false)
 
     // Edit Item State
     const [editingItem, setEditingItem] = useState(null)
@@ -328,7 +327,7 @@ export default function AutoPublisher() {
             const { error } = await supabase.schema('ap').from('candidate_news').update({ status: 'rejected' }).eq('id', item.id)
             if (error) throw error
             fetchCounts()
-        } catch (err) {
+        } catch {
             toast.error("Falha ao excluir matéria.")
             fetchItems(tab) // revert/refresh on error
         }
@@ -342,7 +341,7 @@ export default function AutoPublisher() {
             })
             if (error) throw error
             toast.success("Roteiro de Estúdio gerado com sucesso!")
-        } catch (err) {
+        } catch {
             toast.error("Falha ao gerar roteiro do estúdio.")
         }
         setIsProcessing(false)
@@ -391,7 +390,7 @@ export default function AutoPublisher() {
             // will pick it up automatically. Do NOT invoke render directly:
             // that would bypass idempotency guards and cause duplicate renders.
             toast.success("Aprovado! Arte entrará na fila de renderização automaticamente.")
-        } catch (err) {
+        } catch {
             toast.error("Falha ao aprovar matéria.")
         }
         setIsProcessing(false)
@@ -446,7 +445,7 @@ export default function AutoPublisher() {
             setEditModalOpen(false)
             setEditingItem(null)
             fetchCounts()
-        } catch (err) {
+        } catch {
             toast.error("Erro ao salvar edição.")
         }
         setIsSavingEdit(false)
@@ -472,7 +471,7 @@ export default function AutoPublisher() {
             // items in 'pending_render' with idempotency guarantees.
             toast.success("Pipeline iniciado. A renderização ocorrerá automaticamente.");
             fetchCounts(); fetchItems(tab);
-        } catch (err) {
+        } catch {
             toast.error("Erro ao processar.");
         } finally {
             setIsProcessing(false);
@@ -581,7 +580,7 @@ export default function AutoPublisher() {
 
                 const { data: pubData } = supabase.storage.from('ap-images').getPublicUrl(`admin_uploads/${fileName}`)
                 finalImageUrl = pubData.publicUrl
-            } catch (err) {
+            } catch {
                 toast.error("Erro ao subir imagem.")
             }
         }
@@ -619,7 +618,7 @@ export default function AutoPublisher() {
         }
 
         try {
-            const { data, error } = await supabase.functions.invoke('ap-employee-generator', { body: payload })
+            const { error } = await supabase.functions.invoke('ap-employee-generator', { body: payload })
             if (error) throw error
 
             toast.success("Matéria enviada para processamento!")
@@ -1097,7 +1096,7 @@ function PendenteCard({ item, onReject, onStudio, onApproveSelected, onEdit, isP
 // ──────────────────────────────────────────────────────────
 // AprovadaCard — Matérias prontas, aguardam publicação manual
 // ──────────────────────────────────────────────────────────
-function AprovadaCard({ item, onPublish, onReject, onEdit, isProcessing }) {
+function AprovadaCard({ item, onPublish, onReject, isProcessing }) {
     const [copied, setCopied] = useState(false)
     const [isExpanded, setIsExpanded] = useState(false)
 
@@ -1127,7 +1126,7 @@ function AprovadaCard({ item, onPublish, onReject, onEdit, isProcessing }) {
             else if (blob.type === 'video/mp4') ext = '.mp4'
             else if (blob.type === 'image/webp') ext = '.webp'
             else {
-                const match = url.match(/\.([a-z0-9]+)(?:[\?#]|$)/i);
+                const match = url.match(/\.([a-z0-9]+)(?:[?#]|$)/i);
                 if (match) ext = `.${match[1].toLowerCase()}`;
             }
 
@@ -1139,7 +1138,7 @@ function AprovadaCard({ item, onPublish, onReject, onEdit, isProcessing }) {
             a.click()
             document.body.removeChild(a)
             setTimeout(() => URL.revokeObjectURL(blobUrl), 1000)
-        } catch (err) {
+        } catch {
             if (url.includes('/storage/v1/object/')) {
                 toast.success('Forçando download direto...')
                 const separator = url.includes('?') ? '&' : '?';
