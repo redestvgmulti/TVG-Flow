@@ -64,10 +64,10 @@ const tenantAuthorizationErrorResponse = (error: TenantAuthorizationError) =>
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     },
   );
-async function getActiveMasterConfig(supabase: any, clienteId: string, contentType: string, templateSet: string) {
-  const { data, error } = await supabase.schema('ap').from('master_render_configs').select('*').eq('cliente_id', clienteId).eq('content_type', contentType).eq('enabled', true).or('template_set.eq.' + templateSet + ',template_set.is.null');
+async function getActiveMasterConfig(supabase: any, clienteId: string, contentType: string) {
+  const { data, error } = await supabase.schema('ap').from('master_render_configs').select('*').eq('cliente_id', clienteId).eq('content_type', contentType).eq('enabled', true).maybeSingle();
   if (error) throw error;
-  return (data || []).sort((a: any, b: any) => Number(Boolean(b.template_set)) - Number(Boolean(a.template_set)))[0] || null;
+  return data || null;
 }
 async function claimEditorialProcessing(supabase: any, newsId: string) {
   const { data, error } = await supabase.schema('ap').from('candidate_news').update({ processing_started_at: new Date().toISOString() }).eq('id', newsId).eq('status', 'processing').is('processing_started_at', null).select('id').maybeSingle();
@@ -163,7 +163,7 @@ Deno.serve(async (req: Request) => {
         const { data: control, error: controlError } = await supabase.schema('ap').from('master_render_controls').select('kill_switch').eq('cliente_id', cliente_id).maybeSingle();
         if (controlError) throw controlError;
         if (control?.kill_switch) return new Response(JSON.stringify({ error: 'MASTER_V1_DISABLED', message: 'master_v1 esta bloqueado para este cliente' }), { status: 409, headers: corsHeaders });
-        const config = await getActiveMasterConfig(supabase, cliente_id, content_type, sponsorRotationSet);
+        const config = await getActiveMasterConfig(supabase, cliente_id, content_type);
         if (!config?.master_template_uuid || !hasLayerName(config.layer_map, 'visual_title')) return new Response(JSON.stringify({ error: 'MASTER_V1_DISABLED', message: 'Configuracao master_v1 incompleta ou desativada' }), { status: 409, headers: corsHeaders });
         renderSnapshotBase = {
           master_config: { id: config.id, master_template_uuid: config.master_template_uuid, enabled: config.enabled },
@@ -243,8 +243,7 @@ Deno.serve(async (req: Request) => {
       }
     }
     const { data: control } = await supabase.schema("ap").from("master_render_controls").select("kill_switch").eq("cliente_id", cliente_id).maybeSingle();
-    const { data: configs } = await supabase.schema("ap").from("master_render_configs").select("*").eq("cliente_id", cliente_id).eq("content_type", content_type).eq("enabled", true).or(`template_set.eq.${resolved.template_set || requestedSet},template_set.is.null`);
-    const config = (configs || []).sort((a: any, b: any) => Number(Boolean(b.template_set)) - Number(Boolean(a.template_set)))[0];
+    const { data: config } = await supabase.schema("ap").from("master_render_configs").select("*").eq("cliente_id", cliente_id).eq("content_type", content_type).eq("enabled", true).maybeSingle();
     let profile: any = null; if (resolved.id) { const { data } = await supabase.schema("ap").from("template_render_profiles").select("*").eq("template_id", resolved.id).eq("ativo", true).maybeSingle(); profile = data; }
     const canMaster = Boolean(!control?.kill_switch && config?.master_template_uuid && config?.layer_map && visualTitle && resolved.id && profile);
     const fallbackReason = canMaster ? null : (!config?.enabled ? "master_disabled" : control?.kill_switch ? "kill_switch" : !visualTitle ? "visual_title_missing" : !resolved.id ? "template_row_unresolved" : !profile ? "profile_missing" : "master_config_invalid");
