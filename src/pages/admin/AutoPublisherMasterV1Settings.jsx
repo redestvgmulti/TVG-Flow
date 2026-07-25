@@ -5,6 +5,7 @@ import {
   uploadImmutablePng,
 } from '../../services/masterV1Assets'
 import VisualTitlesManager from '../../components/editorial/VisualTitlesManager'
+import MasterRenderConfig from '../../components/editorial/MasterRenderConfig'
 
 const EMPTY_SPONSOR = {
   id: null,
@@ -25,6 +26,7 @@ const EMPTY_MEMBERSHIP = {
 const TABS = [
   ['titles', 'Selos da matéria'],
   ['sponsors', 'Patrocinadores'],
+  ['rendering', 'Renderização'],
 ]
 
 function slugify(value) {
@@ -509,6 +511,10 @@ export default function AutoPublisherMasterV1Settings({
             clienteId={clienteId}
             onChanged={load}
           />
+        )}
+
+        {tab === 'rendering' && (
+          <MasterRenderConfig clienteId={clienteId} />
         )}
 
         {tab === 'sponsors' && (
