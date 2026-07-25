@@ -64,8 +64,17 @@ function App() {
     
     const bc = new BroadcastChannel('flowos-pwa-sync')
     let refreshing = false
-    
+
+    // On the very first load there is no SW controlling the page. Because the
+    // service worker uses skipWaiting + clientsClaim, it activates and claims the
+    // page right after render, firing `controllerchange` even though nothing was
+    // updated. Reloading then throws the user out mid-interaction (e.g. while
+    // typing login credentials). Only reload on a genuine update — i.e. when a
+    // controller already existed when this listener was installed.
+    const hadController = !!navigator.serviceWorker.controller
+
     const handleControllerChange = () => {
+      if (!hadController) return
       if (refreshing) return
       refreshing = true
       bc.postMessage({ type: 'RELOAD_REQUESTED' })
