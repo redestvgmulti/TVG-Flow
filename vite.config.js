@@ -125,7 +125,12 @@ export default defineConfig({
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024 // 5MB limit for precaching
       },
       devOptions: {
-        enabled: true, // Enabled for testing and consistency
+        // Keep the service worker OFF during `vite dev`. With skipWaiting +
+        // clientsClaim it claimed the page on first load and fired
+        // controllerchange -> reload (the login double-reload), and it also
+        // served a stale cached bundle. The SW still ships in production builds;
+        // test PWA behavior with `vite preview` on a build.
+        enabled: false,
         type: 'module'
       }
     }),
