@@ -17,6 +17,7 @@ CONTRACTS=(
   visual-title-groups-contract.sql
   autopublisher-e2e.sql
   tarefas-rls-equivalence.sql
+  master-render-config.sql
 )
 
 fail=0
