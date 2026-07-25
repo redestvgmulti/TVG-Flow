@@ -12,6 +12,7 @@ import EditorialEngine from '../../features/editorial/EditorialEngine'
 import { SkeletonCard, SkeletonTable } from '../../components/Skeleton'
 import { toast } from 'sonner'
 import ArticleForm from '../../components/editorial/ArticleForm'
+import { isMasterV1Available } from '../../services/masterV1Availability'
 import { resolveOperationalClienteId } from '../../services/visualTitleGroups'
 import { loadVisualTitleCatalog } from '../../services/visualTitleCatalog'
 
@@ -267,12 +268,16 @@ export default function AutoPublisher() {
     }, [clienteId, isManualModalOpen])
 
     const masterConfig = useMemo(() => {
-        if (masterRuntime.killSwitch) return null
-        const requestedSet = formData.template_set || 'default'
-        const candidates = masterRuntime.configs.filter(config => config.content_type === formData.content_type && config.master_template_uuid && config.layer_map?.visual_title)
-        return candidates.find(config => config.template_set === requestedSet) || candidates.find(config => !config.template_set) || null
-    }, [formData.content_type, formData.template_set, masterRuntime])
-    const sponsorRotationEnabled = Boolean(masterConfig)
+        // One master config per (cliente, content_type). template_set is a
+        // deprecated compatibility field and no longer selects the config.
+        return masterRuntime.configs.find(config => config.content_type === formData.content_type) || null
+    }, [formData.content_type, masterRuntime])
+    // A row existing is not enough: the config must be enabled, complete and the
+    // kill switch off (isMasterV1Available). Otherwise the legacy path is used.
+    const sponsorRotationEnabled = useMemo(
+        () => isMasterV1Available(masterConfig, { kill_switch: masterRuntime.killSwitch }),
+        [masterConfig, masterRuntime.killSwitch],
+    )
 
     useEffect(() => {
         if (!isManualModalOpen) {

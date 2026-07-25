@@ -19,7 +19,9 @@ test('frontend sends an idempotent sponsor request only after a valid enabled ma
   const page = await source('src/pages/admin/AutoPublisher.jsx')
   assert.match(page, /master_render_controls/)
   assert.match(page, /master_render_configs/)
-  assert.match(page, /const sponsorRotationEnabled = Boolean\(masterConfig\)/)
+  // Availability is decided by isMasterV1Available (enabled + complete + no kill
+  // switch), not by a bare row existence check.
+  assert.match(page, /sponsorRotationEnabled = useMemo\([\s\S]*isMasterV1Available\(/)
   assert.match(page, /payload\.sponsor_count = Number\(formData\.sponsor_count \?\? 0\)/)
   assert.match(page, /payload\.idempotency_key = idempotencyKey/)
   assert.match(page, /payload\.placid_template_uuid = null/)
