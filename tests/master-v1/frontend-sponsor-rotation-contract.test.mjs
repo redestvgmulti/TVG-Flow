@@ -5,50 +5,49 @@ import test from 'node:test'
 const root = new URL('../../', import.meta.url)
 async function source(path) { return readFile(new URL(path, root), 'utf8') }
 
-test('manual form exposes exactly zero, one and two sponsor choices only for an enabled master contract', async () => {
+test('manual form offers the publication vehicle (not a sponsor-count picker) when the master rotation is enabled', async () => {
   const form = await source('src/components/editorial/ArticleForm.jsx')
-  assert.match(form, /sponsorRotationEnabled = false/)
-  assert.match(form, /Quantidade de patrocinadores/)
-  assert.match(form, /option value="0">Nenhum/)
-  assert.match(form, /option value="1">1 patrocinador/)
-  assert.match(form, /option value="2">2 patrocinadores/)
-  assert.match(form, /!sponsorRotationEnabled && formData\.template_set/)
+  // The vehicle selector replaces the old "Campanha Visual"/template picker.
+  assert.match(form, /Veículo de publicação/)
+  assert.match(form, /formData\.veiculo/)
+  assert.match(form, /availableVehicles\.map/)
+  // The operator NEVER picks the sponsor count: that UI is gone.
+  assert.doesNotMatch(form, /Quantidade de patrocinadores/)
+  assert.doesNotMatch(form, /formData\.sponsor_count/)
 })
 
-test('frontend sends an idempotent sponsor request only after a valid enabled master config exists', async () => {
+test('frontend sends the vehicle (never a sponsor_count) with an idempotency key when the rotation is enabled', async () => {
   const page = await source('src/pages/admin/AutoPublisher.jsx')
   assert.match(page, /master_render_controls/)
   assert.match(page, /master_render_configs/)
-  // Availability is decided by isMasterV1Available (enabled + complete + no kill
-  // switch), not by a bare row existence check.
-  assert.match(page, /sponsorRotationEnabled = useMemo\([\s\S]*isMasterV1Available\(/)
-  assert.match(page, /payload\.sponsor_count = Number\(formData\.sponsor_count \?\? 0\)/)
+  // Availability is decided by which vehicles are enabled/complete for the format.
+  assert.match(page, /availableVehicles\s*=\s*useMemo\([\s\S]*availableVehiclesForFormat\(/)
+  assert.match(page, /sponsorRotationEnabled\s*=\s*availableVehicles\.length\s*>\s*0/)
+  // The payload carries the vehicle + idempotency key, and no sponsor_count.
+  assert.match(page, /payload\.veiculo = formData\.veiculo/)
   assert.match(page, /payload\.idempotency_key = idempotencyKey/)
   assert.match(page, /payload\.placid_template_uuid = null/)
-  assert.match(page, /!sponsorRotationEnabled && formData\.template_set === 'individuais'/)
+  assert.doesNotMatch(page, /payload\.sponsor_count/)
 })
 
-test('sponsor administration uses the isolated catalog and campaign-format memberships, not legacy template profiles', async () => {
+test('sponsor administration uses the isolated catalog and vehicle-scoped memberships, not legacy template profiles', async () => {
   const settings = await source('src/pages/admin/AutoPublisherMasterV1Settings.jsx')
   assert.match(settings, /from\('render_sponsors'\)/)
   assert.match(settings, /from\('render_sponsor_scope_memberships'\)/)
   assert.match(settings, /kind: 'sponsors'/)
-  // The upsert target is unchanged; only tolerate the formatter wrapping the
-  // onConflict key and its value onto separate lines.
+  // Membership scope is the publication vehicle (stored as template_set).
+  assert.match(settings, /PUBLICATION_VEHICLES/)
   assert.match(settings, /onConflict:\s*'cliente_id,template_set,content_type,sponsor_id'/)
   assert.doesNotMatch(settings, /template_render_profiles/)
   assert.doesNotMatch(settings, /from\('templates'\)/)
 })
 
-test('settings page hides the technical master controls from operators', async () => {
-  // fdd927c intentionally removed the raw layer-map editor and the logical
-  // sponsor-slot diagnostic from the operator settings page. The sponsor-slot
-  // independence invariant itself now lives in the render pipeline and is
-  // certified by renderer-snapshot-contract.test.mjs / generator-sponsor-rotation,
-  // so the operator UI must no longer expose these technical controls.
+test('the operator settings page exposes no technical master controls (no render tab, layer map or UUID editor)', async () => {
   const settings = await source('src/pages/admin/AutoPublisherMasterV1Settings.jsx')
   assert.doesNotMatch(settings, /layerMap/)
+  assert.doesNotMatch(settings, /MasterRenderConfig/)
+  assert.doesNotMatch(settings, /'rendering'/)
+  assert.doesNotMatch(settings, /Renderização/)
   assert.doesNotMatch(settings, /previewSponsor[12]/)
-  assert.doesNotMatch(settings, /'diagnostic'/)
   assert.doesNotMatch(settings, /Layer map/)
 })

@@ -26,6 +26,7 @@ export default function ArticleForm({
     // []    → loaded from DB, bank has no non-default campaigns
     // [...]  → loaded from DB, render these
     availableCampaigns = null,
+    availableVehicles = [],
     visualTitleGroups = [],
     visualTitlesLoading = false,
     visualTitlesError = '',
@@ -42,7 +43,9 @@ export default function ArticleForm({
     function selectContentType(contentType) {
         const retainedId = retainCompatibleVisualTitleId(visualTitleGroups, formData.visual_title_id, contentType);
         const isCompatible = !formData.visual_title_id || retainedId === formData.visual_title_id;
-        setFormData({ ...formData, content_type: contentType, visual_title_id: retainedId });
+        // The vehicle set differs per format; drop it so the operator re-picks a
+        // vehicle that actually exists for the new format.
+        setFormData({ ...formData, content_type: contentType, visual_title_id: retainedId, veiculo: '' });
         setVisualTitleFormatNotice(isCompatible ? '' : 'O selo selecionado n\u00e3o est\u00e1 dispon\u00edvel para este formato.');
     }
 
@@ -61,38 +64,56 @@ export default function ArticleForm({
                 ))}
             </div>
 
-            {/* Part 4 - Template Selector */}
-            <div style={{ display: 'flex', gap: '16px', background: '#f8fafc', padding: '16px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <label style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>Campanha Visual</label>
+            {/* Veículo de publicação (master) OU seleção legada de campanha/template */}
+            {sponsorRotationEnabled ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: '#f8fafc', padding: '16px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
+                    <label style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>Veículo de publicação <span style={{ color: '#ef4444' }}>*</span></label>
                     <select
-                        value={formData.template_set || 'default'}
-                        onChange={e => setFormData({ ...formData, template_set: e.target.value, placid_template_uuid: null })}
-                        style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '14px', outline: 'none', backgroundColor: '#fff', cursor: 'pointer' }}
+                        value={formData.veiculo || ''}
+                        onChange={e => setFormData({ ...formData, veiculo: e.target.value })}
+                        style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: typeof errors.veiculo === 'string' ? '1px solid #ef4444' : '1px solid #cbd5e1', fontSize: '14px', outline: 'none', backgroundColor: '#fff', cursor: 'pointer' }}
                     >
-                        <option value="default">Padrão</option>
-                        {campaignOptions.map(c => (
-                            <option key={c.slug} value={c.slug}>{c.label}</option>
+                        <option value="" disabled>Selecione o veículo...</option>
+                        {availableVehicles.map(v => (
+                            <option key={v.slug} value={v.slug}>{v.label}</option>
                         ))}
                     </select>
+                    {typeof errors.veiculo === 'string' && <span style={{ color: '#ef4444', fontSize: '12px', fontWeight: 600 }}>{errors.veiculo}</span>}
+                    <small style={{ color: '#64748b' }}>O veículo define o template e os patrocinadores automaticamente.</small>
                 </div>
-                {!sponsorRotationEnabled && formData.template_set && formData.template_set !== 'default' && (
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px', animation: 'fadeIn 0.2s ease-out' }}>
-                        <label style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>Selecionar Template</label>
+            ) : (
+                <div style={{ display: 'flex', gap: '16px', background: '#f8fafc', padding: '16px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <label style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>Campanha Visual</label>
                         <select
-                            value={formData.placid_template_uuid || ''}
-                            onChange={e => setFormData({ ...formData, placid_template_uuid: e.target.value })}
-                            style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: typeof errors.placid_template_uuid === 'string' ? '1px solid #ef4444' : '1px solid #cbd5e1', fontSize: '14px', outline: 'none', backgroundColor: '#fff', cursor: 'pointer' }}
+                            value={formData.template_set || 'default'}
+                            onChange={e => setFormData({ ...formData, template_set: e.target.value, placid_template_uuid: null })}
+                            style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '14px', outline: 'none', backgroundColor: '#fff', cursor: 'pointer' }}
                         >
-                            <option value="" disabled>Escolha um template...</option>
-                            {availableTemplates.map(t => (
-                                <option key={t.id} value={t.placid_template_uuid}>{t.nome}</option>
+                            <option value="default">Padrão</option>
+                            {campaignOptions.map(c => (
+                                <option key={c.slug} value={c.slug}>{c.label}</option>
                             ))}
                         </select>
-                        {typeof errors.placid_template_uuid === 'string' && <span style={{ color: '#ef4444', fontSize: '12px', fontWeight: 600 }}>{errors.placid_template_uuid}</span>}
                     </div>
-                )}
-            </div>
+                    {formData.template_set && formData.template_set !== 'default' && (
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px', animation: 'fadeIn 0.2s ease-out' }}>
+                            <label style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>Selecionar Template</label>
+                            <select
+                                value={formData.placid_template_uuid || ''}
+                                onChange={e => setFormData({ ...formData, placid_template_uuid: e.target.value })}
+                                style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: typeof errors.placid_template_uuid === 'string' ? '1px solid #ef4444' : '1px solid #cbd5e1', fontSize: '14px', outline: 'none', backgroundColor: '#fff', cursor: 'pointer' }}
+                            >
+                                <option value="" disabled>Escolha um template...</option>
+                                {availableTemplates.map(t => (
+                                    <option key={t.id} value={t.placid_template_uuid}>{t.nome}</option>
+                                ))}
+                            </select>
+                            {typeof errors.placid_template_uuid === 'string' && <span style={{ color: '#ef4444', fontSize: '12px', fontWeight: 600 }}>{errors.placid_template_uuid}</span>}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Tag Obrigatória */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
@@ -117,15 +138,6 @@ export default function ArticleForm({
                 onChange={visualTitleId => { setVisualTitleFormatNotice(''); setFormData({ ...formData, visual_title_id: visualTitleId }); }}
             />
             {visualTitleFormatNotice && <small role="status" style={{ color: '#92400e' }}>{visualTitleFormatNotice}</small>}
-            {sponsorRotationEnabled && <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
-                <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Quantidade de patrocinadores</label>
-                <select value={String(formData.sponsor_count ?? 0)} onChange={event => setFormData({ ...formData, sponsor_count: Number(event.target.value) })} style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', background: '#fff' }}>
-                    <option value="0">Nenhum</option>
-                    <option value="1">1 patrocinador</option>
-                    <option value="2">2 patrocinadores</option>
-                </select>
-                <small style={{ color: '#64748b' }}>A selecao e automatica pela rotacao da campanha.</small>
-            </div>}
             {/* Link Origem */}
             <div style={{ padding: '16px', background: '#e0f2fe', border: '1px solid #bae6fd', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
                 <label style={{ fontSize: '14px', fontWeight: 700, color: '#0284c7', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Link Origem <span style={{ color: '#ef4444' }}>*</span></label>

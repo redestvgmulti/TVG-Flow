@@ -5,7 +5,7 @@ import {
   uploadImmutablePng,
 } from '../../services/masterV1Assets'
 import VisualTitlesManager from '../../components/editorial/VisualTitlesManager'
-import MasterRenderConfig from '../../components/editorial/MasterRenderConfig'
+import { PUBLICATION_VEHICLES } from '../../services/publicationVehicles'
 
 const EMPTY_SPONSOR = {
   id: null,
@@ -17,7 +17,8 @@ const EMPTY_SPONSOR = {
 const EMPTY_MEMBERSHIP = {
   id: null,
   sponsor_id: '',
-  template_set: 'default',
+  // template_set carries the publication vehicle slug (the rotation scope).
+  template_set: PUBLICATION_VEHICLES[0].slug,
   content_type: 'feed',
   ordem: 0,
   ativo: true,
@@ -26,7 +27,6 @@ const EMPTY_MEMBERSHIP = {
 const TABS = [
   ['titles', 'Selos da matéria'],
   ['sponsors', 'Patrocinadores'],
-  ['rendering', 'Renderização'],
 ]
 
 function slugify(value) {
@@ -358,12 +358,12 @@ export default function AutoPublisherMasterV1Settings({
         .toLowerCase()
 
       if (
-        !/^[a-z0-9][a-z0-9_-]*$/.test(
-          templateSet,
+        !PUBLICATION_VEHICLES.some(
+          vehicle => vehicle.slug === templateSet,
         )
       ) {
         throw new Error(
-          'Use apenas letras minúsculas, números, hífen ou sublinhado na campanha.',
+          'Selecione um veículo de publicação válido.',
         )
       }
 
@@ -408,7 +408,7 @@ export default function AutoPublisherMasterV1Settings({
       notice(
         membership.id
           ? 'Associação atualizada.'
-          : 'Patrocinador adicionado à campanha.',
+          : 'Patrocinador adicionado ao veículo.',
       )
 
       await load()
@@ -513,17 +513,13 @@ export default function AutoPublisherMasterV1Settings({
           />
         )}
 
-        {tab === 'rendering' && (
-          <MasterRenderConfig clienteId={clienteId} />
-        )}
-
         {tab === 'sponsors' && (
           <>
             <h3>Catálogo de patrocinadores</h3>
 
             <p style={{ color: '#64748b' }}>
               Cadastre cada patrocinador uma única vez
-              e associe-o às campanhas e formatos em
+              e associe-o aos veículos e formatos em
               que poderá aparecer.
             </p>
 
@@ -717,13 +713,13 @@ export default function AutoPublisherMasterV1Settings({
             </table>
 
             <h3 style={{ marginTop: 22 }}>
-              Campanhas e formatos
+              Veículos e formatos
             </h3>
 
             <p style={{ color: '#64748b' }}>
               Defina quais patrocinadores participam
-              de cada campanha, em Feed ou Reels, e em
-              qual ordem serão considerados.
+              de cada veículo, em Feed ou Reels, e em
+              qual ordem entram na rotação.
             </p>
 
             <div
@@ -766,9 +762,9 @@ export default function AutoPublisherMasterV1Settings({
               </label>
 
               <label>
-                Campanha
-                <input
-                  className="ap-input"
+                Veículo
+                <select
+                  className="ap-select"
                   value={
                     membership.template_set
                   }
@@ -779,7 +775,18 @@ export default function AutoPublisherMasterV1Settings({
                         event.target.value,
                     }))
                   }}
-                />
+                >
+                  {PUBLICATION_VEHICLES.map(
+                    vehicle => (
+                      <option
+                        key={vehicle.slug}
+                        value={vehicle.slug}
+                      >
+                        {vehicle.label}
+                      </option>
+                    ),
+                  )}
+                </select>
               </label>
 
               <label>
@@ -846,7 +853,7 @@ export default function AutoPublisherMasterV1Settings({
               >
                 {membership.id
                   ? 'Salvar associação'
-                  : 'Adicionar à campanha'}
+                  : 'Adicionar ao veículo'}
               </button>
             </div>
 
@@ -857,7 +864,7 @@ export default function AutoPublisherMasterV1Settings({
               <thead>
                 <tr>
                   <th>Patrocinador</th>
-                  <th>Campanha</th>
+                  <th>Veículo</th>
                   <th>Formato</th>
                   <th>Ordem</th>
                   <th>Status</th>
@@ -883,7 +890,13 @@ export default function AutoPublisherMasterV1Settings({
                         'Patrocinador indisponível'}
                     </td>
 
-                    <td>{item.template_set}</td>
+                    <td>
+                      {PUBLICATION_VEHICLES.find(
+                        vehicle =>
+                          vehicle.slug ===
+                          item.template_set,
+                      )?.label || item.template_set}
+                    </td>
                     <td>{item.content_type}</td>
                     <td>{item.ordem}</td>
 

@@ -12,7 +12,7 @@ import EditorialEngine from '../../features/editorial/EditorialEngine'
 import { SkeletonCard, SkeletonTable } from '../../components/Skeleton'
 import { toast } from 'sonner'
 import ArticleForm from '../../components/editorial/ArticleForm'
-import { isMasterV1Available } from '../../services/masterV1Availability'
+import { availableVehiclesForFormat } from '../../services/publicationVehicles'
 import { resolveOperationalClienteId } from '../../services/visualTitleGroups'
 import { loadVisualTitleCatalog } from '../../services/visualTitleCatalog'
 
@@ -73,7 +73,7 @@ export default function AutoPublisher() {
         template_set: 'default',
         placid_template_uuid: null,
         visual_title_id: null,
-        sponsor_count: null,
+        veiculo: '',
         idempotency_key: null
     })
     const [availableTemplates, setAvailableTemplates] = useState([])
@@ -117,7 +117,7 @@ export default function AutoPublisher() {
             template_set: 'default',
             placid_template_uuid: null,
             visual_title_id: null,
-            sponsor_count: null,
+            veiculo: '',
             idempotency_key: null
         })
         setAvailableTemplates([])
@@ -267,17 +267,15 @@ export default function AutoPublisher() {
         return () => { cancelled = true }
     }, [clienteId, isManualModalOpen])
 
-    const masterConfig = useMemo(() => {
-        // One master config per (cliente, content_type). template_set is a
-        // deprecated compatibility field and no longer selects the config.
-        return masterRuntime.configs.find(config => config.content_type === formData.content_type) || null
-    }, [formData.content_type, masterRuntime])
-    // A row existing is not enough: the config must be enabled, complete and the
-    // kill switch off (isMasterV1Available). Otherwise the legacy path is used.
-    const sponsorRotationEnabled = useMemo(
-        () => isMasterV1Available(masterConfig, { kill_switch: masterRuntime.killSwitch }),
-        [masterConfig, masterRuntime.killSwitch],
+    // Each (cliente, content_type, template_set=vehicle) row is one fixed Placid
+    // template. The operator picks the vehicle; the sponsor count and template
+    // follow from it. A vehicle is offered only when its master config exists,
+    // is enabled and complete, with the kill switch off.
+    const availableVehicles = useMemo(
+        () => availableVehiclesForFormat(masterRuntime.configs, { kill_switch: masterRuntime.killSwitch }, formData.content_type),
+        [masterRuntime, formData.content_type],
     )
+    const sponsorRotationEnabled = availableVehicles.length > 0
 
     useEffect(() => {
         if (!isManualModalOpen) {
@@ -500,6 +498,10 @@ export default function AutoPublisher() {
             newErrors.visual_title_id = 'Selecione o selo da mat\u00e9ria para usar a rota\u00e7\u00e3o de patrocinadores.'
         }
 
+        if (sponsorRotationEnabled && !formData.veiculo) {
+            newErrors.veiculo = 'Selecione o ve\u00edculo de publica\u00e7\u00e3o.'
+        }
+
         if (!sponsorRotationEnabled && formData.template_set === 'individuais' && !formData.placid_template_uuid) {
             newErrors.placid_template_uuid = 'Selecione um template para a campanha individual.'
         }
@@ -617,7 +619,9 @@ export default function AutoPublisher() {
         if (sponsorRotationEnabled) {
             const idempotencyKey = formData.idempotency_key || crypto.randomUUID()
             if (!formData.idempotency_key) setFormData(previous => ({ ...previous, idempotency_key: idempotencyKey }))
-            payload.sponsor_count = Number(formData.sponsor_count ?? 0)
+            // The vehicle drives the template scope and sponsor count; the
+            // operator never sends sponsor_count. The producer derives it.
+            payload.veiculo = formData.veiculo
             payload.idempotency_key = idempotencyKey
             payload.placid_template_uuid = null
         }
@@ -921,6 +925,7 @@ export default function AutoPublisher() {
                                 onCancel={() => { setManualModalOpen(false); setSelectedFile(null); }}
                                 availableTemplates={availableTemplates}
                                 availableCampaigns={availableCampaigns}
+                                availableVehicles={availableVehicles}
                                 visualTitleGroups={visualTitleGroups}
                                 visualTitlesLoading={visualTitlesLoading}
                                 visualTitlesError={visualTitlesError}
