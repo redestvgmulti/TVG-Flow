@@ -8,8 +8,6 @@ import { useFocusTrap } from '../hooks/useFocusTrap'
 import { usePermission } from '../hooks/usePermission'
 
 export default function EditTaskModal({ task, isOpen, onClose, onSuccess, currentUserId, onCancelRequest }) {
-    if (!isOpen || !task) return null
-
     const modalRef = useRef(null)
     const [loading, setLoading] = useState(false)
     const [professionals, setProfessionals] = useState([])
@@ -35,15 +33,33 @@ export default function EditTaskModal({ task, isOpen, onClose, onSuccess, curren
     const [canEdit, setCanEdit] = useState(false)
     const [checkingPermissions, setCheckingPermissions] = useState(true)
 
+    // Focus trap — the hook itself no-ops when isOpen is false or the
+    // container ref isn't attached yet, so it's safe to call unconditionally.
+    useFocusTrap(isOpen, modalRef)
+
+    // Close on escape key — only while actually open, otherwise this modal
+    // (mounted but hidden) would swallow every ESC press in the app.
     useEffect(() => {
-        if (isOpen) {
-            loadInitialData()
+        if (!isOpen) return
+        const handleEsc = (e) => {
+            if (e.key === 'Escape') onClose()
         }
+        window.addEventListener('keydown', handleEsc)
+        return () => window.removeEventListener('keydown', handleEsc)
+    }, [isOpen, onClose])
+
+    useEffect(() => {
+        if (!isOpen || !task) return
+        loadInitialData()
     }, [isOpen, task])
 
     async function loadInitialData() {
-
         setLoading(true)
+        // Reset per-edit action tracking so leftover pending adds/removals
+        // from a previous task can't leak into this one.
+        setAddedMicroTasks([])
+        setRemovedMicroTaskIds([])
+        setRemovedAttachmentIds([])
         try {
             const [profsData, freshTaskData, permissionResult] = await Promise.all([
                 getActiveProfessionals(),
@@ -233,24 +249,8 @@ export default function EditTaskModal({ task, isOpen, onClose, onSuccess, curren
         ...addedMicroTasks
     ]
 
-    // Focus trap for accessibility
-    useFocusTrap(isOpen, modalRef)
-
-    // Close on escape key
-    useEffect(() => {
-        const handleEsc = (e) => {
-            if (e.key === 'Escape') onClose()
-        }
-        window.addEventListener('keydown', handleEsc)
-        return () => window.removeEventListener('keydown', handleEsc)
-    }, [onClose])
-
-    const priorityOptions = [
-        { value: 'urgent', label: 'Urgente', color: 'text-red-600' },
-        { value: 'high', label: 'Alta', color: 'text-orange-500' },
-        { value: 'medium', label: 'Média', color: 'text-blue-500' },
-        { value: 'low', label: 'Baixa', color: 'text-gray-500' }
-    ]
+    // All hooks are called above, unconditionally — safe to bail out now.
+    if (!isOpen || !task) return null
 
     return createPortal(
         <div className="modal-backdrop" onClick={onClose}>
