@@ -114,29 +114,30 @@ export default function ConversaoWorkflowModal({
                 motivo: motivo.trim() || null
             }
 
-            // Buscar token de autenticação
-            const { data: { session } } = await supabase.auth.getSession()
-            if (!session) {
-                throw new Error('Sessão não encontrada')
-            }
-
-            // Chamar Edge Function
-            const response = await fetch(
-                `${process.env.REACT_APP_SUPABASE_URL}/functions/v1/converter-os-para-complexa`,
-                {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${session.access_token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(payload)
-                }
+            // Chamar Edge Function via cliente Supabase compartilhado — ele já
+            // resolve a URL correta (import.meta.env.VITE_SUPABASE_URL) e anexa
+            // o Authorization da sessão atual automaticamente.
+            const { data: result, error: fnError } = await supabase.functions.invoke(
+                'converter-os-para-complexa',
+                { body: payload }
             )
 
-            const result = await response.json()
-
-            if (!response.ok) {
-                throw new Error(result.error || 'Erro ao converter OS')
+            if (fnError) {
+                // A função responde erros de negócio como { error: '...' } no
+                // corpo, mesmo com status != 2xx — extrai a mensagem real dali.
+                let message = fnError.message
+                if (fnError.context) {
+                    try {
+                        const body = await fnError.context.json()
+                        if (body?.error) message = body.error
+                    } catch {
+                        // corpo não era JSON — mantém a mensagem padrão do SDK
+                    }
+                }
+                throw new Error(message || 'Erro ao converter OS')
+            }
+            if (result?.error) {
+                throw new Error(result.error)
             }
 
             // Sucesso!
