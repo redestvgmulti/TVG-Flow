@@ -177,6 +177,14 @@ const SAFE_RPC_ERRORS = new Map<string, { status: number; message: string }>([
   ['VISUAL_TITLE_INVALID', { status: 400, message: 'O selo da materia nao esta disponivel.' }],
 ]);
 
+function safeRpcErrorFor(message: unknown) {
+  if (typeof message !== 'string') return undefined;
+  const code = [...SAFE_RPC_ERRORS.keys()].find((candidate) =>
+    message === candidate || message.startsWith(`${candidate} `)
+  );
+  return code ? { code, ...SAFE_RPC_ERRORS.get(code)! } : undefined;
+}
+
 Deno.serve(async (req: Request) => {
   const correlationId = resolveCorrelationId(undefined);
   if (req.method === 'OPTIONS') {
@@ -498,10 +506,10 @@ Deno.serve(async (req: Request) => {
         p_render_snapshot_base: renderSnapshotBase,
       });
     if (rotationError) {
-      const safeRpcError = SAFE_RPC_ERRORS.get(rotationError.message);
+      const safeRpcError = safeRpcErrorFor(rotationError.message);
       return errorResponse(
         context,
-        safeRpcError ? rotationError.message : 'SPONSOR_ROTATION_FAILED',
+        safeRpcError?.code || 'SPONSOR_ROTATION_FAILED',
         safeRpcError?.message || 'Nao foi possivel preparar a materia.',
         safeRpcError?.status || 503,
         'call_candidate_rpc',

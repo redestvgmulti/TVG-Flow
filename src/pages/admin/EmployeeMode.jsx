@@ -347,6 +347,8 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                         const errBody = await error.context.json();
                         if (errBody?.error === 'INTERNAL_ERROR' && errBody.correlation_id) {
                             realErrorMsg = `Não foi possível gerar a matéria. Código de suporte: ${errBody.correlation_id}`;
+                        } else if (errBody?.message) {
+                            realErrorMsg = errBody.message;
                         } else if (errBody?.error) {
                             realErrorMsg = errBody.error;
                         }
