@@ -19,6 +19,7 @@ CONTRACTS=(
   tarefas-rls-equivalence.sql
   master-render-config.sql
   visual-model-matrix.sql
+  render-sponsor-registration.sql
 )
 
 fail=0

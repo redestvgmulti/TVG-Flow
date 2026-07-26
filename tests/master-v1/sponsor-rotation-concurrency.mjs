@@ -80,12 +80,29 @@ try {
      values ($1, 'Concurrent client')`,
     [CLIENT_ID],
   )
+  // The membership FK requires a real professional, and provisioning triggers
+  // read auth.users. Seed both with the trigger bypassed, as the SQL contracts do.
+  await admin.query(`set session_replication_role = replica`)
+  await admin.query(
+    `insert into auth.users (id, email)
+     values ($1, 'concurrency@rotation.test')
+     on conflict (id) do nothing`,
+    [USER_ID],
+  )
+  await admin.query(
+    `insert into public.profissionais (id, nome, email, role)
+     values ($1, 'Concurrency User', 'concurrency@rotation.test', 'profissional')
+     on conflict (id) do nothing`,
+    [USER_ID],
+  )
+  await admin.query(`set session_replication_role = origin`)
   await admin.query(
     `insert into public.cliente_profissionais (
        cliente_id,
        profissional_id,
+       funcao,
        ativo
-     ) values ($1, $2, true)`,
+     ) values ($1, $2, 'admin', true)`,
     [CLIENT_ID, USER_ID],
   )
   await admin.query(
@@ -301,6 +318,31 @@ try {
   await Promise.allSettled([
     sessionA.query('rollback'),
     sessionB.query('rollback'),
+  ])
+  // This test writes committed fixtures, so it must also remove them: the SQL
+  // contracts seed the same well-known ids and would collide on a later run.
+  await Promise.allSettled([
+    admin.query(`
+      truncate table
+        ap.candidate_news,
+        ap.render_sponsor_rotation_state,
+        ap.render_sponsor_scope_memberships,
+        ap.render_sponsors,
+        ap.visual_titles,
+        ap.template_queue_state,
+        ap.templates,
+        public.cliente_profissionais,
+        public.clientes
+      cascade
+    `),
+  ])
+  // auth.users and profissionais are outside that truncate, so remove the
+  // identity this test seeded, by id.
+  await Promise.allSettled([
+    admin.query(`delete from public.profissionais where id = $1`, [USER_ID]),
+  ])
+  await Promise.allSettled([
+    admin.query(`delete from auth.users where id = $1`, [USER_ID]),
   ])
   await Promise.allSettled([
     admin.end(),
