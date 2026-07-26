@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react'
-import { X, Plus, Trash2, Workflow, AlertCircle } from 'lucide-react'
+import { Plus, Trash2, Workflow, AlertCircle } from 'lucide-react'
 import { supabase } from '../services/supabase'
 import { toast } from 'sonner'
+import Modal from './ui/Modal'
 import '../styles/conversao-workflow-modal.css'
 
 /**
@@ -154,135 +155,121 @@ export default function ConversaoWorkflowModal({
     if (!isOpen) return null
 
     return (
-        <div className="conversao-modal-overlay" onClick={onClose}>
-            <div className="conversao-modal-content" onClick={(e) => e.stopPropagation()}>
-                {/* Header */}
-                <div className="conversao-modal-header">
-                    <div className="conversao-modal-title">
-                        <Workflow size={24} />
-                        <h2>Converter em Workflow</h2>
-                    </div>
-                    <button onClick={onClose} className="conversao-modal-close">
-                        <X size={20} />
+        <Modal
+            isOpen={isOpen}
+            onClose={onClose}
+            title="Converter em Workflow"
+            icon={Workflow}
+            size="lg"
+            closeOnBackdrop={!loading}
+            footer={(
+                <>
+                    <button type="button" onClick={onClose} className="btn btn-secondary" disabled={loading}>
+                        Cancelar
                     </button>
-                </div>
+                    <button type="submit" form="conversao-workflow-form" className="btn btn-primary" disabled={loading}>
+                        {loading ? 'Convertendo...' : 'Converter em Workflow'}
+                    </button>
+                </>
+            )}
+        >
+            <div className="info-banner danger" style={{ marginBottom: 'var(--space-6)' }}>
+                <AlertCircle size={18} />
+                <p>
+                    <strong>Atenção:</strong> Esta ação não pode ser revertida.
+                    A OS #{os.id} será convertida em workflow com etapas definidas.
+                </p>
+            </div>
 
-                {/* Warning */}
-                <div className="conversao-modal-warning">
-                    <AlertCircle size={18} />
-                    <div>
-                        <strong>Atenção:</strong> Esta ação não pode ser revertida.
-                        <br />
-                        A OS #{os.id} será convertida em workflow com etapas definidas.
-                    </div>
-                </div>
-
-                {/* Form */}
-                <form onSubmit={handleSubmit} className="conversao-modal-form">
-                    {/* Etapas */}
-                    <div className="conversao-etapas-section">
-                        <div className="conversao-section-header">
-                            <h3>Etapas do Workflow</h3>
-                            <span className="conversao-etapas-count">
-                                {etapas.length} {etapas.length === 1 ? 'etapa' : 'etapas'}
-                            </span>
-                        </div>
-
-                        <div className="conversao-etapas-list">
-                            {etapas.map((etapa, index) => (
-                                <div key={index} className="conversao-etapa-item">
-                                    <div className="conversao-etapa-number">
-                                        {index + 1}
-                                    </div>
-
-                                    <div className="conversao-etapa-fields">
-                                        <input
-                                            type="text"
-                                            placeholder="Descrição da etapa"
-                                            value={etapa.descricao}
-                                            onChange={(e) => atualizarEtapa(index, 'descricao', e.target.value)}
-                                            required
-                                            disabled={loading}
-                                            maxLength={200}
-                                        />
-
-                                        <select
-                                            value={etapa.profissional_id}
-                                            onChange={(e) => atualizarEtapa(index, 'profissional_id', e.target.value)}
-                                            required
-                                            disabled={loading || loadingProfissionais}
-                                        >
-                                            <option value="">Selecione profissional</option>
-                                            {profissionais.map(prof => (
-                                                <option key={prof.id} value={prof.id}>
-                                                    {prof.nome}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-
-                                    {etapas.length > 1 && (
-                                        <button
-                                            type="button"
-                                            onClick={() => removerEtapa(index)}
-                                            className="conversao-etapa-remove"
-                                            disabled={loading}
-                                        >
-                                            <Trash2 size={16} />
-                                        </button>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-
-                        <button
-                            type="button"
-                            onClick={adicionarEtapa}
-                            className="conversao-add-etapa"
-                            disabled={loading}
-                        >
-                            <Plus size={16} />
-                            Adicionar Etapa
-                        </button>
-                    </div>
-
-                    {/* Motivo (opcional) */}
-                    <div className="conversao-motivo-section">
-                        <label htmlFor="motivo">Motivo (opcional)</label>
-                        <textarea
-                            id="motivo"
-                            value={motivo}
-                            onChange={(e) => setMotivo(e.target.value)}
-                            placeholder="Ex: Cliente solicitou divisão em etapas específicas"
-                            rows={3}
-                            maxLength={500}
-                            disabled={loading}
-                        />
-                        <span className="conversao-char-count">
-                            {motivo.length}/500
+            {/* Form */}
+            <form id="conversao-workflow-form" onSubmit={handleSubmit}>
+                {/* Etapas */}
+                <div className="conversao-etapas-section">
+                    <div className="conversao-section-header">
+                        <h3>Etapas do Workflow</h3>
+                        <span className="conversao-etapas-count">
+                            {etapas.length} {etapas.length === 1 ? 'etapa' : 'etapas'}
                         </span>
                     </div>
 
-                    {/* Actions */}
-                    <div className="conversao-modal-actions">
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="conversao-btn conversao-btn-cancel"
-                            disabled={loading}
-                        >
-                            Cancelar
-                        </button>
-                        <button
-                            type="submit"
-                            className="conversao-btn conversao-btn-submit"
-                            disabled={loading}
-                        >
-                            {loading ? 'Convertendo...' : 'Converter em Workflow'}
-                        </button>
+                    <div className="conversao-etapas-list">
+                        {etapas.map((etapa, index) => (
+                            <div key={index} className="conversao-etapa-item">
+                                <div className="conversao-etapa-number">
+                                    {index + 1}
+                                </div>
+
+                                <div className="conversao-etapa-fields">
+                                    <input
+                                        type="text"
+                                        className="input"
+                                        placeholder="Descrição da etapa"
+                                        value={etapa.descricao}
+                                        onChange={(e) => atualizarEtapa(index, 'descricao', e.target.value)}
+                                        required
+                                        disabled={loading}
+                                        maxLength={200}
+                                    />
+
+                                    <select
+                                        className="input"
+                                        value={etapa.profissional_id}
+                                        onChange={(e) => atualizarEtapa(index, 'profissional_id', e.target.value)}
+                                        required
+                                        disabled={loading || loadingProfissionais}
+                                    >
+                                        <option value="">Selecione profissional</option>
+                                        {profissionais.map(prof => (
+                                            <option key={prof.id} value={prof.id}>
+                                                {prof.nome}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {etapas.length > 1 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => removerEtapa(index)}
+                                        className="conversao-etapa-remove"
+                                        disabled={loading}
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
+                                )}
+                            </div>
+                        ))}
                     </div>
-                </form>
-            </div>
-        </div>
+
+                    <button
+                        type="button"
+                        onClick={adicionarEtapa}
+                        className="conversao-add-etapa"
+                        disabled={loading}
+                    >
+                        <Plus size={16} />
+                        Adicionar Etapa
+                    </button>
+                </div>
+
+                {/* Motivo (opcional) */}
+                <div className="input-group conversao-motivo-section">
+                    <label htmlFor="motivo">Motivo (opcional)</label>
+                    <textarea
+                        id="motivo"
+                        className="input"
+                        value={motivo}
+                        onChange={(e) => setMotivo(e.target.value)}
+                        placeholder="Ex: Cliente solicitou divisão em etapas específicas"
+                        rows={3}
+                        maxLength={500}
+                        disabled={loading}
+                    />
+                    <span className="conversao-char-count">
+                        {motivo.length}/500
+                    </span>
+                </div>
+            </form>
+        </Modal>
     )
 }

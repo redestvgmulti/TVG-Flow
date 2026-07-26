@@ -1415,15 +1415,15 @@ function Tasks() {
                 <div className="modal-backdrop" onClick={() => setShowDeleteModal(false)}>
                     <div className="modal" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-body">
-                            <div className="admin-tasks-delete-modal-icon">
+                            <div className="confirm-modal-icon">
                                 <AlertTriangle size={24} />
                             </div>
-                            <h3 className="admin-tasks-delete-modal-title">Excluir Tarefa</h3>
-                            <p className="admin-tasks-delete-modal-message">
+                            <h3 className="confirm-modal-title">Excluir Tarefa</h3>
+                            <p className="confirm-modal-message">
                                 Tem certeza que deseja excluir a tarefa{' '}
-                                <span className="admin-tasks-delete-modal-task-name">"{selectedTask.titulo}"</span>?
+                                <span className="confirm-modal-highlight">"{selectedTask.titulo}"</span>?
                             </p>
-                            <p className="admin-tasks-delete-modal-warning">
+                            <p className="confirm-modal-warning">
                                 ⚠️ Esta ação não pode ser desfeita.
                             </p>
                         </div>
@@ -1452,15 +1452,15 @@ function Tasks() {
                 <div className="modal-backdrop" onClick={() => setShowCancelModal(false)}>
                     <div className="modal" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-body">
-                            <div className="admin-tasks-delete-modal-icon">
+                            <div className="confirm-modal-icon">
                                 <AlertTriangle size={24} />
                             </div>
-                            <h3 className="admin-tasks-delete-modal-title">Cancelar Ordem de Serviço</h3>
-                            <p className="admin-tasks-delete-modal-message">
+                            <h3 className="confirm-modal-title">Cancelar Ordem de Serviço</h3>
+                            <p className="confirm-modal-message">
                                 Tem certeza que deseja cancelar a OS{' '}
-                                <span className="admin-tasks-delete-modal-task-name">"{selectedTask.titulo}"</span>?
+                                <span className="confirm-modal-highlight">"{selectedTask.titulo}"</span>?
                             </p>
-                            <p className="admin-tasks-delete-modal-warning">
+                            <p className="confirm-modal-warning">
                                 ⚠️ Esta ação não pode ser desfeita. A OS será movida para "Canceladas".
                             </p>
                         </div>
@@ -1489,17 +1489,17 @@ function Tasks() {
                 <div className="modal-backdrop" onClick={() => setShowBulkDeleteModal(false)}>
                     <div className="modal" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-body">
-                            <div className="admin-tasks-delete-modal-icon">
+                            <div className="confirm-modal-icon">
                                 <AlertTriangle size={24} />
                             </div>
-                            <h3 className="admin-tasks-delete-modal-title">Excluir Tarefas</h3>
-                            <p className="admin-tasks-delete-modal-message">
+                            <h3 className="confirm-modal-title">Excluir Tarefas</h3>
+                            <p className="confirm-modal-message">
                                 Tem certeza que deseja excluir{' '}
-                                <span className="admin-tasks-delete-modal-task-name">
+                                <span className="confirm-modal-highlight">
                                     {selectedTasks.length} {selectedTasks.length === 1 ? 'tarefa selecionada' : 'tarefas selecionadas'}
                                 </span>?
                             </p>
-                            <p className="admin-tasks-delete-modal-warning">
+                            <p className="confirm-modal-warning">
                                 ⚠️ Esta ação não pode ser desfeita.
                             </p>
                         </div>

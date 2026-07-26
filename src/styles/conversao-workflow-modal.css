@@ -1,139 +1,49 @@
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   Conversão Workflow Modal Styles - ETAPA 4 FASE 4
-   Estilos para modal de conversão de OS simples em workflow
+   Conversão Workflow Modal — conteúdo específico (a moldura do modal em si
+   vem do <Modal> compartilhado / .modal-backdrop em components.css).
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
-.conversao-modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 3000;
-    padding: 1rem;
-    overflow-y: auto;
-}
-
-.conversao-modal-content {
-    background: #fff;
-    border-radius: 16px;
-    max-width: 700px;
-    width: 100%;
-    max-height: 90vh;
-    overflow-y: auto;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-}
-
-/* Header */
-.conversao-modal-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 1.5rem;
-    border-bottom: 1px solid #e2e8f0;
-}
-
-.conversao-modal-title {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    color: #4299e1;
-}
-
-.conversao-modal-title h2 {
-    margin: 0;
-    font-size: 1.5rem;
-    color: #1a202c;
-}
-
-.conversao-modal-close {
-    background: none;
-    border: none;
-    color: #718096;
-    cursor: pointer;
-    padding: 0.5rem;
-    border-radius: 6px;
-    transition: all 0.2s;
-}
-
-.conversao-modal-close:hover {
-    background: #f7fafc;
-    color: #2d3748;
-}
-
-/* Warning */
-.conversao-modal-warning {
-    display: flex;
-    gap: 0.75rem;
-    padding: 1rem 1.5rem;
-    background: #fff5f5;
-    border-left: 4px solid #f56565;
-    margin: 0 1.5rem;
-    margin-top: 1rem;
-    border-radius: 6px;
-}
-
-.conversao-modal-warning svg {
-    flex-shrink: 0;
-    color: #f56565;
-    margin-top: 0.125rem;
-}
-
-.conversao-modal-warning strong {
-    color: #c53030;
-}
-
-/* Form */
-.conversao-modal-form {
-    padding: 1.5rem;
-}
-
-/* Etapas Section */
 .conversao-etapas-section {
-    margin-bottom: 1.5rem;
+    margin-bottom: var(--space-6);
 }
 
 .conversao-section-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 1rem;
+    margin-bottom: var(--space-4);
 }
 
 .conversao-section-header h3 {
     margin: 0;
-    font-size: 1rem;
-    color: #2d3748;
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--color-text-primary);
 }
 
 .conversao-etapas-count {
-    font-size: 0.875rem;
-    color: #718096;
-    background: #f7fafc;
-    padding: 0.25rem 0.75rem;
-    border-radius: 12px;
+    font-size: var(--text-sm);
+    color: var(--color-text-secondary);
+    background: var(--color-bg-subtle);
+    padding: 4px 12px;
+    border-radius: var(--radius-full);
 }
 
-/* Etapas List */
 .conversao-etapas-list {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
-    margin-bottom: 1rem;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
 }
 
 .conversao-etapa-item {
     display: flex;
-    gap: 0.75rem;
+    gap: var(--space-3);
     align-items: flex-start;
 }
 
 .conversao-etapa-number {
-    background: #4299e1;
+    background: var(--color-primary);
     color: #fff;
     width: 32px;
     height: 32px;
@@ -142,7 +52,7 @@
     align-items: center;
     justify-content: center;
     font-weight: 600;
-    font-size: 0.875rem;
+    font-size: var(--text-sm);
     flex-shrink: 0;
 }
 
@@ -150,38 +60,21 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
-}
-
-.conversao-etapa-fields input,
-.conversao-etapa-fields select {
-    width: 100%;
-    padding: 0.625rem;
-    border: 1px solid #cbd5e0;
-    border-radius: 6px;
-    font-size: 0.875rem;
-    transition: all 0.2s;
-}
-
-.conversao-etapa-fields input:focus,
-.conversao-etapa-fields select:focus {
-    outline: none;
-    border-color: #4299e1;
-    box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+    gap: var(--space-2);
 }
 
 .conversao-etapa-remove {
     background: none;
     border: none;
-    color: #fc8181;
+    color: var(--color-danger);
     cursor: pointer;
-    padding: 0.5rem;
-    border-radius: 6px;
+    padding: var(--space-2);
+    border-radius: var(--radius-md);
     transition: all 0.2s;
 }
 
 .conversao-etapa-remove:hover {
-    background: #fff5f5;
+    background: var(--color-danger-bg);
 }
 
 .conversao-add-etapa {
@@ -189,123 +82,46 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 0.5rem;
-    padding: 0.75rem;
-    border: 2px dashed #cbd5e0;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    border: 2px dashed var(--color-border);
     background: none;
-    border-radius: 8px;
-    color: #4299e1;
+    border-radius: var(--radius-md);
+    color: var(--color-primary);
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s;
 }
 
 .conversao-add-etapa:hover {
-    border-color: #4299e1;
-    background: #ebf8ff;
+    border-color: var(--color-primary);
+    background: var(--color-primary-light);
 }
 
-/* Motivo Section */
+.conversao-add-etapa:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 .conversao-motivo-section {
-    margin-bottom: 1.5rem;
-}
-
-.conversao-motivo-section label {
-    display: block;
-    font-weight: 600;
-    color: #2d3748;
-    margin-bottom: 0.5rem;
-    font-size: 0.875rem;
-}
-
-.conversao-motivo-section textarea {
-    width: 100%;
-    padding: 0.75rem;
-    border: 1px solid #cbd5e0;
-    border-radius: 6px;
-    font-family: inherit;
-    font-size: 0.875rem;
-    resize: vertical;
-    transition: all 0.2s;
-}
-
-.conversao-motivo-section textarea:focus {
-    outline: none;
-    border-color: #4299e1;
-    box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+    margin-bottom: 0;
 }
 
 .conversao-char-count {
     display: block;
     text-align: right;
-    font-size: 0.75rem;
-    color: #a0aec0;
-    margin-top: 0.25rem;
-}
-
-/* Actions */
-.conversao-modal-actions {
-    display: flex;
-    gap: 0.75rem;
-    justify-content: flex-end;
-    padding-top: 1rem;
-    border-top: 1px solid #e2e8f0;
-}
-
-.conversao-btn {
-    padding: 0.75rem 1.5rem;
-    border-radius: 8px;
-    font-weight: 500;
-    font-size: 0.875rem;
-    cursor: pointer;
-    transition: all 0.2s;
-    border: none;
-}
-
-.conversao-btn-cancel {
-    background: #f7fafc;
-    color: #4a5568;
-}
-
-.conversao-btn-cancel:hover {
-    background: #edf2f7;
-}
-
-.conversao-btn-submit {
-    background: #4299e1;
-    color: #fff;
-}
-
-.conversao-btn-submit:hover {
-    background: #3182ce;
-    box-shadow: 0 4px 8px rgba(66, 153, 225, 0.3);
-}
-
-.conversao-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+    margin-top: 4px;
 }
 
 /* Mobile */
 @media (max-width: 768px) {
-    .conversao-modal-content {
-        max-height: 100vh;
-        border-radius: 0;
-    }
-
     .conversao-etapa-item {
         flex-direction: column;
     }
 
     .conversao-etapa-number {
         align-self: flex-start;
-    }
-
-    .conversao-modal-actions {
-        flex-direction: column-reverse;
-    }
-
-    .conversao-btn {
-        width: 100%;
     }
 }
