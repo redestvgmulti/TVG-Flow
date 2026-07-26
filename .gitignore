@@ -41,3 +41,7 @@ start_log.txt
 
 # Scripts locais
 detect_conflicts.py
+
+# Local audit/QA scratchpad (screenshots, one-off debug scripts, seed data)
+# — never meant to be versioned; see scratch/ usage in session work.
+/scratch/
