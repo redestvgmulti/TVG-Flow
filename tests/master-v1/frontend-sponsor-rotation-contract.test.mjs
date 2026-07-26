@@ -51,19 +51,30 @@ test('EmployeeMode reaches the same matrix: model, seal and idempotency, no lega
 })
 
 test('sponsor administration uses the isolated catalog and one shared rotation scope', async () => {
+  // Sponsor administration moved out of the settings page: the catalog is read
+  // by its own service and the scope is now decided by the database, so the
+  // page must not reach either table any more.
   const settings = await source('src/pages/admin/AutoPublisherMasterV1Settings.jsx')
-  assert.match(settings, /from\('render_sponsors'\)/)
-  assert.match(settings, /from\('render_sponsor_scope_memberships'\)/)
-  assert.match(settings, /kind: 'sponsors'/)
-  assert.match(settings, /onConflict:\s*'cliente_id,template_set,content_type,sponsor_id'/)
-  // TVG and Misto share one pool: the scope is a fixed internal constant and
-  // the operator never associates a sponsor with a visual model.
-  assert.match(settings, /const ROTATION_TEMPLATE_SET = 'default'/)
-  assert.match(settings, /template_set: ROTATION_TEMPLATE_SET/)
-  assert.doesNotMatch(settings, /PUBLICATION_VEHICLES/)
-  assert.doesNotMatch(settings, /VISUAL_MODELS/)
+  assert.doesNotMatch(settings, /from\('render_sponsors'\)/)
+  assert.doesNotMatch(settings, /from\('render_sponsor_scope_memberships'\)/)
   assert.doesNotMatch(settings, /template_render_profiles/)
   assert.doesNotMatch(settings, /from\('templates'\)/)
+
+  const service = await source('src/services/renderSponsors.js')
+  assert.match(service, /from\('render_sponsors'\)/)
+  assert.match(service, /kind: 'sponsors'/)
+  // TVG and Misto share one pool. The scope is no longer written by the client
+  // at all: ap.create_render_sponsor owns it, so the UI cannot diverge from it.
+  assert.match(service, /rpc\('create_render_sponsor'/)
+  assert.doesNotMatch(service, /from\('render_sponsor_scope_memberships'\)/)
+  assert.doesNotMatch(service, /PUBLICATION_VEHICLES/)
+  assert.doesNotMatch(service, /VISUAL_MODELS/)
+
+  const migration = await source(
+    'supabase/migrations/20260726150000_create_render_sponsor_transactional.sql',
+  )
+  assert.match(migration, /v_scope text := 'default'/)
+  assert.match(migration, /ARRAY\['feed', 'reels'\]/)
 })
 
 test('the operator settings page exposes no technical master controls (no render tab, layer map or UUID editor)', async () => {
