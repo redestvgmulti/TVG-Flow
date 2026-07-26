@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../../services/supabase';
 import { Check, CheckCircle2, Copy, Download, X, AlertCircle, RefreshCcw, ImageIcon, Brain, Search, SearchCode, Video, Image as ImageIconLucide } from 'lucide-react';
@@ -6,6 +6,12 @@ import { useAuth } from '../../contexts/AuthContext';
 import ArticleForm from '../../components/editorial/ArticleForm';
 import { availableVisualModelsForFormat } from '../../services/visualModels';
 import { loadVisualTitleCatalog } from '../../services/visualTitleCatalog';
+import {
+    loadMasterRuntime,
+    MASTER_RUNTIME_STATUS,
+    visualModelsBlockMessage,
+    visualModelsStateFor,
+} from '../../services/masterRuntime';
 
 // Fallback provider client removed - enforce session ID
 
@@ -25,7 +31,11 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
         idempotency_key: null,
     });
 
-    const [masterRuntime, setMasterRuntime] = useState({ configs: [], killSwitch: false });
+    const [masterRuntime, setMasterRuntime] = useState({
+        configs: [],
+        killSwitch: false,
+        status: MASTER_RUNTIME_STATUS.IDLE,
+    });
     const [visualTitleGroups, setVisualTitleGroups] = useState([]);
     const [visualTitlesLoading, setVisualTitlesLoading] = useState(false);
     const [visualTitlesError, setVisualTitlesError] = useState('');
@@ -56,26 +66,30 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
         }
     }, [isOpen, professionalId, empresaId, clienteId]);
 
-    // ── Load the fixed master matrix every time the modal opens
-    useEffect(() => {
+    const loadAvailableMasterRuntime = useCallback(async () => {
         if (!isOpen || !clienteId) return;
-        let cancelled = false;
-        async function loadMasterRuntime() {
-            const [controlsResult, configsResult] = await Promise.all([
-                supabase.schema('ap').from('master_render_controls').select('kill_switch').eq('cliente_id', clienteId).maybeSingle(),
-                supabase.schema('ap').from('master_render_configs').select('id,content_type,visual_model,master_template_uuid,enabled,layer_map').eq('cliente_id', clienteId).eq('enabled', true),
-            ]);
-            if (cancelled) return;
-            if (controlsResult.error || configsResult.error) {
-                console.warn('[EmployeeMode] master_v1 config unavailable; keeping legacy form path.', controlsResult.error || configsResult.error);
-                setMasterRuntime({ configs: [], killSwitch: false });
-                return;
-            }
-            setMasterRuntime({ configs: configsResult.data || [], killSwitch: Boolean(controlsResult.data?.kill_switch) });
+        setMasterRuntime(previous => ({
+            ...previous,
+            configs: [],
+            status: MASTER_RUNTIME_STATUS.LOADING,
+        }));
+        try {
+            const runtime = await loadMasterRuntime(supabase, clienteId);
+            setMasterRuntime({ ...runtime, status: MASTER_RUNTIME_STATUS.READY });
+        } catch {
+            console.error('[EmployeeMode] MASTER_CONFIG_READ_FAILED');
+            setMasterRuntime({
+                configs: [],
+                killSwitch: false,
+                status: MASTER_RUNTIME_STATUS.ERROR,
+            });
         }
-        loadMasterRuntime();
-        return () => { cancelled = true };
     }, [isOpen, clienteId]);
+
+    // Load the fixed master matrix every time the modal opens.
+    useEffect(() => {
+        loadAvailableMasterRuntime();
+    }, [loadAvailableMasterRuntime]);
 
     // ── Load the grouped seal catalog every time the modal opens
     useEffect(() => {
@@ -107,7 +121,10 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
         () => availableVisualModelsForFormat(masterRuntime.configs, { kill_switch: masterRuntime.killSwitch }, formData.content_type),
         [masterRuntime, formData.content_type],
     );
-    const sponsorRotationEnabled = availableVisualModels.length > 0;
+    const visualModelsState = visualModelsStateFor(
+        masterRuntime.status,
+        availableVisualModels,
+    );
 
     // Poll for render_url after employee submits — render runs async in background
     useEffect(() => {
@@ -197,9 +214,13 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
         const { url_original, context_tag, titulo, conteudo, image_url, content_type, visual_model, visual_title_id } = formData;
 
         // Validation based on unified behavior
+        if (visualModelsState !== 'available') {
+            setErrorMsg(visualModelsBlockMessage(visualModelsState) || 'Aguarde o carregamento dos modelos visuais.');
+            return;
+        }
         if (!context_tag) { setErrorMsg('Tag de editoria é obrigatória.'); return; }
-        if (sponsorRotationEnabled && !visual_model) { setErrorMsg('Selecione o modelo visual.'); return; }
-        if (sponsorRotationEnabled && !visual_title_id) { setErrorMsg('Selecione o selo da matéria.'); return; }
+        if (!visual_model) { setErrorMsg('Selecione o modelo visual.'); return; }
+        if (!visual_title_id) { setErrorMsg('Selecione o selo da matéria.'); return; }
         if (!url_original && !titulo && !conteudo && !image_url && !selectedFile) {
             setErrorMsg('Preencha pelo menos um campo ou insira um link para gerar a matéria.');
             return;
@@ -221,7 +242,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
 
                 currentClienteId = empresa_id;
                 setClienteId(empresa_id);
-            } catch (err) {
+            } catch {
                 setErrorMsg("Erro ao identificar a agência. Tente novamente.");
                 setIsSubmitting(false);
                 return;
@@ -303,14 +324,12 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                 userText: conteudo || null,
             };
 
-            if (sponsorRotationEnabled) {
-                // The visual model addresses the fixed template and fixes the
-                // sponsor count; no sponsor_count and no template UUID are sent.
-                const idempotencyKey = formData.idempotency_key || crypto.randomUUID();
-                if (!formData.idempotency_key) setFormData(previous => ({ ...previous, idempotency_key: idempotencyKey }));
-                payload.visual_model = visual_model;
-                payload.idempotency_key = idempotencyKey;
-            }
+            // The visual model addresses the fixed template and fixes the
+            // sponsor count; no sponsor_count and no template UUID are sent.
+            const idempotencyKey = formData.idempotency_key || crypto.randomUUID();
+            if (!formData.idempotency_key) setFormData(previous => ({ ...previous, idempotency_key: idempotencyKey }));
+            payload.visual_model = visual_model;
+            payload.idempotency_key = idempotencyKey;
 
             // Validation and Audit
             if (!payload.empresa_id) {
@@ -630,7 +649,8 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                 onSubmit={handleGenerate}
                                 isSubmitting={isSubmitting || isUploading}
                                 availableVisualModels={availableVisualModels}
-                                sponsorRotationEnabled={sponsorRotationEnabled}
+                                visualModelsState={visualModelsState}
+                                onRetryVisualModels={loadAvailableMasterRuntime}
                                 visualTitleGroups={visualTitleGroups}
                                 visualTitlesLoading={visualTitlesLoading}
                                 visualTitlesError={visualTitlesError}

@@ -11,6 +11,10 @@ test('manual form offers the visual model and no technical picker at all', async
   assert.match(form, /Modelo visual/)
   assert.match(form, /formData\.visual_model/)
   assert.match(form, /availableVisualModels\.map/)
+  assert.match(form, /visualModelsState === 'error'/)
+  assert.match(form, /visualModelsState === 'empty'/)
+  assert.match(form, /disabled=\{isSubmitting \|\| generationBlocked\}/)
+  assert.match(form, /onRetryVisualModels/)
   // The operator NEVER picks the sponsor count, a campaign or a template.
   assert.doesNotMatch(form, /Quantidade de patrocinadores/)
   assert.doesNotMatch(form, /formData\.sponsor_count/)
@@ -24,11 +28,11 @@ test('manual form offers the visual model and no technical picker at all', async
 
 test('the manual page sends the visual model, never a sponsor_count or a UUID', async () => {
   const page = await source('src/pages/admin/AutoPublisher.jsx')
-  assert.match(page, /master_render_controls/)
-  assert.match(page, /master_render_configs/)
+  assert.match(page, /loadMasterRuntime\(supabase, clienteId\)/)
   // Availability is decided by which models are enabled/complete for the format.
   assert.match(page, /availableVisualModels\s*=\s*useMemo\([\s\S]*availableVisualModelsForFormat\(/)
-  assert.match(page, /sponsorRotationEnabled\s*=\s*availableVisualModels\.length\s*>\s*0/)
+  assert.match(page, /visualModelsStateFor\(/)
+  assert.match(page, /visualModelsState !== 'available'/)
   assert.match(page, /payload\.visual_model = formData\.visual_model/)
   assert.match(page, /payload\.idempotency_key = idempotencyKey/)
   assert.doesNotMatch(page, /payload\.sponsor_count/)
@@ -40,6 +44,8 @@ test('the manual page sends the visual model, never a sponsor_count or a UUID', 
 test('EmployeeMode reaches the same matrix: model, seal and idempotency, no legacy pickers', async () => {
   const employee = await source('src/pages/admin/EmployeeMode.jsx')
   assert.match(employee, /availableVisualModelsForFormat\(/)
+  assert.match(employee, /visualModelsStateFor\(/)
+  assert.match(employee, /visualModelsState !== 'available'/)
   assert.match(employee, /payload\.visual_model = visual_model/)
   assert.match(employee, /payload\.idempotency_key = idempotencyKey/)
   assert.match(employee, /loadVisualTitleCatalog\(/)

@@ -150,21 +150,21 @@ test('o selo e seu grupo não alteram o template resolvido', () => {
 
 test('o produtor deriva sponsor_count do modelo e rejeita o enviado pelo cliente', async () => {
   const generator = await source('supabase/functions/ap-employee-generator/index.ts')
-  assert.match(generator, /VISUAL_MODEL_SPONSORS: Record<string, number> = \{ tvg: 2, misto: 1 \}/)
-  assert.match(generator, /const effectiveSponsorCount = usesVisualModel \? sponsorCountForVisualModel\(visualModel\)/)
-  assert.match(generator, /p_sponsor_count: effectiveSponsorCount/)
-  // Sending both is a validation error, never a silent precedence rule.
-  assert.match(generator, /usesVisualModel && sponsorCountRequested/)
-  assert.match(generator, /sponsor_count e derivado do visual_model/)
+  const config = await source('supabase/functions/ap-employee-generator/masterConfiguration.ts')
+  assert.match(config, /tvg:\s*2/)
+  assert.match(config, /misto:\s*1/)
+  assert.match(generator, /const sponsorCount = sponsorCountForVisualModel\(/)
+  assert.match(generator, /p_sponsor_count: sponsorCount/)
+  assert.match(generator, /SPONSOR_COUNT_NOT_ALLOWED/)
   // The UUID is read from the database only, scoped by visual_model.
   assert.match(generator, /\.eq\('visual_model', visualModel\)/)
-  assert.match(generator, /placid_template_uuid manual nao e compativel/)
+  assert.match(generator, /MANUAL_TEMPLATE_NOT_ALLOWED/)
 })
 
 test('a rotação de patrocinadores é compartilhada: template_set fica fixo em default', async () => {
   const generator = await source('supabase/functions/ap-employee-generator/index.ts')
-  assert.match(generator, /const ROTATION_TEMPLATE_SET = "default"/)
-  assert.match(generator, /usesVisualModel \? ROTATION_TEMPLATE_SET/)
+  assert.match(generator, /const ROTATION_TEMPLATE_SET = ['"]default['"]/)
+  assert.match(generator, /p_template_set: ROTATION_TEMPLATE_SET/)
 
   const migration = await source(
     'supabase/migrations/20260725120000_master_render_config_visual_model.sql',

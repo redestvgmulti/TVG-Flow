@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ImageIcon, Video, UploadCloud, CheckCircle2 } from 'lucide-react';
+import { ImageIcon, Video, CheckCircle2, RefreshCcw } from 'lucide-react';
 import VisualTitleCombobox from './VisualTitleCombobox';
 import { retainCompatibleVisualTitleId } from '../../services/visualTitleCatalog';
 
@@ -16,12 +16,15 @@ export default function ArticleForm({
     visualTitlesLoading = false,
     visualTitlesError = '',
     onRetryVisualTitles,
-    sponsorRotationEnabled = false,
+    visualModelsState = 'loading',
+    onRetryVisualModels,
     selectedFile,
     setSelectedFile
 }) {
     const [isDragging, setIsDragging] = useState(false);
     const [visualTitleFormatNotice, setVisualTitleFormatNotice] = useState('');
+    const visualModelsAvailable = visualModelsState === 'available';
+    const generationBlocked = visualModelsState !== 'available';
 
     function selectContentType(contentType) {
         const retainedId = retainCompatibleVisualTitleId(visualTitleGroups, formData.visual_title_id, contentType);
@@ -48,7 +51,7 @@ export default function ArticleForm({
             </div>
 
             {/* Modelo visual: junto com o formato, endereça o template fixo. */}
-            {sponsorRotationEnabled ? (
+            {visualModelsAvailable ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: '#f8fafc', padding: '16px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
                     <label style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>Modelo visual <span style={{ color: '#ef4444' }}>*</span></label>
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -64,9 +67,20 @@ export default function ArticleForm({
                     {typeof errors.visual_model === 'string' && <span style={{ color: '#ef4444', fontSize: '12px', fontWeight: 600 }}>{errors.visual_model}</span>}
                     <small style={{ color: '#64748b' }}>O modelo define o template e a quantidade de patrocinadores automaticamente.</small>
                 </div>
-            ) : (
+            ) : visualModelsState === 'error' ? (
+                <div role="alert" style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: '12px', padding: '14px 16px', fontSize: '13px', color: '#991b1b', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '10px' }}>
+                    <span>Não foi possível carregar os modelos visuais. Tente novamente.</span>
+                    <button type="button" onClick={onRetryVisualModels} style={{ border: '1px solid #ef4444', background: '#fff', color: '#991b1b', borderRadius: '8px', padding: '8px 10px', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                        <RefreshCcw size={14} /> Recarregar configuração
+                    </button>
+                </div>
+            ) : visualModelsState === 'empty' ? (
                 <div role="status" style={{ background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: '12px', padding: '14px 16px', fontSize: '13px', color: '#92400e' }}>
-                    Nenhum modelo visual está configurado para este formato. Fale com o administrador antes de gerar a matéria.
+                    Nenhum modelo visual está habilitado para este formato.
+                </div>
+            ) : (
+                <div role="status" style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px 16px', fontSize: '13px', color: '#475569' }}>
+                    Carregando modelos visuais...
                 </div>
             )}
 
@@ -222,7 +236,7 @@ export default function ArticleForm({
             )}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #e2e8f0' }}>
-                <button type="submit" disabled={isSubmitting} style={{ width: '100%', background: isSubmitting ? '#cbd5e1' : (mode === 'admin' ? '#111827' : '#2563eb'), color: '#fff', border: 'none', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: isSubmitting ? 'not-allowed' : 'pointer', opacity: isSubmitting ? 0.7 : 1, transition: 'all 0.2s', boxShadow: mode === 'admin' ? 'none' : '0 4px 6px -1px rgba(37, 99, 235, 0.2)' }}>
+                <button type="submit" disabled={isSubmitting || generationBlocked} style={{ width: '100%', background: isSubmitting || generationBlocked ? '#cbd5e1' : (mode === 'admin' ? '#111827' : '#2563eb'), color: '#fff', border: 'none', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: isSubmitting || generationBlocked ? 'not-allowed' : 'pointer', opacity: isSubmitting || generationBlocked ? 0.7 : 1, transition: 'all 0.2s', boxShadow: mode === 'admin' ? 'none' : '0 4px 6px -1px rgba(37, 99, 235, 0.2)' }}>
                     {isSubmitting ? (
                         <>
                             <div style={{ width: '18px', height: '18px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>

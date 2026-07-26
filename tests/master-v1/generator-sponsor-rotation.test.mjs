@@ -2,159 +2,80 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 
-const CLIENTE = 'cd287e6e-f273-4d0f-a72d-2a8c391e40e9'
-const KEY = '11111111-1111-4111-8111-111111111111'
-const TITLE = { id: '22222222-2222-4222-8222-222222222222', formatos: ['feed', 'reels'], ativo: true }
-const CONFIG = { id: 'config-feed', enabled: true, master_template_uuid: 'master-feed', layer_map: { visual_title: 'tag-png', sponsor_1: 'patrocinador-1', sponsor_2: 'patrocinador-2' } }
-const CREATED = { id: '33333333-3333-4333-8333-333333333333', status: 'processing' }
+import {
+  normalizeVisualModel,
+  requireMasterConfiguration,
+  sponsorCountForVisualModel,
+} from '../../supabase/functions/ap-employee-generator/masterConfiguration.ts'
 
-function resolveSponsorCount(value) {
-  if (value === undefined || value === null || value === '') return null
-  const parsed = typeof value === 'number' ? value : Number(value)
-  return Number.isInteger(parsed) && [0, 1, 2].includes(parsed) ? parsed : null
-}
+const generatorUrl = new URL(
+  '../../supabase/functions/ap-employee-generator/index.ts',
+  import.meta.url,
+)
 
-async function runGeneratorModel({
-  sponsorCount,
-  idempotencyKey = KEY,
-  manualUuid = null,
-  title = TITLE,
-  config = CONFIG,
-  killSwitch = false,
-  rpcResult = { reused: false, candidate_news: CREATED },
-  claim = true,
-  existingCandidate = null,
-} = {}) {
-  const calls = { legacyTemplateRotation: 0, sponsorRpc: 0, editorial: 0, profileLookup: 0, titleLookup: 0, masterControl: 0, masterConfig: 0 }
-  const requested = sponsorCount !== undefined && sponsorCount !== null && sponsorCount !== ''
-  if (!requested) {
-    calls.legacyTemplateRotation += 1
-    calls.profileLookup += 1
-    return { mode: 'legacy', calls }
-  }
-  const count = resolveSponsorCount(sponsorCount)
-  if (count === null) throw new Error('SPONSOR_COUNT_INVALID')
-  if (!idempotencyKey) throw new Error('IDEMPOTENCY_KEY_REQUIRED')
-  if (manualUuid) throw new Error('MANUAL_UUID_UNSUPPORTED')
-  if (!existingCandidate) {
-    calls.titleLookup += 1
-    calls.masterControl += 1
-    calls.masterConfig += 1
-    if (!title?.ativo || !title?.formatos.includes('feed')) throw new Error('VISUAL_TITLE_INVALID')
-    if (killSwitch || !config?.enabled || !config.master_template_uuid || !config.layer_map?.visual_title) throw new Error('MASTER_V1_DISABLED')
-  }
-
-  calls.sponsorRpc += 1
-  const params = {
-    p_cliente_id: CLIENTE,
-    p_idempotency_key: idempotencyKey,
-    p_content_type: 'feed',
-    p_template_set: 'default',
-    p_sponsor_count: count,
-    p_visual_title_id: title.id,
-    p_render_contract_version: 'master_v1',
-    p_render_snapshot_base: existingCandidate
-      ? {}
-      : { master_config: { id: config.id, master_template_uuid: config.master_template_uuid, enabled: true }, layer_map: config.layer_map },
-  }
-  const news = rpcResult.candidate_news
-  if (rpcResult.reused && ['pending_render', 'pending_review', 'approved'].includes(news.status)) return { mode: 'reused_terminal', calls, params }
-  if (!claim) return { mode: 'already_processing', calls, params }
-  calls.editorial += 1
-  return { mode: 'editorial', calls, params }
-}
-
-test('legacy clients that omit sponsor_count keep the existing generator path', async () => {
-  const actual = await runGeneratorModel()
-  assert.equal(actual.mode, 'legacy')
-  assert.equal(actual.calls.legacyTemplateRotation, 1)
-  assert.equal(actual.calls.sponsorRpc, 0)
+test('new manual candidates require the visual model instead of legacy fallback', async () => {
+  const source = await readFile(generatorUrl, 'utf8')
+  assert.equal(normalizeVisualModel(null), null)
+  assert.match(source, /MASTER_MODEL_REQUIRED/)
+  assert.doesNotMatch(source, /get_and_advance_template|\.from\('templates'\)/)
 })
 
-test('master sponsor requests call only the transacted RPC and preserve its snapshot inputs', async () => {
-  const actual = await runGeneratorModel({ sponsorCount: 2 })
-  assert.equal(actual.calls.sponsorRpc, 1)
-  assert.equal(actual.calls.legacyTemplateRotation, 0)
-  assert.equal(actual.calls.profileLookup, 0)
-  assert.equal(actual.params.p_sponsor_count, 2)
-  assert.equal(actual.params.p_visual_title_id, TITLE.id)
-  assert.equal(actual.params.p_render_snapshot_base.master_config.master_template_uuid, 'master-feed')
-  assert.equal(actual.params.p_render_snapshot_base.layer_map.visual_title, 'tag-png')
+test('tvg and misto derive exactly two and one sponsors', () => {
+  assert.equal(sponsorCountForVisualModel('tvg'), 2)
+  assert.equal(sponsorCountForVisualModel('misto'), 1)
 })
 
-test('sponsor_count supports exactly zero, one, and two without slot coupling in the generator', async () => {
-  for (const count of [0, 1, 2]) {
-    const actual = await runGeneratorModel({ sponsorCount: count })
-    assert.equal(actual.params.p_sponsor_count, count)
-    assert.equal(actual.calls.sponsorRpc, 1)
-  }
+test('manual sponsor_count and UUID are rejected before rotation', async () => {
+  const source = await readFile(generatorUrl, 'utf8')
+  assert.match(source, /SPONSOR_COUNT_NOT_ALLOWED/)
+  assert.match(source, /MANUAL_TEMPLATE_NOT_ALLOWED/)
 })
 
-test('invalid count, missing key, manual UUID, inactive title, kill switch, and invalid config fail before rotation', async () => {
-  const cases = [
-    [{ sponsorCount: 3 }, 'SPONSOR_COUNT_INVALID'],
-    [{ sponsorCount: 1, idempotencyKey: null }, 'IDEMPOTENCY_KEY_REQUIRED'],
-    [{ sponsorCount: 1, manualUuid: 'legacy-uuid' }, 'MANUAL_UUID_UNSUPPORTED'],
-    [{ sponsorCount: 1, title: { ...TITLE, ativo: false } }, 'VISUAL_TITLE_INVALID'],
-    [{ sponsorCount: 1, killSwitch: true }, 'MASTER_V1_DISABLED'],
-    [{ sponsorCount: 1, config: { ...CONFIG, master_template_uuid: null } }, 'MASTER_V1_DISABLED'],
-  ]
-  for (const [input, expected] of cases) await assert.rejects(() => runGeneratorModel(input), new RegExp(expected))
-})
+test('master lookup is scoped by tenant, format and visual model', async () => {
+  const source = await readFile(generatorUrl, 'utf8')
+  assert.match(source, /\.eq\('cliente_id', clienteId\)[\s\S]*\.eq\('content_type', content_type\)[\s\S]*\.eq\('visual_model', visualModel\)/)
 
-test('committed retries do not consult live title, master config or kill switch', async () => {
-  const actual = await runGeneratorModel({
-    sponsorCount: 1,
-    existingCandidate: CREATED,
-    title: { ...TITLE, ativo: false },
-    config: { ...CONFIG, master_template_uuid: null, layer_map: null },
-    killSwitch: true,
-    rpcResult: { reused: true, candidate_news: { ...CREATED, status: 'pending_render' } },
-  })
-  assert.equal(actual.mode, 'reused_terminal')
-  assert.deepEqual(
-    {
-      titleLookup: actual.calls.titleLookup,
-      masterControl: actual.calls.masterControl,
-      masterConfig: actual.calls.masterConfig,
+  const config = {
+    id: 'master',
+    content_type: 'feed',
+    visual_model: 'misto',
+    enabled: true,
+    master_template_uuid: 'uuid-from-config',
+    layer_map: {
+      headline: 'titulo-materia',
+      news_image: 'news-image',
+      visual_title: 'titulo-png',
+      sponsor_1: 'patrocinador-1',
     },
-    { titleLookup: 0, masterControl: 0, masterConfig: 0 },
-  )
-  assert.deepEqual(actual.params.p_render_snapshot_base, {})
+  }
+  const actual = await requireMasterConfiguration({
+    contentType: 'feed',
+    visualModel: 'misto',
+    readControl: async () => ({ data: null, error: null }),
+    readConfig: async () => ({ data: config, error: null }),
+  })
+  assert.equal(actual.master_template_uuid, 'uuid-from-config')
 })
 
-test('terminal idempotent retries do not invoke editorial or any rotation again', async () => {
-  const actual = await runGeneratorModel({ sponsorCount: 2, existingCandidate: CREATED, rpcResult: { reused: true, candidate_news: { ...CREATED, status: 'pending_render' } } })
-  assert.equal(actual.mode, 'reused_terminal')
-  assert.equal(actual.calls.sponsorRpc, 1)
-  assert.equal(actual.calls.editorial, 0)
-  assert.equal(actual.calls.legacyTemplateRotation, 0)
-})
-
-test('a concurrent retry with an existing processing claim does not invoke a second editorial workflow', async () => {
-  const actual = await runGeneratorModel({ sponsorCount: 1, existingCandidate: CREATED, rpcResult: { reused: true, candidate_news: CREATED }, claim: false })
-  assert.equal(actual.mode, 'already_processing')
-  assert.equal(actual.calls.editorial, 0)
-  assert.equal(actual.calls.sponsorRpc, 1)
-})
-
-test('a retry after an interrupted editorial stage may claim the same candidate without re-rotating', async () => {
-  const actual = await runGeneratorModel({ sponsorCount: 1, existingCandidate: CREATED, rpcResult: { reused: true, candidate_news: CREATED }, claim: true })
-  assert.equal(actual.mode, 'editorial')
-  assert.equal(actual.calls.editorial, 1)
-  assert.equal(actual.calls.sponsorRpc, 1)
-  assert.equal(actual.calls.legacyTemplateRotation, 0)
-})
-
-test('implemented generator delegates sponsor rotation to the single database RPC', async () => {
-  const source = await readFile(new URL('../../supabase/functions/ap-employee-generator/index.ts', import.meta.url), 'utf8')
-  assert.match(source, /sponsor_count: rawSponsorCount/)
-  assert.ok(source.includes("rpc('create_candidate_with_sponsors'"))
-  assert.match(source, /p_idempotency_key: idempotency_key/)
-  // The visual model fixes the sponsor count; the RPC gets the derived value.
-  assert.match(source, /p_sponsor_count: effectiveSponsorCount/)
-  assert.match(source, /const effectiveSponsorCount = usesVisualModel \? sponsorCountForVisualModel\(visualModel\)/)
+test('master path delegates creation to the transactional RPC', async () => {
+  const source = await readFile(generatorUrl, 'utf8')
+  assert.match(source, /rpc\('create_candidate_with_sponsors'/)
+  assert.match(source, /p_sponsor_count: sponsorCount/)
   assert.match(source, /p_render_contract_version: 'master_v1'/)
-  assert.ok(source.includes('if (rotationRequested) {'))
-  assert.ok(source.includes('if (!await claimEditorialProcessing(supabase, news.id))'))
+  assert.match(source, /p_render_snapshot_base: renderSnapshotBase/)
+})
+
+test('committed retries use the frozen base and skip live configuration', async () => {
+  const source = await readFile(generatorUrl, 'utf8')
+  assert.match(source, /shouldResolveVisualTitleForCreation\(existingCandidate\)/)
+  assert.match(source, /existingSnapshotBase\(existingCandidate\)/)
+  assert.match(source, /FROZEN_SNAPSHOT_REUSED/)
+})
+
+test('generator records safe versioned lifecycle events', async () => {
+  const source = await readFile(generatorUrl, 'utf8')
+  assert.match(source, /AP_EMPLOYEE_GENERATOR_VERSION/)
+  assert.match(source, /MASTER_CONFIG_LOADED/)
+  assert.match(source, /CANDIDATE_CREATED/)
+  assert.match(source, /GENERATION_COMPLETED/)
 })

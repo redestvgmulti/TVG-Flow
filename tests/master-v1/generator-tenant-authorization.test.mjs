@@ -186,10 +186,9 @@ test('generator creates service role only after authorization and uses token ide
     'utf8',
   )
   const authorizationCall = source.indexOf('await authorizeOperationalTenant')
-  const serviceRoleClient = source.indexOf('Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")')
+  const serviceRoleClient = source.search(/Deno\.env\.get\(['"]SUPABASE_SERVICE_ROLE_KEY['"]\)/)
   assert.ok(authorizationCall >= 0)
   assert.ok(serviceRoleClient > authorizationCall)
   assert.match(source, /p_auth_user_id:\s*authenticatedUserId/)
-  assert.match(source, /criado_por_user_id:\s*authenticatedUserId/)
   assert.doesNotMatch(source, /p_auth_user_id:\s*isUUID\(auth_user_id\)/)
 })

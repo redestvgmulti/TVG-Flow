@@ -18,6 +18,7 @@ CONTRACTS=(
   autopublisher-e2e.sql
   tarefas-rls-equivalence.sql
   master-render-config.sql
+  master-config-service-role-grants.sql
   visual-model-matrix.sql
   render-sponsor-registration.sql
 )

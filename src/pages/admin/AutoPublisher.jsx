@@ -15,6 +15,12 @@ import ArticleForm from '../../components/editorial/ArticleForm'
 import { availableVisualModelsForFormat } from '../../services/visualModels'
 import { resolveOperationalClienteId } from '../../services/visualTitleGroups'
 import { loadVisualTitleCatalog } from '../../services/visualTitleCatalog'
+import {
+    loadMasterRuntime,
+    MASTER_RUNTIME_STATUS,
+    visualModelsBlockMessage,
+    visualModelsStateFor,
+} from '../../services/masterRuntime'
 
 // ──────────────────────────────────────────────────────────
 // Tab config
@@ -77,7 +83,11 @@ export default function AutoPublisher() {
     const [visualTitleGroups, setVisualTitleGroups] = useState([])
     const [visualTitlesLoading, setVisualTitlesLoading] = useState(false)
     const [visualTitlesError, setVisualTitlesError] = useState('')
-    const [masterRuntime, setMasterRuntime] = useState({ configs: [], killSwitch: false })
+    const [masterRuntime, setMasterRuntime] = useState({
+        configs: [],
+        killSwitch: false,
+        status: MASTER_RUNTIME_STATUS.IDLE,
+    })
     const [manualFormErrors, setManualFormErrors] = useState({})
     const [isSubmittingManual, setIsSubmittingManual] = useState(false)
     const [selectedFile, setSelectedFile] = useState(null)
@@ -197,26 +207,30 @@ export default function AutoPublisher() {
         loadAvailableVisualTitles()
     }, [clienteId, isManualModalOpen, loadAvailableVisualTitles])
 
-    // ── Load the fixed master matrix every time the manual modal opens
-    useEffect(() => {
+    const loadAvailableMasterRuntime = useCallback(async () => {
         if (!isManualModalOpen || !clienteId) return
-        let cancelled = false
-        async function loadMasterRuntime() {
-            const [controlsResult, configsResult] = await Promise.all([
-                supabase.schema('ap').from('master_render_controls').select('kill_switch').eq('cliente_id', clienteId).maybeSingle(),
-                supabase.schema('ap').from('master_render_configs').select('id,content_type,visual_model,master_template_uuid,enabled,layer_map').eq('cliente_id', clienteId).eq('enabled', true),
-            ])
-            if (cancelled) return
-            if (controlsResult.error || configsResult.error) {
-                console.warn('[AutoPublisher] master_v1 config unavailable; keeping legacy form path.', controlsResult.error || configsResult.error)
-                setMasterRuntime({ configs: [], killSwitch: false })
-                return
-            }
-            setMasterRuntime({ configs: configsResult.data || [], killSwitch: Boolean(controlsResult.data?.kill_switch) })
+        setMasterRuntime(previous => ({
+            ...previous,
+            configs: [],
+            status: MASTER_RUNTIME_STATUS.LOADING,
+        }))
+        try {
+            const runtime = await loadMasterRuntime(supabase, clienteId)
+            setMasterRuntime({ ...runtime, status: MASTER_RUNTIME_STATUS.READY })
+        } catch {
+            console.error('[AutoPublisher] MASTER_CONFIG_READ_FAILED')
+            setMasterRuntime({
+                configs: [],
+                killSwitch: false,
+                status: MASTER_RUNTIME_STATUS.ERROR,
+            })
         }
-        loadMasterRuntime()
-        return () => { cancelled = true }
     }, [clienteId, isManualModalOpen])
+
+    // Load the fixed master matrix every time the manual modal opens.
+    useEffect(() => {
+        loadAvailableMasterRuntime()
+    }, [loadAvailableMasterRuntime])
 
     // Each (cliente, content_type, visual_model) row is one fixed Placid
     // template. The operator picks the model; the template and the sponsor count
@@ -226,7 +240,10 @@ export default function AutoPublisher() {
         () => availableVisualModelsForFormat(masterRuntime.configs, { kill_switch: masterRuntime.killSwitch }, formData.content_type),
         [masterRuntime, formData.content_type],
     )
-    const sponsorRotationEnabled = availableVisualModels.length > 0
+    const visualModelsState = visualModelsStateFor(
+        masterRuntime.status,
+        availableVisualModels,
+    )
 
     // ── Load on tab change + realtime
     useEffect(() => {
@@ -411,6 +428,12 @@ export default function AutoPublisher() {
         e.preventDefault()
         if (isSubmittingManual) return;
 
+        if (visualModelsState !== 'available') {
+            const message = visualModelsBlockMessage(visualModelsState) || 'Aguarde o carregamento dos modelos visuais.'
+            toast.error(message)
+            return
+        }
+
         // 1. Validation Logic
         const newErrors = {}
         const isLinkMode = !!formData.url_original
@@ -419,11 +442,11 @@ export default function AutoPublisher() {
             newErrors.context_tag = 'Tag é obrigatória.'
         }
 
-        if (sponsorRotationEnabled && !formData.visual_title_id) {
+        if (!formData.visual_title_id) {
             newErrors.visual_title_id = 'Selecione o selo da mat\u00e9ria para usar a rota\u00e7\u00e3o de patrocinadores.'
         }
 
-        if (sponsorRotationEnabled && !formData.visual_model) {
+        if (!formData.visual_model) {
             newErrors.visual_model = 'Selecione o modelo visual.'
         }
 
@@ -535,14 +558,12 @@ export default function AutoPublisher() {
             userText: formData.conteudo || null
         }
 
-        if (sponsorRotationEnabled) {
-            const idempotencyKey = formData.idempotency_key || crypto.randomUUID()
-            if (!formData.idempotency_key) setFormData(previous => ({ ...previous, idempotency_key: idempotencyKey }))
-            // The visual model addresses the fixed template and fixes the sponsor
-            // count; the operator never sends sponsor_count nor a template UUID.
-            payload.visual_model = formData.visual_model
-            payload.idempotency_key = idempotencyKey
-        }
+        const idempotencyKey = formData.idempotency_key || crypto.randomUUID()
+        if (!formData.idempotency_key) setFormData(previous => ({ ...previous, idempotency_key: idempotencyKey }))
+        // The visual model addresses the fixed template and fixes the sponsor
+        // count; the operator never sends sponsor_count nor a template UUID.
+        payload.visual_model = formData.visual_model
+        payload.idempotency_key = idempotencyKey
 
         try {
             const { error } = await supabase.functions.invoke('ap-employee-generator', { body: payload })
@@ -846,7 +867,8 @@ export default function AutoPublisher() {
                                 visualTitlesLoading={visualTitlesLoading}
                                 visualTitlesError={visualTitlesError}
                                 onRetryVisualTitles={loadAvailableVisualTitles}
-                                sponsorRotationEnabled={sponsorRotationEnabled}
+                                visualModelsState={visualModelsState}
+                                onRetryVisualModels={loadAvailableMasterRuntime}
                                 selectedFile={selectedFile}
                                 setSelectedFile={setSelectedFile}
                             />
