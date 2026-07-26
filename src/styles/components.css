@@ -2729,3 +2729,14 @@ textarea.input:focus {
         opacity: 1;
     }
 }
+
+/*
+ * EDIT TASK MODAL — Título/Prazo grid collapses to one column on narrow
+ * screens; the fixed 2fr/1fr split left the datetime-local input too
+ * narrow to render its value below ~420px.
+ */
+@media (max-width: 480px) {
+    .edit-task-title-deadline-grid {
+        grid-template-columns: 1fr !important;
+    }
+}
