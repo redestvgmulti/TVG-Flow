@@ -12,7 +12,6 @@ import {
 } from './tenantAuthorization.ts';
 import {
   AP_EMPLOYEE_GENERATOR_VERSION,
-  buildGeneratorLogEvent,
   MasterConfigurationError,
   masterConfigurationPublicMessage,
   normalizeVisualModel,
@@ -20,7 +19,12 @@ import {
   sponsorCountForVisualModel,
   type VisualModel,
 } from './masterConfiguration.ts';
-
+import {
+  buildGeneratorLogEvent,
+  buildUnexpectedGeneratorLogEvent,
+  resolveCorrelationId,
+  type GeneratorStage,
+} from './unexpectedErrorTelemetry.ts';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers':
@@ -44,20 +48,24 @@ const isUrl = (value: unknown) => {
 };
 
 type LogContext = {
+  correlationId: string;
   articleId?: unknown;
   clientId?: unknown;
   contentType?: unknown;
   visualModel?: unknown;
+  hasVisualTitleId?: boolean;
+  hasSourceImage?: boolean;
 };
 
 function logEvent(
   context: LogContext,
-  stage: string,
+  stage: GeneratorStage,
   code: string,
   level: 'info' | 'error' = 'info',
 ) {
   const event = buildGeneratorLogEvent({
     ...context,
+    functionVersion: AP_EMPLOYEE_GENERATOR_VERSION,
     stage,
     code,
   });
@@ -71,12 +79,29 @@ function errorResponse(
   code: string,
   message: string,
   status: number,
-  stage: string,
+  stage: GeneratorStage,
 ) {
   logEvent(context, stage, code, 'error');
   return new Response(
-    JSON.stringify({ error: code, message }),
+    JSON.stringify({ error: code, message, correlation_id: context.correlationId }),
     { status, headers: jsonHeaders },
+  );
+}
+
+function unexpectedErrorResponse(
+  context: LogContext,
+  stage: GeneratorStage,
+  error: unknown,
+) {
+  console.error(JSON.stringify(buildUnexpectedGeneratorLogEvent({
+    ...context,
+    functionVersion: AP_EMPLOYEE_GENERATOR_VERSION,
+    stage,
+    error,
+  })));
+  return new Response(
+    JSON.stringify({ error: 'INTERNAL_ERROR', correlation_id: context.correlationId }),
+    { status: 500, headers: jsonHeaders },
   );
 }
 
@@ -100,7 +125,7 @@ function visualTitleErrorResponse(
     error.code,
     'O selo da materia nao esta disponivel para esta criacao.',
     400,
-    'visual_title',
+    'resolve_visual_title',
   );
 }
 
@@ -122,7 +147,7 @@ function tenantAuthorizationErrorResponse(
     error.code,
     message,
     error.status,
-    'tenant_authorization',
+    error.code.startsWith('AUTH_') ? 'authenticate' : 'resolve_tenant',
   );
 }
 
@@ -153,13 +178,18 @@ const SAFE_RPC_ERRORS = new Map<string, { status: number; message: string }>([
 ]);
 
 Deno.serve(async (req: Request) => {
+  const correlationId = resolveCorrelationId(undefined);
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
-  let context: LogContext = {};
+  let stage: GeneratorStage = 'startup';
+  let context: LogContext = { correlationId };
+  logEvent(context, stage, 'REQUEST_RECEIVED');
   try {
+    stage = 'parse_request';
     const body = await req.json();
+    logEvent(context, stage, 'REQUEST_PARSED');
     const {
       titulo,
       conteudo,
@@ -182,11 +212,15 @@ Deno.serve(async (req: Request) => {
 
     const visualModel = normalizeVisualModel(rawVisualModel);
     context = {
+      correlationId,
       clientId: requestedClienteId,
       contentType: content_type,
       visualModel: visualModel || rawVisualModel,
+      hasVisualTitleId: isUUID(visual_title_id),
+      hasSourceImage: Boolean(rawImage || rawImageAlias),
     };
-    logEvent(context, 'request', 'REQUEST_RECEIVED');
+    stage = 'validate_request';
+    logEvent(context, stage, 'REQUEST_VALIDATION_STARTED');
 
     if (!['feed', 'reels'].includes(content_type)) {
       return errorResponse(
@@ -258,14 +292,16 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    stage = 'resolve_source_image';
     const imageUrl = rawImage || rawImageAlias || null;
+    logEvent(context, stage, 'SOURCE_IMAGE_RESOLVED');
     if (imageUrl && !isUrl(imageUrl)) {
       return errorResponse(
         context,
         'VALIDATION_ERROR',
         'imagem_url invalida.',
         400,
-        'request_validation',
+        'resolve_source_image',
       );
     }
     if (!isUUID(visual_title_id)) {
@@ -278,6 +314,10 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    stage = 'authenticate';
+    logEvent(context, stage, 'AUTHENTICATION_STARTED');
+    stage = 'resolve_tenant';
+    logEvent(context, stage, 'TENANT_RESOLUTION_STARTED');
     let authorization;
     try {
       authorization = await authorizeOperationalTenant({
@@ -304,6 +344,8 @@ Deno.serve(async (req: Request) => {
     const clienteId = authorization.clienteId;
     const authenticatedUserId = authorization.userId;
     context = { ...context, clientId: clienteId, visualModel };
+    logEvent(context, stage, 'TENANT_RESOLVED');
+    stage = 'build_snapshot';
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -324,7 +366,7 @@ Deno.serve(async (req: Request) => {
         'CANDIDATE_READ_FAILED',
         'Nao foi possivel verificar esta tentativa. Tente novamente.',
         503,
-        'candidate_lookup',
+        'build_snapshot',
       );
     }
     if (existingCandidate) {
@@ -335,7 +377,7 @@ Deno.serve(async (req: Request) => {
           'IDEMPOTENCY_CONTRACT_MISMATCH',
           'Retries legacy devem continuar pelo snapshot historico.',
           409,
-          'candidate_lookup',
+          'build_snapshot',
         );
       }
     }
@@ -356,6 +398,8 @@ Deno.serve(async (req: Request) => {
     // sent back to the transactional RPC, which validates semantic equality;
     // retries never consult live title/configuration rows.
     if (shouldResolveVisualTitleForCreation(existingCandidate)) {
+      stage = 'resolve_visual_title';
+      logEvent(context, stage, 'VISUAL_TITLE_RESOLUTION_STARTED');
       try {
         await resolveVisualTitleForCreation(supabase, {
           visualTitleId: visual_title_id,
@@ -369,6 +413,8 @@ Deno.serve(async (req: Request) => {
         throw error;
       }
 
+      stage = 'load_master';
+      logEvent(context, stage, 'MASTER_CONFIG_LOAD_STARTED');
       let config: Record<string, unknown>;
       try {
         config = await requireMasterConfiguration({
@@ -398,12 +444,13 @@ Deno.serve(async (req: Request) => {
             error.code,
             masterConfigurationPublicMessage(error.code),
             error.status,
-            error.stage,
+            stage,
           );
         }
         throw error;
       }
 
+      stage = 'build_snapshot';
       renderSnapshotBase = {
         master_config: {
           id: config.id,
@@ -414,7 +461,7 @@ Deno.serve(async (req: Request) => {
         visual_model: config.visual_model,
         layer_map: config.layer_map,
       };
-      logEvent(context, 'master_render_configs', 'MASTER_CONFIG_LOADED');
+      logEvent(context, stage, 'MASTER_CONFIG_LOADED');
     } else {
       const frozenBase = existingSnapshotBase(existingCandidate);
       if (!frozenBase) {
@@ -423,13 +470,15 @@ Deno.serve(async (req: Request) => {
           'IDEMPOTENCY_SNAPSHOT_INVALID',
           'O snapshot original desta tentativa esta incompleto.',
           409,
-          'candidate_snapshot',
+          'build_snapshot',
         );
       }
       renderSnapshotBase = frozenBase;
-      logEvent(context, 'candidate_snapshot', 'FROZEN_SNAPSHOT_REUSED');
+      logEvent(context, stage, 'FROZEN_SNAPSHOT_REUSED');
     }
 
+    stage = 'call_candidate_rpc';
+    logEvent(context, stage, 'CANDIDATE_RPC_STARTED');
     const { data: rpcResult, error: rotationError } = await supabase
       .schema('ap')
       .rpc('create_candidate_with_sponsors', {
@@ -455,7 +504,7 @@ Deno.serve(async (req: Request) => {
         safeRpcError ? rotationError.message : 'SPONSOR_ROTATION_FAILED',
         safeRpcError?.message || 'Nao foi possivel preparar a materia.',
         safeRpcError?.status || 503,
-        'create_candidate_with_sponsors',
+        'call_candidate_rpc',
       );
     }
 
@@ -466,15 +515,17 @@ Deno.serve(async (req: Request) => {
         'SPONSOR_ROTATION_INVALID_RESPONSE',
         'Nao foi possivel preparar a materia.',
         503,
-        'create_candidate_with_sponsors',
+        'call_candidate_rpc',
       );
     }
     context = { ...context, articleId: news.id };
     logEvent(
       context,
-      'create_candidate_with_sponsors',
+      stage,
       rpcResult.reused ? 'CANDIDATE_REUSED' : 'CANDIDATE_CREATED',
     );
+    stage = 'complete';
+    logEvent(context, stage, 'EDITORIAL_PROCESSING_STARTED');
 
     if (
       rpcResult.reused &&
@@ -515,7 +566,7 @@ Deno.serve(async (req: Request) => {
         .eq('id', news.id);
       if (updateError) throw new Error('CANDIDATE_UPDATE_FAILED');
 
-      logEvent(context, 'editorial_workflow', 'GENERATION_COMPLETED');
+      logEvent(context, stage, 'GENERATION_COMPLETED');
       return new Response(
         JSON.stringify(responseForNews({
           ...news,
@@ -535,14 +586,8 @@ Deno.serve(async (req: Request) => {
         .eq('status', 'processing');
       throw editorialError;
     }
-  } catch {
-    return errorResponse(
-      context,
-      'INTERNAL_ERROR',
-      'Nao foi possivel gerar a materia. Tente novamente.',
-      500,
-      'unhandled',
-    );
+  } catch (error) {
+    return unexpectedErrorResponse(context, stage, error);
   }
 });
 

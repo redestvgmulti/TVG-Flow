@@ -345,12 +345,19 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                 if (error.context) {
                     try {
                         const errBody = await error.context.json();
-                        if (errBody && errBody.error) realErrorMsg = errBody.error;
+                        if (errBody?.error === 'INTERNAL_ERROR' && errBody.correlation_id) {
+                            realErrorMsg = `Não foi possível gerar a matéria. Código de suporte: ${errBody.correlation_id}`;
+                        } else if (errBody?.error) {
+                            realErrorMsg = errBody.error;
+                        }
                     } catch (e) {
                         console.error('Failed to parse edge function error:', e);
                     }
                 }
                 throw new Error(realErrorMsg || 'Erro de rede na Edge Function');
+            }
+            if (data?.error === 'INTERNAL_ERROR' && data.correlation_id) {
+                throw new Error(`Não foi possível gerar a matéria. Código de suporte: ${data.correlation_id}`);
             }
             if (data?.error) throw new Error(data.error);
 
@@ -363,6 +370,9 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                 }
             }
 
+            if (parsedData?.error === 'INTERNAL_ERROR' && parsedData.correlation_id) {
+                throw new Error(`Não foi possível gerar a matéria. Código de suporte: ${parsedData.correlation_id}`);
+            }
             if (parsedData?.error) throw new Error(parsedData.error);
 
             setSuccessData(parsedData);

@@ -567,7 +567,20 @@ export default function AutoPublisher() {
 
         try {
             const { error } = await supabase.functions.invoke('ap-employee-generator', { body: payload })
-            if (error) throw error
+            if (error) {
+                let message = error.message
+                if (error.context) {
+                    try {
+                        const errBody = await error.context.json()
+                        if (errBody?.error === 'INTERNAL_ERROR' && errBody.correlation_id) {
+                            message = `Não foi possível gerar a matéria. Código de suporte: ${errBody.correlation_id}`
+                        }
+                    } catch (parseError) {
+                        console.error('Failed to parse ap-employee-generator error:', parseError)
+                    }
+                }
+                throw new Error(message)
+            }
 
             toast.success("Matéria enviada para processamento!")
             resetManualModal()
