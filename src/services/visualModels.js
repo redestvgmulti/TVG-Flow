@@ -4,18 +4,18 @@
 // never chooses the sponsor count separately.
 //
 //   tvg    → TVG fixa + dois patrocinadores dinâmicos          → 2 patrocinadores
-//   misto  → TVG fixa + Itumbiara fixa + um patrocinador       → 1 patrocinador
+//   misto  → TVG fixa + imagem fixa + um patrocinador           → 1 patrocinador
 //
 // The model is stored in its own column, ap.master_render_configs.visual_model.
 // It is NOT a "campanha visual" and it is NOT template_set: template_set stays
 // fixed at 'default' and remains only the internal sponsor-rotation scope, which
-// TVG and Misto deliberately share (one catalog, one pool, one cursor per
+// TVG and TVG + IMG deliberately share (one catalog, one pool, one cursor per
 // format). Nothing here selects layers or UUIDs in the UI.
 import { isMasterV1Available } from './masterV1Availability.js'
 
 export const VISUAL_MODELS = [
   { slug: 'tvg', label: 'TVG', sponsorCount: 2 },
-  { slug: 'misto', label: 'Misto', sponsorCount: 1 },
+  { slug: 'misto', label: 'TVG + IMG', sponsorCount: 1 },
 ]
 
 const BY_SLUG = new Map(VISUAL_MODELS.map(model => [model.slug, model]))
