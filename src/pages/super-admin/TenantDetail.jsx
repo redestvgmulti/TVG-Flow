@@ -157,9 +157,9 @@ export default function TenantDetail() {
                     <ArrowLeft size={16} /> Voltar para lista
                 </button>
 
-                <div className="flex justify-between items-end w-full">
+                <div className="flex justify-between w-full" style={{ alignItems: 'flex-start', flexWrap: 'wrap', rowGap: '16px' }}>
                     <div className="reports-title">
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3" style={{ flexWrap: 'wrap', rowGap: '8px' }}>
                             <h1>{company.nome}</h1>
                             <span className={`text-xs px-2 py-1 rounded-full border font-medium ${company.status_conta === 'active' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
                                 {company.status_conta === 'active' ? 'Ativo' : 'Suspenso'}

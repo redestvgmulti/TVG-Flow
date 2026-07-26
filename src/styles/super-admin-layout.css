@@ -2,6 +2,7 @@
 
 .super-admin-layout {
     display: flex;
+    flex-direction: column;
     min-height: 100vh;
     background: var(--color-bg-app);
 }
@@ -127,11 +128,92 @@
     color: var(--color-text-secondary);
 }
 
-/* 
- * MAIN CONTENT 
+/*
+ * MAIN CONTENT
  */
 .super-admin-content {
     margin-left: 240px;
     flex: 1;
     min-height: 100vh;
+    padding-top: 0;
+}
+
+/*
+ * MOBILE HEADER — hidden on desktop, shown <=1024px alongside the
+ * hamburger toggle. Mirrors AdminLayout's Header/.mobile-menu-btn pattern.
+ */
+.super-admin-mobile-header {
+    display: none;
+}
+
+.super-admin-mobile-menu-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: #fff;
+    border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-1);
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    display: flex;
+    transition: all 0.2s;
+    color: var(--color-text-primary);
+    flex-shrink: 0;
+}
+
+.super-admin-mobile-menu-btn:hover {
+    background: var(--color-bg-subtle);
+    border-color: var(--color-primary-light);
+}
+
+.super-admin-mobile-overlay {
+    display: none;
+}
+
+/*
+ * MOBILE RESPONSIVE — same breakpoint as AdminLayout (1024px).
+ * Sidebar becomes an off-canvas drawer; content loses its fixed margin.
+ */
+@media (max-width: 1024px) {
+    .super-admin-mobile-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 16px;
+        background: rgba(255, 255, 255, 0.85);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-bottom: 1px solid var(--color-border);
+        position: sticky;
+        top: 0;
+        z-index: 50;
+    }
+
+    .super-admin-mobile-overlay {
+        display: block;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+        z-index: 999;
+    }
+
+    .super-admin-sidebar {
+        top: 0;
+        width: 280px;
+        z-index: 1000;
+        transform: translateX(-100%);
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .super-admin-sidebar.mobile-open {
+        transform: translateX(0);
+        box-shadow: 0 0 60px rgba(0, 0, 0, 0.5);
+    }
+
+    .super-admin-content {
+        margin-left: 0;
+    }
 }
