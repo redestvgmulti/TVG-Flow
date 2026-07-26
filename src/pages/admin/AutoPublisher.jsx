@@ -12,7 +12,7 @@ import EditorialEngine from '../../features/editorial/EditorialEngine'
 import { SkeletonCard, SkeletonTable } from '../../components/Skeleton'
 import { toast } from 'sonner'
 import ArticleForm from '../../components/editorial/ArticleForm'
-import { isMasterV1Available } from '../../services/masterV1Availability'
+import { availableVisualModelsForFormat } from '../../services/visualModels'
 import { resolveOperationalClienteId } from '../../services/visualTitleGroups'
 import { loadVisualTitleCatalog } from '../../services/visualTitleCatalog'
 
@@ -70,14 +70,10 @@ export default function AutoPublisher() {
         context_tag: '',
         image_url: '',
         content_type: 'feed',
-        template_set: 'default',
-        placid_template_uuid: null,
         visual_title_id: null,
-        sponsor_count: null,
+        visual_model: '',
         idempotency_key: null
     })
-    const [availableTemplates, setAvailableTemplates] = useState([])
-    const [availableCampaigns, setAvailableCampaigns] = useState(null) // null = not yet loaded
     const [visualTitleGroups, setVisualTitleGroups] = useState([])
     const [visualTitlesLoading, setVisualTitlesLoading] = useState(false)
     const [visualTitlesError, setVisualTitlesError] = useState('')
@@ -114,13 +110,10 @@ export default function AutoPublisher() {
             context_tag: '',
             image_url: '',
             content_type: 'feed',
-            template_set: 'default',
-            placid_template_uuid: null,
             visual_title_id: null,
-            sponsor_count: null,
+            visual_model: '',
             idempotency_key: null
         })
-        setAvailableTemplates([])
         setSelectedFile(null)
         setManualFormErrors({})
     }
@@ -184,48 +177,6 @@ export default function AutoPublisher() {
         setLoading(false)
     }, [clienteId])
 
-    // ── Load available templates for any non-default campaign
-    useEffect(() => {
-        if (formData.template_set && formData.template_set !== 'default' && formData.content_type) {
-            async function loadTemplates() {
-                try {
-                    const { data, error } = await supabase.functions.invoke('ap-config', {
-                        method: 'POST',
-                        body: { resource: 'templates', action: 'list' }
-                    })
-
-                    if (error) {
-                        console.error("[AutoPublisher] Edge function query error:", error);
-                        toast.error("Erro ao carregar templates.");
-                        return;
-                    }
-
-                    if (!data || data.has_error) {
-                        console.error("[AutoPublisher] Edge function data error:", data?.error);
-                        toast.error("Erro ao processar templates.");
-                        return;
-                    }
-
-                    // Filter locally to match campaign, type and active status
-                    const filtered = data.filter(t =>
-                        (t.template_set === formData.template_set) &&
-                        (t.tipo === formData.content_type) &&
-                        t.ativo
-                    ).sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
-
-                    setAvailableTemplates(filtered)
-                } catch (err) {
-                    console.error("[AutoPublisher] Failed to load templates:", err);
-                    toast.error("Erro de conexão ao carregar templates.");
-                }
-            }
-            loadTemplates()
-        } else {
-            setAvailableTemplates([])
-            setFormData(prev => ({ ...prev, placid_template_uuid: null,
-        visual_title_id: null }))
-        }
-    }, [formData.template_set, formData.content_type])
     const loadAvailableVisualTitles = useCallback(async () => {
         if (!clienteId) return
         setVisualTitlesLoading(true)
@@ -246,14 +197,14 @@ export default function AutoPublisher() {
         loadAvailableVisualTitles()
     }, [clienteId, isManualModalOpen, loadAvailableVisualTitles])
 
-    // ── Load campaigns (template_sets) every time the manual modal opens
+    // ── Load the fixed master matrix every time the manual modal opens
     useEffect(() => {
         if (!isManualModalOpen || !clienteId) return
         let cancelled = false
         async function loadMasterRuntime() {
             const [controlsResult, configsResult] = await Promise.all([
                 supabase.schema('ap').from('master_render_controls').select('kill_switch').eq('cliente_id', clienteId).maybeSingle(),
-                supabase.schema('ap').from('master_render_configs').select('id,content_type,template_set,master_template_uuid,enabled,layer_map').eq('cliente_id', clienteId).eq('enabled', true),
+                supabase.schema('ap').from('master_render_configs').select('id,content_type,visual_model,master_template_uuid,enabled,layer_map').eq('cliente_id', clienteId).eq('enabled', true),
             ])
             if (cancelled) return
             if (controlsResult.error || configsResult.error) {
@@ -267,43 +218,15 @@ export default function AutoPublisher() {
         return () => { cancelled = true }
     }, [clienteId, isManualModalOpen])
 
-    const masterConfig = useMemo(() => {
-        // One master config per (cliente, content_type). template_set is a
-        // deprecated compatibility field and no longer selects the config.
-        return masterRuntime.configs.find(config => config.content_type === formData.content_type) || null
-    }, [formData.content_type, masterRuntime])
-    // A row existing is not enough: the config must be enabled, complete and the
-    // kill switch off (isMasterV1Available). Otherwise the legacy path is used.
-    const sponsorRotationEnabled = useMemo(
-        () => isMasterV1Available(masterConfig, { kill_switch: masterRuntime.killSwitch }),
-        [masterConfig, masterRuntime.killSwitch],
+    // Each (cliente, content_type, visual_model) row is one fixed Placid
+    // template. The operator picks the model; the template and the sponsor count
+    // follow from it. A model is offered only when its master config exists, is
+    // enabled and complete, with the kill switch off.
+    const availableVisualModels = useMemo(
+        () => availableVisualModelsForFormat(masterRuntime.configs, { kill_switch: masterRuntime.killSwitch }, formData.content_type),
+        [masterRuntime, formData.content_type],
     )
-
-    useEffect(() => {
-        if (!isManualModalOpen) {
-            setAvailableCampaigns(null) // reset so next open re-fetches
-            return
-        }
-        async function loadCampaigns() {
-            try {
-                const { data, error } = await supabase.functions.invoke('ap-config', {
-                    method: 'POST',
-                    body: { resource: 'template_sets', action: 'list' }
-                })
-                if (error || !data || data.has_error) {
-                    console.error('[AutoPublisher] Failed to load campaigns:', error || data?.error)
-                    setAvailableCampaigns([])
-                    return
-                }
-                // Exclude 'default' — always rendered as the first option in ArticleForm
-                setAvailableCampaigns(data.filter(c => c.slug !== 'default'))
-            } catch (err) {
-                console.error('[AutoPublisher] Campaign fetch error:', err)
-                setAvailableCampaigns([])
-            }
-        }
-        loadCampaigns()
-    }, [isManualModalOpen])
+    const sponsorRotationEnabled = availableVisualModels.length > 0
 
     // ── Load on tab change + realtime
     useEffect(() => {
@@ -500,8 +423,8 @@ export default function AutoPublisher() {
             newErrors.visual_title_id = 'Selecione o selo da mat\u00e9ria para usar a rota\u00e7\u00e3o de patrocinadores.'
         }
 
-        if (!sponsorRotationEnabled && formData.template_set === 'individuais' && !formData.placid_template_uuid) {
-            newErrors.placid_template_uuid = 'Selecione um template para a campanha individual.'
+        if (sponsorRotationEnabled && !formData.visual_model) {
+            newErrors.visual_model = 'Selecione o modelo visual.'
         }
 
         if (!isLinkMode) {
@@ -605,8 +528,6 @@ export default function AutoPublisher() {
             context_tag: formData.context_tag.toUpperCase(),
             content_type: formData.content_type || 'feed',
             imagem_url: formData.content_type === 'reels' ? null : finalImageUrl,
-            template_set: formData.template_set || 'default',
-            placid_template_uuid: formData.placid_template_uuid || null,
             visual_title_id: formData.visual_title_id || null,
             // Hybrid fields for backend compatibility
             userHeadline: formData.titulo || null,
@@ -617,9 +538,10 @@ export default function AutoPublisher() {
         if (sponsorRotationEnabled) {
             const idempotencyKey = formData.idempotency_key || crypto.randomUUID()
             if (!formData.idempotency_key) setFormData(previous => ({ ...previous, idempotency_key: idempotencyKey }))
-            payload.sponsor_count = Number(formData.sponsor_count ?? 0)
+            // The visual model addresses the fixed template and fixes the sponsor
+            // count; the operator never sends sponsor_count nor a template UUID.
+            payload.visual_model = formData.visual_model
             payload.idempotency_key = idempotencyKey
-            payload.placid_template_uuid = null
         }
 
         try {
@@ -901,7 +823,7 @@ export default function AutoPublisher() {
                                 <div style={{ background: '#eff6ff', color: '#3b82f6', padding: '8px', borderRadius: '10px', display: 'flex' }}><Brain size={18} /></div>
                                 Nova Matéria
                             </h2>
-                            <button onClick={() => { setManualModalOpen(false); setSelectedFile(null); setFormData({ url_original: '', titulo: '', conteudo: '', image_url: '', context_tag: '', content_type: 'feed', template_set: 'default' }) }} style={{ background: '#f3f4f6', border: 'none', cursor: 'pointer', color: '#6b7280', width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <button onClick={() => { setManualModalOpen(false); setSelectedFile(null); setFormData({ url_original: '', titulo: '', conteudo: '', image_url: '', context_tag: '', content_type: 'feed', visual_title_id: null, visual_model: '', idempotency_key: null }) }} style={{ background: '#f3f4f6', border: 'none', cursor: 'pointer', color: '#6b7280', width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                 <X size={18} />
                             </button>
                         </div>
@@ -919,8 +841,7 @@ export default function AutoPublisher() {
                                 onSubmit={submitManualNews}
                                 isSubmitting={isSubmittingManual}
                                 onCancel={() => { setManualModalOpen(false); setSelectedFile(null); }}
-                                availableTemplates={availableTemplates}
-                                availableCampaigns={availableCampaigns}
+                                availableVisualModels={availableVisualModels}
                                 visualTitleGroups={visualTitleGroups}
                                 visualTitlesLoading={visualTitlesLoading}
                                 visualTitlesError={visualTitlesError}

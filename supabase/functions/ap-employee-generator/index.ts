@@ -15,6 +15,16 @@ const isUUID = (value: unknown) => typeof value === "string" && /^[0-9a-f]{8}-[0
 const isUrl = (value: unknown) => { try { new URL(String(value)); return true; } catch { return false; } };
 const normalize = (payload: Record<string, any>) => Object.fromEntries(Object.entries(payload).map(([key, value]) => [key, value === undefined || value === "" ? null : value]));
 
+// Visual model → fixed sponsor count. Mirrors src/services/visualModels.js.
+// The model selects the fixed Placid template together with content_type and
+// fixes how many sponsors rotate. It is NOT the rotation scope: template_set
+// stays 'default' so both models share one sponsor catalog, pool and cursor.
+const VISUAL_MODEL_SPONSORS: Record<string, number> = { tvg: 2, misto: 1 };
+const isVisualModel = (slug: string) => Object.prototype.hasOwnProperty.call(VISUAL_MODEL_SPONSORS, slug);
+const sponsorCountForVisualModel = (slug: string) => VISUAL_MODEL_SPONSORS[slug];
+// The sponsor rotation scope is internal and fixed; the operator never sees it.
+const ROTATION_TEMPLATE_SET = "default";
+
 async function rotateTemplate(supabase: any, ownerId: string, contentType: string, templateSet: string) {
   const { data, error } = await supabase.schema("ap").rpc("get_and_advance_template", { p_empresa_id: ownerId, p_tipo: contentType, p_template_set: templateSet });
   if (error || !data?.placid_template_uuid) return null;
@@ -64,8 +74,10 @@ const tenantAuthorizationErrorResponse = (error: TenantAuthorizationError) =>
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     },
   );
-async function getActiveMasterConfig(supabase: any, clienteId: string, contentType: string) {
-  const { data, error } = await supabase.schema('ap').from('master_render_configs').select('*').eq('cliente_id', clienteId).eq('content_type', contentType).eq('enabled', true).maybeSingle();
+async function getActiveMasterConfig(supabase: any, clienteId: string, contentType: string, visualModel: string) {
+  // Master identity is (cliente, content_type, visual_model): exactly one
+  // enabled row per model, so the lookup MUST be scoped by visual_model.
+  const { data, error } = await supabase.schema('ap').from('master_render_configs').select('*').eq('cliente_id', clienteId).eq('content_type', contentType).eq('visual_model', visualModel).eq('enabled', true).maybeSingle();
   if (error) throw error;
   return data || null;
 }
@@ -79,14 +91,27 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
     const body = await req.json();
-    const { titulo, conteudo, imagem_url: rawImage, image_url: rawImageAlias, cliente_id: requestedClienteId, auth_user_id, url_original, content_type = "feed", userHeadline: rawHeadline, userTag: rawTag, context_tag: rawContextTag, userText: rawText, template_set: rawTemplateSet = "default", placid_template_uuid: manualUuid = null, visual_title_id = null, sponsor_count: rawSponsorCount, idempotency_key = null } = body;
+    const { titulo, conteudo, imagem_url: rawImage, image_url: rawImageAlias, cliente_id: requestedClienteId, auth_user_id, url_original, content_type = "feed", userHeadline: rawHeadline, userTag: rawTag, context_tag: rawContextTag, userText: rawText, template_set: rawTemplateSet = "default", placid_template_uuid: manualUuid = null, visual_title_id = null, sponsor_count: rawSponsorCount, visual_model: rawVisualModel = null, idempotency_key = null } = body;
     if (!["feed", "reels"].includes(content_type)) return new Response(JSON.stringify({ error: "VALIDATION_ERROR", message: "content_type inválido" }), { status: 400, headers: corsHeaders });
     if (!titulo || String(titulo).trim().length < 2 || !conteudo || String(conteudo).trim().length < 5) return new Response(JSON.stringify({ error: "VALIDATION_ERROR", message: "titulo e conteudo são obrigatórios" }), { status: 400, headers: corsHeaders });
     const sponsorCountRequested = rawSponsorCount !== undefined && rawSponsorCount !== null && rawSponsorCount !== '';
     const sponsorCount = parseSponsorCount(rawSponsorCount);
-    if (sponsorCountRequested && sponsorCount === null) return new Response(JSON.stringify({ error: 'VALIDATION_ERROR', message: 'sponsor_count deve ser 0, 1 ou 2' }), { status: 400, headers: corsHeaders });
-    if (sponsorCountRequested && !isUUID(idempotency_key)) return new Response(JSON.stringify({ error: 'VALIDATION_ERROR', message: 'idempotency_key e obrigatorio e deve ser UUID quando sponsor_count for informado' }), { status: 400, headers: corsHeaders });
-    if (sponsorCountRequested && manualUuid) return new Response(JSON.stringify({ error: 'VALIDATION_ERROR', message: 'placid_template_uuid manual nao e compativel com sponsor_rotation_v1' }), { status: 400, headers: corsHeaders });
+    // The visual model drives the fixed matrix: it selects the template with
+    // content_type AND fixes the sponsor count, so the operator never sends
+    // sponsor_count. A client that sends both is rejected rather than silently
+    // having one of them ignored.
+    const visualModel = typeof rawVisualModel === 'string' && rawVisualModel.trim() ? rawVisualModel.trim().toLowerCase() : null;
+    if (visualModel && !isVisualModel(visualModel)) return new Response(JSON.stringify({ error: 'VALIDATION_ERROR', message: 'visual_model invalido' }), { status: 400, headers: corsHeaders });
+    const usesVisualModel = visualModel !== null;
+    if (usesVisualModel && sponsorCountRequested) return new Response(JSON.stringify({ error: 'VALIDATION_ERROR', message: 'sponsor_count e derivado do visual_model e nao deve ser enviado' }), { status: 400, headers: corsHeaders });
+    if (!usesVisualModel && sponsorCountRequested && sponsorCount === null) return new Response(JSON.stringify({ error: 'VALIDATION_ERROR', message: 'sponsor_count deve ser 0, 1 ou 2' }), { status: 400, headers: corsHeaders });
+    const rotationRequested = usesVisualModel || sponsorCountRequested;
+    const effectiveSponsorCount = usesVisualModel ? sponsorCountForVisualModel(visualModel) : sponsorCount;
+    // Rotation scope is internal and shared by both models; only the legacy
+    // sponsor_count opt-in may still carry a caller-provided template_set.
+    const effectiveTemplateSet = usesVisualModel ? ROTATION_TEMPLATE_SET : String(rawTemplateSet || 'default').trim().toLowerCase();
+    if (rotationRequested && !isUUID(idempotency_key)) return new Response(JSON.stringify({ error: 'VALIDATION_ERROR', message: 'idempotency_key e obrigatorio e deve ser UUID para a rotacao de patrocinadores' }), { status: 400, headers: corsHeaders });
+    if (rotationRequested && manualUuid) return new Response(JSON.stringify({ error: 'VALIDATION_ERROR', message: 'placid_template_uuid manual nao e compativel com sponsor_rotation_v1' }), { status: 400, headers: corsHeaders });
 
     let authorization;
     try {
@@ -120,9 +145,10 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // Explicit opt-in: existing clients omit sponsor_count and preserve the legacy generator path below.
-    if (sponsorCountRequested) {
-      const sponsorRotationSet = String(rawTemplateSet || 'default').trim().toLowerCase();
+    // Explicit opt-in: requests without a visual model (or legacy sponsor_count)
+    // fall through to the legacy generator path below.
+    if (rotationRequested) {
+      const sponsorRotationSet = effectiveTemplateSet;
       if (!/^[a-z0-9][a-z0-9_-]*$/.test(sponsorRotationSet)) return new Response(JSON.stringify({ error: 'VALIDATION_ERROR', message: 'template_set invalido para sponsor_rotation_v1' }), { status: 400, headers: corsHeaders });
       const imageUrlForRotation = rawImage || rawImageAlias || null;
       if (imageUrlForRotation && !isUrl(imageUrlForRotation)) return new Response(JSON.stringify({ error: 'VALIDATION_ERROR', message: 'imagem_url invalida' }), { status: 400, headers: corsHeaders });
@@ -163,10 +189,14 @@ Deno.serve(async (req: Request) => {
         const { data: control, error: controlError } = await supabase.schema('ap').from('master_render_controls').select('kill_switch').eq('cliente_id', cliente_id).maybeSingle();
         if (controlError) throw controlError;
         if (control?.kill_switch) return new Response(JSON.stringify({ error: 'MASTER_V1_DISABLED', message: 'master_v1 esta bloqueado para este cliente' }), { status: 409, headers: corsHeaders });
-        const config = await getActiveMasterConfig(supabase, cliente_id, content_type);
+        // Legacy sponsor_count callers predate the matrix: the backfill turned
+        // their single master into the 'tvg' row, so that stays their model.
+        const effectiveVisualModel = visualModel || 'tvg';
+        const config = await getActiveMasterConfig(supabase, cliente_id, content_type, effectiveVisualModel);
         if (!config?.master_template_uuid || !hasLayerName(config.layer_map, 'visual_title')) return new Response(JSON.stringify({ error: 'MASTER_V1_DISABLED', message: 'Configuracao master_v1 incompleta ou desativada' }), { status: 409, headers: corsHeaders });
         renderSnapshotBase = {
-          master_config: { id: config.id, master_template_uuid: config.master_template_uuid, enabled: config.enabled },
+          master_config: { id: config.id, master_template_uuid: config.master_template_uuid, enabled: config.enabled, visual_model: config.visual_model },
+          visual_model: config.visual_model,
           layer_map: config.layer_map,
         };
       }
@@ -176,7 +206,7 @@ Deno.serve(async (req: Request) => {
         p_idempotency_key: idempotency_key,
         p_content_type: content_type,
         p_template_set: sponsorRotationSet,
-        p_sponsor_count: sponsorCount,
+        p_sponsor_count: effectiveSponsorCount,
         p_titulo: userHeadlineForRotation || titulo,
         p_conteudo: userTextForRotation || conteudo,
         p_url_original: url_original || null,
@@ -243,7 +273,9 @@ Deno.serve(async (req: Request) => {
       }
     }
     const { data: control } = await supabase.schema("ap").from("master_render_controls").select("kill_switch").eq("cliente_id", cliente_id).maybeSingle();
-    const { data: config } = await supabase.schema("ap").from("master_render_configs").select("*").eq("cliente_id", cliente_id).eq("content_type", content_type).eq("enabled", true).maybeSingle();
+    // Legacy profile path: masters are keyed by visual model now, and a caller
+    // on this path never picks one, so it keeps the backfilled 'tvg' master.
+    const { data: config } = await supabase.schema("ap").from("master_render_configs").select("*").eq("cliente_id", cliente_id).eq("content_type", content_type).eq("visual_model", "tvg").eq("enabled", true).maybeSingle();
     let profile: any = null; if (resolved.id) { const { data } = await supabase.schema("ap").from("template_render_profiles").select("*").eq("template_id", resolved.id).eq("ativo", true).maybeSingle(); profile = data; }
     const canMaster = Boolean(!control?.kill_switch && config?.master_template_uuid && config?.layer_map && visualTitle && resolved.id && profile);
     const fallbackReason = canMaster ? null : (!config?.enabled ? "master_disabled" : control?.kill_switch ? "kill_switch" : !visualTitle ? "visual_title_missing" : !resolved.id ? "template_row_unresolved" : !profile ? "profile_missing" : "master_config_invalid");

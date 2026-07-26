@@ -1,8 +1,10 @@
 \set ON_ERROR_STOP on
 
--- Persistence + tenant isolation for the master_v1 admin configuration
--- (ap.master_render_configs / ap.master_render_controls), exercised under the
--- real RLS an authenticated admin session sees. Rolled back at the end.
+-- Per-visual-model master configuration for master_v1: each fixed Placid
+-- template is one ap.master_render_configs row keyed by (cliente_id,
+-- content_type, visual_model). Proves that (a) both models coexist for the same
+-- format, (b) the same model collides, (c) selection resolves the exact
+-- template per model, and (d) tenant isolation holds. Rolled back at the end.
 
 BEGIN;
 
@@ -63,42 +65,63 @@ ON CONFLICT (cliente_id, profissional_id, funcao) DO NOTHING;
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', '11111111-1111-4111-8111-111111111111', true);
 
--- Create a config for tenant A (feed), keyed on (cliente_id, content_type).
-INSERT INTO ap.master_render_configs (cliente_id, content_type, template_set, master_template_uuid, enabled, layer_map)
-VALUES (
-    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'feed', 'default', 'tpl-feed-1', false,
-    '{"headline":"headline_news","news_image":"news-image","visual_title":"titulo-materia","sponsor_1":"patrocinador-1"}'::jsonb
-)
-ON CONFLICT (cliente_id, content_type)
-DO UPDATE SET master_template_uuid = EXCLUDED.master_template_uuid, enabled = EXCLUDED.enabled, layer_map = EXCLUDED.layer_map;
+-- Both visual models for the SAME format (feed) must coexist: this is the
+-- widened per-format invariant. Each is a distinct fixed Placid template.
+INSERT INTO ap.master_render_configs (cliente_id, content_type, visual_model, master_template_uuid, enabled, layer_map)
+VALUES
+    ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'feed', 'misto', 'tpl-feed-misto', true,
+     '{"headline":"titulo-materia","news_image":"news-image","visual_title":"titulo-png","sponsor_1":"patrocinador-1"}'::jsonb),
+    ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'feed', 'tvg', 'tpl-feed-tvg', true,
+     '{"headline":"titulo-materia","news_image":"news-image","visual_title":"titulo-png","sponsor_1":"patrocinador-1","sponsor_2":"patrocinador-2"}'::jsonb),
+    ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'reels', 'tvg', 'tpl-reels-tvg', true,
+     '{"headline":"titulo-materia","visual_title":"titulo-png","sponsor_1":"patrocinador-1","sponsor_2":"patrocinador-2"}'::jsonb);
 
 SELECT pg_temp.assert_true(
-    (SELECT count(*) = 1 FROM ap.master_render_configs
+    (SELECT count(*) = 2 FROM ap.master_render_configs
      WHERE cliente_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' AND content_type = 'feed'),
-    'config for tenant A feed was not created'
+    'both feed visual models did not coexist for one tenant'
 );
 
--- Enable it and change layer_map WITHOUT touching template_set (preservation).
-UPDATE ap.master_render_configs
-SET enabled = true,
-    layer_map = layer_map || '{"sponsor_2":"patrocinador-2"}'::jsonb
-WHERE cliente_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' AND content_type = 'feed';
-
-SELECT pg_temp.assert_true(
-    (SELECT enabled AND template_set = 'default'
-        AND layer_map ->> 'visual_title' = 'titulo-materia'
-        AND layer_map ->> 'sponsor_2' = 'patrocinador-2'
-     FROM ap.master_render_configs
-     WHERE cliente_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' AND content_type = 'feed'),
-    'update did not enable/preserve template_set/merge layer_map'
-);
-
--- One config per (cliente, content_type): a second feed config collides.
+-- The same model for the same format collides (one master per model).
 SELECT pg_temp.assert_raises(
-    $$INSERT INTO ap.master_render_configs (cliente_id, content_type, master_template_uuid, enabled, layer_map)
-      VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','feed','tpl-x',false,'{}'::jsonb)$$,
+    $$INSERT INTO ap.master_render_configs (cliente_id, content_type, visual_model, master_template_uuid, enabled, layer_map)
+      VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','feed','tvg','tpl-dup',false,'{}'::jsonb)$$,
     '23505',
-    'a second feed config was accepted for one tenant'
+    'a duplicate (feed, tvg) visual model was accepted'
+);
+
+-- Deterministic selection: (content_type, visual_model) resolves the exact
+-- fixed template, and the selo layer maps to titulo-png.
+SELECT pg_temp.assert_true(
+    (SELECT master_template_uuid = 'tpl-feed-misto'
+        AND layer_map ->> 'headline' = 'titulo-materia'
+        AND layer_map ->> 'visual_title' = 'titulo-png'
+     FROM ap.master_render_configs
+     WHERE cliente_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+       AND content_type = 'feed' AND visual_model = 'misto' AND enabled),
+    'feed/misto did not resolve its fixed template + titulo-png layer'
+);
+
+SELECT pg_temp.assert_true(
+    (SELECT master_template_uuid = 'tpl-reels-tvg'
+     FROM ap.master_render_configs
+     WHERE cliente_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+       AND content_type = 'reels' AND visual_model = 'tvg' AND enabled),
+    'reels/tvg did not resolve its own fixed template'
+);
+
+-- Editing one model does not touch the other model of the same format.
+UPDATE ap.master_render_configs
+SET master_template_uuid = 'tpl-feed-misto-edited'
+WHERE cliente_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  AND content_type = 'feed' AND visual_model = 'misto';
+
+SELECT pg_temp.assert_true(
+    (SELECT master_template_uuid = 'tpl-feed-tvg'
+     FROM ap.master_render_configs
+     WHERE cliente_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+       AND content_type = 'feed' AND visual_model = 'tvg'),
+    'editing one visual model leaked into the other'
 );
 
 -- Kill switch upsert for tenant A.
@@ -112,17 +135,17 @@ SELECT pg_temp.assert_true(
 
 -- Tenant isolation: admin A cannot write a config for tenant B (RLS WITH CHECK).
 SELECT pg_temp.assert_raises(
-    $$INSERT INTO ap.master_render_configs (cliente_id, content_type, master_template_uuid, enabled, layer_map)
-      VALUES ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','feed','tpl-b',false,'{}'::jsonb)$$,
+    $$INSERT INTO ap.master_render_configs (cliente_id, content_type, visual_model, master_template_uuid, enabled, layer_map)
+      VALUES ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','feed','tvg','tpl-b',false,'{}'::jsonb)$$,
     '42501',
     'admin A wrote a config for tenant B'
 );
 
 -- Seed a config for tenant B as postgres (bypasses RLS) to prove read isolation.
 RESET ROLE;
-INSERT INTO ap.master_render_configs (cliente_id, content_type, master_template_uuid, enabled, layer_map)
-VALUES ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','feed','tpl-b',true,'{}'::jsonb)
-ON CONFLICT (cliente_id, content_type) DO NOTHING;
+INSERT INTO ap.master_render_configs (cliente_id, content_type, visual_model, master_template_uuid, enabled, layer_map)
+VALUES ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','feed','tvg','tpl-b',true,'{}'::jsonb)
+ON CONFLICT (cliente_id, content_type, visual_model) DO NOTHING;
 
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', '11111111-1111-4111-8111-111111111111', true);

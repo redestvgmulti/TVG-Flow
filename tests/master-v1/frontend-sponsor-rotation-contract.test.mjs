@@ -5,50 +5,90 @@ import test from 'node:test'
 const root = new URL('../../', import.meta.url)
 async function source(path) { return readFile(new URL(path, root), 'utf8') }
 
-test('manual form exposes exactly zero, one and two sponsor choices only for an enabled master contract', async () => {
+test('manual form offers the visual model and no technical picker at all', async () => {
   const form = await source('src/components/editorial/ArticleForm.jsx')
-  assert.match(form, /sponsorRotationEnabled = false/)
-  assert.match(form, /Quantidade de patrocinadores/)
-  assert.match(form, /option value="0">Nenhum/)
-  assert.match(form, /option value="1">1 patrocinador/)
-  assert.match(form, /option value="2">2 patrocinadores/)
-  assert.match(form, /!sponsorRotationEnabled && formData\.template_set/)
+  // The visual model selector replaces "Campanha Visual" and the template picker.
+  assert.match(form, /Modelo visual/)
+  assert.match(form, /formData\.visual_model/)
+  assert.match(form, /availableVisualModels\.map/)
+  // The operator NEVER picks the sponsor count, a campaign or a template.
+  assert.doesNotMatch(form, /Quantidade de patrocinadores/)
+  assert.doesNotMatch(form, /formData\.sponsor_count/)
+  assert.doesNotMatch(form, /Campanha Visual/)
+  assert.doesNotMatch(form, /FALLBACK_CAMPAIGNS/)
+  assert.doesNotMatch(form, /Selecionar Template/)
+  assert.doesNotMatch(form, /availableTemplates/)
+  assert.doesNotMatch(form, /placid_template_uuid/)
+  assert.doesNotMatch(form, /template_set/)
 })
 
-test('frontend sends an idempotent sponsor request only after a valid enabled master config exists', async () => {
+test('the manual page sends the visual model, never a sponsor_count or a UUID', async () => {
   const page = await source('src/pages/admin/AutoPublisher.jsx')
   assert.match(page, /master_render_controls/)
   assert.match(page, /master_render_configs/)
-  // Availability is decided by isMasterV1Available (enabled + complete + no kill
-  // switch), not by a bare row existence check.
-  assert.match(page, /sponsorRotationEnabled = useMemo\([\s\S]*isMasterV1Available\(/)
-  assert.match(page, /payload\.sponsor_count = Number\(formData\.sponsor_count \?\? 0\)/)
+  // Availability is decided by which models are enabled/complete for the format.
+  assert.match(page, /availableVisualModels\s*=\s*useMemo\([\s\S]*availableVisualModelsForFormat\(/)
+  assert.match(page, /sponsorRotationEnabled\s*=\s*availableVisualModels\.length\s*>\s*0/)
+  assert.match(page, /payload\.visual_model = formData\.visual_model/)
   assert.match(page, /payload\.idempotency_key = idempotencyKey/)
-  assert.match(page, /payload\.placid_template_uuid = null/)
-  assert.match(page, /!sponsorRotationEnabled && formData\.template_set === 'individuais'/)
+  assert.doesNotMatch(page, /payload\.sponsor_count/)
+  assert.doesNotMatch(page, /payload\.placid_template_uuid/)
+  assert.doesNotMatch(page, /template_sets/)
+  assert.doesNotMatch(page, /availableCampaigns/)
 })
 
-test('sponsor administration uses the isolated catalog and campaign-format memberships, not legacy template profiles', async () => {
+test('EmployeeMode reaches the same matrix: model, seal and idempotency, no legacy pickers', async () => {
+  const employee = await source('src/pages/admin/EmployeeMode.jsx')
+  assert.match(employee, /availableVisualModelsForFormat\(/)
+  assert.match(employee, /payload\.visual_model = visual_model/)
+  assert.match(employee, /payload\.idempotency_key = idempotencyKey/)
+  assert.match(employee, /loadVisualTitleCatalog\(/)
+  assert.match(employee, /visual_title_id: visual_title_id \|\| null/)
+  assert.doesNotMatch(employee, /payload\.sponsor_count/)
+  assert.doesNotMatch(employee, /template_set/)
+  assert.doesNotMatch(employee, /placid_template_uuid/)
+  assert.doesNotMatch(employee, /availableCampaigns/)
+})
+
+test('sponsor administration uses the isolated catalog and one shared rotation scope', async () => {
   const settings = await source('src/pages/admin/AutoPublisherMasterV1Settings.jsx')
   assert.match(settings, /from\('render_sponsors'\)/)
   assert.match(settings, /from\('render_sponsor_scope_memberships'\)/)
   assert.match(settings, /kind: 'sponsors'/)
-  // The upsert target is unchanged; only tolerate the formatter wrapping the
-  // onConflict key and its value onto separate lines.
   assert.match(settings, /onConflict:\s*'cliente_id,template_set,content_type,sponsor_id'/)
+  // TVG and Misto share one pool: the scope is a fixed internal constant and
+  // the operator never associates a sponsor with a visual model.
+  assert.match(settings, /const ROTATION_TEMPLATE_SET = 'default'/)
+  assert.match(settings, /template_set: ROTATION_TEMPLATE_SET/)
+  assert.doesNotMatch(settings, /PUBLICATION_VEHICLES/)
+  assert.doesNotMatch(settings, /VISUAL_MODELS/)
   assert.doesNotMatch(settings, /template_render_profiles/)
   assert.doesNotMatch(settings, /from\('templates'\)/)
 })
 
-test('settings page hides the technical master controls from operators', async () => {
-  // fdd927c intentionally removed the raw layer-map editor and the logical
-  // sponsor-slot diagnostic from the operator settings page. The sponsor-slot
-  // independence invariant itself now lives in the render pipeline and is
-  // certified by renderer-snapshot-contract.test.mjs / generator-sponsor-rotation,
-  // so the operator UI must no longer expose these technical controls.
+test('the operator settings page exposes no technical master controls (no render tab, layer map or UUID editor)', async () => {
   const settings = await source('src/pages/admin/AutoPublisherMasterV1Settings.jsx')
   assert.doesNotMatch(settings, /layerMap/)
+  assert.doesNotMatch(settings, /MasterRenderConfig/)
+  assert.doesNotMatch(settings, /'rendering'/)
+  assert.doesNotMatch(settings, /Renderização/)
   assert.doesNotMatch(settings, /previewSponsor[12]/)
-  assert.doesNotMatch(settings, /'diagnostic'/)
   assert.doesNotMatch(settings, /Layer map/)
+  assert.doesNotMatch(settings, /master_template_uuid/)
+})
+
+test('no Placid template UUID is hardcoded anywhere in the frontend', async () => {
+  const files = [
+    'src/components/editorial/ArticleForm.jsx',
+    'src/pages/admin/AutoPublisher.jsx',
+    'src/pages/admin/EmployeeMode.jsx',
+    'src/pages/admin/AutoPublisherMasterV1Settings.jsx',
+    'src/services/visualModels.js',
+  ]
+  for (const path of files) {
+    const text = await source(path)
+    for (const uuid of ['mzszfje7xdh6l', 'xcxtk9tt7syfd', '3pm4re4blrizh', 'rrbcykdqcrqae']) {
+      assert.ok(!text.includes(uuid), `${path} must not hardcode ${uuid}`)
+    }
+  }
 })

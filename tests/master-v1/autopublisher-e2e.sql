@@ -49,31 +49,40 @@ INSERT INTO auth.users (id, email) VALUES (:UA, 'e2e-user-a@test.local');
 INSERT INTO public.cliente_profissionais (cliente_id, profissional_id, funcao, ativo)
 VALUES (:A, :UA, 'editor', true);
 
--- 3. Feed master.
-INSERT INTO ap.master_render_configs (cliente_id, content_type, master_template_uuid, enabled, layer_map)
-VALUES (:A, 'feed', 'master-feed-original', true,
+-- 3. Feed master (tvg visual model).
+INSERT INTO ap.master_render_configs (cliente_id, content_type, visual_model, master_template_uuid, enabled, layer_map)
+VALUES (:A, 'feed', 'tvg', 'master-feed-original', true,
         '{"visual_title":"tag-png","sponsor_1":"patrocinador-1"}'::jsonb);
 
--- 4. Story (reels) master.
-INSERT INTO ap.master_render_configs (cliente_id, content_type, master_template_uuid, enabled, layer_map)
-VALUES (:A, 'reels', 'master-reels-original', true,
+-- 4. Story (reels) master (tvg visual model).
+INSERT INTO ap.master_render_configs (cliente_id, content_type, visual_model, master_template_uuid, enabled, layer_map)
+VALUES (:A, 'reels', 'tvg', 'master-reels-original', true,
         '{"visual_title":"tag-png"}'::jsonb);
 
--- 5. Exactly one master per (cliente, format): a second feed master is rejected,
---    and A ends up with exactly one enabled master for each of feed and reels.
+-- 5. Exactly one master per (cliente, format, visual_model): repeating the same
+--    triple is rejected, while the other model of the same format is accepted.
 SELECT pg_temp.assert_raises(
-    format($$INSERT INTO ap.master_render_configs (cliente_id, content_type, enabled)
-             VALUES (%L,'feed',true)$$, :A),
+    format($$INSERT INTO ap.master_render_configs (cliente_id, content_type, visual_model, enabled)
+             VALUES (%L,'feed','tvg',true)$$, :A),
     '23505',
-    'a second feed master was accepted for one tenant'
+    'a second feed/tvg master was accepted for one tenant'
+);
+INSERT INTO ap.master_render_configs (cliente_id, content_type, visual_model, master_template_uuid, enabled, layer_map)
+VALUES (:A, 'feed', 'misto', 'master-feed-misto', true,
+        '{"visual_title":"tag-png","sponsor_1":"patrocinador-1"}'::jsonb);
+SELECT pg_temp.assert_true(
+    (SELECT count(*) = 2 FROM ap.master_render_configs WHERE cliente_id = :A AND content_type='feed' AND enabled),
+    'tenant A does not have both enabled feed visual models'
 );
 SELECT pg_temp.assert_true(
-    (SELECT count(*) = 1 FROM ap.master_render_configs WHERE cliente_id = :A AND content_type='feed' AND enabled),
-    'tenant A does not have exactly one enabled feed master'
+    (SELECT count(*) = 1 FROM ap.master_render_configs
+     WHERE cliente_id = :A AND content_type='feed' AND visual_model='tvg' AND enabled),
+    'tenant A does not have exactly one enabled feed/tvg master'
 );
 SELECT pg_temp.assert_true(
-    (SELECT count(*) = 1 FROM ap.master_render_configs WHERE cliente_id = :A AND content_type='reels' AND enabled),
-    'tenant A does not have exactly one enabled reels master'
+    (SELECT count(*) = 1 FROM ap.master_render_configs
+     WHERE cliente_id = :A AND content_type='reels' AND visual_model='tvg' AND enabled),
+    'tenant A does not have exactly one enabled reels/tvg master'
 );
 
 -- 6. Sponsors and their feed/default rotation membership.
@@ -132,7 +141,8 @@ $$;
 
 -- 11. Mutate the live configuration after generation.
 UPDATE ap.master_render_configs SET master_template_uuid = 'master-feed-CHANGED'
-    WHERE cliente_id = 'aaaaaaaa-0000-4e2e-8000-00000000000a' AND content_type = 'feed';
+    WHERE cliente_id = 'aaaaaaaa-0000-4e2e-8000-00000000000a'
+      AND content_type = 'feed' AND visual_model = 'tvg';
 UPDATE ap.visual_titles SET asset_path = 'visual-titles/a/goiatuba/NEW.png', asset_version = 'v2'
     WHERE id = '70000000-0000-4e2e-8000-000000000001';
 UPDATE ap.render_sponsors SET asset_path = 'sponsors/a/sponsor-a/NEW.png', ativo = false

@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../../services/supabase';
 import { Check, CheckCircle2, Copy, Download, X, AlertCircle, RefreshCcw, ImageIcon, Brain, Search, SearchCode, Video, Image as ImageIconLucide } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import ArticleForm from '../../components/editorial/ArticleForm';
+import { availableVisualModelsForFormat } from '../../services/visualModels';
+import { loadVisualTitleCatalog } from '../../services/visualTitleCatalog';
 
 // Fallback provider client removed - enforce session ID
 
@@ -18,12 +20,15 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
         context_tag: '',
         content_type: 'feed',
         image_url: '',
-        template_set: 'default',
-        placid_template_uuid: null,
+        visual_title_id: null,
+        visual_model: '',
+        idempotency_key: null,
     });
 
-    const [availableTemplates, setAvailableTemplates] = useState([]);
-    const [availableCampaigns, setAvailableCampaigns] = useState(null); // null = not yet loaded
+    const [masterRuntime, setMasterRuntime] = useState({ configs: [], killSwitch: false });
+    const [visualTitleGroups, setVisualTitleGroups] = useState([]);
+    const [visualTitlesLoading, setVisualTitlesLoading] = useState(false);
+    const [visualTitlesError, setVisualTitlesError] = useState('');
 
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [successData, setSuccessData] = useState(null);
@@ -51,66 +56,58 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
         }
     }, [isOpen, professionalId, empresaId, clienteId]);
 
-    // ── Load campaigns (template_sets) every time the modal opens
+    // ── Load the fixed master matrix every time the modal opens
     useEffect(() => {
-        if (!isOpen) {
-            setAvailableCampaigns(null); // reset so next open re-fetches
-            return;
+        if (!isOpen || !clienteId) return;
+        let cancelled = false;
+        async function loadMasterRuntime() {
+            const [controlsResult, configsResult] = await Promise.all([
+                supabase.schema('ap').from('master_render_controls').select('kill_switch').eq('cliente_id', clienteId).maybeSingle(),
+                supabase.schema('ap').from('master_render_configs').select('id,content_type,visual_model,master_template_uuid,enabled,layer_map').eq('cliente_id', clienteId).eq('enabled', true),
+            ]);
+            if (cancelled) return;
+            if (controlsResult.error || configsResult.error) {
+                console.warn('[EmployeeMode] master_v1 config unavailable; keeping legacy form path.', controlsResult.error || configsResult.error);
+                setMasterRuntime({ configs: [], killSwitch: false });
+                return;
+            }
+            setMasterRuntime({ configs: configsResult.data || [], killSwitch: Boolean(controlsResult.data?.kill_switch) });
         }
-        async function loadCampaigns() {
+        loadMasterRuntime();
+        return () => { cancelled = true };
+    }, [isOpen, clienteId]);
+
+    // ── Load the grouped seal catalog every time the modal opens
+    useEffect(() => {
+        if (!isOpen || !clienteId) return;
+        let cancelled = false;
+        async function loadTitles() {
+            setVisualTitlesLoading(true);
+            setVisualTitlesError('');
             try {
-                const { data, error } = await supabase.functions.invoke('ap-config', {
-                    method: 'POST',
-                    body: { resource: 'template_sets', action: 'list' }
-                });
-                if (error || !data || data.has_error) {
-                    console.error('[EmployeeMode] Failed to load campaigns:', error || data?.error);
-                    setAvailableCampaigns([]); // fall through to empty state
-                    return;
+                const groups = await loadVisualTitleCatalog(supabase, clienteId);
+                if (!cancelled) setVisualTitleGroups(groups);
+            } catch (error) {
+                console.error('[EmployeeMode] visual title catalog failed', error);
+                if (!cancelled) {
+                    setVisualTitleGroups([]);
+                    setVisualTitlesError('Não foi possível carregar os selos da matéria.');
                 }
-                // Exclude 'default' — it is always rendered as the first option in ArticleForm
-                setAvailableCampaigns(data.filter(c => c.slug !== 'default'));
-            } catch (err) {
-                console.error('[EmployeeMode] Campaign fetch error:', err);
-                setAvailableCampaigns([]);
+            } finally {
+                if (!cancelled) setVisualTitlesLoading(false);
             }
         }
-        loadCampaigns();
-    }, [isOpen]);
+        loadTitles();
+        return () => { cancelled = true };
+    }, [isOpen, clienteId]);
 
-    // ── Load available templates for any non-default campaign (Unified with AutoPublisher)
-    useEffect(() => {
-        if (formData.template_set && formData.template_set !== 'default' && formData.content_type) {
-            async function loadTemplates() {
-                try {
-                    const { data, error } = await supabase.functions.invoke('ap-config', {
-                        method: 'POST',
-                        body: { resource: 'templates', action: 'list' }
-                    });
-
-                    if (error || !data || data.has_error) {
-                        console.error("[EmployeeMode] Error loading templates:", error || data?.error);
-                        return;
-                    }
-
-                    // Filter locally to match campaign, type and active status
-                    const filtered = data.filter(t =>
-                        (t.template_set === formData.template_set) &&
-                        (t.tipo === formData.content_type) &&
-                        t.ativo
-                    ).sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
-
-                    setAvailableTemplates(filtered);
-                } catch (err) {
-                    console.error("[EmployeeMode] Failed to load templates:", err);
-                }
-            }
-            loadTemplates();
-        } else {
-            setAvailableTemplates([]);
-            setFormData(prev => ({ ...prev, placid_template_uuid: null }));
-        }
-    }, [formData.template_set, formData.content_type]);
+    // Each (cliente, content_type, visual_model) row is one fixed Placid
+    // template; a model is offered only when its config is enabled and complete.
+    const availableVisualModels = useMemo(
+        () => availableVisualModelsForFormat(masterRuntime.configs, { kill_switch: masterRuntime.killSwitch }, formData.content_type),
+        [masterRuntime, formData.content_type],
+    );
+    const sponsorRotationEnabled = availableVisualModels.length > 0;
 
     // Poll for render_url after employee submits — render runs async in background
     useEffect(() => {
@@ -197,11 +194,12 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
         if (e) e.preventDefault();
         if (isSubmitting) return;
 
-        const { url_original, context_tag, titulo, conteudo, image_url, content_type, template_set, placid_template_uuid } = formData;
+        const { url_original, context_tag, titulo, conteudo, image_url, content_type, visual_model, visual_title_id } = formData;
 
         // Validation based on unified behavior
         if (!context_tag) { setErrorMsg('Tag de editoria é obrigatória.'); return; }
-        if (template_set === 'individuais' && !placid_template_uuid) { setErrorMsg('Selecione um template para a campanha individual.'); return; }
+        if (sponsorRotationEnabled && !visual_model) { setErrorMsg('Selecione o modelo visual.'); return; }
+        if (sponsorRotationEnabled && !visual_title_id) { setErrorMsg('Selecione o selo da matéria.'); return; }
         if (!url_original && !titulo && !conteudo && !image_url && !selectedFile) {
             setErrorMsg('Preencha pelo menos um campo ou insira um link para gerar a matéria.');
             return;
@@ -298,13 +296,21 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                 context_tag: context_tag.toUpperCase(),
                 content_type: content_type,
                 imagem_url: content_type === 'feed' ? finalImageUrl : null,
-                template_set: template_set || 'default',
-                placid_template_uuid: placid_template_uuid || null,
+                visual_title_id: visual_title_id || null,
                 // Hybrid fields expected by exact ap-employee-generator edge function mappings
                 userTag: context_tag.toUpperCase(),
                 userHeadline: titulo || null,
                 userText: conteudo || null,
             };
+
+            if (sponsorRotationEnabled) {
+                // The visual model addresses the fixed template and fixes the
+                // sponsor count; no sponsor_count and no template UUID are sent.
+                const idempotencyKey = formData.idempotency_key || crypto.randomUUID();
+                if (!formData.idempotency_key) setFormData(previous => ({ ...previous, idempotency_key: idempotencyKey }));
+                payload.visual_model = visual_model;
+                payload.idempotency_key = idempotencyKey;
+            }
 
             // Validation and Audit
             if (!payload.empresa_id) {
@@ -609,7 +615,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                     <button onClick={handleCopy} style={{ width: '100%', background: '#fff', color: actionCopiou ? '#16a34a' : '#111827', border: actionCopiou ? '2px solid #16a34a' : '1px solid #e2e8f0', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: 'pointer', transition: 'all 0.2s' }}>
                                         {actionCopiou ? <><CheckCircle2 size={18} color="#16a34a" /> Copiado!</> : <><Copy size={18} /> Copiar {successData.content_type === 'reels' ? 'Roteiro e Legenda' : 'Legenda'}</>}
                                     </button>
-                                    <button onClick={() => { setSuccessData(null); setFormData({ url_original: '', titulo: '', conteudo: '', context_tag: '', content_type: 'feed', image_url: '', template_set: 'default', placid_template_uuid: null }); setSelectedFile(null); }} style={{ background: 'transparent', color: '#64748b', border: 'none', padding: '16px', fontSize: '14px', fontWeight: 600, marginTop: '4px', cursor: 'pointer' }}>
+                                    <button onClick={() => { setSuccessData(null); setFormData({ url_original: '', titulo: '', conteudo: '', context_tag: '', content_type: 'feed', image_url: '', visual_title_id: null, visual_model: '', idempotency_key: null }); setSelectedFile(null); }} style={{ background: 'transparent', color: '#64748b', border: 'none', padding: '16px', fontSize: '14px', fontWeight: 600, marginTop: '4px', cursor: 'pointer' }}>
 
                                         Novo Conteúdo
                                     </button>
@@ -623,8 +629,11 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                 setFormData={setFormData}
                                 onSubmit={handleGenerate}
                                 isSubmitting={isSubmitting || isUploading}
-                                availableTemplates={availableTemplates}
-                                availableCampaigns={availableCampaigns}
+                                availableVisualModels={availableVisualModels}
+                                sponsorRotationEnabled={sponsorRotationEnabled}
+                                visualTitleGroups={visualTitleGroups}
+                                visualTitlesLoading={visualTitlesLoading}
+                                visualTitlesError={visualTitlesError}
                                 selectedFile={selectedFile}
                                 setSelectedFile={setSelectedFile}
                             />

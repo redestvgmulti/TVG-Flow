@@ -5,7 +5,11 @@ import {
   uploadImmutablePng,
 } from '../../services/masterV1Assets'
 import VisualTitlesManager from '../../components/editorial/VisualTitlesManager'
-import MasterRenderConfig from '../../components/editorial/MasterRenderConfig'
+
+// Sponsors rotate from a single catalog per format: TVG and Misto deliberately
+// share the same pool and cursor, so the rotation scope is a fixed internal
+// constant and is never chosen by the operator.
+const ROTATION_TEMPLATE_SET = 'default'
 
 const EMPTY_SPONSOR = {
   id: null,
@@ -17,7 +21,7 @@ const EMPTY_SPONSOR = {
 const EMPTY_MEMBERSHIP = {
   id: null,
   sponsor_id: '',
-  template_set: 'default',
+  template_set: ROTATION_TEMPLATE_SET,
   content_type: 'feed',
   ordem: 0,
   ativo: true,
@@ -26,7 +30,6 @@ const EMPTY_MEMBERSHIP = {
 const TABS = [
   ['titles', 'Selos da matéria'],
   ['sponsors', 'Patrocinadores'],
-  ['rendering', 'Renderização'],
 ]
 
 function slugify(value) {
@@ -351,26 +354,11 @@ export default function AutoPublisherMasterV1Settings({
         )
       }
 
-      const templateSet = String(
-        membership.template_set || '',
-      )
-        .trim()
-        .toLowerCase()
-
-      if (
-        !/^[a-z0-9][a-z0-9_-]*$/.test(
-          templateSet,
-        )
-      ) {
-        throw new Error(
-          'Use apenas letras minúsculas, números, hífen ou sublinhado na campanha.',
-        )
-      }
-
       const payload = {
         cliente_id: clienteId,
         sponsor_id: membership.sponsor_id,
-        template_set: templateSet,
+        // Fixed internal scope: one shared pool per format, both models.
+        template_set: ROTATION_TEMPLATE_SET,
         content_type: membership.content_type,
         ordem: Number(membership.ordem) || 0,
         ativo: Boolean(membership.ativo),
@@ -408,7 +396,7 @@ export default function AutoPublisherMasterV1Settings({
       notice(
         membership.id
           ? 'Associação atualizada.'
-          : 'Patrocinador adicionado à campanha.',
+          : 'Patrocinador adicionado à rotação.',
       )
 
       await load()
@@ -513,18 +501,14 @@ export default function AutoPublisherMasterV1Settings({
           />
         )}
 
-        {tab === 'rendering' && (
-          <MasterRenderConfig clienteId={clienteId} />
-        )}
-
         {tab === 'sponsors' && (
           <>
             <h3>Catálogo de patrocinadores</h3>
 
             <p style={{ color: '#64748b' }}>
               Cadastre cada patrocinador uma única vez
-              e associe-o às campanhas e formatos em
-              que poderá aparecer.
+              e defina em quais formatos ele entra
+              na rotação.
             </p>
 
             <div
@@ -717,13 +701,13 @@ export default function AutoPublisherMasterV1Settings({
             </table>
 
             <h3 style={{ marginTop: 22 }}>
-              Campanhas e formatos
+              Rotação por formato
             </h3>
 
             <p style={{ color: '#64748b' }}>
-              Defina quais patrocinadores participam
-              de cada campanha, em Feed ou Reels, e em
-              qual ordem serão considerados.
+              Defina quais patrocinadores entram na
+              rotação de Feed ou Reels e em qual ordem.
+              TVG e Misto compartilham a mesma rotação.
             </p>
 
             <div
@@ -763,23 +747,6 @@ export default function AutoPublisherMasterV1Settings({
                       </option>
                     ))}
                 </select>
-              </label>
-
-              <label>
-                Campanha
-                <input
-                  className="ap-input"
-                  value={
-                    membership.template_set
-                  }
-                  onChange={event => {
-                    setMembership(previous => ({
-                      ...previous,
-                      template_set:
-                        event.target.value,
-                    }))
-                  }}
-                />
               </label>
 
               <label>
@@ -846,7 +813,7 @@ export default function AutoPublisherMasterV1Settings({
               >
                 {membership.id
                   ? 'Salvar associação'
-                  : 'Adicionar à campanha'}
+                  : 'Adicionar à rotação'}
               </button>
             </div>
 
@@ -857,7 +824,6 @@ export default function AutoPublisherMasterV1Settings({
               <thead>
                 <tr>
                   <th>Patrocinador</th>
-                  <th>Campanha</th>
                   <th>Formato</th>
                   <th>Ordem</th>
                   <th>Status</th>
@@ -868,7 +834,7 @@ export default function AutoPublisherMasterV1Settings({
               <tbody>
                 {memberships.length === 0 && (
                   <tr>
-                    <td colSpan={6}>
+                    <td colSpan={5}>
                       Nenhuma associação cadastrada.
                     </td>
                   </tr>
@@ -883,7 +849,6 @@ export default function AutoPublisherMasterV1Settings({
                         'Patrocinador indisponível'}
                     </td>
 
-                    <td>{item.template_set}</td>
                     <td>{item.content_type}</td>
                     <td>{item.ordem}</td>
 

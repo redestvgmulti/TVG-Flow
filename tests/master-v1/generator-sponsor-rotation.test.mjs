@@ -151,8 +151,10 @@ test('implemented generator delegates sponsor rotation to the single database RP
   assert.match(source, /sponsor_count: rawSponsorCount/)
   assert.ok(source.includes("rpc('create_candidate_with_sponsors'"))
   assert.match(source, /p_idempotency_key: idempotency_key/)
-  assert.match(source, /p_sponsor_count: sponsorCount/)
+  // The visual model fixes the sponsor count; the RPC gets the derived value.
+  assert.match(source, /p_sponsor_count: effectiveSponsorCount/)
+  assert.match(source, /const effectiveSponsorCount = usesVisualModel \? sponsorCountForVisualModel\(visualModel\)/)
   assert.match(source, /p_render_contract_version: 'master_v1'/)
-  assert.ok(source.includes('if (sponsorCountRequested) {'))
+  assert.ok(source.includes('if (rotationRequested) {'))
   assert.ok(source.includes('if (!await claimEditorialProcessing(supabase, news.id))'))
 })

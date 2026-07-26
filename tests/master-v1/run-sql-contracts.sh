@@ -5,7 +5,7 @@
 # on production data. Usage: bash tests/master-v1/run-sql-contracts.sh
 set -uo pipefail
 
-DB="${SUPABASE_DB_CONTAINER:-supabase_db_sprint-g3}"
+DB="${SUPABASE_DB_CONTAINER:-supabase_db_TVG-Flow}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
 CONTRACTS=(
@@ -18,6 +18,7 @@ CONTRACTS=(
   autopublisher-e2e.sql
   tarefas-rls-equivalence.sql
   master-render-config.sql
+  visual-model-matrix.sql
 )
 
 fail=0
