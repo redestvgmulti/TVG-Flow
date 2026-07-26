@@ -29,10 +29,22 @@ export default function Modal({
     children,
 }) {
     const cardRef = useRef(null)
+    const bodyRef = useRef(null)
     const previouslyFocusedRef = useRef(null)
     const titleId = useId()
 
     useFocusTrap(isOpen, cardRef)
+
+    // useFocusTrap focuses the first focusable element in DOM order, which
+    // is the header's close button (it precedes the body in markup). For
+    // modals whose body is a form, the first actual field is more useful —
+    // prefer it when one exists, otherwise leave the trap's default (close
+    // button) focused.
+    useEffect(() => {
+        if (!isOpen) return
+        const firstField = bodyRef.current?.querySelector('input, select, textarea')
+        firstField?.focus()
+    }, [isOpen])
 
     // ESC to close
     useEffect(() => {
@@ -106,7 +118,7 @@ export default function Modal({
                     </button>
                 </div>
 
-                <div className="modal-body">
+                <div className="modal-body" ref={bodyRef}>
                     {children}
                 </div>
 
