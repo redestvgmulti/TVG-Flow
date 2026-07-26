@@ -90,12 +90,6 @@ function Tasks() {
     // Bulk selection
     const [selectedTasks, setSelectedTasks] = useState([])
 
-    // Workflow Editing State (Legacy removed, keeping for safety if needed internally but EditTaskModal handles it)
-    const [workflowReferenceData, setWorkflowReferenceData] = useState({
-        professionals: [],
-        functions: []
-    })
-
     // Form state
     const [formData, setFormData] = useState({
         titulo: '',
@@ -441,41 +435,6 @@ function Tasks() {
         setSelectedTask(task)
         setShowEditModal(true)
     }
-
-    async function loadWorkflowReferenceData(clientId) {
-        if (!clientId) return
-        setLoadingWorkflowData(true)
-        try {
-            const { data, error } = await supabase
-                .from('empresa_profissionais')
-                .select(`
-                    profissional_id,
-                    funcao,
-                    profissionais!inner (
-                        id,
-                        nome
-                    )
-                `)
-                .eq('empresa_id', clientId)
-                .eq('ativo', true)
-
-            if (error) throw error
-
-            const professionals = data || []
-            const functions = [...new Set(professionals.map(p => p.funcao))]
-
-            setWorkflowReferenceData({
-                professionals,
-                functions
-            })
-        } catch (error) {
-            console.error('Error loading workflow data:', error)
-            toast.error('Erro ao carregar dados do workflow')
-        } finally {
-            setLoadingWorkflowData(false)
-        }
-    }
-
 
     async function refreshTaskDetails(taskId) {
         if (!taskId) return null
@@ -1393,16 +1352,7 @@ function Tasks() {
                             }
                             onReopen={
                                 (role === 'admin' || role === 'super_admin')
-                                    ? async () => {
-                                        try {
-                                            await handleReopenTask(selectedTask)
-                                            setShowDetailModal(false)
-                                            setSelectedTask(null)
-                                            fetchData()
-                                        } catch (error) {
-                                            console.error('Error reopening task:', error)
-                                        }
-                                    }
+                                    ? handleReopen
                                     : undefined
                             }
                         />
