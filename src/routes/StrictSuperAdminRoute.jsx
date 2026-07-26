@@ -23,6 +23,20 @@ export default function StrictSuperAdminRoute({ children }) {
         )
     }
 
+    // Wait for role to be loaded before making routing decisions. `loading` only
+    // reflects session bootstrap (Phase 1); the professional profile/role is
+    // fetched afterwards. Without this, a hard refresh or deep link into
+    // /platform/* races role from null to 'super_admin' and gets bounced to
+    // /login before the RPC resolves — see RoleProtectedRoute's equivalent guard.
+    if (user && role === null) {
+        return (
+            <div className="flex items-center justify-center h-screen bg-gray-50 flex-col gap-4">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                <div className="text-gray-500 font-medium">Verificando Acesso...</div>
+            </div>
+        )
+    }
+
     // CRITICAL: Role check (validated by backend RPC in AuthContext)
     if (role !== 'super_admin') {
         // Security: Redirect to root, not to their dashboard

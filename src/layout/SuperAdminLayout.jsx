@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { LogOut, LayoutDashboard, Building2, BarChart3, Activity } from 'lucide-react'
+import { LogOut, LayoutDashboard, Building2, BarChart3, Activity, Menu, X } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import '../styles/super-admin-layout.css'
 
@@ -7,6 +8,7 @@ export default function SuperAdminLayout() {
     const { signOut, professionalName } = useAuth()
     const navigate = useNavigate()
     const location = useLocation()
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
     async function handleLogout() {
         try {
@@ -24,9 +26,29 @@ export default function SuperAdminLayout() {
         { path: '/platform/system', icon: Activity, label: 'Status do Sistema' },
     ]
 
+    const handleNavigate = (path) => {
+        navigate(path)
+        setMobileMenuOpen(false)
+    }
+
     return (
         <div className="super-admin-layout">
-            <aside className="super-admin-sidebar">
+            <header className="super-admin-mobile-header">
+                <button
+                    className="super-admin-mobile-menu-btn"
+                    onClick={() => setMobileMenuOpen(open => !open)}
+                    aria-label={mobileMenuOpen ? 'Fechar menu' : 'Abrir menu'}
+                >
+                    {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+                </button>
+                <span className="logo-text">FlowOS</span>
+            </header>
+
+            {mobileMenuOpen && (
+                <div className="super-admin-mobile-overlay" onClick={() => setMobileMenuOpen(false)} />
+            )}
+
+            <aside className={`super-admin-sidebar ${mobileMenuOpen ? 'mobile-open' : ''}`}>
                 <div className="sidebar-header">
                     <span className="logo-text">FlowOS</span>
                 </div>
@@ -38,7 +60,7 @@ export default function SuperAdminLayout() {
                         return (
                             <button
                                 key={item.path}
-                                onClick={() => navigate(item.path)}
+                                onClick={() => handleNavigate(item.path)}
                                 className={`nav-item ${isActive ? 'active' : ''}`}
                             >
                                 <Icon size={20} />

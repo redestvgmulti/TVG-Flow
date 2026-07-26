@@ -3,6 +3,7 @@ import { supabase } from '../../services/supabase'
 import { Database, Activity, RefreshCw, CheckCircle, AlertCircle, Users } from 'lucide-react'
 import '../../styles/super-admin-dashboard.css'
 import '../../styles/utilities.css'
+import '../../styles/refresh-button.css'
 
 export default function SystemStatusPage() {
     const [loading, setLoading] = useState(true)

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../../services/supabase';
-import { Check, CheckCircle2, Copy, Download, X, AlertCircle, RefreshCcw, ImageIcon, Brain, Search, SearchCode, Video, Image as ImageIconLucide } from 'lucide-react';
+import { Check, CheckCircle2, Copy, Download, X, AlertCircle, RefreshCcw, ImageIcon, Brain, Search, SearchCode, Video, Image as ImageIconLucide, Loader2 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import ArticleForm from '../../components/editorial/ArticleForm';
 import { availableVisualModelsForFormat } from '../../services/visualModels';
@@ -584,7 +584,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                 ) : isPollingRender ? (
                                     <div style={{ width: '100%', borderRadius: '16px', border: '1px dashed #bae6fd', background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)', padding: '32px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px', boxSizing: 'border-box' }}>
                                         <div style={{ width: 48, height: 48, background: '#3b82f6', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'spin 1.5s linear infinite' }}>
-                                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" /></svg>
+                                            <Loader2 size={24} color="#fff" strokeWidth={2.5} />
                                         </div>
                                         <p style={{ margin: 0, fontSize: '14px', color: '#0284c7', fontWeight: 700, textAlign: 'center' }}>Gerando arte...</p>
                                         <p style={{ margin: 0, fontSize: '12px', color: '#38bdf8', textAlign: 'center' }}>O Placid está renderizando seu card. Aguarde alguns segundos.</p>
@@ -600,7 +600,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                 ) : (
                                     <div style={{ width: '100%', borderRadius: '16px', border: '1px dashed #e2e8f0', background: '#f8fafc', padding: '28px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', boxSizing: 'border-box' }}>
                                         <div style={{ width: 48, height: 48, background: '#fee2e2', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+                                            <AlertCircle size={24} color="#ef4444" />
                                         </div>
                                         <p style={{ margin: 0, fontSize: '14px', color: '#475569', fontWeight: 600, textAlign: 'center', maxWidth: '300px' }}>
                                             A arte foi enviada para a fila de processamento. Ela estará disponível no seu Histórico em alguns instantes.

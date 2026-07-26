@@ -114,7 +114,7 @@ export default function TaskSummaryModal({ task, onClose, onUpdate, onEdit, onDe
                         <div className={`status-dot-sm ${getStatusColorClass(task.status)}`}></div>
                         <span>{getStatusText(task.status)}</span>
                     </div>
-                    <button onClick={onClose} className="modal-close-btn">
+                    <button onClick={onClose} className="task-summary-close-btn">
                         <X size={16} />
                     </button>
                 </div>
@@ -178,26 +178,26 @@ export default function TaskSummaryModal({ task, onClose, onUpdate, onEdit, onDe
                 <div className="modal-footer-action">
                     <button
                         onClick={handleToggleComplete}
-                        className={`btn-action ${task.status === 'concluida' ? 'btn-reopen' : 'btn-complete'}`}
+                        className={`ts-btn-action ${task.status === 'concluida' ? 'ts-btn-reopen' : 'ts-btn-complete'}`}
                         disabled={loading}
                     >
                         {task.status === 'concluida' ? (
                             <>
-                                <RefreshCw size={14} /> Reabrir Tarefa
+                                <RefreshCw size={14} /> <span className="ts-btn-label">Reabrir Tarefa</span>
                             </>
                         ) : (
                             <>
-                                <CheckCircle2 size={14} /> Concluir Tarefa
+                                <CheckCircle2 size={14} /> <span className="ts-btn-label">Concluir Tarefa</span>
                             </>
                         )}
                     </button>
-                    <a href="/admin/tasks" className="btn-open-task">
-                        Acessar tarefa completa <ExternalLink size={14} />
+                    <a href="/admin/tasks" className="ts-btn-open-task">
+                        <span className="ts-btn-label">Acessar tarefa completa</span> <ExternalLink size={14} />
                     </a>
                 </div>
             </div>
 
-            <style jsx>{`
+            <style>{`
                 .task-summary-overlay {
                     position: fixed;
                     inset: 0;
@@ -252,7 +252,7 @@ export default function TaskSummaryModal({ task, onClose, onUpdate, onEdit, onDe
                 .bg-blue-500 { background-color: #3b82f6; }
                 .bg-gray-400 { background-color: #9ca3af; }
 
-                .modal-close-btn {
+                .task-summary-close-btn {
                     background: none;
                     border: none;
                     color: #9ca3af;
@@ -262,7 +262,7 @@ export default function TaskSummaryModal({ task, onClose, onUpdate, onEdit, onDe
                     transition: all 0.2s;
                     display: flex;
                 }
-                .modal-close-btn:hover { background: #f3f4f6; color: #111827; }
+                .task-summary-close-btn:hover { background: #f3f4f6; color: #111827; }
 
                 .modal-task-title {
                     font-size: 18px;
@@ -323,15 +323,9 @@ export default function TaskSummaryModal({ task, onClose, onUpdate, onEdit, onDe
                     justify-content: space-between;
                     align-items: center;
                     gap: 12px;
-                    flex-direction: row;
                 }
-                .footer-left-actions, .footer-right-actions {
-                    display: flex;
-                    gap: 8px;
-                    align-items: center;
-                }
-                
-                .btn-action, .btn-icon-action, .btn-open-task {
+
+                .ts-btn-action, .ts-btn-open-task {
                     display: flex;
                     align-items: center;
                     justify-content: center;
@@ -346,71 +340,48 @@ export default function TaskSummaryModal({ task, onClose, onUpdate, onEdit, onDe
                     text-decoration: none;
                     white-space: nowrap;
                     height: 36px;
+                    flex-shrink: 0;
                 }
-
-                /* Edit/Delete Buttons */
-                .btn-edit {
-                    background: #f3f4f6;
-                    color: #374151;
-                    border: 1px solid #e5e7eb;
-                }
-                .btn-edit:hover { background: #e5e7eb; color: #111827; }
-                
-                .btn-delete {
-                    background: #fef2f2;
-                    color: #ef4444;
-                    border: 1px solid #fee2e2;
-                }
-                .btn-delete:hover { background: #fee2e2; color: #dc2626; }
 
                 /* Complete/Reopen Buttons */
-                .btn-complete {
+                .ts-btn-complete {
                     background: #ecfdf5;
                     color: #059669;
                     border: 1px solid #d1fae5;
                 }
-                .btn-complete:hover { background: #d1fae5; }
-                
-                .btn-reopen {
+                .ts-btn-complete:hover { background: #d1fae5; }
+
+                .ts-btn-reopen {
                     background: #fff7ed;
                     color: #d97706;
                     border: 1px solid #ffedd5;
                 }
-                .btn-reopen:hover { background: #ffedd5; }
+                .ts-btn-reopen:hover { background: #ffedd5; }
 
                 /* Open Task Link */
-                .btn-open-task {
+                .ts-btn-open-task {
                     background: transparent;
                     color: #4b5563;
                     border: 1px solid transparent;
                 }
-                .btn-open-task:hover {
+                .ts-btn-open-task:hover {
                     background: #f9fafb;
                     color: #111827;
                 }
 
-                /* Mobile Optimization */
-                @media (max-width: 768px) {
-                    .btn-label {
+                /* Mobile: icon-only footer buttons — full labels don't fit two
+                   actions side by side under ~400px, so we collapse to icons
+                   (with accessible text still in the DOM for screen readers). */
+                @media (max-width: 420px) {
+                    .ts-btn-label {
                         display: none;
                     }
-                    .btn-action, .btn-icon-action, .btn-open-task {
+                    .ts-btn-action, .ts-btn-open-task {
                         padding: 8px;
                         width: 36px;
                     }
-                    /* Keep Complete button text if possible, or icon only too? 
-                       User asked for Edit/Delete to be icon only. 
-                       Let's make sure critical actions are clear. 
-                       For now, hiding all labels on mobile to prevent overflow as requested.
-                    */
                 }
-                
-                /* But maybe keep "Concluir" label visible if space permits? 
-                   Let's keep it consistent: Icon only for strictly constrained mobile rows.
-                   Or: Show label for the primary action (Complete) and hide others.
-                   User request: "para mobile, deixe apenas os ícones já que o espaco é reduzido"
-                   Applying to ALL buttons in the footer to be safe.
-                */
+
                 @keyframes pulse {
                     0% { opacity: 0.6; }
                     50% { opacity: 1; }

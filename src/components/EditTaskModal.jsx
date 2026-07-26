@@ -275,8 +275,8 @@ export default function EditTaskModal({ task, isOpen, onClose, onSuccess, curren
                 {/* Body */}
                 <div className="modal-body" style={{ padding: '32px', backgroundColor: '#fafafa', display: 'flex', flexDirection: 'column', gap: '24px' }}>
                     
-                    {/* Title & Deadline - 2 Columns */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)', gap: '20px' }}>
+                    {/* Title & Deadline - 2 Columns (stacks on narrow screens, see .edit-task-title-deadline-grid) */}
+                    <div className="edit-task-title-deadline-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)', gap: '20px' }}>
                         <div className="form-group" style={{ marginBottom: 0 }}>
                             <label htmlFor="edit-title" style={{ fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Título</label>
                             <input
