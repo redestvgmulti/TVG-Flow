@@ -608,7 +608,7 @@ function Tasks() {
         try {
             const { error } = await supabase
                 .from('tarefas')
-                .update({ status: 'pending' })
+                .update({ status: TASK_STATUS.PENDENTE })
                 .eq('id', selectedTask.id)
 
             if (error) throw error
