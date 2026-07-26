@@ -1,4 +1,4 @@
-export const AP_EMPLOYEE_GENERATOR_VERSION = '2026-07-26-p0.1';
+export const AP_EMPLOYEE_GENERATOR_VERSION = '2026-07-26-p0.2';
 
 export const VISUAL_MODEL_SPONSORS = Object.freeze({
   tvg: 2,
