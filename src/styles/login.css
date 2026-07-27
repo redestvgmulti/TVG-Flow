@@ -1,0 +1,434 @@
+/* Login — implementa o "Login Wireframe" (Claude Design).
+   Layout dividido: painel de marca à esquerda, card de acesso à direita.
+   Os valores literais abaixo (raios, sombras, alturas) vêm da especificação do
+   wireframe; as cores de texto usam os tokens do app onde coincidem. */
+
+.login-shell {
+    display: flex;
+    min-height: 100vh;
+    min-height: 100dvh;
+    background: #EEF0F3;
+    color: var(--color-text-primary);
+}
+
+/* ── Painel de marca ─────────────────────────────────────────────────────── */
+.login-brand {
+    flex: 0 0 40%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 48px;
+    background:
+        radial-gradient(120% 80% at 20% 0%, #F4F5F7 0%, rgba(244, 245, 247, 0) 60%),
+        linear-gradient(160deg, #E7E9ED 0%, #DCDFE4 100%);
+    border-right: 1px solid #D6D9DE;
+}
+
+.login-brand-wordmark {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #555;
+}
+
+.login-brand-center {
+    text-align: center;
+}
+
+.login-brand-figure {
+    width: 120px;
+    height: 120px;
+    margin: 0 auto 24px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: #fff;
+    box-shadow: 0 12px 32px -12px rgba(20, 20, 30, 0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.login-brand-figure img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.login-brand-title {
+    font-size: 22px;
+    font-weight: 700;
+    margin: 0 0 8px;
+}
+
+.login-brand-text {
+    font-size: 13px;
+    color: #666;
+    max-width: 280px;
+    margin: 0 auto;
+    min-height: 40px;
+}
+
+/* Indicador do rotador de mensagens. São botões reais: o wireframe desenha um
+   carrossel, então os pontos navegam de fato em vez de decorar. */
+.login-brand-dots {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+}
+
+.login-dot {
+    width: 8px;
+    height: 4px;
+    padding: 0;
+    border: 0;
+    border-radius: 2px;
+    background: #B5B9C0;
+    cursor: pointer;
+    transition: width 0.3s ease, background 0.3s ease;
+}
+
+.login-dot[aria-current='true'] {
+    width: 24px;
+    background: #111;
+}
+
+.login-dot:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 3px;
+}
+
+/* ── Área do formulário ──────────────────────────────────────────────────── */
+.login-main {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 48px;
+}
+
+.login-card {
+    width: 100%;
+    max-width: 420px;
+    background: #FFFFFF;
+    border: 1px solid #D6D9DE;
+    border-radius: 20px;
+    padding: 40px;
+    box-shadow: 0 24px 60px -20px rgba(20, 20, 30, 0.15);
+}
+
+.login-card-mark {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 20px;
+    background: #F4F5F7;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.login-card-mark img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.login-title {
+    font-size: 26px;
+    font-weight: 700;
+    margin: 0 0 4px;
+}
+
+.login-subtitle {
+    font-size: 14px;
+    color: #666;
+    margin: 0 0 32px;
+}
+
+.login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* ── Campos com label flutuante ──────────────────────────────────────────── */
+.login-field {
+    position: relative;
+}
+
+.login-field-icon {
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #AEB3BA;
+    pointer-events: none;
+    transition: color 0.2s ease;
+}
+
+.login-input {
+    width: 100%;
+    height: 52px;
+    box-sizing: border-box;
+    padding: 0 16px 0 46px;
+    border: 1.5px solid #D6D9DE;
+    border-radius: 12px;
+    background: #FAFAFB;
+    font-size: 14px;
+    color: var(--color-text-primary);
+    outline: none;
+    transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.login-input:focus {
+    border-color: #1B1E27;
+    background: #fff;
+    box-shadow: 0 0 0 4px rgba(27, 30, 39, 0.08);
+}
+
+.login-input:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.login-field:focus-within .login-field-icon {
+    color: #1B1E27;
+}
+
+/* O label ocupa o lugar do placeholder enquanto o campo está vazio e sem foco,
+   e sobe para cima da borda assim que recebe foco ou conteúdo. */
+.login-field-label {
+    position: absolute;
+    left: 46px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 14px;
+    color: #AEB3BA;
+    pointer-events: none;
+    transition: all 0.18s ease;
+    background: transparent;
+}
+
+.login-input:focus + .login-field-label,
+.login-input:not(:placeholder-shown) + .login-field-label {
+    top: -8px;
+    left: 12px;
+    transform: none;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #8A8F98;
+    background: #fff;
+    padding: 0 6px;
+    border-radius: 4px;
+}
+
+/* O placeholder só aparece depois que o label sobe, para os dois não colidirem. */
+.login-input:placeholder-shown:not(:focus)::placeholder {
+    color: transparent;
+}
+
+.login-input::placeholder {
+    color: #AEB3BA;
+}
+
+.login-password-toggle {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: 0;
+    padding: 6px;
+    line-height: 0;
+    color: #AEB3BA;
+    cursor: pointer;
+    border-radius: 8px;
+}
+
+.login-password-toggle:hover {
+    color: #1B1E27;
+}
+
+.login-password-toggle:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+.login-input.has-toggle {
+    padding-right: 46px;
+}
+
+/* ── Ações ───────────────────────────────────────────────────────────────── */
+.login-forgot-row {
+    display: flex;
+    justify-content: flex-end;
+    margin: 8px 0 24px;
+}
+
+.login-link {
+    background: none;
+    border: 0;
+    padding: 0;
+    font-size: 12px;
+    color: #8A8F98;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.login-link:hover {
+    color: #1B1E27;
+}
+
+.login-link:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 3px;
+    border-radius: 4px;
+}
+
+.login-submit {
+    width: 100%;
+    height: 52px;
+    border: 0;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #1B1E27, #3A3F4D);
+    color: #fff;
+    font-weight: 600;
+    font-size: 15px;
+    cursor: pointer;
+    box-shadow: 0 12px 24px -8px rgba(20, 20, 30, 0.35);
+    transition: transform 0.15s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+
+.login-submit:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 16px 28px -8px rgba(20, 20, 30, 0.42);
+}
+
+.login-submit:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.login-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 20px 0;
+    color: #B5B9C0;
+    font-size: 11px;
+}
+
+.login-divider::before,
+.login-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #E4E6EA;
+}
+
+.login-sso {
+    width: 100%;
+    height: 48px;
+    border: 1.5px solid #D6D9DE;
+    border-radius: 12px;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #555;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.login-sso:hover:not(:disabled) {
+    border-color: #B5B9C0;
+    background: #FAFAFB;
+}
+
+.login-sso:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+.login-feedback {
+    font-size: 13px;
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 20px;
+}
+
+.login-feedback.is-error {
+    background: #FEF2F2;
+    border: 1px solid #FCA5A5;
+    color: #991B1B;
+}
+
+.login-feedback.is-success {
+    background: #ECFDF5;
+    border: 1px solid #6EE7B7;
+    color: #065F46;
+}
+
+.login-footer {
+    text-align: center;
+    border-top: 1px solid #EEF0F3;
+    padding-top: 16px;
+    margin-top: 28px;
+}
+
+.login-footer p {
+    margin: 0;
+    font-size: 11px;
+    color: #AEB3BA;
+}
+
+/* ── Responsivo ──────────────────────────────────────────────────────────── */
+/* O painel de marca é decorativo: abaixo de 1024px o card ocupa a tela, para o
+   acesso nunca competir por espaço com a ilustração. */
+@media (max-width: 1023px) {
+    .login-brand {
+        display: none;
+    }
+
+    .login-main {
+        padding: 32px 20px;
+    }
+}
+
+@media (max-width: 420px) {
+    .login-main {
+        padding: 20px 16px;
+    }
+
+    .login-card {
+        padding: 28px 20px;
+        border-radius: 16px;
+    }
+
+    .login-title {
+        font-size: 22px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    .login-input,
+    .login-field-label,
+    .login-submit,
+    .login-dot,
+    .login-sso {
+        transition: none;
+    }
+
+    .login-submit:hover:not(:disabled) {
+        transform: none;
+    }
+}
