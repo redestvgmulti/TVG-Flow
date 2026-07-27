@@ -303,12 +303,15 @@ serve(async (req) => {
             )
         }
 
+        // `cargo` was dropped from this table's real schema (added by the
+        // 2026-03-18 role/cargo migration series, never applied here) — see
+        // the same fix in src/components/forms/TaskForm.jsx. `funcao` is the
+        // NOT NULL column every other query in this codebase already reads.
         let query = supabaseClient
             .from('empresa_profissionais')
             .select(`
                 profissional_id,
                 funcao,
-                cargo,
                 profissionais!inner (
                     id,
                     nome,
@@ -321,7 +324,7 @@ serve(async (req) => {
         if (profissionaisIdsArr.length > 0) {
             query = query.in('profissional_id', profissionaisIdsArr)
         } else {
-            query = query.in('cargo', funcoesArr) // Fallback for older interface
+            query = query.in('funcao', funcoesArr) // Fallback for older interface
         }
 
         const { data: professionals, error: profError } = await query

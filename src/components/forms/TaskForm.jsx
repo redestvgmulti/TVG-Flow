@@ -108,13 +108,17 @@ export default function TaskForm({ onSuccess, onCancel }) {
         try {
             setLoadingProfessionals(true)
 
-            // ORIGINAL: Direct query to empresa_profissionais
+            // Direct query to empresa_profissionais. `cargo` was dropped from
+            // this table's real schema (added by the 2026-03-18 role/cargo
+            // migration series, never applied here) — every other query in
+            // this codebase already reads `funcao` only. The `p.cargo ||
+            // p.funcao || 'Sem Cargo'` fallbacks below keep working exactly
+            // as before, just always resolving through `funcao`.
             const { data, error } = await supabase
                 .from('empresa_profissionais')
                 .select(`
                     profissional_id,
                     funcao,
-                    cargo,
                     profissionais!inner (
                         id,
                         nome

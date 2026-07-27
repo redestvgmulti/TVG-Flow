@@ -284,6 +284,31 @@
     background-color: transparent;
 }
 
+/*
+ * GRAY SCALE COMPATIBILITY — a handful of pages (staff/Today, staff/Profile,
+ * professionals/index, ErrorBoundary) were written assuming Tailwind's
+ * gray-N utilities, which this project doesn't ship. Defining the standard
+ * Tailwind gray scale here (same hex values already hardcoded throughout
+ * the app, e.g. AutoPublisher.css) makes those classes resolve instead of
+ * silently doing nothing.
+ */
+.bg-gray-50 { background-color: #f9fafb; }
+.bg-gray-100 { background-color: #f3f4f6; }
+.bg-gray-200 { background-color: #e5e7eb; }
+.bg-gray-800 { background-color: #1f2937; }
+.bg-gray-900 { background-color: #111827; }
+.bg-gray-950 { background-color: #030712; }
+
+.text-gray-400 { color: #9ca3af; }
+.text-gray-500 { color: #6b7280; }
+.text-gray-600 { color: #4b5563; }
+.text-gray-800 { color: #1f2937; }
+.text-gray-900 { color: #111827; }
+
+.border-gray-100 { border-color: #f3f4f6; }
+.border-gray-200 { border-color: #e5e7eb; }
+.border-dashed { border-style: dashed; }
+
 /* Glassmorphism Utilities */
 .glass {
     background: var(--glass-bg);
@@ -309,12 +334,33 @@
     border-radius: var(--radius-xl);
 }
 
+.rounded-2xl {
+    border-radius: 16px;
+}
+
 .rounded-full {
     border-radius: var(--radius-full);
 }
 
 .border {
     border: 1px solid var(--color-border);
+}
+
+/* --- STACK SPACING (Tailwind space-y-N equivalent) --- */
+.space-y-3>*+* {
+    margin-top: var(--space-3);
+}
+
+.space-y-4>*+* {
+    margin-top: var(--space-4);
+}
+
+.space-y-5>*+* {
+    margin-top: var(--space-5);
+}
+
+.space-y-6>*+* {
+    margin-top: var(--space-6);
 }
 
 .border-b {

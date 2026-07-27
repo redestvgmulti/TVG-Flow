@@ -229,109 +229,15 @@ textarea:focus {
 }
 
 
-/* 
- * MODALS 
+/*
+ * MODALS
+ * The full .modal-backdrop/.modal/.modal-header/.modal-close/.modal-body/
+ * .modal-footer system lives below in "MODAL PREMIUM STYLES (CityOS V2)"
+ * (.modal-large is defined right after it there) — this used to duplicate
+ * it with an older, unused recipe that a later cascade rule always
+ * overrode. Only the scaleUp keyframe (still used by .animation-scale-in)
+ * was actually load-bearing here.
  */
-.modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background-color: rgba(30, 40, 50, 0.6);
-    /* Darker overlay - compensates reduced blur */
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 2000;
-    padding: var(--space-4);
-    animation: fadeIn 0.2s ease-out;
-}
-
-/* Performance: Only apply blur on desktop (GPU intensive on mobile) */
-@media (min-width: 768px) {
-    .modal-backdrop {
-        backdrop-filter: blur(4px);
-        -webkit-backdrop-filter: blur(4px);
-    }
-}
-
-.modal {
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
-    border: 1px solid rgba(255, 255, 255, 0.5);
-    border-radius: var(--radius-xl);
-    box-shadow: var(--shadow-xl);
-    width: 100%;
-    max-width: 540px;
-    max-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 32px);
-    display: flex;
-    flex-direction: column;
-    animation: scaleUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.modal-large {
-    max-width: 720px;
-}
-
-.modal-header {
-    padding: 20px 24px;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.modal-header h3 {
-    margin: 0;
-    font-size: 18px;
-    font-weight: 600;
-}
-
-.modal-close {
-    background: transparent;
-    border: none;
-    font-size: 20px;
-    color: var(--color-text-tertiary);
-    cursor: pointer;
-    width: 32px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    transition: all 0.2s;
-}
-
-.modal-close:hover {
-    background: rgba(0, 0, 0, 0.05);
-    color: var(--color-text-primary);
-}
-
-.modal-body {
-    padding: 24px;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-    /* Smooth scrolling on iOS */
-}
-
-.modal-footer {
-    padding: 20px 24px;
-    border-top: 1px solid rgba(0, 0, 0, 0.05);
-    display: flex;
-    justify-content: flex-end;
-    gap: 12px;
-    background: rgba(255, 255, 255, 0.4);
-}
-
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-    }
-
-    to {
-        opacity: 1;
-    }
-}
-
 @keyframes scaleUp {
     from {
         transform: scale(0.95);
@@ -344,8 +250,8 @@ textarea:focus {
     }
 }
 
-/* 
- * BADGES 
+/*
+ * BADGES
  */
 .badge {
     display: inline-flex;
@@ -1380,6 +1286,10 @@ textarea:focus {
     animation: modalSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
     position: relative;
     border: 1px solid rgba(255, 255, 255, 0.8);
+}
+
+.modal-large {
+    max-width: 720px;
 }
 
 @keyframes modalSlideUp {
@@ -2728,6 +2638,99 @@ textarea.input:focus {
     50% {
         opacity: 1;
     }
+}
+
+/*
+ * INFO BANNER — light tinted callout with icon, used inside modal bodies
+ * to explain a side-effect before the user confirms (e.g. "this will
+ * notify the assignee"). Neutral (blue) by default.
+ */
+.info-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 14px;
+    background: var(--color-primary-light);
+    border: 1px solid rgba(37, 99, 235, 0.15);
+    border-radius: 12px;
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+    margin-bottom: var(--space-5);
+}
+
+.info-banner svg {
+    flex-shrink: 0;
+    color: var(--color-primary);
+    margin-top: 1px;
+}
+
+.info-banner p {
+    margin: 0;
+}
+
+.info-banner.danger {
+    background: var(--color-danger-bg);
+    border-color: rgba(220, 38, 38, 0.2);
+}
+
+.info-banner.danger svg {
+    color: var(--color-danger);
+}
+
+.info-banner strong {
+    color: var(--color-text-primary);
+}
+
+/*
+ * SHARED CONFIRM MODAL CONTENT — centered icon badge + title + message,
+ * used inside .modal-body for delete/cancel/destructive confirmations
+ * (Tasks.jsx, Meetings.jsx, ConfirmDeleteModal, ReturnReasonModal).
+ */
+.confirm-modal-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--color-danger-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 16px;
+}
+
+.confirm-modal-icon svg {
+    color: var(--color-danger);
+}
+
+.confirm-modal-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin-bottom: 8px;
+    text-align: center;
+}
+
+.confirm-modal-message {
+    font-size: 14px;
+    color: var(--color-text-secondary);
+    text-align: center;
+    line-height: 1.5;
+    margin-bottom: 0;
+}
+
+.confirm-modal-highlight {
+    font-weight: 600;
+    color: var(--color-text-primary);
+}
+
+.confirm-modal-warning {
+    margin-top: 12px;
+    padding: 12px;
+    background: var(--color-warning-bg);
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    text-align: center;
 }
 
 /*

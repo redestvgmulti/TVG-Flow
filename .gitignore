@@ -41,3 +41,17 @@ start_log.txt
 
 # Scripts locais
 detect_conflicts.py
+
+# Local audit/QA scratchpad (screenshots, one-off debug scripts, seed data)
+# — never meant to be versioned; see scratch/ usage in session work.
+/scratch/
+
+# Local nested git clones and worktrees — infrastructure for parallel
+# sprint work, not project source. Accidentally added as gitlinks in
+# 0d5979a (a broad `git add` during a deploy-retrigger commit). Never
+# meant to be tracked; removing them from the index does not delete
+# the directories on disk.
+/.g1/
+/sprint-g1/
+/sprint-g3/
+/.worktrees/

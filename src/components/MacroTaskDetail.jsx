@@ -26,6 +26,11 @@ export default function MacroTaskDetail({ taskId, onBack, isModal = false, onEdi
     const [attachments, setAttachments] = useState([])
     const [loadingAttachments, setLoadingAttachments] = useState(false)
 
+    // Reopen action state — guards against double-submit on rapid clicks
+    const [reopening, setReopening] = useState(false)
+    const isMountedRef = useRef(true)
+    useEffect(() => () => { isMountedRef.current = false }, [])
+
     // Focus trap for accessibility when in modal mode
     useFocusTrap(isModal, detailRef)
 
@@ -215,6 +220,20 @@ export default function MacroTaskDetail({ taskId, onBack, isModal = false, onEdi
         } catch (error) {
             console.error('Error returning task:', error)
             toast.error(error.message || 'Erro ao devolver tarefa')
+        }
+    }
+
+    // Guards onReopen against rapid double-clicks — the parent's handler has
+    // no idea this button exists, so the button has to protect itself.
+    async function handleReopenClick() {
+        if (reopening || !onReopen) return
+        setReopening(true)
+        try {
+            await onReopen()
+        } finally {
+            // onReopen() closes this modal on success (parent unmounts us) —
+            // only touch state if we're still around to own it.
+            if (isMountedRef.current) setReopening(false)
         }
     }
 
@@ -501,11 +520,12 @@ export default function MacroTaskDetail({ taskId, onBack, isModal = false, onEdi
                     <div className="flex items-center gap-2 ml-auto">
                         {task.status === 'cancelada' && onReopen && (
                             <button
-                                onClick={onReopen}
+                                onClick={handleReopenClick}
                                 className="btn btn-secondary flex items-center gap-2"
                                 title="Reabrir OS"
+                                disabled={reopening}
                             >
-                                <RefreshCw size={16} /> Reabrir
+                                <RefreshCw size={16} className={reopening ? 'animate-spin' : ''} /> {reopening ? 'Reabrindo...' : 'Reabrir'}
                             </button>
                         )}
 

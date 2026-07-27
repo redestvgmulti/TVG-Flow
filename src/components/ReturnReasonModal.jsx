@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { X, AlertCircle } from 'lucide-react'
-import '../styles/modal.css'
+import { AlertCircle } from 'lucide-react'
+import Modal from './ui/Modal'
 
 export default function ReturnReasonModal({ microTask, professionals, onClose, onSubmit }) {
     const [targetProfessionalId, setTargetProfessionalId] = useState('')
@@ -30,86 +30,76 @@ export default function ReturnReasonModal({ microTask, professionals, onClose, o
     }
 
     return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="modal-container" onClick={(e) => e.stopPropagation()}>
-                <div className="modal-header">
-                    <h2 className="modal-title">Solicitar Ajuste</h2>
-                    <button onClick={onClose} className="modal-close-btn">
-                        <X size={20} />
+        <Modal
+            isOpen
+            onClose={onClose}
+            title="Solicitar Ajuste"
+            closeOnBackdrop={!submitting}
+            footer={(
+                <>
+                    <button type="button" onClick={onClose} className="btn btn-secondary" disabled={submitting}>
+                        Cancelar
                     </button>
-                </div>
-
-                <div className="modal-body">
-                    <div className="modal-info-box">
-                        <AlertCircle size={16} />
-                        <p>Esta etapa será devolvida para outro profissional revisar. O motivo é obrigatório para rastreabilidade.</p>
-                    </div>
-
-                    <form onSubmit={handleSubmit} className="modal-form">
-                        <div className="modal-form-group">
-                            <label className="modal-form-label">
-                                Devolver para *
-                            </label>
-                            <select
-                                className="modal-form-select"
-                                value={targetProfessionalId}
-                                onChange={(e) => setTargetProfessionalId(e.target.value)}
-                                required
-                                disabled={professionals.length === 0}
-                            >
-                                <option value="">
-                                    {professionals.length === 0
-                                        ? 'Nenhum outro profissional nesta tarefa'
-                                        : 'Selecione o profissional...'}
-                                </option>
-                                {professionals.map(p => (
-                                    <option key={p.profissional_id} value={p.profissional_id}>
-                                        {p.ordem != null ? `#${p.ordem} - ` : ''}{p.profissionais.nome} ({p.funcao})
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <div className="modal-form-group">
-                            <label className="modal-form-label">
-                                Motivo da Devolução *
-                            </label>
-                            <textarea
-                                className="modal-form-textarea"
-                                placeholder="Descreva o motivo do ajuste solicitado..."
-                                value={motivo}
-                                onChange={(e) => setMotivo(e.target.value)}
-                                rows={4}
-                                required
-                                minLength={10}
-                            />
-                            <span className="modal-form-hint" style={{
-                                color: motivo.trim().length < 10 ? '#ef4444' : '#64748b'
-                            }}>
-                                {motivo.trim().length}/10 caracteres mínimos
-                            </span>
-                        </div>
-
-                        <div className="modal-actions">
-                            <button
-                                type="button"
-                                onClick={onClose}
-                                className="modal-btn-cancel"
-                                disabled={submitting}
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                type="submit"
-                                className="modal-btn-submit"
-                                disabled={submitting || !targetProfessionalId || motivo.trim().length < 10}
-                            >
-                                {submitting ? 'Devolvendo...' : 'Devolver Etapa'}
-                            </button>
-                        </div>
-                    </form>
-                </div>
+                    <button
+                        type="submit"
+                        form="return-reason-form"
+                        className="btn btn-primary"
+                        disabled={submitting || !targetProfessionalId || motivo.trim().length < 10}
+                    >
+                        {submitting ? 'Devolvendo...' : 'Devolver Etapa'}
+                    </button>
+                </>
+            )}
+        >
+            <div className="info-banner">
+                <AlertCircle size={16} />
+                <p>Esta etapa será devolvida para outro profissional revisar. O motivo é obrigatório para rastreabilidade.</p>
             </div>
-        </div>
+
+            <form id="return-reason-form" onSubmit={handleSubmit}>
+                <div className="input-group">
+                    <label>Devolver para *</label>
+                    <select
+                        className="input"
+                        value={targetProfessionalId}
+                        onChange={(e) => setTargetProfessionalId(e.target.value)}
+                        required
+                        disabled={professionals.length === 0}
+                    >
+                        <option value="">
+                            {professionals.length === 0
+                                ? 'Nenhum outro profissional nesta tarefa'
+                                : 'Selecione o profissional...'}
+                        </option>
+                        {professionals.map(p => (
+                            <option key={p.profissional_id} value={p.profissional_id}>
+                                {p.ordem != null ? `#${p.ordem} - ` : ''}{p.profissionais.nome} ({p.funcao})
+                            </option>
+                        ))}
+                    </select>
+                </div>
+
+                <div className="input-group">
+                    <label>Motivo da Devolução *</label>
+                    <textarea
+                        className="input"
+                        placeholder="Descreva o motivo do ajuste solicitado..."
+                        value={motivo}
+                        onChange={(e) => setMotivo(e.target.value)}
+                        rows={4}
+                        required
+                        minLength={10}
+                    />
+                    <span style={{
+                        display: 'block',
+                        marginTop: '6px',
+                        fontSize: '12px',
+                        color: motivo.trim().length < 10 ? 'var(--color-danger)' : 'var(--color-text-tertiary)'
+                    }}>
+                        {motivo.trim().length}/10 caracteres mínimos
+                    </span>
+                </div>
+            </form>
+        </Modal>
     )
 }

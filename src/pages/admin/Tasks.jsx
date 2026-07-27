@@ -90,12 +90,6 @@ function Tasks() {
     // Bulk selection
     const [selectedTasks, setSelectedTasks] = useState([])
 
-    // Workflow Editing State (Legacy removed, keeping for safety if needed internally but EditTaskModal handles it)
-    const [workflowReferenceData, setWorkflowReferenceData] = useState({
-        professionals: [],
-        functions: []
-    })
-
     // Form state
     const [formData, setFormData] = useState({
         titulo: '',
@@ -442,41 +436,6 @@ function Tasks() {
         setShowEditModal(true)
     }
 
-    async function loadWorkflowReferenceData(clientId) {
-        if (!clientId) return
-        setLoadingWorkflowData(true)
-        try {
-            const { data, error } = await supabase
-                .from('empresa_profissionais')
-                .select(`
-                    profissional_id,
-                    funcao,
-                    profissionais!inner (
-                        id,
-                        nome
-                    )
-                `)
-                .eq('empresa_id', clientId)
-                .eq('ativo', true)
-
-            if (error) throw error
-
-            const professionals = data || []
-            const functions = [...new Set(professionals.map(p => p.funcao))]
-
-            setWorkflowReferenceData({
-                professionals,
-                functions
-            })
-        } catch (error) {
-            console.error('Error loading workflow data:', error)
-            toast.error('Erro ao carregar dados do workflow')
-        } finally {
-            setLoadingWorkflowData(false)
-        }
-    }
-
-
     async function refreshTaskDetails(taskId) {
         if (!taskId) return null
 
@@ -649,7 +608,7 @@ function Tasks() {
         try {
             const { error } = await supabase
                 .from('tarefas')
-                .update({ status: 'pending' })
+                .update({ status: TASK_STATUS.PENDENTE })
                 .eq('id', selectedTask.id)
 
             if (error) throw error
@@ -1393,16 +1352,7 @@ function Tasks() {
                             }
                             onReopen={
                                 (role === 'admin' || role === 'super_admin')
-                                    ? async () => {
-                                        try {
-                                            await handleReopenTask(selectedTask)
-                                            setShowDetailModal(false)
-                                            setSelectedTask(null)
-                                            fetchData()
-                                        } catch (error) {
-                                            console.error('Error reopening task:', error)
-                                        }
-                                    }
+                                    ? handleReopen
                                     : undefined
                             }
                         />
@@ -1415,15 +1365,15 @@ function Tasks() {
                 <div className="modal-backdrop" onClick={() => setShowDeleteModal(false)}>
                     <div className="modal" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-body">
-                            <div className="admin-tasks-delete-modal-icon">
+                            <div className="confirm-modal-icon">
                                 <AlertTriangle size={24} />
                             </div>
-                            <h3 className="admin-tasks-delete-modal-title">Excluir Tarefa</h3>
-                            <p className="admin-tasks-delete-modal-message">
+                            <h3 className="confirm-modal-title">Excluir Tarefa</h3>
+                            <p className="confirm-modal-message">
                                 Tem certeza que deseja excluir a tarefa{' '}
-                                <span className="admin-tasks-delete-modal-task-name">"{selectedTask.titulo}"</span>?
+                                <span className="confirm-modal-highlight">"{selectedTask.titulo}"</span>?
                             </p>
-                            <p className="admin-tasks-delete-modal-warning">
+                            <p className="confirm-modal-warning">
                                 ⚠️ Esta ação não pode ser desfeita.
                             </p>
                         </div>
@@ -1452,15 +1402,15 @@ function Tasks() {
                 <div className="modal-backdrop" onClick={() => setShowCancelModal(false)}>
                     <div className="modal" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-body">
-                            <div className="admin-tasks-delete-modal-icon">
+                            <div className="confirm-modal-icon">
                                 <AlertTriangle size={24} />
                             </div>
-                            <h3 className="admin-tasks-delete-modal-title">Cancelar Ordem de Serviço</h3>
-                            <p className="admin-tasks-delete-modal-message">
+                            <h3 className="confirm-modal-title">Cancelar Ordem de Serviço</h3>
+                            <p className="confirm-modal-message">
                                 Tem certeza que deseja cancelar a OS{' '}
-                                <span className="admin-tasks-delete-modal-task-name">"{selectedTask.titulo}"</span>?
+                                <span className="confirm-modal-highlight">"{selectedTask.titulo}"</span>?
                             </p>
-                            <p className="admin-tasks-delete-modal-warning">
+                            <p className="confirm-modal-warning">
                                 ⚠️ Esta ação não pode ser desfeita. A OS será movida para "Canceladas".
                             </p>
                         </div>
@@ -1489,17 +1439,17 @@ function Tasks() {
                 <div className="modal-backdrop" onClick={() => setShowBulkDeleteModal(false)}>
                     <div className="modal" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-body">
-                            <div className="admin-tasks-delete-modal-icon">
+                            <div className="confirm-modal-icon">
                                 <AlertTriangle size={24} />
                             </div>
-                            <h3 className="admin-tasks-delete-modal-title">Excluir Tarefas</h3>
-                            <p className="admin-tasks-delete-modal-message">
+                            <h3 className="confirm-modal-title">Excluir Tarefas</h3>
+                            <p className="confirm-modal-message">
                                 Tem certeza que deseja excluir{' '}
-                                <span className="admin-tasks-delete-modal-task-name">
+                                <span className="confirm-modal-highlight">
                                     {selectedTasks.length} {selectedTasks.length === 1 ? 'tarefa selecionada' : 'tarefas selecionadas'}
                                 </span>?
                             </p>
-                            <p className="admin-tasks-delete-modal-warning">
+                            <p className="confirm-modal-warning">
                                 ⚠️ Esta ação não pode ser desfeita.
                             </p>
                         </div>

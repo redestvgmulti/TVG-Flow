@@ -524,17 +524,17 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
     if (!isOpen) return null;
 
     return createPortal(
-        <div className="modal-backdrop" onClick={onClose} style={{ zIndex: 9999, padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box', width: '100vw', height: '100vh', position: 'fixed', top: 0, left: 0 }}>
-            <div className="ap-modal-content" onClick={e => e.stopPropagation()} style={{ background: '#ffffff', padding: '0', borderRadius: '20px', width: '100%', maxWidth: '560px', maxHeight: '100%', boxShadow: '0 24px 48px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05)', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
+        <div className="modal-backdrop" onClick={onClose}>
+            <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '560px', maxHeight: '90vh' }}>
 
                 {/* Header */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #f0f0f0', background: '#fafafa', flexShrink: 0 }}>
-                    <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#111827', margin: 0, display: 'flex', alignItems: 'center', gap: '10px', letterSpacing: '-0.02em' }}>
-                        <div style={{ background: '#eff6ff', color: '#3b82f6', padding: '8px', borderRadius: '10px', display: 'flex' }}><Brain size={18} /></div>
+                <div className="modal-header">
+                    <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary)', padding: '8px', borderRadius: '10px', display: 'inline-flex' }}><Brain size={18} /></span>
                         Nova Matéria
-                    </h2>
-                    <button onClick={onClose} style={{ background: '#f3f4f6', border: 'none', cursor: 'pointer', color: '#6b7280', width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}>
-                        <X size={18} />
+                    </h3>
+                    <button onClick={onClose} className="modal-close" aria-label="Fechar">
+                        <X size={20} />
                     </button>
                 </div>
 

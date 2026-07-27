@@ -12,6 +12,7 @@ import EditorialEngine from '../../features/editorial/EditorialEngine'
 import { SkeletonCard, SkeletonTable } from '../../components/Skeleton'
 import { toast } from 'sonner'
 import ArticleForm from '../../components/editorial/ArticleForm'
+import Modal from '../../components/ui/Modal'
 import { availableVisualModelsForFormat } from '../../services/visualModels'
 import { resolveOperationalClienteId } from '../../services/visualTitleGroups'
 import { loadVisualTitleCatalog } from '../../services/visualTitleCatalog'
@@ -851,62 +852,48 @@ export default function AutoPublisher() {
             </div>
 
             {/* ── Modal Nova Matéria */}
-            {isManualModalOpen && (
-                <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-                    <div className="ap-modal-content" style={{ background: '#ffffff', padding: '0', borderRadius: '20px', width: '560px', maxWidth: '100%', boxShadow: '0 24px 48px rgba(0,0,0,0.15)', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #f0f0f0', background: '#fafafa', flexShrink: 0 }}>
-                            <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#111827', margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                <div style={{ background: '#eff6ff', color: '#3b82f6', padding: '8px', borderRadius: '10px', display: 'flex' }}><Brain size={18} /></div>
-                                Nova Matéria
-                            </h2>
-                            <button onClick={() => { setManualModalOpen(false); setSelectedFile(null); setFormData({ url_original: '', titulo: '', conteudo: '', image_url: '', context_tag: '', content_type: 'feed', visual_title_id: null, visual_model: '', idempotency_key: null }) }} style={{ background: '#f3f4f6', border: 'none', cursor: 'pointer', color: '#6b7280', width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <X size={18} />
-                            </button>
-                        </div>
-
-                        <div style={{ display: 'flex', flexDirection: 'column', padding: '20px', gap: '20px', overflowY: 'auto', flex: 1, maxHeight: '75vh', boxSizing: 'border-box' }}>
-                            <ArticleForm
-                                mode="admin"
-                                formData={formData}
-                                setFormData={data => {
-                                    setFormData(data);
-                                    // Optionally clear errors here if mapped
-                                    setManualFormErrors({}); 
-                                }}
-                                errors={manualFormErrors}
-                                onSubmit={submitManualNews}
-                                isSubmitting={isSubmittingManual}
-                                onCancel={() => { setManualModalOpen(false); setSelectedFile(null); }}
-                                availableVisualModels={availableVisualModels}
-                                visualTitleGroups={visualTitleGroups}
-                                visualTitlesLoading={visualTitlesLoading}
-                                visualTitlesError={visualTitlesError}
-                                onRetryVisualTitles={loadAvailableVisualTitles}
-                                visualModelsState={visualModelsState}
-                                onRetryVisualModels={loadAvailableMasterRuntime}
-                                selectedFile={selectedFile}
-                                setSelectedFile={setSelectedFile}
-                            />
-                        </div>
-                    </div>
-                </div>
-            )}
+            <Modal
+                isOpen={isManualModalOpen}
+                onClose={() => { setManualModalOpen(false); setSelectedFile(null); setFormData({ url_original: '', titulo: '', conteudo: '', image_url: '', context_tag: '', content_type: 'feed', visual_title_id: null, visual_model: '', idempotency_key: null }) }}
+                title="Nova Matéria"
+                icon={Brain}
+                size="lg"
+            >
+                <ArticleForm
+                    mode="admin"
+                    formData={formData}
+                    setFormData={data => {
+                        setFormData(data);
+                        // Optionally clear errors here if mapped
+                        setManualFormErrors({});
+                    }}
+                    errors={manualFormErrors}
+                    onSubmit={submitManualNews}
+                    isSubmitting={isSubmittingManual}
+                    onCancel={() => { setManualModalOpen(false); setSelectedFile(null); }}
+                    availableVisualModels={availableVisualModels}
+                    visualTitleGroups={visualTitleGroups}
+                    visualTitlesLoading={visualTitlesLoading}
+                    visualTitlesError={visualTitlesError}
+                    onRetryVisualTitles={loadAvailableVisualTitles}
+                    visualModelsState={visualModelsState}
+                    onRetryVisualModels={loadAvailableMasterRuntime}
+                    selectedFile={selectedFile}
+                    setSelectedFile={setSelectedFile}
+                />
+            </Modal>
 
             {/* ── Modal Edição de Matéria */}
-            {editModalOpen && editingItem && (
-                <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-                    <div className="ap-modal-content" style={{ background: '#ffffff', padding: '0', borderRadius: '20px', width: '560px', maxWidth: '100%', boxShadow: '0 24px 48px rgba(0,0,0,0.15)', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #f0f0f0', background: '#fafafa', flexShrink: 0 }}>
-                            <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#111827', margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                <div style={{ background: '#f5f3ff', color: '#8b5cf6', padding: '8px', borderRadius: '10px', display: 'flex' }}><Pencil size={18} /></div>
-                                Editar Matéria
-                            </h2>
-                            <button onClick={() => { setEditModalOpen(false); setEditingItem(null) }} style={{ background: '#f3f4f6', border: 'none', cursor: 'pointer', color: '#6b7280', width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <X size={18} />
-                            </button>
-                        </div>
-
-                        <div style={{ display: 'flex', flexDirection: 'column', padding: '20px', gap: '20px', overflowY: 'auto', flex: 1, maxHeight: '75vh', boxSizing: 'border-box' }}>
+            <Modal
+                isOpen={editModalOpen && !!editingItem}
+                onClose={() => { setEditModalOpen(false); setEditingItem(null) }}
+                title="Editar Matéria"
+                icon={Pencil}
+                iconColor="#8b5cf6"
+                iconBg="#f5f3ff"
+                size="lg"
+            >
+                {editingItem && (
                             <form onSubmit={handleSaveEdit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', boxSizing: 'border-box' }}>
@@ -967,10 +954,8 @@ export default function AutoPublisher() {
                                     </button>
                                 </div>
                             </form>
-                        </div>
-                    </div>
-                </div>
-            )}
+                )}
+            </Modal>
         </>
     )
 }

@@ -183,52 +183,9 @@
     gap: 8px;
 }
 
-/* Delete Confirmation Modal */
-.admin-tasks-delete-modal-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    background: var(--color-danger-bg);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto 16px;
-}
-
-.admin-tasks-delete-modal-icon svg {
-    color: var(--color-danger);
-}
-
-.admin-tasks-delete-modal-title {
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--color-text-primary);
-    margin-bottom: 8px;
-    text-align: center;
-}
-
-.admin-tasks-delete-modal-message {
-    font-size: 14px;
-    color: var(--color-text-secondary);
-    text-align: center;
-    line-height: 1.5;
-    margin-bottom: 0;
-}
-
-.admin-tasks-delete-modal-task-name {
-    font-weight: 600;
-    color: var(--color-text-primary);
-}
-
-.admin-tasks-delete-modal-warning {
-    margin-top: 12px;
-    padding: 12px;
-    background: var(--color-warning-bg);
-    border-radius: 8px;
-    font-size: 13px;
-    color: var(--color-text-secondary);
-    text-align: center;
-}
+/* Delete confirmation modal content now lives in components.css as a
+   shared .confirm-modal-* pattern (used by Tasks.jsx, Meetings.jsx,
+   ConfirmDeleteModal, ReturnReasonModal). */
 
 /* Botão destrutivo (mesma estrutura do .btn-primary, em vermelho) */
 .btn-danger {

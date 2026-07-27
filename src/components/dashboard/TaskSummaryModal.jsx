@@ -102,7 +102,7 @@ export default function TaskSummaryModal({ task, onClose, onUpdate, onEdit, onDe
     }
 
     return (
-        <div className="task-summary-overlay" onClick={onClose}>
+        <div className="modal-backdrop" onClick={onClose}>
             <div
                 className="task-summary-modal"
                 onClick={e => e.stopPropagation()}
@@ -198,16 +198,6 @@ export default function TaskSummaryModal({ task, onClose, onUpdate, onEdit, onDe
             </div>
 
             <style>{`
-                .task-summary-overlay {
-                    position: fixed;
-                    inset: 0;
-                    background: rgba(0,0,0,0.2);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    z-index: 9999;
-                    backdrop-filter: blur(2px);
-                }
                 .task-summary-modal {
                     width: 100%;
                     max-width: 480px;

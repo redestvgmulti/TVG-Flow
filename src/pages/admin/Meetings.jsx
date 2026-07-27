@@ -504,13 +504,13 @@ function Meetings() {
                 <div className="modal-backdrop" style={{ zIndex: 1100 }}>
                     <div className="modal" style={{ maxWidth: '400px', height: 'auto' }} onClick={(e) => e.stopPropagation()}>
                         <div className="modal-body" style={{ textAlign: 'center', padding: '24px' }}>
-                            <div className="admin-tasks-delete-modal-icon">
+                            <div className="confirm-modal-icon">
                                 <AlertTriangle size={24} />
                             </div>
-                            <h3 className="admin-tasks-delete-modal-title">
+                            <h3 className="confirm-modal-title">
                                 Cancelar Reunião
                             </h3>
-                            <p className="admin-tasks-delete-modal-message" style={{ marginBottom: '24px' }}>
+                            <p className="confirm-modal-message" style={{ marginBottom: '24px' }}>
                                 Tem certeza que deseja cancelar esta reunião? Os participantes serão notificados automaticamente.
                             </p>
                             <div className="flex gap-3 justify-center" style={{ justifyContent: 'center' }}>
