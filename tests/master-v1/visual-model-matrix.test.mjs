@@ -13,8 +13,8 @@ const SUPABASE_URL = 'https://tenant.supabase.co'
 const MATRIX = [
   { contentType: 'feed', visualModel: 'tvg', uuid: 'mzszfje7xdh6l', sponsors: 2 },
   { contentType: 'reels', visualModel: 'tvg', uuid: 'xcxtk9tt7syfd', sponsors: 2 },
-  { contentType: 'feed', visualModel: 'misto', uuid: '3pm4re4blrizh', sponsors: 1 },
-  { contentType: 'reels', visualModel: 'misto', uuid: 'rrbcykdqcrqae', sponsors: 1 },
+  { contentType: 'feed', visualModel: 'tvg_img', uuid: '3pm4re4blrizh', sponsors: 1 },
+  { contentType: 'reels', visualModel: 'tvg_img', uuid: 'rrbcykdqcrqae', sponsors: 1 },
 ]
 
 const FEED_LAYERS = {
@@ -101,8 +101,8 @@ test('Feed nunca resolve um UUID de Reels e Reels nunca resolve um de Feed', () 
   }
 })
 
-test('Misto envia apenas patrocinador-1 e omite patrocinador-2', () => {
-  for (const row of MATRIX.filter(r => r.visualModel === 'misto')) {
+test('TVG + IMG envia apenas patrocinador-1 e omite patrocinador-2', () => {
+  for (const row of MATRIX.filter(r => r.visualModel === 'tvg_img')) {
     const plan = prepareRotationV1Render(candidate(row), SUPABASE_URL)
     assert.match(plan.layers['patrocinador-1'].image, /sponsors\/a\.png$/)
     assert.equal(plan.layers['patrocinador-2'], undefined)
@@ -152,12 +152,13 @@ test('o produtor deriva sponsor_count do modelo e rejeita o enviado pelo cliente
   const generator = await source('supabase/functions/ap-employee-generator/index.ts')
   const config = await source('supabase/functions/ap-employee-generator/masterConfiguration.ts')
   assert.match(config, /tvg:\s*2/)
-  assert.match(config, /misto:\s*1/)
+  assert.match(config, /tvg_img:\s*1/)
   assert.match(generator, /const sponsorCount = sponsorCountForVisualModel\(/)
   assert.match(generator, /p_sponsor_count: sponsorCount/)
   assert.match(generator, /SPONSOR_COUNT_NOT_ALLOWED/)
-  // The UUID is read from the database only, scoped by visual_model.
-  assert.match(generator, /\.eq\('visual_model', visualModel\)/)
+  // The UUID is read from the database only, scoped by visual_model — as an
+  // `.in()` while the rename window allows either slug to address the master.
+  assert.match(generator, /\.in\(\s*'visual_model',\s*masterLookupSlugs\(/)
   assert.match(generator, /MANUAL_TEMPLATE_NOT_ALLOWED/)
 })
 

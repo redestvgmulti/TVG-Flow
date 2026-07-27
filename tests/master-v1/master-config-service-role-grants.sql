@@ -132,9 +132,9 @@ INSERT INTO ap.master_render_configs (
     layer_map
 )
 VALUES
-    ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'feed', 'misto', 'grant-a-master', false,
+    ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'feed', 'tvg_img', 'grant-a-master', false,
      '{"headline":"titulo-materia","news_image":"news-image","visual_title":"titulo-png","sponsor_1":"patrocinador-1"}'::jsonb),
-    ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'feed', 'misto', 'grant-b-master', false,
+    ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'feed', 'tvg_img', 'grant-b-master', false,
      '{"headline":"titulo-materia","news_image":"news-image","visual_title":"titulo-png","sponsor_1":"patrocinador-1"}'::jsonb)
 ON CONFLICT (cliente_id, content_type, visual_model) DO NOTHING;
 

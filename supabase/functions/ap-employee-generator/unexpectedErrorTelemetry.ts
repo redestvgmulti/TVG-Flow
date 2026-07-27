@@ -129,7 +129,9 @@ export function buildGeneratorLogEvent(input: GeneratorLogContext & {
     code: input.code,
     cliente_id: safeUuid(input.clientId),
     content_type: safeEnum(input.contentType, ['feed', 'reels']),
-    visual_model: safeEnum(input.visualModel, ['tvg', 'misto']),
+    // Allow-list, not a write path: 'misto' stays listed only so a rejected
+    // legacy request is still observable in the logs instead of vanishing.
+    visual_model: safeEnum(input.visualModel, ['tvg', 'tvg_img', 'misto']),
     has_visual_title_id: Boolean(input.hasVisualTitleId),
     has_source_image: Boolean(input.hasSourceImage),
     article_id: safeUuid(input.articleId),

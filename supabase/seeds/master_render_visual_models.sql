@@ -10,10 +10,10 @@
 --
 -- Matrix (sponsor count is implied by the model, never stored here and never
 -- chosen by the operator):
---   feed  + tvg    → mzszfje7xdh6l → 2 patrocinadores
---   reels + tvg    → xcxtk9tt7syfd → 2 patrocinadores
---   feed  + misto  → 3pm4re4blrizh → 1 patrocinador
---   reels + misto  → rrbcykdqcrqae → 1 patrocinador
+--   feed  + tvg      → mzszfje7xdh6l → 2 patrocinadores
+--   reels + tvg      → xcxtk9tt7syfd → 2 patrocinadores
+--   feed  + tvg_img  → 3pm4re4blrizh → 1 patrocinador
+--   reels + tvg_img  → rrbcykdqcrqae → 1 patrocinador
 --
 -- Fixed layer map (identical for every client; never exposed in the UI):
 --   headline     → "titulo-materia"   (article headline TEXT)
@@ -28,7 +28,11 @@
 -- template_set stays NULL here: it is not part of the master identity. The
 -- sponsor rotation scope is 'default' and is shared by both visual models, so
 -- each sponsor is registered ONCE (Patrocinadores tab) and rotates across TVG
--- and Misto within a format.
+-- and TVG + IMG within a format.
+--
+-- Re-running never re-enables a master that was deliberately disabled: the
+-- ON CONFLICT branch preserves the current `enabled`. Enabling is always an
+-- explicit, separate operator decision.
 -- ============================================================================
 
 \if :{?cliente_id}
@@ -44,15 +48,15 @@ INSERT INTO ap.master_render_configs
     (cliente_id, content_type, visual_model, master_template_uuid, enabled, layer_map)
 VALUES
     -- FEED
-    (:'cliente_id', 'feed',  'tvg',   'mzszfje7xdh6l', true, :'feed_layers'::jsonb),
-    (:'cliente_id', 'feed',  'misto', '3pm4re4blrizh', true, :'feed_layers'::jsonb),
+    (:'cliente_id', 'feed',  'tvg',     'mzszfje7xdh6l', true, :'feed_layers'::jsonb),
+    (:'cliente_id', 'feed',  'tvg_img', '3pm4re4blrizh', true, :'feed_layers'::jsonb),
     -- REELS
-    (:'cliente_id', 'reels', 'tvg',   'xcxtk9tt7syfd', true, :'reels_layers'::jsonb),
-    (:'cliente_id', 'reels', 'misto', 'rrbcykdqcrqae', true, :'reels_layers'::jsonb)
+    (:'cliente_id', 'reels', 'tvg',     'xcxtk9tt7syfd', true, :'reels_layers'::jsonb),
+    (:'cliente_id', 'reels', 'tvg_img', 'rrbcykdqcrqae', true, :'reels_layers'::jsonb)
 ON CONFLICT (cliente_id, content_type, visual_model)
 DO UPDATE SET
     master_template_uuid = EXCLUDED.master_template_uuid,
-    enabled = EXCLUDED.enabled,
+    enabled = ap.master_render_configs.enabled,
     layer_map = EXCLUDED.layer_map;
 
 -- Ensure the kill switch is off so the master path is live.

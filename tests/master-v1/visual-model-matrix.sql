@@ -1,6 +1,6 @@
--- Certifies the fixed TVG/Misto matrix directly against the migrated schema:
--- the widened unique key, the four templates, the derived sponsor counts, the
--- shared rotation cursor and the fail-closed pool guard.
+-- Certifies the fixed TVG / TVG + IMG matrix directly against the migrated
+-- schema: the widened unique key, the four templates, the derived sponsor
+-- counts, the shared rotation cursor and the fail-closed pool guard.
 -- Self-contained: everything runs inside one transaction and is rolled back.
 \set ON_ERROR_STOP on
 BEGIN;
@@ -27,10 +27,10 @@ SELECT set_config(
 INSERT INTO ap.master_render_configs
     (cliente_id, content_type, visual_model, master_template_uuid, enabled, layer_map)
 VALUES
-    (:'cliente_id', 'feed',  'tvg',   'mzszfje7xdh6l', true, :'feed_layers'::jsonb),
-    (:'cliente_id', 'feed',  'misto', '3pm4re4blrizh', true, :'feed_layers'::jsonb),
-    (:'cliente_id', 'reels', 'tvg',   'xcxtk9tt7syfd', true, :'reels_layers'::jsonb),
-    (:'cliente_id', 'reels', 'misto', 'rrbcykdqcrqae', true, :'reels_layers'::jsonb);
+    (:'cliente_id', 'feed',  'tvg',     'mzszfje7xdh6l', true, :'feed_layers'::jsonb),
+    (:'cliente_id', 'feed',  'tvg_img', '3pm4re4blrizh', true, :'feed_layers'::jsonb),
+    (:'cliente_id', 'reels', 'tvg',     'xcxtk9tt7syfd', true, :'reels_layers'::jsonb),
+    (:'cliente_id', 'reels', 'tvg_img', 'rrbcykdqcrqae', true, :'reels_layers'::jsonb);
 
 DO $$
 BEGIN
@@ -66,18 +66,26 @@ END;
 $$;
 
 -- ── An unknown visual model is rejected by the CHECK ────────────────────────
+-- 'misto' is included on purpose: after the 20260727120000 rename it is no
+-- longer a storable master slug, it survives only inside frozen snapshots.
 DO $$
+DECLARE
+    v_retired text;
 BEGIN
-    BEGIN
-        INSERT INTO ap.master_render_configs
-            (cliente_id, content_type, visual_model, master_template_uuid, enabled, layer_map)
-        VALUES
-            ('11111111-1111-4111-8111-111111111111', 'feed', 'itumbiara',
-             'removed-model', true, '{}'::jsonb);
-        RAISE EXCEPTION 'ASSERTION: visual_model outside (tvg, misto) was accepted';
-    EXCEPTION WHEN check_violation THEN
-        NULL; -- expected
-    END;
+    FOREACH v_retired IN ARRAY ARRAY['itumbiara', 'misto'] LOOP
+        BEGIN
+            INSERT INTO ap.master_render_configs
+                (cliente_id, content_type, visual_model, master_template_uuid, enabled, layer_map)
+            VALUES
+                ('11111111-1111-4111-8111-111111111111', 'feed', v_retired,
+                 'removed-model', true, '{}'::jsonb);
+            RAISE EXCEPTION
+                'ASSERTION: visual_model % outside (tvg, tvg_img) was accepted',
+                v_retired;
+        EXCEPTION WHEN check_violation THEN
+            NULL; -- expected
+        END;
+    END LOOP;
 END;
 $$;
 
@@ -87,8 +95,8 @@ DECLARE
     v_expected jsonb := '{
         "feed/tvg": "mzszfje7xdh6l",
         "reels/tvg": "xcxtk9tt7syfd",
-        "feed/misto": "3pm4re4blrizh",
-        "reels/misto": "rrbcykdqcrqae"
+        "feed/tvg_img": "3pm4re4blrizh",
+        "reels/tvg_img": "rrbcykdqcrqae"
     }'::jsonb;
     v_key text;
     v_uuid text;
@@ -129,7 +137,7 @@ VALUES
     ('22222222-2222-4222-8222-00000000000b', :'cliente_id', 'default', 'feed', 1),
     ('22222222-2222-4222-8222-00000000000c', :'cliente_id', 'default', 'feed', 2);
 
--- ── TVG takes two, Misto takes one, from one shared cursor ─────────────────
+-- ── TVG takes two, TVG + IMG takes one, from one shared cursor ─────────────────
 DO $$
 DECLARE
     v_result jsonb;
@@ -166,28 +174,28 @@ BEGIN
         RAISE EXCEPTION 'ASSERTION: master_v1 must anchor the legacy uuid to the master';
     END IF;
 
-    -- Misto feed → sponsor C only, continuing the SAME cursor.
+    -- TVG + IMG feed → sponsor C only, continuing the SAME cursor.
     v_base := jsonb_build_object(
         'master_config', jsonb_build_object(
-            'master_template_uuid', '3pm4re4blrizh', 'visual_model', 'misto'),
-        'visual_model', 'misto',
+            'master_template_uuid', '3pm4re4blrizh', 'visual_model', 'tvg_img'),
+        'visual_model', 'tvg_img',
         'layer_map', '{"headline":"titulo-materia"}'::jsonb);
     v_result := ap.create_candidate_with_sponsors(
         '11111111-1111-4111-8111-111111111111',
         gen_random_uuid(), 'feed', 'default', 1::smallint,
-        'Materia Misto', 'conteudo', NULL, NULL, 'DESTAQUE', NULL, NULL,
+        'Materia TVG IMG', 'conteudo', NULL, NULL, 'DESTAQUE', NULL, NULL,
         'master_v1', v_base);
     v_items := v_result -> 'sponsor_selection' -> 'items';
 
     IF jsonb_array_length(v_items) <> 1 THEN
-        RAISE EXCEPTION 'ASSERTION: misto must select exactly one sponsor';
+        RAISE EXCEPTION 'ASSERTION: tvg_img must select exactly one sponsor';
     END IF;
     IF (v_items -> 0 ->> 'slot') <> 'sponsor_1' THEN
         RAISE EXCEPTION 'ASSERTION: the single sponsor must land in sponsor_1';
     END IF;
     IF (v_items -> 0 ->> 'name') <> 'Sponsor C' THEN
         RAISE EXCEPTION
-            'ASSERTION: misto must continue the shared cursor (expected Sponsor C)';
+            'ASSERTION: tvg_img must continue the shared cursor (expected Sponsor C)';
     END IF;
 
     -- TVG again → wraps back to A and B, proving one shared cursor per format.
@@ -243,13 +251,13 @@ BEGIN
 END;
 $$;
 
--- ── Misto with an empty pool also fails closed ─────────────────────────────
+-- ── TVG + IMG with an empty pool also fails closed ─────────────────────────────
 DO $$
 DECLARE
     v_base jsonb := jsonb_build_object(
         'master_config', jsonb_build_object(
-            'master_template_uuid', 'rrbcykdqcrqae', 'visual_model', 'misto'),
-        'visual_model', 'misto',
+            'master_template_uuid', 'rrbcykdqcrqae', 'visual_model', 'tvg_img'),
+        'visual_model', 'tvg_img',
         'layer_map', '{"headline":"titulo-materia"}'::jsonb);
 BEGIN
     UPDATE ap.render_sponsor_scope_memberships
@@ -261,9 +269,9 @@ BEGIN
         PERFORM ap.create_candidate_with_sponsors(
             '11111111-1111-4111-8111-111111111111',
             gen_random_uuid(), 'reels', 'default', 1::smallint,
-            'Materia Misto reels', 'conteudo', NULL, NULL, 'DESTAQUE', NULL, NULL,
+            'Materia TVG IMG reels', 'conteudo', NULL, NULL, 'DESTAQUE', NULL, NULL,
             'master_v1', v_base);
-        RAISE EXCEPTION 'ASSERTION: misto without an active sponsor must fail closed';
+        RAISE EXCEPTION 'ASSERTION: tvg_img without an active sponsor must fail closed';
     EXCEPTION WHEN raise_exception THEN
         IF SQLERRM NOT LIKE 'SPONSOR_POOL_INSUFFICIENT%' THEN
             RAISE;

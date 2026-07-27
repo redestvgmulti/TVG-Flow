@@ -243,7 +243,7 @@ BEGIN
 END;
 $$;
 
--- ── The registered catalog feeds the real rotation: TVG 2, Misto 1 ────────
+-- ── The registered catalog feeds the real rotation: TVG 2, TVG + IMG 1 ────────
 DO $$
 DECLARE
     v_base_tvg jsonb := jsonb_build_object(
@@ -251,10 +251,10 @@ DECLARE
             'master_template_uuid', 'mzszfje7xdh6l', 'visual_model', 'tvg'),
         'visual_model', 'tvg',
         'layer_map', '{"headline":"titulo-materia"}'::jsonb);
-    v_base_misto jsonb := jsonb_build_object(
+    v_base_tvg_img jsonb := jsonb_build_object(
         'master_config', jsonb_build_object(
-            'master_template_uuid', '3pm4re4blrizh', 'visual_model', 'misto'),
-        'visual_model', 'misto',
+            'master_template_uuid', '3pm4re4blrizh', 'visual_model', 'tvg_img'),
+        'visual_model', 'tvg_img',
         'layer_map', '{"headline":"titulo-materia"}'::jsonb);
     v jsonb;
 BEGIN
@@ -268,10 +268,10 @@ BEGIN
 
     v := ap.create_candidate_with_sponsors(
         '33333333-3333-4333-8333-333333333333', gen_random_uuid(),
-        'feed', 'default', 1::smallint, 'Materia Misto', 'txt',
-        NULL, NULL, 'DESTAQUE', NULL, NULL, 'master_v1', v_base_misto);
+        'feed', 'default', 1::smallint, 'Materia TVG IMG', 'txt',
+        NULL, NULL, 'DESTAQUE', NULL, NULL, 'master_v1', v_base_tvg_img);
     IF jsonb_array_length(v -> 'sponsor_selection' -> 'items') <> 1 THEN
-        RAISE EXCEPTION 'ASSERTION: misto did not consume one sponsor';
+        RAISE EXCEPTION 'ASSERTION: tvg_img did not consume one sponsor';
     END IF;
     IF (v #>> '{sponsor_selection,items,0,slot}') <> 'sponsor_1' THEN
         RAISE EXCEPTION 'ASSERTION: the single sponsor did not land in sponsor_1';
@@ -281,7 +281,7 @@ BEGIN
     IF (SELECT count(*) FROM ap.render_sponsor_rotation_state
         WHERE cliente_id = '33333333-3333-4333-8333-333333333333'
           AND content_type = 'feed') <> 1 THEN
-        RAISE EXCEPTION 'ASSERTION: tvg and misto did not share one feed cursor';
+        RAISE EXCEPTION 'ASSERTION: tvg and tvg_img did not share one feed cursor';
     END IF;
 END;
 $$;

@@ -14,8 +14,13 @@ import {
   AP_EMPLOYEE_GENERATOR_VERSION,
   MasterConfigurationError,
   masterConfigurationPublicMessage,
+  isLegacyVisualModel,
+  LEGACY_INPUT_POLICY_ENV,
+  masterLookupSlugs,
+  normalizeHistoricalVisualModel,
   normalizeVisualModel,
   requireMasterConfiguration,
+  resolveLegacyInputPolicy,
   sponsorCountForVisualModel,
   type VisualModel,
 } from './masterConfiguration.ts';
@@ -34,6 +39,15 @@ const corsHeaders = {
 };
 const jsonHeaders = { ...corsHeaders, 'Content-Type': 'application/json' };
 const ROTATION_TEMPLATE_SET = 'default';
+
+// Phase 1–3 of the slug rollout: tolerate the retired slug on the way IN and
+// normalize it, so an old browser tab and a not-yet-migrated database both keep
+// working. Phase 4 sets AP_LEGACY_VISUAL_MODEL_INPUT=reject and the retired slug
+// starts returning MASTER_MODEL_RETIRED. Either way, nothing retired is ever
+// written: the snapshot always freezes the canonical model.
+const LEGACY_INPUT_POLICY = resolveLegacyInputPolicy(
+  Deno.env.get(LEGACY_INPUT_POLICY_ENV),
+);
 
 const isUUID = (value: unknown) =>
   typeof value === 'string' &&
@@ -250,7 +264,11 @@ Deno.serve(async (req: Request) => {
       idempotency_key = null,
     } = body;
 
-    const visualModel = normalizeVisualModel(rawVisualModel);
+    // Under the transitional policy the retired slug is normalized to its
+    // canonical model; under the hardened policy only current slugs resolve.
+    const visualModel = LEGACY_INPUT_POLICY === 'accept'
+      ? normalizeHistoricalVisualModel(rawVisualModel)
+      : normalizeVisualModel(rawVisualModel);
     context = {
       correlationId,
       clientId: requestedClienteId,
@@ -289,6 +307,19 @@ Deno.serve(async (req: Request) => {
         'MASTER_MODEL_REQUIRED',
         'Selecione o modelo visual antes de gerar a materia.',
         422,
+        'request_validation',
+      );
+    }
+    // Phase 4 only. The retired slug is refused explicitly instead of falling
+    // through to a generic "invalid" error, and never degrades into the legacy
+    // render contract: committed candidates that carry it keep rendering from
+    // their frozen snapshot, which this endpoint never rewrites.
+    if (LEGACY_INPUT_POLICY === 'reject' && isLegacyVisualModel(rawVisualModel)) {
+      return errorResponse(
+        context,
+        'MASTER_MODEL_RETIRED',
+        'Este modelo visual foi substituido. Selecione TVG ou TVG + IMG.',
+        400,
         'request_validation',
       );
     }
@@ -467,6 +498,11 @@ Deno.serve(async (req: Request) => {
               .select('kill_switch')
               .eq('cliente_id', clienteId)
               .maybeSingle(),
+          // Both slugs are looked up during the migration window. If a tenant
+          // somehow owns both rows for the same format, maybeSingle() errors
+          // and the request fails closed rather than picking one arbitrarily —
+          // the same collision the rename migration refuses to resolve on its
+          // own.
           readConfig: () =>
             supabase
               .schema('ap')
@@ -474,7 +510,13 @@ Deno.serve(async (req: Request) => {
               .select('*')
               .eq('cliente_id', clienteId)
               .eq('content_type', content_type)
-              .eq('visual_model', visualModel)
+              .in(
+                'visual_model',
+                masterLookupSlugs(
+                  visualModel as VisualModel,
+                  LEGACY_INPUT_POLICY === 'accept',
+                ),
+              )
               .maybeSingle(),
         });
       } catch (error) {
@@ -491,14 +533,18 @@ Deno.serve(async (req: Request) => {
       }
 
       stage = 'build_snapshot';
+      // The snapshot freezes the CANONICAL model, never config.visual_model.
+      // That is what makes reading a not-yet-migrated row safe: the UUID and
+      // the layer map come from the row verbatim, but a brand-new matéria can
+      // never be born carrying the retired slug.
       renderSnapshotBase = {
         master_config: {
           id: config.id,
           master_template_uuid: config.master_template_uuid,
           enabled: config.enabled,
-          visual_model: config.visual_model,
+          visual_model: visualModel,
         },
-        visual_model: config.visual_model,
+        visual_model: visualModel,
         layer_map: config.layer_map,
       };
       logEvent(context, stage, 'MASTER_CONFIG_LOADED');

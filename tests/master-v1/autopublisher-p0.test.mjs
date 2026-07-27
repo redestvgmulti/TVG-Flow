@@ -26,11 +26,11 @@ const root = new URL('../../', import.meta.url)
 const source = path => readFile(new URL(path, root), 'utf8')
 
 const baseConfig = {
-  id: 'master-feed-misto',
+  id: 'master-feed-tvg-img',
   content_type: 'feed',
-  visual_model: 'misto',
+  visual_model: 'tvg_img',
   enabled: true,
-  master_template_uuid: 'master-feed-misto-uuid',
+  master_template_uuid: 'master-feed-tvg-img-uuid',
   layer_map: {
     headline: 'titulo-materia',
     news_image: 'news-image',
@@ -41,21 +41,24 @@ const baseConfig = {
 
 const reads = ({ control = null, config = baseConfig, controlError = null, configError = null } = {}) => ({
   contentType: 'feed',
-  visualModel: 'misto',
+  visualModel: 'tvg_img',
   readControl: async () => ({ data: control, error: controlError }),
   readConfig: async () => ({ data: config, error: configError }),
 })
 
-test('manual visual_model is required and accepts only tvg or misto', async () => {
+test('manual visual_model is required and accepts only tvg or tvg_img', async () => {
   assert.equal(normalizeVisualModel(null), null)
   assert.equal(normalizeVisualModel(''), null)
   assert.equal(normalizeVisualModel('outro'), null)
   assert.equal(normalizeVisualModel(' TVG '), 'tvg')
-  assert.equal(normalizeVisualModel('Misto'), 'misto')
+  assert.equal(normalizeVisualModel(' TVG_IMG '), 'tvg_img')
+  // The historical slug is not a valid value for a new request.
+  assert.equal(normalizeVisualModel('misto'), null)
 
   const generator = await source('supabase/functions/ap-employee-generator/index.ts')
   assert.match(generator, /MASTER_MODEL_REQUIRED/)
   assert.match(generator, /MASTER_MODEL_INVALID/)
+  assert.match(generator, /MASTER_MODEL_RETIRED/)
 })
 
 test('master disabled, missing, invalid, permission denied or query failure block', async () => {
@@ -77,7 +80,7 @@ test('master disabled, missing, invalid, permission denied or query failure bloc
 
 test('visual model derives sponsor count and UUID/layers come from master config', async () => {
   assert.equal(sponsorCountForVisualModel('tvg'), 2)
-  assert.equal(sponsorCountForVisualModel('misto'), 1)
+  assert.equal(sponsorCountForVisualModel('tvg_img'), 1)
 
   const resolved = await requireMasterConfiguration(reads())
   assert.equal(resolved.master_template_uuid, baseConfig.master_template_uuid)
@@ -128,7 +131,7 @@ test('frontend distinguishes loading, empty, error and available', () => {
   assert.equal(visualModelsStateFor(MASTER_RUNTIME_STATUS.LOADING, []), VISUAL_MODELS_STATE.LOADING)
   assert.equal(visualModelsStateFor(MASTER_RUNTIME_STATUS.READY, []), VISUAL_MODELS_STATE.EMPTY)
   assert.equal(visualModelsStateFor(MASTER_RUNTIME_STATUS.ERROR, []), VISUAL_MODELS_STATE.ERROR)
-  assert.equal(visualModelsStateFor(MASTER_RUNTIME_STATUS.READY, [{ slug: 'misto' }]), VISUAL_MODELS_STATE.AVAILABLE)
+  assert.equal(visualModelsStateFor(MASTER_RUNTIME_STATUS.READY, [{ slug: 'tvg_img' }]), VISUAL_MODELS_STATE.AVAILABLE)
   assert.equal(visualModelsBlockMessage(VISUAL_MODELS_STATE.EMPTY), 'Nenhum modelo visual está habilitado para este formato.')
   assert.equal(visualModelsBlockMessage(VISUAL_MODELS_STATE.ERROR), 'Não foi possível carregar os modelos visuais. Tente novamente.')
 })
@@ -142,7 +145,7 @@ test('frontend blocks both empty and error, retries loading, and shows enabled m
   assert.match(form, /Recarregar configuração/)
 
   const models = availableVisualModelsForFormat([baseConfig], { kill_switch: false }, 'feed')
-  assert.deepEqual(models.map(model => model.slug), ['misto'])
+  assert.deepEqual(models.map(model => model.slug), ['tvg_img'])
 })
 
 test('logs include safe code and version without accepting secrets or signed URLs', async () => {
@@ -150,7 +153,7 @@ test('logs include safe code and version without accepting secrets or signed URL
     articleId: '11111111-1111-4111-8111-111111111111',
     clientId: '22222222-2222-4222-8222-222222222222',
     contentType: 'feed',
-    visualModel: 'misto',
+    visualModel: 'tvg_img',
     stage: 'master_render_configs',
     code: 'MASTER_CONFIG_READ_FAILED',
   })

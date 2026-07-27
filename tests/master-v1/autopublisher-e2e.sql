@@ -68,7 +68,7 @@ SELECT pg_temp.assert_raises(
     'a second feed/tvg master was accepted for one tenant'
 );
 INSERT INTO ap.master_render_configs (cliente_id, content_type, visual_model, master_template_uuid, enabled, layer_map)
-VALUES (:A, 'feed', 'misto', 'master-feed-misto', true,
+VALUES (:A, 'feed', 'tvg_img', 'master-feed-tvg-img', true,
         '{"visual_title":"tag-png","sponsor_1":"patrocinador-1"}'::jsonb);
 SELECT pg_temp.assert_true(
     (SELECT count(*) = 2 FROM ap.master_render_configs WHERE cliente_id = :A AND content_type='feed' AND enabled),

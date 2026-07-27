@@ -32,32 +32,32 @@ const config = (contentType, visualModel, overrides = {}) => ({
 })
 
 test('the catalog is exactly the two visual models', () => {
-  assert.deepEqual(VISUAL_MODELS.map(model => model.slug), ['tvg', 'misto'])
+  assert.deepEqual(VISUAL_MODELS.map(model => model.slug), ['tvg', 'tvg_img'])
   assert.equal(VISUAL_MODELS.length, 2)
   // Itumbiara isolada was removed from the product: it must not come back.
   assert.ok(!VISUAL_MODELS.some(model => model.slug.includes('itumbiara')))
   assert.equal(visualModelLabel('tvg'), 'TVG')
-  assert.equal(visualModelLabel('misto'), 'TVG + IMG')
+  assert.equal(visualModelLabel('tvg_img'), 'TVG + IMG')
 })
 
 test('sponsor count is fixed by the visual model', () => {
   assert.equal(sponsorCountForVisualModel('tvg'), 2)
-  assert.equal(sponsorCountForVisualModel('misto'), 1)
+  assert.equal(sponsorCountForVisualModel('tvg_img'), 1)
   assert.equal(sponsorCountForVisualModel('itumbiara'), null)
   assert.equal(sponsorCountForVisualModel(''), null)
-  assert.ok(isVisualModel('tvg') && isVisualModel('misto'))
+  assert.ok(isVisualModel('tvg') && isVisualModel('tvg_img'))
   assert.ok(!isVisualModel('itumbiara') && !isVisualModel('default'))
 })
 
 test('a model is available only when its config is enabled, complete and the kill switch is off', () => {
-  const configs = [config('feed', 'tvg'), config('feed', 'misto')]
+  const configs = [config('feed', 'tvg'), config('feed', 'tvg_img')]
   assert.deepEqual(
     availableVisualModelsForFormat(configs, {}, 'feed').map(m => m.slug),
-    ['tvg', 'misto'],
+    ['tvg', 'tvg_img'],
   )
   assert.deepEqual(
     availableVisualModelsForFormat(
-      [config('feed', 'tvg'), config('feed', 'misto', { enabled: false })],
+      [config('feed', 'tvg'), config('feed', 'tvg_img', { enabled: false })],
       {},
       'feed',
     ).map(m => m.slug),
@@ -66,7 +66,7 @@ test('a model is available only when its config is enabled, complete and the kil
 })
 
 test('the kill switch removes every model', () => {
-  const configs = [config('feed', 'tvg'), config('feed', 'misto')]
+  const configs = [config('feed', 'tvg'), config('feed', 'tvg_img')]
   assert.deepEqual(
     availableVisualModelsForFormat(configs, { kill_switch: true }, 'feed'),
     [],
@@ -74,11 +74,11 @@ test('the kill switch removes every model', () => {
 })
 
 test('an incomplete config (missing layer or UUID) does not offer its model', () => {
-  const noUuid = config('feed', 'misto', { master_template_uuid: '' })
-  const noSeal = config('feed', 'misto', {
+  const noUuid = config('feed', 'tvg_img', { master_template_uuid: '' })
+  const noSeal = config('feed', 'tvg_img', {
     layer_map: { ...FEED_LAYERS, visual_title: '' },
   })
-  const noNewsImage = config('feed', 'misto', {
+  const noNewsImage = config('feed', 'tvg_img', {
     layer_map: { ...FEED_LAYERS, news_image: '' },
   })
   for (const broken of [noUuid, noSeal, noNewsImage]) {
@@ -94,17 +94,17 @@ test('an incomplete config (missing layer or UUID) does not offer its model', ()
 })
 
 test('models are scoped by format: a feed config never enables a reels model', () => {
-  const feedOnly = [config('feed', 'tvg'), config('feed', 'misto')]
+  const feedOnly = [config('feed', 'tvg'), config('feed', 'tvg_img')]
   assert.deepEqual(availableVisualModelsForFormat(feedOnly, {}, 'reels'), [])
 
-  const reelsOnly = [config('reels', 'tvg'), config('reels', 'misto')]
+  const reelsOnly = [config('reels', 'tvg'), config('reels', 'tvg_img')]
   assert.deepEqual(availableVisualModelsForFormat(reelsOnly, {}, 'feed'), [])
 })
 
 test('reels configs stay complete without news_image', () => {
-  const configs = [config('reels', 'tvg'), config('reels', 'misto')]
+  const configs = [config('reels', 'tvg'), config('reels', 'tvg_img')]
   assert.deepEqual(
     availableVisualModelsForFormat(configs, {}, 'reels').map(m => m.slug),
-    ['tvg', 'misto'],
+    ['tvg', 'tvg_img'],
   )
 })

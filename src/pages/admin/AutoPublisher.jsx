@@ -87,6 +87,7 @@ export default function AutoPublisher() {
     const [masterRuntime, setMasterRuntime] = useState({
         configs: [],
         killSwitch: false,
+        sponsorPools: null,
         status: MASTER_RUNTIME_STATUS.IDLE,
     })
     const [manualFormErrors, setManualFormErrors] = useState({})
@@ -223,6 +224,7 @@ export default function AutoPublisher() {
             setMasterRuntime({
                 configs: [],
                 killSwitch: false,
+                sponsorPools: null,
                 status: MASTER_RUNTIME_STATUS.ERROR,
             })
         }
@@ -236,9 +238,15 @@ export default function AutoPublisher() {
     // Each (cliente, content_type, visual_model) row is one fixed Placid
     // template. The operator picks the model; the template and the sponsor count
     // follow from it. A model is offered only when its master config exists, is
-    // enabled and complete, with the kill switch off.
+    // enabled and complete, with the kill switch off; it is selectable only when
+    // the eligible sponsor pool of the format can serve it.
     const availableVisualModels = useMemo(
-        () => availableVisualModelsForFormat(masterRuntime.configs, { kill_switch: masterRuntime.killSwitch }, formData.content_type),
+        () => availableVisualModelsForFormat(
+            masterRuntime.configs,
+            { kill_switch: masterRuntime.killSwitch },
+            formData.content_type,
+            masterRuntime.sponsorPools?.[formData.content_type] ?? null,
+        ),
         [masterRuntime, formData.content_type],
     )
     const visualModelsState = visualModelsStateFor(

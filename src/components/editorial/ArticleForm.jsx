@@ -1,7 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ImageIcon, Video, CheckCircle2, RefreshCcw } from 'lucide-react';
 import VisualTitleCombobox from './VisualTitleCombobox';
 import { retainCompatibleVisualTitleId } from '../../services/visualTitleCatalog';
+import {
+    resolveVisualModelSelection,
+    selectableVisualModels,
+} from '../../services/visualModels';
 
 export default function ArticleForm({
     mode = 'admin',
@@ -24,14 +28,28 @@ export default function ArticleForm({
     const [isDragging, setIsDragging] = useState(false);
     const [visualTitleFormatNotice, setVisualTitleFormatNotice] = useState('');
     const visualModelsAvailable = visualModelsState === 'available';
-    const generationBlocked = visualModelsState !== 'available';
+    const selectableModels = selectableVisualModels(availableVisualModels);
+    // No selectable model means no generation: either nothing is enabled for the
+    // format, or the eligible sponsor pool cannot serve any of the models.
+    const generationBlocked = visualModelsState !== 'available' || selectableModels.length === 0;
+    const currentVisualModel = formData.visual_model;
+
+    // Keeps the selection consistent with the options actually offered for the
+    // current format: a still-valid choice survives, an invalid one is cleared,
+    // and a single option is chosen automatically.
+    useEffect(() => {
+        const next = resolveVisualModelSelection(currentVisualModel, availableVisualModels);
+        if (next !== currentVisualModel) {
+            setFormData(previous => ({ ...previous, visual_model: next }));
+        }
+    }, [availableVisualModels, currentVisualModel, setFormData]);
 
     function selectContentType(contentType) {
         const retainedId = retainCompatibleVisualTitleId(visualTitleGroups, formData.visual_title_id, contentType);
         const isCompatible = !formData.visual_title_id || retainedId === formData.visual_title_id;
-        // A model is only offered when its master config exists for the format,
-        // so drop it and let the operator re-pick one that actually exists.
-        setFormData({ ...formData, content_type: contentType, visual_title_id: retainedId, visual_model: '' });
+        // The visual model is reconciled by the effect above once the parent
+        // recomputes the options for the new format.
+        setFormData({ ...formData, content_type: contentType, visual_title_id: retainedId });
         setVisualTitleFormatNotice(isCompatible ? '' : 'O selo selecionado n\u00e3o est\u00e1 dispon\u00edvel para este formato.');
     }
 
@@ -55,14 +73,25 @@ export default function ArticleForm({
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: '#f8fafc', padding: '16px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
                     <label style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>Modelo visual <span style={{ color: '#ef4444' }}>*</span></label>
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                        {availableVisualModels.map(model => (
-                            <button key={model.slug} type="button"
-                                onClick={() => setFormData({ ...formData, visual_model: model.slug })}
-                                aria-pressed={formData.visual_model === model.slug}
-                                style={{ flex: '1 1 140px', padding: '12px 10px', borderRadius: '12px', border: formData.visual_model === model.slug ? '1px solid #0f172a' : '1px solid #cbd5e1', background: formData.visual_model === model.slug ? '#0f172a' : '#fff', color: formData.visual_model === model.slug ? '#fff' : '#334155', fontWeight: 600, fontSize: '14px', cursor: 'pointer', transition: 'all 0.2s' }}>
-                                {model.label}
-                            </button>
-                        ))}
+                        {availableVisualModels.map(model => {
+                            const isSelected = formData.visual_model === model.slug;
+                            const isSelectable = model.selectable !== false;
+                            return (
+                                <div key={model.slug} style={{ flex: '1 1 140px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                    <button type="button"
+                                        disabled={!isSelectable}
+                                        onClick={() => setFormData({ ...formData, visual_model: model.slug })}
+                                        aria-pressed={isSelected}
+                                        title={isSelectable ? undefined : model.unavailableReason}
+                                        style={{ width: '100%', padding: '12px 10px', borderRadius: '12px', border: isSelected ? '1px solid #0f172a' : '1px solid #cbd5e1', background: !isSelectable ? '#f1f5f9' : isSelected ? '#0f172a' : '#fff', color: !isSelectable ? '#94a3b8' : isSelected ? '#fff' : '#334155', fontWeight: 600, fontSize: '14px', cursor: isSelectable ? 'pointer' : 'not-allowed', opacity: isSelectable ? 1 : 0.75, transition: 'all 0.2s' }}>
+                                        {model.label}
+                                    </button>
+                                    {!isSelectable && model.unavailableReason && (
+                                        <small role="status" style={{ color: '#92400e', fontSize: '11px', fontWeight: 600 }}>{model.unavailableReason}</small>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
                     {typeof errors.visual_model === 'string' && <span style={{ color: '#ef4444', fontSize: '12px', fontWeight: 600 }}>{errors.visual_model}</span>}
                     <small style={{ color: '#64748b' }}>O modelo define o template e a quantidade de patrocinadores automaticamente.</small>

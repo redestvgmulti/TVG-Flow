@@ -69,7 +69,7 @@ SELECT set_config('request.jwt.claim.sub', '11111111-1111-4111-8111-111111111111
 -- widened per-format invariant. Each is a distinct fixed Placid template.
 INSERT INTO ap.master_render_configs (cliente_id, content_type, visual_model, master_template_uuid, enabled, layer_map)
 VALUES
-    ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'feed', 'misto', 'tpl-feed-misto', true,
+    ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'feed', 'tvg_img', 'tpl-feed-tvg-img', true,
      '{"headline":"titulo-materia","news_image":"news-image","visual_title":"titulo-png","sponsor_1":"patrocinador-1"}'::jsonb),
     ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'feed', 'tvg', 'tpl-feed-tvg', true,
      '{"headline":"titulo-materia","news_image":"news-image","visual_title":"titulo-png","sponsor_1":"patrocinador-1","sponsor_2":"patrocinador-2"}'::jsonb),
@@ -93,13 +93,13 @@ SELECT pg_temp.assert_raises(
 -- Deterministic selection: (content_type, visual_model) resolves the exact
 -- fixed template, and the selo layer maps to titulo-png.
 SELECT pg_temp.assert_true(
-    (SELECT master_template_uuid = 'tpl-feed-misto'
+    (SELECT master_template_uuid = 'tpl-feed-tvg-img'
         AND layer_map ->> 'headline' = 'titulo-materia'
         AND layer_map ->> 'visual_title' = 'titulo-png'
      FROM ap.master_render_configs
      WHERE cliente_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
-       AND content_type = 'feed' AND visual_model = 'misto' AND enabled),
-    'feed/misto did not resolve its fixed template + titulo-png layer'
+       AND content_type = 'feed' AND visual_model = 'tvg_img' AND enabled),
+    'feed/tvg_img did not resolve its fixed template + titulo-png layer'
 );
 
 SELECT pg_temp.assert_true(
@@ -112,9 +112,9 @@ SELECT pg_temp.assert_true(
 
 -- Editing one model does not touch the other model of the same format.
 UPDATE ap.master_render_configs
-SET master_template_uuid = 'tpl-feed-misto-edited'
+SET master_template_uuid = 'tpl-feed-tvg-img-edited'
 WHERE cliente_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
-  AND content_type = 'feed' AND visual_model = 'misto';
+  AND content_type = 'feed' AND visual_model = 'tvg_img';
 
 SELECT pg_temp.assert_true(
     (SELECT master_template_uuid = 'tpl-feed-tvg'

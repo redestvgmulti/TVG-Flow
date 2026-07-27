@@ -34,6 +34,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
     const [masterRuntime, setMasterRuntime] = useState({
         configs: [],
         killSwitch: false,
+        sponsorPools: null,
         status: MASTER_RUNTIME_STATUS.IDLE,
     });
     const [visualTitleGroups, setVisualTitleGroups] = useState([]);
@@ -81,6 +82,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
             setMasterRuntime({
                 configs: [],
                 killSwitch: false,
+                sponsorPools: null,
                 status: MASTER_RUNTIME_STATUS.ERROR,
             });
         }
@@ -118,7 +120,12 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
     // Each (cliente, content_type, visual_model) row is one fixed Placid
     // template; a model is offered only when its config is enabled and complete.
     const availableVisualModels = useMemo(
-        () => availableVisualModelsForFormat(masterRuntime.configs, { kill_switch: masterRuntime.killSwitch }, formData.content_type),
+        () => availableVisualModelsForFormat(
+            masterRuntime.configs,
+            { kill_switch: masterRuntime.killSwitch },
+            formData.content_type,
+            masterRuntime.sponsorPools?.[formData.content_type] ?? null,
+        ),
         [masterRuntime, formData.content_type],
     );
     const visualModelsState = visualModelsStateFor(

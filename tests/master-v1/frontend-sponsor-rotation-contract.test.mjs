@@ -69,7 +69,7 @@ test('sponsor administration uses the isolated catalog and one shared rotation s
   const service = await source('src/services/renderSponsors.js')
   assert.match(service, /from\('render_sponsors'\)/)
   assert.match(service, /kind: 'sponsors'/)
-  // TVG and Misto share one pool. The scope is no longer written by the client
+  // TVG and TVG + IMG share one pool. The scope is no longer written by the client
   // at all: ap.create_render_sponsor owns it, so the UI cannot diverge from it.
   assert.match(service, /rpc\('create_render_sponsor'/)
   assert.doesNotMatch(service, /from\('render_sponsor_scope_memberships'\)/)
