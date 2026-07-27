@@ -77,16 +77,124 @@ aceitável.
 ## Rollback
 
 **Postura padrão: forward-only.** Recuperar de um deploy ruim é corrigir para a
-frente, não reverter o slug.
-
-O script reverso existe pré-escrito e testado em
+frente, não reverter o slug. O script reverso existe pré-escrito e testado em
 `supabase/rollback/20260727120000_rollback_...sql` — fora de
 `supabase/migrations/`, para que nenhuma ferramenta o aplique sozinho.
 
-⚠️ **Pré-condição inegociável:** um build de fase 4 **não** consegue endereçar um
-master gravado como `misto`. Antes de rodar o rollback do banco, volte a Edge
-Function para o build transicional (ou remova `AP_LEGACY_VISUAL_MODEL_INPUT`).
-Reverter só o banco quebra o sistema.
+### 🚫 Rollback somente do banco é proibido
+
+Reverter o schema é uma **operação coordenada**, não um `UPDATE`. O sistema só é
+consistente em combinações inteiras de schema + Edge Function + frontend +
+variável de ambiente:
+
+| Schema | Edge Function | `AP_LEGACY_VISUAL_MODEL_INPUT` | Frontend | Estado |
+|---|---|---|---|---|
+| `misto` | transicional | `accept` | qualquer | ✅ fase 1 |
+| `tvg_img` | transicional | `accept` | qualquer | ✅ fases 2–3 |
+| `tvg_img` | transicional | `reject` | novo | ✅ fase 4 |
+| `misto` | transicional | `accept` | novo | ✅ alvo válido de rollback |
+| **`misto`** | **transicional** | **`reject`** | qualquer | ❌ **quebra** |
+| **`misto`** | **build antigo pré-fase-1** | — | novo | ❌ **quebra** |
+
+**Ordem obrigatória para reverter o banco:**
+
+1. remova `AP_LEGACY_VISUAL_MODEL_INPUT` (ou defina `accept`) e confirme que a
+   Edge Function em execução é o build transicional;
+2. valide que uma geração ainda funciona;
+3. só então rode o script reverso;
+4. valide de novo.
+
+Inverter 1 e 3 derruba a geração: um build de fase 4 **não** consegue endereçar
+um master gravado como `misto`.
+
+## Homologação em staging
+
+A ordem é a mesma das fases; nenhum gate pode ser antecipado.
+
+### Gate 1 — fase 1 **antes** da migration
+
+O gate mais importante: prova que a compatibilidade é invariante, não sorte.
+Banco ainda com `misto`, apenas a Edge Function transicional publicada com
+`AP_LEGACY_VISUAL_MODEL_INPUT=accept`.
+
+- [ ] lookup encontra o master armazenado como `misto`
+- [ ] snapshot novo persiste `visual_model = tvg_img`
+- [ ] **nenhuma** matéria nova persiste `misto`
+- [ ] retry reutiliza o snapshot sem reinterpretação
+- [ ] Feed e Reels funcionam
+- [ ] TVG e TVG + IMG funcionam
+- [ ] tenant com `misto` + `tvg_img` duplicados falha fechado
+- [ ] nenhuma linha arbitrária é escolhida
+
+Consulta de verificação:
+
+```sql
+SELECT id, content_type,
+       render_snapshot ->> 'visual_model' AS snapshot_model,
+       render_snapshot -> 'master_config' ->> 'visual_model' AS master_model
+FROM ap.candidate_news
+WHERE render_contract_version = 'master_v1'
+  AND created_at > now() - interval '1 hour'
+ORDER BY created_at DESC;
+-- Nenhuma linha pode trazer 'misto' em qualquer das duas colunas.
+```
+
+### Gate 2 — migration em staging
+
+Capture **antes**:
+
+```sql
+SELECT cliente_id, content_type, visual_model, master_template_uuid, enabled, layer_map
+FROM ap.master_render_configs
+ORDER BY cliente_id, content_type, visual_model;
+```
+
+Confirme **depois**:
+
+- [ ] nenhuma linha `misto`
+- [ ] todas as antigas viraram `tvg_img`
+- [ ] UUIDs preservados
+- [ ] `enabled` preservado
+- [ ] `layer_map` preservado
+- [ ] nenhuma linha adicional; nenhum tenant perdeu configuração
+- [ ] constraint final é `CHECK (visual_model IN ('tvg','tvg_img'))`
+- [ ] reexecução é no-op
+
+### Gate 3 — frontend em staging
+
+- [ ] opções `TVG` e `TVG + IMG`
+- [ ] troca Feed → Reels atualiza as opções
+- [ ] seleção incompatível é limpa
+- [ ] opção única é selecionada automaticamente
+- [ ] duas opções exigem decisão
+- [ ] payload envia somente o slug canônico
+- [ ] mensagem de patrocinadores insuficientes aparece
+- [ ] falha de leitura do pool **não** bloqueia indevidamente
+- [ ] backend continua sendo a autoridade
+
+### Gate 4 — rejeição explícita do legado
+
+Só depois de migration + frontend estabilizados:
+`AP_LEGACY_VISUAL_MODEL_INPUT=reject`.
+
+- [ ] `misto` retorna `400` com `MASTER_MODEL_RETIRED`
+- [ ] nenhuma criação parcial; nenhuma linha de candidato nova; nenhum snapshot novo
+- [ ] telemetria registra a tentativa
+- [ ] o bundle atual segue funcionando normalmente
+
+## Estado do Supabase local durante a validação
+
+Durante os testes foram aplicadas localmente:
+
+- `20260726165558` — grants de `service_role`, **anteriormente ausente** no banco
+  local (era essa lacuna, e não o diff deste PR, que fazia
+  `master-config-service-role-grants.sql` falhar);
+- `20260727120000` — renomeação de `misto` para `tvg_img`.
+
+O banco local foi usado para validar upgrade, rollback e re-upgrade. Portanto,
+**seu estado atual não representa mais o baseline anterior à migration**. Isso
+está registrado de propósito: o objetivo não é deixar o ambiente "bonito", é
+deixá-lo conhecido e reproduzível.
 
 ## Habilitação de masters
 

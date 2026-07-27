@@ -10,12 +10,25 @@
 -- rename landed, phase 3/4 has NOT happened yet, and the only way out is to put
 -- the database back where the previous release expects it.
 --
--- PRECONDITIONS (verified by the script itself, which aborts otherwise):
---   1. No candidate created after the rename may depend on 'tvg_img' being a
---      storable master slug. Concretely: the transitional generator (phase 1)
---      or an older build must be the one deployed. A phase 4 (hardened) build
---      MUST be rolled back to the transitional build FIRST — it can no longer
---      address a master stored as 'misto'.
+-- ⚠️ ROLLING BACK THE DATABASE ALONE IS FORBIDDEN.
+--
+-- The system is only consistent in whole combinations of schema + Edge Function
+-- + frontend + environment variable. Reverting the schema while a phase 4
+-- (hardened) build is live takes generation down: that build looks the master up
+-- as 'tvg_img' only and can no longer address a row stored as 'misto'.
+--
+-- MANDATORY ORDER — do not reorder:
+--   1. unset AP_LEGACY_VISUAL_MODEL_INPUT (or set it to 'accept') and confirm
+--      the deployed Edge Function is the transitional build;
+--   2. verify a generation still works;
+--   3. only then run this script;
+--   4. verify again.
+--
+-- The combination matrix and the full rollout are in docs/rollout-tvg-img.md.
+--
+-- PRECONDITIONS:
+--   1. The transitional generator (phase 1) or an older build must be the one
+--      deployed — see the mandatory order above.
 --   2. The four fixed UUIDs must still be intact.
 --
 -- WHAT IT DOES NOT DO:
