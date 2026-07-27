@@ -37,7 +37,7 @@ test('the catalog is exactly the two visual models', () => {
   // Itumbiara isolada was removed from the product: it must not come back.
   assert.ok(!VISUAL_MODELS.some(model => model.slug.includes('itumbiara')))
   assert.equal(visualModelLabel('tvg'), 'TVG')
-  assert.equal(visualModelLabel('misto'), 'Misto')
+  assert.equal(visualModelLabel('misto'), 'TVG + IMG')
 })
 
 test('sponsor count is fixed by the visual model', () => {

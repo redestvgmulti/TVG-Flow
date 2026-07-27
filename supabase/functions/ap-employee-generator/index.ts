@@ -23,6 +23,7 @@ import {
   buildGeneratorLogEvent,
   buildUnexpectedGeneratorLogEvent,
   resolveCorrelationId,
+  sanitizeUnexpectedMessage,
   type GeneratorStage,
 } from './unexpectedErrorTelemetry.ts';
 const corsHeaders = {
@@ -88,6 +89,29 @@ function errorResponse(
   );
 }
 
+function rpcErrorResponse(
+  context: LogContext,
+  code: string,
+  message: string,
+  status: number,
+  error: unknown,
+) {
+  const raw = error && typeof error === 'object' ? error as Record<string, unknown> : {};
+  console.error(JSON.stringify({
+    ...buildGeneratorLogEvent({
+      ...context,
+      functionVersion: AP_EMPLOYEE_GENERATOR_VERSION,
+      stage: 'call_candidate_rpc',
+      code,
+    }),
+    rpc_error_code: typeof raw.code === 'string' ? raw.code.slice(0, 32) : null,
+    sanitized_message: sanitizeUnexpectedMessage(raw.message ?? error),
+  }));
+  return new Response(
+    JSON.stringify({ error: code, message, correlation_id: context.correlationId }),
+    { status, headers: jsonHeaders },
+  );
+}
 function unexpectedErrorResponse(
   context: LogContext,
   stage: GeneratorStage,
@@ -176,6 +200,22 @@ const SAFE_RPC_ERRORS = new Map<string, { status: number; message: string }>([
   ['IDEMPOTENCY_KEY_PAYLOAD_MISMATCH', { status: 409, message: 'Esta tentativa nao corresponde a requisicao original.' }],
   ['VISUAL_TITLE_INVALID', { status: 400, message: 'O selo da materia nao esta disponivel.' }],
 ]);
+
+function safeRpcErrorFor(error: unknown) {
+  const raw = error && typeof error === 'object' ? error as Record<string, unknown> : {};
+  const message = typeof raw.message === 'string' ? raw.message : '';
+  if (raw.code === '23505') {
+    return {
+      code: 'DUPLICATE_CANDIDATE',
+      status: 409,
+      message: 'Ja existe uma materia ativa com a mesma origem ou titulo.',
+    };
+  }
+  const code = [...SAFE_RPC_ERRORS.keys()].find((candidate) =>
+    message === candidate || message.startsWith(`${candidate} `)
+  );
+  return code ? { code, ...SAFE_RPC_ERRORS.get(code)! } : undefined;
+}
 
 Deno.serve(async (req: Request) => {
   const correlationId = resolveCorrelationId(undefined);
@@ -498,13 +538,13 @@ Deno.serve(async (req: Request) => {
         p_render_snapshot_base: renderSnapshotBase,
       });
     if (rotationError) {
-      const safeRpcError = SAFE_RPC_ERRORS.get(rotationError.message);
-      return errorResponse(
+      const safeRpcError = safeRpcErrorFor(rotationError);
+      return rpcErrorResponse(
         context,
-        safeRpcError ? rotationError.message : 'SPONSOR_ROTATION_FAILED',
+        safeRpcError?.code || 'SPONSOR_ROTATION_FAILED',
         safeRpcError?.message || 'Nao foi possivel preparar a materia.',
         safeRpcError?.status || 503,
-        'call_candidate_rpc',
+        rotationError,
       );
     }
 

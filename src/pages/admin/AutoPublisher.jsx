@@ -575,6 +575,8 @@ export default function AutoPublisher() {
                         const errBody = await error.context.json()
                         if (errBody?.error === 'INTERNAL_ERROR' && errBody.correlation_id) {
                             message = `Não foi possível gerar a matéria. Código de suporte: ${errBody.correlation_id}`
+                        } else if (errBody?.message) {
+                            message = errBody.message
                         }
                     } catch (parseError) {
                         console.error('Failed to parse ap-employee-generator error:', parseError)
