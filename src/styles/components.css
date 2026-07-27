@@ -1351,6 +1351,23 @@ textarea:focus {
     padding: var(--space-8);
 }
 
+/* .modal.modal-large (adminTasks.css) turns the card into a fixed-height flex
+   column with `overflow: hidden !important`. That only works when something
+   INSIDE the card scrolls — true for MacroTaskDetail, which brings its own
+   scrolling container, but not for modals whose body is a long form. Those had
+   no scroll container at all, so everything past the fold was clipped and
+   simply unreachable ("Nova Matéria" lost its scroll this way).
+
+   The body is that container. `min-height: 0` is required, not cosmetic: a flex
+   item defaults to `min-height: auto` and refuses to shrink below its content,
+   so `overflow-y` would never engage without it. */
+.modal-large > .modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
 .modal-footer {
     padding: var(--space-6) var(--space-8);
     border-top: 1px solid rgba(0, 0, 0, 0.03);
