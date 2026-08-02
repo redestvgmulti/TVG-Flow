@@ -85,6 +85,12 @@ test('sponsor administration uses the isolated catalog and one shared rotation s
 
 test('the operator settings page exposes no technical master controls (no render tab, layer map or UUID editor)', async () => {
   const settings = await source('src/pages/admin/AutoPublisherMasterV1Settings.jsx')
+  assert.doesNotMatch(settings, /Finalidades das artes/)
+  assert.doesNotMatch(settings, /MasterConfigsManager/)
+  assert.doesNotMatch(settings, /'purposes'/)
+  assert.match(settings, /useState\('titles'\)/)
+  assert.match(settings, /\['titles', 'Selos da matéria'\]/)
+  assert.match(settings, /\['sponsors', 'Patrocinadores'\]/)
   assert.doesNotMatch(settings, /layerMap/)
   assert.doesNotMatch(settings, /MasterRenderConfig/)
   assert.doesNotMatch(settings, /'rendering'/)
