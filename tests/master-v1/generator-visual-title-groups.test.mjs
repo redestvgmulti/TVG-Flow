@@ -157,7 +157,7 @@ test('legacy title without group remains valid with null audit metadata', async 
   assert.deepEqual(supabase.calls.map(call => call.table), ['visual_titles'])
 })
 
-test('Feed, Reels and dual-format eligibility are enforced by the backend', async () => {
+test('Feed, Reels and Story eligibility are enforced by the backend', async () => {
   const feedOnly = mockSupabase({ titles: [{ ...baseTitle, formatos: ['feed'] }] })
   assert.equal((await resolveVisualTitleForCreation(feedOnly, {
     visualTitleId: baseTitle.id,
@@ -177,6 +177,18 @@ test('Feed, Reels and dual-format eligibility are enforced by the backend', asyn
     contentType: 'reels',
   })).id, baseTitle.id)
   await expectCode(resolveVisualTitleForCreation(reelsOnly, {
+    visualTitleId: baseTitle.id,
+    clienteId: CLIENT_A,
+    contentType: 'feed',
+  }), 'VISUAL_TITLE_FORMAT_INVALID')
+
+  const storyOnly = mockSupabase({ titles: [{ ...baseTitle, formatos: ['story'] }] })
+  assert.equal((await resolveVisualTitleForCreation(storyOnly, {
+    visualTitleId: baseTitle.id,
+    clienteId: CLIENT_A,
+    contentType: 'story',
+  })).id, baseTitle.id)
+  await expectCode(resolveVisualTitleForCreation(storyOnly, {
     visualTitleId: baseTitle.id,
     clienteId: CLIENT_A,
     contentType: 'feed',

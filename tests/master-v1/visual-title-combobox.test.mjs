@@ -34,12 +34,14 @@ test('catalog keeps active real groups and a distinct virtual Geral for legacy t
   assert.deepEqual(catalog.find(group => group.id === 'legacy-general').titles.map(title => title.id), ['legacy'])
 })
 
-test('Feed and Reels filters preserve titles compatible with both formats', () => {
+test('format filters preserve only compatible titles, including Story', () => {
   const catalog = prepareVisualTitleCatalog(groups, titles)
   assert.deepEqual(filterVisualTitleGroups(catalog, 'feed').flatMap(group => group.titles.map(title => title.id)), ['morrinhos', 'goiatuba', 'legacy'])
   assert.deepEqual(filterVisualTitleGroups(catalog, 'reels').flatMap(group => group.titles.map(title => title.id)), ['morrinhos', 'futebol', 'legacy'])
   assert.equal(isVisualTitleCompatible({ formatos: ['feed', 'reels'] }, 'feed'), true)
   assert.equal(isVisualTitleCompatible({ formatos: ['feed', 'reels'] }, 'reels'), true)
+  assert.equal(isVisualTitleCompatible({ formatos: ['story'] }, 'story'), true)
+  assert.equal(isVisualTitleCompatible({ formatos: ['feed'] }, 'story'), false)
 })
 
 test('search matches either the seal name or its group name locally', () => {

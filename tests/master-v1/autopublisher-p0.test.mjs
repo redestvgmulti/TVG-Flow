@@ -8,7 +8,7 @@ import {
   MasterConfigurationError,
   normalizeVisualModel,
   requireMasterConfiguration,
-  sponsorCountForVisualModel,
+  sponsorCountFromConfig,
 } from '../../supabase/functions/ap-employee-generator/masterConfiguration.ts'
 import {
   MASTER_RUNTIME_STATUS,
@@ -25,12 +25,22 @@ import {
 const root = new URL('../../', import.meta.url)
 const source = path => readFile(new URL(path, root), 'utf8')
 
+test('generator release marker is unique to the visual catalog expansion', async () => {
+  assert.equal(AP_EMPLOYEE_GENERATOR_VERSION, '2026-08-02-visual-catalog.1')
+
+  const generator = await source('supabase/functions/ap-employee-generator/index.ts')
+  assert.match(generator, /correlation_id: context\.correlationId/)
+  assert.match(generator, /functionVersion: AP_EMPLOYEE_GENERATOR_VERSION/)
+  assert.match(generator, /function_version: AP_EMPLOYEE_GENERATOR_VERSION/)
+})
+
 const baseConfig = {
-  id: 'master-feed-misto',
+  id: 'master-feed-tvg-img',
   content_type: 'feed',
-  visual_model: 'misto',
+  visual_model: 'tvg_img',
   enabled: true,
-  master_template_uuid: 'master-feed-misto-uuid',
+  master_template_uuid: 'master-feed-tvg-img-uuid',
+  sponsor_count: 1,
   layer_map: {
     headline: 'titulo-materia',
     news_image: 'news-image',
@@ -41,27 +51,31 @@ const baseConfig = {
 
 const reads = ({ control = null, config = baseConfig, controlError = null, configError = null } = {}) => ({
   contentType: 'feed',
-  visualModel: 'misto',
+  visualModel: 'tvg_img',
   readControl: async () => ({ data: control, error: controlError }),
   readConfig: async () => ({ data: config, error: configError }),
 })
 
-test('manual visual_model is required and accepts only tvg or misto', async () => {
+test('manual visual_model is required and accepts the controlled catalog', async () => {
   assert.equal(normalizeVisualModel(null), null)
   assert.equal(normalizeVisualModel(''), null)
   assert.equal(normalizeVisualModel('outro'), null)
   assert.equal(normalizeVisualModel(' TVG '), 'tvg')
-  assert.equal(normalizeVisualModel('Misto'), 'misto')
+  assert.equal(normalizeVisualModel('Misto'), null)
+  assert.equal(normalizeVisualModel('TVG_IMG'), 'tvg_img')
+  assert.equal(normalizeVisualModel('Individual'), 'individual')
+  assert.equal(normalizeVisualModel('Aparecida'), 'aparecida')
+  assert.equal(normalizeVisualModel('Story'), 'story')
 
   const generator = await source('supabase/functions/ap-employee-generator/index.ts')
-  assert.match(generator, /MASTER_MODEL_REQUIRED/)
-  assert.match(generator, /MASTER_MODEL_INVALID/)
+  assert.match(generator, /VISUAL_MODEL_REQUIRED/)
+  assert.match(generator, /VISUAL_MODEL_INVALID/)
 })
 
 test('master disabled, missing, invalid, permission denied or query failure block', async () => {
   const cases = [
-    [reads({ config: { ...baseConfig, enabled: false } }), 'MASTER_MODEL_DISABLED'],
-    [reads({ config: null }), 'MASTER_CONFIG_NOT_FOUND'],
+    [reads({ config: { ...baseConfig, enabled: false } }), 'VISUAL_MODEL_NOT_AVAILABLE'],
+    [reads({ config: null }), 'VISUAL_MODEL_NOT_AVAILABLE'],
     [reads({ config: { ...baseConfig, master_template_uuid: null } }), 'MASTER_CONFIG_INVALID'],
     [reads({ configError: { code: '42501', message: 'permission denied' } }), 'MASTER_CONFIG_READ_FAILED'],
     [{ ...reads(), readControl: async () => { throw new Error('network') } }, 'MASTER_CONFIG_READ_FAILED'],
@@ -76,8 +90,8 @@ test('master disabled, missing, invalid, permission denied or query failure bloc
 })
 
 test('visual model derives sponsor count and UUID/layers come from master config', async () => {
-  assert.equal(sponsorCountForVisualModel('tvg'), 2)
-  assert.equal(sponsorCountForVisualModel('misto'), 1)
+  assert.equal(sponsorCountFromConfig({ sponsor_count: 2 }), 2)
+  assert.equal(sponsorCountFromConfig({ sponsor_count: 1 }), 1)
 
   const resolved = await requireMasterConfiguration(reads())
   assert.equal(resolved.master_template_uuid, baseConfig.master_template_uuid)
@@ -128,7 +142,7 @@ test('frontend distinguishes loading, empty, error and available', () => {
   assert.equal(visualModelsStateFor(MASTER_RUNTIME_STATUS.LOADING, []), VISUAL_MODELS_STATE.LOADING)
   assert.equal(visualModelsStateFor(MASTER_RUNTIME_STATUS.READY, []), VISUAL_MODELS_STATE.EMPTY)
   assert.equal(visualModelsStateFor(MASTER_RUNTIME_STATUS.ERROR, []), VISUAL_MODELS_STATE.ERROR)
-  assert.equal(visualModelsStateFor(MASTER_RUNTIME_STATUS.READY, [{ slug: 'misto' }]), VISUAL_MODELS_STATE.AVAILABLE)
+  assert.equal(visualModelsStateFor(MASTER_RUNTIME_STATUS.READY, [{ slug: 'tvg_img' }]), VISUAL_MODELS_STATE.AVAILABLE)
   assert.equal(visualModelsBlockMessage(VISUAL_MODELS_STATE.EMPTY), 'Nenhum modelo visual está habilitado para este formato.')
   assert.equal(visualModelsBlockMessage(VISUAL_MODELS_STATE.ERROR), 'Não foi possível carregar os modelos visuais. Tente novamente.')
 })
@@ -142,7 +156,7 @@ test('frontend blocks both empty and error, retries loading, and shows enabled m
   assert.match(form, /Recarregar configuração/)
 
   const models = availableVisualModelsForFormat([baseConfig], { kill_switch: false }, 'feed')
-  assert.deepEqual(models.map(model => model.slug), ['misto'])
+  assert.deepEqual(models.map(model => model.slug), ['tvg_img'])
 })
 
 test('logs include safe code and version without accepting secrets or signed URLs', async () => {

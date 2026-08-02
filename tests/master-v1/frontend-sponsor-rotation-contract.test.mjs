@@ -5,12 +5,12 @@ import test from 'node:test'
 const root = new URL('../../', import.meta.url)
 async function source(path) { return readFile(new URL(path, root), 'utf8') }
 
-test('manual form offers the visual model and no technical picker at all', async () => {
+test('manual form offers artwork purpose and no technical picker at all', async () => {
   const form = await source('src/components/editorial/ArticleForm.jsx')
   // The visual model selector replaces "Campanha Visual" and the template picker.
-  assert.match(form, /Modelo visual/)
+  assert.match(form, /Finalidade da arte/)
   assert.match(form, /formData\.visual_model/)
-  assert.match(form, /availableVisualModels\.map/)
+  assert.match(form, /visualModelOptions\.map/)
   assert.match(form, /visualModelsState === 'error'/)
   assert.match(form, /visualModelsState === 'empty'/)
   assert.match(form, /disabled=\{isSubmitting \|\| generationBlocked\}/)

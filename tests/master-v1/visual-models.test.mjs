@@ -1,110 +1,74 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  availableContentTypes,
   availableVisualModelsForFormat,
   isVisualModel,
-  sponsorCountForVisualModel,
+  nextVisualModel,
   VISUAL_MODELS,
   visualModelLabel,
+  visualModelOptionsForFormat,
 } from '../../src/services/visualModels.js'
 
-const FEED_LAYERS = {
-  headline: 'titulo-materia',
-  news_image: 'news-image',
-  visual_title: 'titulo-png',
-  sponsor_1: 'patrocinador-1',
-  sponsor_2: 'patrocinador-2',
-}
-const REELS_LAYERS = {
-  headline: 'titulo-materia',
-  visual_title: 'titulo-png',
-  sponsor_1: 'patrocinador-1',
-  sponsor_2: 'patrocinador-2',
-}
-
-const config = (contentType, visualModel, overrides = {}) => ({
+const FEED_LAYERS = { headline: 'titulo-materia', news_image: 'news-image', visual_title: 'titulo-png', sponsor_1: 'patrocinador-1', sponsor_2: 'patrocinador-2' }
+const REELS_LAYERS = { headline: 'titulo-materia', visual_title: 'titulo-png', sponsor_1: 'patrocinador-1', sponsor_2: 'patrocinador-2' }
+const INDIVIDUAL_FEED_LAYERS = { headline: 'titulo-materia', news_image: 'news-image', visual_title: 'titulo-png', sponsor_1: 'patrocinador-2' }
+const STORY_LAYERS = { headline: 'titulo-materia', visual_title: 'titulo-png', sponsor_1: 'patrocinador-1', sponsor_2: 'patrocinador-2' }
+const config = (contentType, visualModel, sponsorCount, overrides = {}) => ({
   content_type: contentType,
   visual_model: visualModel,
-  master_template_uuid: 'uuid-' + contentType + '-' + visualModel,
+  master_template_uuid: `uuid-${contentType}-${visualModel}`,
   enabled: true,
+  sponsor_count: sponsorCount,
   layer_map: contentType === 'reels' ? REELS_LAYERS : FEED_LAYERS,
   ...overrides,
 })
 
-test('the catalog is exactly the two visual models', () => {
-  assert.deepEqual(VISUAL_MODELS.map(model => model.slug), ['tvg', 'misto'])
-  assert.equal(VISUAL_MODELS.length, 2)
-  // Itumbiara isolada was removed from the product: it must not come back.
-  assert.ok(!VISUAL_MODELS.some(model => model.slug.includes('itumbiara')))
-  assert.equal(visualModelLabel('tvg'), 'TVG')
+test('catalog uses five business codes and keeps misto presentation-only', () => {
+  assert.deepEqual(VISUAL_MODELS.map(model => model.slug), ['tvg', 'tvg_img', 'individual', 'aparecida', 'story'])
+  assert.equal(visualModelLabel('tvg_img'), 'TVG + IMG')
   assert.equal(visualModelLabel('misto'), 'TVG + IMG')
+  assert.equal(isVisualModel('misto'), false)
 })
 
-test('sponsor count is fixed by the visual model', () => {
-  assert.equal(sponsorCountForVisualModel('tvg'), 2)
-  assert.equal(sponsorCountForVisualModel('misto'), 1)
-  assert.equal(sponsorCountForVisualModel('itumbiara'), null)
-  assert.equal(sponsorCountForVisualModel(''), null)
-  assert.ok(isVisualModel('tvg') && isVisualModel('misto'))
-  assert.ok(!isVisualModel('itumbiara') && !isVisualModel('default'))
+test('format catalog is Feed=3, Reels=4 and Story=1 in the required order', () => {
+  const configs = [
+    config('feed', 'tvg', 2), config('feed', 'tvg_img', 1), config('feed', 'individual', 1, { layer_map: INDIVIDUAL_FEED_LAYERS }),
+    config('reels', 'tvg', 2), config('reels', 'tvg_img', 1), config('reels', 'individual', 0), config('reels', 'aparecida', 0),
+    config('story', 'story', 2, { layer_map: STORY_LAYERS }),
+  ]
+  const pool = { feed: 2, reels: 2, story: 2 }
+  assert.deepEqual(availableVisualModelsForFormat(configs, {}, 'feed', pool).map(m => m.slug), ['tvg', 'tvg_img', 'individual'])
+  assert.deepEqual(availableVisualModelsForFormat(configs, {}, 'reels', pool).map(m => m.slug), ['tvg', 'tvg_img', 'individual', 'aparecida'])
+  assert.deepEqual(availableVisualModelsForFormat(configs, {}, 'story', pool).map(m => m.slug), ['story'])
+  assert.deepEqual(availableContentTypes(configs, {}, pool).map(f => f.slug), ['feed', 'reels', 'story'])
 })
 
-test('a model is available only when its config is enabled, complete and the kill switch is off', () => {
-  const configs = [config('feed', 'tvg'), config('feed', 'misto')]
-  assert.deepEqual(
-    availableVisualModelsForFormat(configs, {}, 'feed').map(m => m.slug),
-    ['tvg', 'misto'],
-  )
-  assert.deepEqual(
-    availableVisualModelsForFormat(
-      [config('feed', 'tvg'), config('feed', 'misto', { enabled: false })],
-      {},
-      'feed',
-    ).map(m => m.slug),
-    ['tvg'],
-  )
+test('unknown sponsor count and insufficient pool keep a purpose unavailable', () => {
+  const unknown = config('reels', 'individual', null)
+  assert.equal(visualModelOptionsForFormat([unknown], {}, 'reels', { reels: 2 }).find(m => m.slug === 'individual').available, false)
+  const tvg = visualModelOptionsForFormat([config('feed', 'tvg', 2)], {}, 'feed', { feed: 1 }).find(m => m.slug === 'tvg')
+  assert.equal(tvg.available, false)
+  assert.equal(tvg.unavailableReason, 'Indisponível: patrocinadores insuficientes.')
 })
 
-test('the kill switch removes every model', () => {
-  const configs = [config('feed', 'tvg'), config('feed', 'misto')]
-  assert.deepEqual(
-    availableVisualModelsForFormat(configs, { kill_switch: true }, 'feed'),
-    [],
-  )
+test('Story remains unavailable until its two-sponsor pool exists', () => {
+  const story = config('story', 'story', 2, { layer_map: STORY_LAYERS })
+  const option = visualModelOptionsForFormat([story], {}, 'story', { story: 0 }).find(model => model.slug === 'story')
+  assert.equal(option.available, false)
+  assert.equal(option.sourceImage, 'unsupported')
+  assert.match(option.unavailableReason, /patrocinadores insuficientes/)
 })
 
-test('an incomplete config (missing layer or UUID) does not offer its model', () => {
-  const noUuid = config('feed', 'misto', { master_template_uuid: '' })
-  const noSeal = config('feed', 'misto', {
-    layer_map: { ...FEED_LAYERS, visual_title: '' },
-  })
-  const noNewsImage = config('feed', 'misto', {
-    layer_map: { ...FEED_LAYERS, news_image: '' },
-  })
-  for (const broken of [noUuid, noSeal, noNewsImage]) {
-    assert.deepEqual(
-      availableVisualModelsForFormat(
-        [config('feed', 'tvg'), broken],
-        {},
-        'feed',
-      ).map(m => m.slug),
-      ['tvg'],
-    )
-  }
+test('switching format clears invalid model and auto-selects a single option', () => {
+  assert.equal(nextVisualModel('tvg', [{ slug: 'story' }]), 'story')
+  assert.equal(nextVisualModel('', [{ slug: 'story' }]), 'story')
+  assert.equal(nextVisualModel('story', [{ slug: 'story' }]), 'story')
 })
 
-test('models are scoped by format: a feed config never enables a reels model', () => {
-  const feedOnly = [config('feed', 'tvg'), config('feed', 'misto')]
-  assert.deepEqual(availableVisualModelsForFormat(feedOnly, {}, 'reels'), [])
-
-  const reelsOnly = [config('reels', 'tvg'), config('reels', 'misto')]
-  assert.deepEqual(availableVisualModelsForFormat(reelsOnly, {}, 'feed'), [])
-})
-
-test('reels configs stay complete without news_image', () => {
-  const configs = [config('reels', 'tvg'), config('reels', 'misto')]
-  assert.deepEqual(
-    availableVisualModelsForFormat(configs, {}, 'reels').map(m => m.slug),
-    ['tvg', 'misto'],
-  )
+test('disabled, incomplete and cross-format configs are never selectable', () => {
+  const configs = [config('feed', 'tvg', 2, { enabled: false }), config('feed', 'tvg_img', 1, { master_template_uuid: '' })]
+  assert.deepEqual(availableVisualModelsForFormat(configs, {}, 'feed', { feed: 2 }), [])
+  assert.deepEqual(availableVisualModelsForFormat([config('feed', 'tvg', 2)], {}, 'reels', { reels: 2 }), [])
+  assert.deepEqual(availableVisualModelsForFormat([config('feed', 'tvg', 2)], { kill_switch: true }, 'feed', { feed: 2 }), [])
 })

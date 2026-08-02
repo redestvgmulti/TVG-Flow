@@ -5,7 +5,7 @@ import test from 'node:test'
 import {
   normalizeVisualModel,
   requireMasterConfiguration,
-  sponsorCountForVisualModel,
+  sponsorCountFromConfig,
 } from '../../supabase/functions/ap-employee-generator/masterConfiguration.ts'
 
 const generatorUrl = new URL(
@@ -16,13 +16,13 @@ const generatorUrl = new URL(
 test('new manual candidates require the visual model instead of legacy fallback', async () => {
   const source = await readFile(generatorUrl, 'utf8')
   assert.equal(normalizeVisualModel(null), null)
-  assert.match(source, /MASTER_MODEL_REQUIRED/)
+  assert.match(source, /VISUAL_MODEL_REQUIRED/)
   assert.doesNotMatch(source, /get_and_advance_template|\.from\('templates'\)/)
 })
 
-test('tvg and misto derive exactly two and one sponsors', () => {
-  assert.equal(sponsorCountForVisualModel('tvg'), 2)
-  assert.equal(sponsorCountForVisualModel('misto'), 1)
+test('sponsor count is derived from the resolved master config', () => {
+  assert.equal(sponsorCountFromConfig({ sponsor_count: 2 }), 2)
+  assert.equal(sponsorCountFromConfig({ sponsor_count: 1 }), 1)
 })
 
 test('manual sponsor_count and UUID are rejected before rotation', async () => {
@@ -38,9 +38,10 @@ test('master lookup is scoped by tenant, format and visual model', async () => {
   const config = {
     id: 'master',
     content_type: 'feed',
-    visual_model: 'misto',
+    visual_model: 'tvg_img',
     enabled: true,
     master_template_uuid: 'uuid-from-config',
+    sponsor_count: 1,
     layer_map: {
       headline: 'titulo-materia',
       news_image: 'news-image',
@@ -50,7 +51,7 @@ test('master lookup is scoped by tenant, format and visual model', async () => {
   }
   const actual = await requireMasterConfiguration({
     contentType: 'feed',
-    visualModel: 'misto',
+    visualModel: 'tvg_img',
     readControl: async () => ({ data: null, error: null }),
     readConfig: async () => ({ data: config, error: null }),
   })
