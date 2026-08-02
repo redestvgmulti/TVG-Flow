@@ -897,7 +897,8 @@ export default function AutoPublisher() {
                 icon={Brain}
                 size="lg"
             >
-                <ArticleForm
+                <div className="ap-new-article-modal-content">
+                    <ArticleForm
                     mode="admin"
                     formData={formData}
                     setFormData={data => {
@@ -921,6 +922,7 @@ export default function AutoPublisher() {
                     selectedFile={selectedFile}
                     setSelectedFile={setSelectedFile}
                 />
+                </div>
             </Modal>
 
             {/* ── Modal Edição de Matéria */}

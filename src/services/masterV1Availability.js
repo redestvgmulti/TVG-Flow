@@ -94,5 +94,6 @@ export function masterV1UnavailableMessage(config, control, poolSize) {
   if (status === 'sponsor_pool') return 'Indisponível: patrocinadores insuficientes.'
   if (status === 'active') return ''
   if (status === 'no_config') return 'Indisponível para este formato.'
+  if (status === 'disabled') return 'Indispon\u00edvel: aguardando homologa\u00e7\u00e3o.'
   return 'Indisponível: configuração incompleta.'
 }

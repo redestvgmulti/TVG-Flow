@@ -1171,6 +1171,26 @@
 }
 
 /* ── ArticleForm (conteúdo do modal Nova Matéria) ─────────── */
+.modal.modal-large:has(.ap-new-article-modal-content) {
+  display: flex;
+  flex-direction: column;
+  height: min(85vh, calc(100dvh - 32px)) !important;
+  max-height: calc(100dvh - 32px) !important;
+  overflow: hidden !important;
+}
+
+.modal.modal-large:has(.ap-new-article-modal-content) .modal-header {
+  flex: 0 0 auto;
+}
+
+.modal.modal-large:has(.ap-new-article-modal-content) .modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
 .ap-af {
   display: flex;
   flex-direction: column;
