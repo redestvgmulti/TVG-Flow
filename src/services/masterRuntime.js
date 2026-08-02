@@ -21,7 +21,7 @@ export class MasterRuntimeLoadError extends Error {
 }
 
 export async function loadMasterRuntime(supabase, clienteId) {
-  const [controlsResult, configsResult] = await Promise.all([
+  const [controlsResult, configsResult, membershipsResult, sponsorsResult] = await Promise.all([
     supabase
       .schema('ap')
       .from('master_render_controls')
@@ -31,18 +31,51 @@ export async function loadMasterRuntime(supabase, clienteId) {
     supabase
       .schema('ap')
       .from('master_render_configs')
-      .select('id,content_type,visual_model,master_template_uuid,enabled,layer_map')
+      .select('id,content_type,visual_model,master_template_uuid,enabled,layer_map,sponsor_count')
+      .eq('cliente_id', clienteId),
+    supabase
+      .schema('ap')
+      .from('render_sponsor_scope_memberships')
+      .select('sponsor_id,content_type,ativo')
       .eq('cliente_id', clienteId)
-      .eq('enabled', true),
+      .eq('template_set', 'default')
+      .eq('ativo', true),
+    supabase
+      .schema('ap')
+      .from('render_sponsors')
+      .select('id,ativo')
+      .eq('cliente_id', clienteId)
+      .eq('ativo', true),
   ])
 
-  if (controlsResult.error || configsResult.error) {
+  if (
+    controlsResult.error || configsResult.error ||
+    membershipsResult.error || sponsorsResult.error
+  ) {
     throw new MasterRuntimeLoadError()
+  }
+
+  const activeSponsorIds = new Set(
+    (sponsorsResult.data || []).map(sponsor => sponsor.id),
+  )
+  const sponsorsByFormat = new Map()
+  for (const membership of membershipsResult.data || []) {
+    if (!activeSponsorIds.has(membership.sponsor_id)) continue
+    if (!sponsorsByFormat.has(membership.content_type)) {
+      sponsorsByFormat.set(membership.content_type, new Set())
+    }
+    sponsorsByFormat.get(membership.content_type).add(membership.sponsor_id)
   }
 
   return {
     configs: configsResult.data || [],
     killSwitch: Boolean(controlsResult.data?.kill_switch),
+    poolCounts: Object.fromEntries(
+      ['feed', 'reels', 'story'].map(format => [
+        format,
+        sponsorsByFormat.get(format)?.size || 0,
+      ]),
+    ),
   }
 }
 

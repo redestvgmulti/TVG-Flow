@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { ImageIcon, Video, CheckCircle2, RefreshCcw } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { ImageIcon, Video, BookOpen, CheckCircle2, RefreshCcw } from 'lucide-react';
 import VisualTitleCombobox from './VisualTitleCombobox';
 import { retainCompatibleVisualTitleId } from '../../services/visualTitleCatalog';
 
@@ -12,6 +12,8 @@ export default function ArticleForm({
     isSubmitting,
     onCancel,
     availableVisualModels = [],
+    visualModelOptions = [],
+    availableFormats = [],
     visualTitleGroups = [],
     visualTitlesLoading = false,
     visualTitlesError = '',
@@ -23,15 +25,32 @@ export default function ArticleForm({
 }) {
     const [isDragging, setIsDragging] = useState(false);
     const [visualTitleFormatNotice, setVisualTitleFormatNotice] = useState('');
-    const visualModelsAvailable = visualModelsState === 'available';
-    const generationBlocked = visualModelsState !== 'available';
+    const visualModelsLoaded = visualModelsState === 'available' ||
+        (visualModelsState === 'empty' && visualModelOptions.length > 0);
+    const generationBlocked = visualModelsState !== 'available' ||
+        !formData.visual_model || !formData.visual_title_id;
+    const selectedModel = availableVisualModels.find(model => model.slug === formData.visual_model);
+    const sourceImageRequired = selectedModel?.sourceImage === 'required';
+    const sourceImageSupported = sourceImageRequired;
+
+    useEffect(() => {
+        if (visualModelsState !== 'available') return;
+        const selectedStillValid = availableVisualModels.some(model => model.slug === formData.visual_model);
+        const nextModel = selectedStillValid
+            ? formData.visual_model
+            : (availableVisualModels.length === 1 ? availableVisualModels[0].slug : '');
+        if (nextModel !== formData.visual_model) {
+            setFormData(previous => ({ ...previous, visual_model: nextModel }));
+        }
+    }, [availableVisualModels, formData.visual_model, setFormData, visualModelsState]);
 
     function selectContentType(contentType) {
         const retainedId = retainCompatibleVisualTitleId(visualTitleGroups, formData.visual_title_id, contentType);
         const isCompatible = !formData.visual_title_id || retainedId === formData.visual_title_id;
         // A model is only offered when its master config exists for the format,
         // so drop it and let the operator re-pick one that actually exists.
-        setFormData({ ...formData, content_type: contentType, visual_title_id: retainedId, visual_model: '' });
+        setSelectedFile(null);
+        setFormData({ ...formData, content_type: contentType, visual_title_id: retainedId, visual_model: '', image_url: '' });
         setVisualTitleFormatNotice(isCompatible ? '' : 'O selo selecionado n\u00e3o est\u00e1 dispon\u00edvel para este formato.');
     }
 
@@ -39,33 +58,47 @@ export default function ArticleForm({
         <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px', width: '100%' }}>
             {/* Formato */}
             <div style={{ display: 'flex', gap: '8px', background: '#f1f5f9', padding: '6px', borderRadius: '16px', flexWrap: 'wrap' }}>
-                {[
-                    ['feed', 'Feed', <ImageIcon size={18} key="feed" />],
-                    ['reels', 'Reels', <Video size={18} key="reels" />],
-                ].map(([val, lbl, icon]) => (
+                {availableFormats.map(({ slug: val, label: lbl }) => {
+                    const icon = val === 'feed'
+                        ? <ImageIcon size={18} key="feed" />
+                        : val === 'reels'
+                            ? <Video size={18} key="reels" />
+                            : <BookOpen size={18} key="story" />;
+                    return (
                     <button key={val} type="button" onClick={() => selectContentType(val)}
                         style={{ flex: '1 1 120px', padding: '10px 8px', borderRadius: '12px', border: 'none', background: formData.content_type === val ? '#fff' : 'transparent', color: formData.content_type === val ? '#0f172a' : '#64748b', fontWeight: 600, fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', boxShadow: formData.content_type === val ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', cursor: 'pointer', transition: 'all 0.2s' }}>
                         {icon} <span style={{ whiteSpace: 'nowrap' }}>{lbl}</span>
                     </button>
-                ))}
+                    );
+                })}
             </div>
 
             {/* Modelo visual: junto com o formato, endereça o template fixo. */}
-            {visualModelsAvailable ? (
+            {visualModelsLoaded ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: '#f8fafc', padding: '16px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
-                    <label style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>Modelo visual <span style={{ color: '#ef4444' }}>*</span></label>
+                    <label style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>Finalidade da arte <span style={{ color: '#ef4444' }}>*</span></label>
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                        {availableVisualModels.map(model => (
-                            <button key={model.slug} type="button"
-                                onClick={() => setFormData({ ...formData, visual_model: model.slug })}
+                        {visualModelOptions.map(model => (
+                            <div key={model.slug} style={{ flex: '1 1 140px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <button type="button" disabled={!model.available}
+                                onClick={() => {
+                                    if (model.sourceImage !== 'required') setSelectedFile(null);
+                                    setFormData({
+                                        ...formData,
+                                        visual_model: model.slug,
+                                        image_url: model.sourceImage === 'required' ? formData.image_url : '',
+                                    });
+                                }}
                                 aria-pressed={formData.visual_model === model.slug}
-                                style={{ flex: '1 1 140px', padding: '12px 10px', borderRadius: '12px', border: formData.visual_model === model.slug ? '1px solid #0f172a' : '1px solid #cbd5e1', background: formData.visual_model === model.slug ? '#0f172a' : '#fff', color: formData.visual_model === model.slug ? '#fff' : '#334155', fontWeight: 600, fontSize: '14px', cursor: 'pointer', transition: 'all 0.2s' }}>
+                                style={{ width: '100%', padding: '12px 10px', borderRadius: '12px', border: formData.visual_model === model.slug ? '1px solid #0f172a' : '1px solid #cbd5e1', background: formData.visual_model === model.slug ? '#0f172a' : '#fff', color: formData.visual_model === model.slug ? '#fff' : '#334155', fontWeight: 600, fontSize: '14px', cursor: model.available ? 'pointer' : 'not-allowed', opacity: model.available ? 1 : 0.55, transition: 'all 0.2s' }}>
                                 {model.label}
                             </button>
+                            {!model.available && <small style={{ color: '#64748b', lineHeight: 1.25 }}>{model.unavailableReason}</small>}
+                            </div>
                         ))}
                     </div>
                     {typeof errors.visual_model === 'string' && <span style={{ color: '#ef4444', fontSize: '12px', fontWeight: 600 }}>{errors.visual_model}</span>}
-                    <small style={{ color: '#64748b' }}>O modelo define o template e a quantidade de patrocinadores automaticamente.</small>
+                    <small style={{ color: '#64748b' }}>A finalidade define a configuração da arte automaticamente.</small>
                 </div>
             ) : visualModelsState === 'error' ? (
                 <div role="alert" style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: '12px', padding: '14px 16px', fontSize: '13px', color: '#991b1b', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '10px' }}>
@@ -150,10 +183,10 @@ export default function ArticleForm({
                 />
             </div>
 
-            {/* Foto (feed only) */}
-            {formData.content_type === 'feed' && (
+            {/* Imagem aparece apenas quando o contrato da finalidade a utiliza. */}
+            {sourceImageSupported && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
-                    <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Foto (Fundo do Card)</label>
+                    <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Foto (Fundo do Card){sourceImageRequired && <span style={{ color: '#ef4444' }}> *</span>}</label>
                     <div
                         onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
                         onDragLeave={() => setIsDragging(false)}

@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import VisualTitlesManager from '../../components/editorial/VisualTitlesManager'
 import SponsorsManager from '../../components/editorial/SponsorsManager'
+import MasterConfigsManager from '../../components/editorial/MasterConfigsManager'
 
 // Operator-facing settings only. Everything technical about the render — Placid
 // template UUIDs, layer maps, rotation scope, membership ordering — is decided
 // by the database and is deliberately absent from this screen.
 const TABS = [
+  ['purposes', 'Finalidades das artes'],
   ['titles', 'Selos da matéria'],
   ['sponsors', 'Patrocinadores'],
 ]
@@ -14,7 +16,7 @@ export default function AutoPublisherMasterV1Settings({
   clienteId,
   clienteError,
 }) {
-  const [tab, setTab] = useState('titles')
+  const [tab, setTab] = useState('purposes')
 
   if (!clienteId) {
     return (
@@ -69,6 +71,10 @@ export default function AutoPublisherMasterV1Settings({
 
         {tab === 'titles' && (
           <VisualTitlesManager clienteId={clienteId} />
+        )}
+
+        {tab === 'purposes' && (
+          <MasterConfigsManager clienteId={clienteId} />
         )}
 
         {tab === 'sponsors' && (

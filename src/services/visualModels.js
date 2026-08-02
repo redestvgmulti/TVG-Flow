@@ -1,22 +1,24 @@
-// Visual model ("Modelo visual"): the only daily selector that, together with
-// the format (Feed/Reels), addresses one of the four fixed Placid templates.
-// The model ALSO fixes how many sponsors the rotation applies — the operator
-// never chooses the sponsor count separately.
-//
-//   tvg    → TVG fixa + dois patrocinadores dinâmicos          → 2 patrocinadores
-//   misto  → TVG fixa + imagem fixa + um patrocinador           → 1 patrocinador
-//
-// The model is stored in its own column, ap.master_render_configs.visual_model.
-// It is NOT a "campanha visual" and it is NOT template_set: template_set stays
-// fixed at 'default' and remains only the internal sponsor-rotation scope, which
-// TVG and TVG + IMG deliberately share (one catalog, one pool, one cursor per
-// format). Nothing here selects layers or UUIDs in the UI.
-import { isMasterV1Available } from './masterV1Availability.js'
+// Business-facing purposes for AutoPublisher artwork. Technical template UUID,
+// sponsor count and layer map are resolved from ap.master_render_configs.
+import {
+  isMasterV1Available,
+  masterV1UnavailableMessage,
+  sourceImageRequirement,
+} from './masterV1Availability.js'
 
-export const VISUAL_MODELS = [
-  { slug: 'tvg', label: 'TVG', sponsorCount: 2 },
-  { slug: 'misto', label: 'TVG + IMG', sponsorCount: 1 },
-]
+export const VISUAL_MODELS = Object.freeze([
+  { slug: 'tvg', label: 'TVG', formats: ['feed', 'reels'] },
+  { slug: 'tvg_img', label: 'TVG + IMG', formats: ['feed', 'reels'] },
+  { slug: 'individual', label: 'Individual', formats: ['feed', 'reels'] },
+  { slug: 'aparecida', label: 'Aparecida', formats: ['reels'] },
+  { slug: 'story', label: 'Story', formats: ['story'] },
+])
+
+export const CONTENT_TYPES = Object.freeze([
+  { slug: 'feed', label: 'Feed' },
+  { slug: 'reels', label: 'Reels' },
+  { slug: 'story', label: 'Story' },
+])
 
 const BY_SLUG = new Map(VISUAL_MODELS.map(model => [model.slug, model]))
 
@@ -24,25 +26,76 @@ export function isVisualModel(slug) {
   return BY_SLUG.has(slug)
 }
 
-export function sponsorCountForVisualModel(slug) {
-  return BY_SLUG.get(slug)?.sponsorCount ?? null
-}
-
 export function visualModelLabel(slug) {
+  if (slug === 'misto') return 'TVG + IMG'
   return BY_SLUG.get(slug)?.label ?? slug
 }
 
-// Models the operator can actually pick for a given format: those whose fixed
-// master config exists, is enabled and complete, with the kill switch off.
-// `configs` are ap.master_render_configs rows (one per content_type ×
-// visual_model).
-export function availableVisualModelsForFormat(configs, control, contentType) {
+export function visualModelsForFormat(contentType) {
+  return VISUAL_MODELS.filter(model => model.formats.includes(contentType))
+}
+
+function poolSizeFor(poolCounts, contentType) {
+  const value = poolCounts?.[contentType]
+  return Number.isInteger(value) ? value : undefined
+}
+
+export function visualModelOptionsForFormat(
+  configs,
+  control,
+  contentType,
+  poolCounts = {},
+) {
   const byModel = new Map(
     (configs || [])
       .filter(config => config.content_type === contentType)
       .map(config => [config.visual_model, config]),
   )
-  return VISUAL_MODELS.filter(model =>
-    isMasterV1Available(byModel.get(model.slug), control),
-  )
+  return visualModelsForFormat(contentType).map(model => {
+    const config = byModel.get(model.slug) || null
+    const poolSize = poolSizeFor(poolCounts, contentType)
+    const available = isMasterV1Available(config, control, poolSize)
+    return {
+      ...model,
+      config,
+      available,
+      unavailableReason: available
+        ? ''
+        : masterV1UnavailableMessage(config, control, poolSize),
+      sourceImage: sourceImageRequirement(config),
+    }
+  })
+}
+
+export function availableVisualModelsForFormat(
+  configs,
+  control,
+  contentType,
+  poolCounts = {},
+) {
+  return visualModelOptionsForFormat(
+    configs,
+    control,
+    contentType,
+    poolCounts,
+  ).filter(model => model.available)
+}
+
+export function availableContentTypes(configs, control) {
+  if (control?.kill_switch) return []
+  return CONTENT_TYPES.filter(format => {
+    const allowed = new Set(visualModelsForFormat(format.slug).map(model => model.slug))
+    return (configs || []).some(config =>
+      config.content_type === format.slug &&
+      config.enabled === true &&
+      allowed.has(config.visual_model),
+    )
+  })
+}
+
+export function nextVisualModel(currentModel, availableModels) {
+  if (availableModels.some(model => model.slug === currentModel)) {
+    return currentModel
+  }
+  return availableModels.length === 1 ? availableModels[0].slug : ''
 }

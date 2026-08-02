@@ -13,7 +13,11 @@ import { SkeletonCard, SkeletonTable } from '../../components/Skeleton'
 import { toast } from 'sonner'
 import ArticleForm from '../../components/editorial/ArticleForm'
 import Modal from '../../components/ui/Modal'
-import { availableVisualModelsForFormat } from '../../services/visualModels'
+import {
+    availableContentTypes,
+    availableVisualModelsForFormat,
+    visualModelOptionsForFormat,
+} from '../../services/visualModels'
 import { resolveOperationalClienteId } from '../../services/visualTitleGroups'
 import { loadVisualTitleCatalog } from '../../services/visualTitleCatalog'
 import {
@@ -87,6 +91,7 @@ export default function AutoPublisher() {
     const [masterRuntime, setMasterRuntime] = useState({
         configs: [],
         killSwitch: false,
+        poolCounts: {},
         status: MASTER_RUNTIME_STATUS.IDLE,
     })
     const [manualFormErrors, setManualFormErrors] = useState({})
@@ -223,6 +228,7 @@ export default function AutoPublisher() {
             setMasterRuntime({
                 configs: [],
                 killSwitch: false,
+                poolCounts: {},
                 status: MASTER_RUNTIME_STATUS.ERROR,
             })
         }
@@ -237,10 +243,40 @@ export default function AutoPublisher() {
     // template. The operator picks the model; the template and the sponsor count
     // follow from it. A model is offered only when its master config exists, is
     // enabled and complete, with the kill switch off.
-    const availableVisualModels = useMemo(
-        () => availableVisualModelsForFormat(masterRuntime.configs, { kill_switch: masterRuntime.killSwitch }, formData.content_type),
-        [masterRuntime, formData.content_type],
+    const runtimeControl = useMemo(
+        () => ({ kill_switch: masterRuntime.killSwitch }),
+        [masterRuntime.killSwitch],
     )
+    const availableVisualModels = useMemo(
+        () => availableVisualModelsForFormat(
+            masterRuntime.configs,
+            runtimeControl,
+            formData.content_type,
+            masterRuntime.poolCounts,
+        ),
+        [masterRuntime, formData.content_type, runtimeControl],
+    )
+    const visualModelOptions = useMemo(
+        () => visualModelOptionsForFormat(
+            masterRuntime.configs,
+            runtimeControl,
+            formData.content_type,
+            masterRuntime.poolCounts,
+        ),
+        [masterRuntime, formData.content_type, runtimeControl],
+    )
+    const availableFormats = useMemo(
+        () => availableContentTypes(
+            masterRuntime.configs,
+            runtimeControl,
+            masterRuntime.poolCounts,
+        ),
+        [masterRuntime, runtimeControl],
+    )
+    const selectedVisualModel = availableVisualModels.find(
+        model => model.slug === formData.visual_model,
+    )
+    const sourceImageRequired = selectedVisualModel?.sourceImage === 'required'
     const visualModelsState = visualModelsStateFor(
         masterRuntime.status,
         availableVisualModels,
@@ -448,15 +484,15 @@ export default function AutoPublisher() {
         }
 
         if (!formData.visual_model) {
-            newErrors.visual_model = 'Selecione o modelo visual.'
+            newErrors.visual_model = 'Selecione a finalidade da arte.'
         }
 
         if (!isLinkMode) {
             // Manual Mode Requirements
             if (!formData.titulo) newErrors.titulo = 'Título obrigatório em modo manual.'
             if (!formData.conteudo) newErrors.conteudo = 'Conteúdo obrigatório em modo manual.'
-            if (formData.content_type === 'feed' && !formData.image_url && !selectedFile) {
-                newErrors.image_url = 'Imagem obrigatória para posts de feed.'
+            if (sourceImageRequired && !formData.image_url && !selectedFile) {
+                newErrors.image_url = 'Imagem obrigatória para esta finalidade.'
             }
         } else {
             // Link Mode Requirements
@@ -523,7 +559,7 @@ export default function AutoPublisher() {
 
         // 4. Image upload
         let finalImageUrl = formData.image_url || scrapedImage || null
-        if (selectedFile) {
+        if (selectedFile && sourceImageRequired) {
             try {
                 const fileExt = selectedFile.name.split('.').pop()
                 const fileName = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`
@@ -537,6 +573,12 @@ export default function AutoPublisher() {
             }
         }
 
+        if (sourceImageRequired && !finalImageUrl) {
+            setManualFormErrors({ image_url: 'Imagem obrigatória para esta finalidade.' })
+            setIsSubmittingManual(false)
+            return
+        }
+
         // 5. Standardized Payload
         const { data: authData } = await supabase.auth.getUser()
         const user = authData?.user
@@ -547,16 +589,12 @@ export default function AutoPublisher() {
             cliente_id: clienteId,
             auth_user_id: finalAuthUserId,
             url_original: formData.url_original || null,
-            titulo: formData.titulo || scrapedTitle || 'Pauta OMNI',
-            conteudo: formData.conteudo || scrapedConteudo || '',
+            headline: formData.titulo || scrapedTitle || 'Pauta OMNI',
+            text: formData.conteudo || scrapedConteudo || '',
             context_tag: formData.context_tag.toUpperCase(),
             content_type: formData.content_type || 'feed',
-            imagem_url: formData.content_type === 'reels' ? null : finalImageUrl,
+            source_image: sourceImageRequired ? finalImageUrl : null,
             visual_title_id: formData.visual_title_id || null,
-            // Hybrid fields for backend compatibility
-            userHeadline: formData.titulo || null,
-            userTag: formData.context_tag.toUpperCase(),
-            userText: formData.conteudo || null
         }
 
         const idempotencyKey = formData.idempotency_key || crypto.randomUUID()
@@ -872,6 +910,8 @@ export default function AutoPublisher() {
                     isSubmitting={isSubmittingManual}
                     onCancel={() => { setManualModalOpen(false); setSelectedFile(null); }}
                     availableVisualModels={availableVisualModels}
+                    visualModelOptions={visualModelOptions}
+                    availableFormats={availableFormats}
                     visualTitleGroups={visualTitleGroups}
                     visualTitlesLoading={visualTitlesLoading}
                     visualTitlesError={visualTitlesError}

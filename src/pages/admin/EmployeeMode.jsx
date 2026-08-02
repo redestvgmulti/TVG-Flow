@@ -4,7 +4,11 @@ import { supabase } from '../../services/supabase';
 import { Check, CheckCircle2, Copy, Download, X, AlertCircle, RefreshCcw, ImageIcon, Brain, Search, SearchCode, Video, Image as ImageIconLucide, Loader2 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import ArticleForm from '../../components/editorial/ArticleForm';
-import { availableVisualModelsForFormat } from '../../services/visualModels';
+import {
+    availableContentTypes,
+    availableVisualModelsForFormat,
+    visualModelOptionsForFormat,
+} from '../../services/visualModels';
 import { loadVisualTitleCatalog } from '../../services/visualTitleCatalog';
 import {
     loadMasterRuntime,
@@ -34,6 +38,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
     const [masterRuntime, setMasterRuntime] = useState({
         configs: [],
         killSwitch: false,
+        poolCounts: {},
         status: MASTER_RUNTIME_STATUS.IDLE,
     });
     const [visualTitleGroups, setVisualTitleGroups] = useState([]);
@@ -81,6 +86,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
             setMasterRuntime({
                 configs: [],
                 killSwitch: false,
+                poolCounts: {},
                 status: MASTER_RUNTIME_STATUS.ERROR,
             });
         }
@@ -117,10 +123,40 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
 
     // Each (cliente, content_type, visual_model) row is one fixed Placid
     // template; a model is offered only when its config is enabled and complete.
-    const availableVisualModels = useMemo(
-        () => availableVisualModelsForFormat(masterRuntime.configs, { kill_switch: masterRuntime.killSwitch }, formData.content_type),
-        [masterRuntime, formData.content_type],
+    const runtimeControl = useMemo(
+        () => ({ kill_switch: masterRuntime.killSwitch }),
+        [masterRuntime.killSwitch],
     );
+    const availableVisualModels = useMemo(
+        () => availableVisualModelsForFormat(
+            masterRuntime.configs,
+            runtimeControl,
+            formData.content_type,
+            masterRuntime.poolCounts,
+        ),
+        [masterRuntime, formData.content_type, runtimeControl],
+    );
+    const visualModelOptions = useMemo(
+        () => visualModelOptionsForFormat(
+            masterRuntime.configs,
+            runtimeControl,
+            formData.content_type,
+            masterRuntime.poolCounts,
+        ),
+        [masterRuntime, formData.content_type, runtimeControl],
+    );
+    const availableFormats = useMemo(
+        () => availableContentTypes(
+            masterRuntime.configs,
+            runtimeControl,
+            masterRuntime.poolCounts,
+        ),
+        [masterRuntime, runtimeControl],
+    );
+    const selectedVisualModel = availableVisualModels.find(
+        model => model.slug === formData.visual_model,
+    );
+    const sourceImageRequired = selectedVisualModel?.sourceImage === 'required';
     const visualModelsState = visualModelsStateFor(
         masterRuntime.status,
         availableVisualModels,
@@ -219,7 +255,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
             return;
         }
         if (!context_tag) { setErrorMsg('Tag de editoria é obrigatória.'); return; }
-        if (!visual_model) { setErrorMsg('Selecione o modelo visual.'); return; }
+        if (!visual_model) { setErrorMsg('Selecione a finalidade da arte.'); return; }
         if (!visual_title_id) { setErrorMsg('Selecione o selo da matéria.'); return; }
         if (!url_original && !titulo && !conteudo && !image_url && !selectedFile) {
             setErrorMsg('Preencha pelo menos um campo ou insira um link para gerar a matéria.');
@@ -300,8 +336,12 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
             }
 
             let finalImageUrl = image_url || scrapedImage || null;
-            if (selectedFile && content_type === 'feed') {
+            if (selectedFile && sourceImageRequired) {
                 finalImageUrl = await handleFileUpload(selectedFile);
+            }
+
+            if (sourceImageRequired && !finalImageUrl) {
+                throw new Error('Imagem obrigatória para esta finalidade.');
             }
 
             // Sanitize professionalId (convert "null" string to null)
@@ -312,16 +352,12 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                 cliente_id: currentClienteId,
                 auth_user_id: finalAuthUserId,
                 url_original: url_original || null,
-                titulo: titulo || scrapedTitle || 'Pauta OMNI',
-                conteudo: conteudo || scrapedConteudo || '',
+                headline: titulo || scrapedTitle || 'Pauta OMNI',
+                text: conteudo || scrapedConteudo || '',
                 context_tag: context_tag.toUpperCase(),
                 content_type: content_type,
-                imagem_url: content_type === 'feed' ? finalImageUrl : null,
+                source_image: sourceImageRequired ? finalImageUrl : null,
                 visual_title_id: visual_title_id || null,
-                // Hybrid fields expected by exact ap-employee-generator edge function mappings
-                userTag: context_tag.toUpperCase(),
-                userHeadline: titulo || null,
-                userText: conteudo || null,
             };
 
             // The visual model addresses the fixed template and fixes the
@@ -332,8 +368,8 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
             payload.idempotency_key = idempotencyKey;
 
             // Validation and Audit
-            if (!payload.empresa_id) {
-                throw new Error("empresa_id could not be resolved");
+            if (!payload.cliente_id) {
+                throw new Error("cliente_id could not be resolved");
             }
 
             const { data, error } = await supabase.functions.invoke('ap-employee-generator', {
@@ -661,6 +697,8 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                 onSubmit={handleGenerate}
                                 isSubmitting={isSubmitting || isUploading}
                                 availableVisualModels={availableVisualModels}
+                                visualModelOptions={visualModelOptions}
+                                availableFormats={availableFormats}
                                 visualModelsState={visualModelsState}
                                 onRetryVisualModels={loadAvailableMasterRuntime}
                                 visualTitleGroups={visualTitleGroups}

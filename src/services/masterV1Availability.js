@@ -1,56 +1,98 @@
-// Pure, testable helpers that decide whether the master_v1 render path is
-// actually available for a tenant/content_type. Layer names stay data-driven
-// (the real values live in ap.master_render_configs.layer_map) — nothing here
-// hardcodes Placid layer names.
-//
-// A row existing in the database is NOT enough: the config must be enabled,
-// complete for its content_type, and the kill switch must be off.
+// Pure helpers for the AutoPublisher master_v1 availability contract.
+// Template UUIDs, sponsor counts and layer names always come from the tenant's
+// ap.master_render_configs row. The browser never derives technical values.
 
 export function nonEmptyLayer(value) {
   return typeof value === 'string' && value.trim().length > 0
 }
 
-// Layers required to ENABLE a config, per content_type. Mirrors the renderer
-// contract (renderContract.validateLayerMap): feed needs news_image; reels
-// forbids news_image/tag; both need headline + visual_title; the sponsor flow
-// needs sponsor_1 (sponsor_2 stays optional).
-export function requiredLayersFor(contentType) {
-  return contentType === 'reels'
-    ? ['headline', 'visual_title', 'sponsor_1']
-    : ['headline', 'news_image', 'visual_title', 'sponsor_1']
+export function sourceImageRequirement(config) {
+  if (!config) return 'unknown'
+  return nonEmptyLayer(config.layer_map?.news_image) ? 'required' : 'unsupported'
 }
 
-// Returns an array of missing-requirement codes; empty means the config is
-// complete enough to be enabled. Codes: 'config', 'master_template_uuid',
-// 'layer:<key>'.
+export function requiredLayersFor(contentType, sponsorCount = 0, layerMap = {}) {
+  const required = ['headline', 'visual_title']
+  if (contentType === 'feed' || nonEmptyLayer(layerMap.news_image)) {
+    required.push('news_image')
+  }
+  if (sponsorCount >= 1) required.push('sponsor_1')
+  if (sponsorCount >= 2) required.push('sponsor_2')
+  return required
+}
+
 export function masterV1ConfigIssues(config) {
   if (!config) return ['config']
   const issues = []
   if (!nonEmptyLayer(config.master_template_uuid)) {
     issues.push('master_template_uuid')
   }
-  const layerMap = config.layer_map || {}
-  for (const key of requiredLayersFor(config.content_type)) {
-    if (!nonEmptyLayer(layerMap[key])) {
-      issues.push(`layer:${key}`)
-    }
+
+  const sponsorCount = config.sponsor_count === null || config.sponsor_count === undefined
+    ? Number.NaN
+    : Number(config.sponsor_count)
+  if (!Number.isInteger(sponsorCount) || sponsorCount < 0 || sponsorCount > 2) {
+    issues.push('sponsor_count')
+  }
+
+  const layerMap = config.layer_map && typeof config.layer_map === 'object'
+    ? config.layer_map
+    : {}
+  for (const key of requiredLayersFor(
+    config.content_type,
+    Number.isInteger(sponsorCount) ? sponsorCount : 0,
+    layerMap,
+  )) {
+    if (!nonEmptyLayer(layerMap[key])) issues.push(`layer:${key}`)
+  }
+
+  if (config.content_type === 'reels' && nonEmptyLayer(layerMap.news_image)) {
+    issues.push('layer:news_image_not_supported')
+  }
+
+  const names = [
+    'headline', 'news_image', 'visual_title', 'sponsor_1', 'sponsor_2',
+  ].map(key => layerMap[key]).filter(nonEmptyLayer).map(value => value.trim())
+  if (new Set(names).size !== names.length) issues.push('layer_collision')
+  return issues
+}
+
+export function masterV1AvailabilityIssues(config, control, poolSize) {
+  if (!config) return ['config']
+  if (control?.kill_switch) return ['kill_switch']
+  if (config.enabled !== true) return ['disabled']
+  const issues = masterV1ConfigIssues(config)
+  const sponsorCount = config.sponsor_count === null || config.sponsor_count === undefined
+    ? Number.NaN
+    : Number(config.sponsor_count)
+  if (
+    Number.isInteger(sponsorCount) &&
+    Number.isInteger(poolSize) &&
+    poolSize < sponsorCount
+  ) {
+    issues.push('sponsor_pool')
   }
   return issues
 }
 
-// The master_v1 path is available for generation only when the config exists,
-// is enabled, is complete, and no kill switch is active.
-export function isMasterV1Available(config, control) {
-  if (control?.kill_switch) return false
-  if (!config || config.enabled !== true) return false
-  return masterV1ConfigIssues(config).length === 0
+export function isMasterV1Available(config, control, poolSize) {
+  return masterV1AvailabilityIssues(config, control, poolSize).length === 0
 }
 
-// Human-readable status used by the admin screen (never technical layer keys).
-export function masterV1Status(config, control) {
-  if (!config) return 'no_config'
-  if (control?.kill_switch) return 'kill_switch'
-  if (config.enabled !== true) return 'disabled'
-  if (masterV1ConfigIssues(config).length > 0) return 'incomplete'
+export function masterV1Status(config, control, poolSize) {
+  const issues = masterV1AvailabilityIssues(config, control, poolSize)
+  if (issues.includes('config')) return 'no_config'
+  if (issues.includes('kill_switch')) return 'kill_switch'
+  if (issues.includes('disabled')) return 'disabled'
+  if (issues.includes('sponsor_pool')) return 'sponsor_pool'
+  if (issues.length > 0) return 'incomplete'
   return 'active'
+}
+
+export function masterV1UnavailableMessage(config, control, poolSize) {
+  const status = masterV1Status(config, control, poolSize)
+  if (status === 'sponsor_pool') return 'Indisponível: patrocinadores insuficientes.'
+  if (status === 'active') return ''
+  if (status === 'no_config') return 'Indisponível para este formato.'
+  return 'Indisponível: configuração incompleta.'
 }

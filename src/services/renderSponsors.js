@@ -1,5 +1,5 @@
 // Sponsor administration. The operator supplies a name, a PNG and a status —
-// nothing else. The identifier, the Feed/Reels eligibility, the rotation scope
+// nothing else. The identifier, Feed/Reels/Story eligibility, the rotation scope
 // and the ordering are all derived, and registration is a single transactional
 // RPC so a sponsor can never exist without its memberships.
 import { sha256, uploadImmutablePng } from './masterV1Assets.js'
@@ -57,7 +57,7 @@ export async function listRenderSponsors(supabase, clienteId) {
   return data || []
 }
 
-// One transactional call: sponsor + Feed membership + Reels membership.
+// One transactional call: sponsor + Feed, Reels and Story memberships.
 // The PNG is uploaded first because Storage is not transactional; on RPC
 // failure the object is left orphaned but harmless — it is content-addressed,
 // unreferenced, and reused verbatim when the operator retries.

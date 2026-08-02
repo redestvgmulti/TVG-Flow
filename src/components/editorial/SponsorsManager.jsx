@@ -140,7 +140,7 @@ export default function SponsorsManager({ clienteId }) {
         setNotice('Alterações salvas.')
       } else {
         // One transactional call registers the sponsor and makes it eligible in
-        // Feed and Reels; the operator does nothing else.
+        // Feed, Reels and Story; the operator does nothing else.
         await createRenderSponsor(supabase, clienteId, { nome: form.nome, file, ativo: form.ativo })
         setNotice('Patrocinador cadastrado e já disponível para a rotação.')
       }
@@ -168,7 +168,7 @@ export default function SponsorsManager({ clienteId }) {
         <h2 className="ap-form-card-title">Patrocinadores</h2>
         <p className="ap-config-intro">
           Cadastre o nome e o logo. O patrocinador entra automaticamente na
-          rotação de Feed e Reels enquanto estiver ativo.
+          rotação de Feed, Reels e Story enquanto estiver ativo.
         </p>
       </div>
       <button type="button" className="ap-btn-add" onClick={() => { setForm({ ...emptySponsor }); setFile(null); setProcessingImage(false) }}>
