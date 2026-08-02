@@ -7,6 +7,7 @@ export type RenderPath =
   | "master_rotation_v1";
 
 type JsonRecord = Record<string, unknown>;
+type MasterContentType = "feed" | "reels" | "story";
 
 type LayerMap = {
   news_image?: string;
@@ -126,7 +127,7 @@ function validateTemplateToken(value: unknown): string {
 
 function validateLayerMap(
   value: unknown,
-  contentType: "feed" | "reels",
+  contentType: MasterContentType,
   sponsorCount: number,
 ): LayerMap {
   if (!isRecord(value)) {
@@ -318,7 +319,7 @@ function addText(
 }
 
 export function buildMasterLayers(input: {
-  contentType: "feed" | "reels";
+  contentType: MasterContentType;
   layerMap: LayerMap;
   headline: string;
   contextTag?: string | null;
@@ -332,7 +333,7 @@ export function buildMasterLayers(input: {
   }
   const layers: RenderLayers = {};
 
-  if (input.contentType === "feed") {
+  if (input.layerMap.news_image) {
     addImage(layers, input.layerMap.news_image, input.newsImageUrl);
   }
   addText(layers, input.layerMap.headline, input.headline);
@@ -374,7 +375,10 @@ export function prepareRotationV1Render(
 
   const snapshot = item.render_snapshot as JsonRecord;
   const contentType = stringValue(item.content_type);
-  if (contentType !== "feed" && contentType !== "reels") {
+  if (
+    contentType !== "feed" && contentType !== "reels" &&
+    contentType !== "story"
+  ) {
     throw new RenderContractError("CONTENT_TYPE_INVALID");
   }
 
@@ -399,12 +403,14 @@ export function prepareRotationV1Render(
     "VISUAL_TITLE_SNAPSHOT_INVALID",
   );
   const visualTitleUrl = storageAssetUrl(supabaseUrl, visualTitle);
-  const newsImageUrl = contentType === "feed"
+  const newsImageUrl = layerMap.news_image
     ? finalNewsImage(item, supabaseUrl)
     : null;
 
-  if (contentType === "feed" && !newsImageUrl) {
-    throw new RenderContractError("FEED_NEWS_IMAGE_MISSING");
+  if (layerMap.news_image && !newsImageUrl) {
+    throw new RenderContractError(
+      contentType === "feed" ? "FEED_NEWS_IMAGE_MISSING" : "SOURCE_IMAGE_REQUIRED",
+    );
   }
 
   const headline = requireString(item.headline, "HEADLINE_MISSING", "headline");

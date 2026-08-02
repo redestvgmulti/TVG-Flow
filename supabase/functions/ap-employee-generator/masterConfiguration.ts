@@ -1,15 +1,17 @@
-export const AP_EMPLOYEE_GENERATOR_VERSION = '2026-07-26-p0.2';
+export const AP_EMPLOYEE_GENERATOR_VERSION = '2026-08-02-visual-catalog.1';
 
-export const VISUAL_MODEL_SPONSORS = Object.freeze({
-  tvg: 2,
-  misto: 1,
+export const VISUAL_MODEL_FORMATS = Object.freeze({
+  tvg: ['feed', 'reels'],
+  tvg_img: ['feed', 'reels'],
+  individual: ['feed', 'reels'],
+  aparecida: ['reels'],
+  story: ['story'],
 } as const);
 
-export type VisualModel = keyof typeof VISUAL_MODEL_SPONSORS;
+export type VisualModel = keyof typeof VISUAL_MODEL_FORMATS;
 export type MasterConfigurationErrorCode =
   | 'MASTER_CONFIG_READ_FAILED'
-  | 'MASTER_CONFIG_NOT_FOUND'
-  | 'MASTER_MODEL_DISABLED'
+  | 'VISUAL_MODEL_NOT_AVAILABLE'
   | 'MASTER_CONFIG_INVALID';
 
 type QueryResult<T> = { data: T | null; error: unknown | null };
@@ -35,13 +37,29 @@ export class MasterConfigurationError extends Error {
 export function normalizeVisualModel(value: unknown): VisualModel | null {
   if (typeof value !== 'string') return null;
   const normalized = value.trim().toLowerCase();
-  return Object.prototype.hasOwnProperty.call(VISUAL_MODEL_SPONSORS, normalized)
+  return Object.prototype.hasOwnProperty.call(VISUAL_MODEL_FORMATS, normalized)
     ? normalized as VisualModel
     : null;
 }
 
-export function sponsorCountForVisualModel(model: VisualModel): number {
-  return VISUAL_MODEL_SPONSORS[model];
+export function isVisualModelAllowedForFormat(
+  visualModel: VisualModel,
+  contentType: string,
+): boolean {
+  return (VISUAL_MODEL_FORMATS[visualModel] as readonly string[]).includes(contentType);
+}
+
+export function sponsorCountFromConfig(config: Record<string, unknown>): number {
+  const count = config.sponsor_count === null || config.sponsor_count === undefined
+    ? Number.NaN
+    : Number(config.sponsor_count);
+  if (!Number.isInteger(count) || count < 0 || count > 2) {
+    throw new MasterConfigurationError(
+      'MASTER_CONFIG_INVALID',
+      'master_render_configs',
+    );
+  }
+  return count;
 }
 
 function nonEmpty(value: unknown): value is string {
@@ -60,23 +78,32 @@ export function masterConfigIssues(
   if (config.visual_model !== visualModel) issues.push('visual_model');
   if (!nonEmpty(config.master_template_uuid)) issues.push('master_template_uuid');
 
+  const sponsorCount = config.sponsor_count === null || config.sponsor_count === undefined
+    ? Number.NaN
+    : Number(config.sponsor_count);
+  if (!Number.isInteger(sponsorCount) || sponsorCount < 0 || sponsorCount > 2) {
+    issues.push('sponsor_count');
+  }
+
   const layerMap = config.layer_map && typeof config.layer_map === 'object'
     ? config.layer_map as Record<string, unknown>
     : {};
-  const requiredLayers = contentType === 'reels'
-    ? ['headline', 'visual_title', 'sponsor_1']
-    : ['headline', 'news_image', 'visual_title', 'sponsor_1'];
-  if (sponsorCountForVisualModel(visualModel) === 2) {
-    requiredLayers.push('sponsor_2');
+  const requiredLayers = ['headline', 'visual_title'];
+  if (contentType === 'feed' || nonEmpty(layerMap.news_image)) {
+    requiredLayers.push('news_image');
+  }
+  if (sponsorCount >= 1) requiredLayers.push('sponsor_1');
+  if (sponsorCount >= 2) requiredLayers.push('sponsor_2');
+  if (contentType === 'reels' && nonEmpty(layerMap.news_image)) {
+    issues.push('layer:news_image_not_supported');
   }
 
   const resolvedLayerNames: string[] = [];
   for (const key of requiredLayers) {
-    if (!nonEmpty(layerMap[key])) {
-      issues.push(`layer:${key}`);
-    } else {
-      resolvedLayerNames.push(String(layerMap[key]).trim());
-    }
+    if (!nonEmpty(layerMap[key])) issues.push(`layer:${key}`);
+  }
+  for (const key of ['headline', 'news_image', 'visual_title', 'sponsor_1', 'sponsor_2']) {
+    if (nonEmpty(layerMap[key])) resolvedLayerNames.push(String(layerMap[key]).trim());
   }
   if (new Set(resolvedLayerNames).size !== resolvedLayerNames.length) {
     issues.push('layer_collision');
@@ -109,21 +136,15 @@ export async function requireMasterConfiguration(input: {
   const control = await safeRead('master_render_controls', input.readControl);
   if (control?.kill_switch === true) {
     throw new MasterConfigurationError(
-      'MASTER_MODEL_DISABLED',
+      'VISUAL_MODEL_NOT_AVAILABLE',
       'master_render_controls',
     );
   }
 
   const config = await safeRead('master_render_configs', input.readConfig);
-  if (!config) {
+  if (!config || config.enabled !== true) {
     throw new MasterConfigurationError(
-      'MASTER_CONFIG_NOT_FOUND',
-      'master_render_configs',
-    );
-  }
-  if (config.enabled !== true) {
-    throw new MasterConfigurationError(
-      'MASTER_MODEL_DISABLED',
+      'VISUAL_MODEL_NOT_AVAILABLE',
       'master_render_configs',
     );
   }
@@ -160,18 +181,14 @@ export function buildGeneratorLogEvent(input: {
   };
 }
 
-// Public messages never expose database or SQL details.
 export function masterConfigurationPublicMessage(
   code: MasterConfigurationErrorCode,
 ): string {
   if (code === 'MASTER_CONFIG_READ_FAILED') {
     return 'Nao foi possivel carregar a configuracao visual. Tente novamente.';
   }
-  if (code === 'MASTER_MODEL_DISABLED') {
-    return 'O modelo visual nao esta habilitado para este formato.';
-  }
   if (code === 'MASTER_CONFIG_INVALID') {
-    return 'A configuracao do modelo visual esta incompleta.';
+    return 'A configuracao desta finalidade esta incompleta.';
   }
-  return 'Nenhuma configuracao foi encontrada para este modelo visual.';
+  return 'Esta finalidade nao esta disponivel para o formato selecionado.';
 }

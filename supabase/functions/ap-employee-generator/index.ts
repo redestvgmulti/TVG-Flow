@@ -13,10 +13,11 @@ import {
 import {
   AP_EMPLOYEE_GENERATOR_VERSION,
   MasterConfigurationError,
+  isVisualModelAllowedForFormat,
   masterConfigurationPublicMessage,
   normalizeVisualModel,
   requireMasterConfiguration,
-  sponsorCountForVisualModel,
+  sponsorCountFromConfig,
   type VisualModel,
 } from './masterConfiguration.ts';
 import {
@@ -144,9 +145,12 @@ function visualTitleErrorResponse(
   context: LogContext,
   error: VisualTitleResolutionError,
 ) {
+  const code = error.code === 'VISUAL_TITLE_FORMAT_INVALID'
+    ? 'VISUAL_TITLE_FORMAT_MISMATCH'
+    : error.code;
   return errorResponse(
     context,
-    error.code,
+    code,
     'O selo da materia nao esta disponivel para esta criacao.',
     400,
     'resolve_visual_title',
@@ -233,36 +237,50 @@ Deno.serve(async (req: Request) => {
     const {
       titulo,
       conteudo,
+      headline,
+      text,
+      source_image: rawSourceImage,
       imagem_url: rawImage,
       image_url: rawImageAlias,
       cliente_id: requestedClienteId,
       auth_user_id,
       url_original,
-      content_type = 'feed',
+      content_type: rawContentType = 'feed',
       userHeadline: rawHeadline,
       userTag: rawTag,
       context_tag: rawContextTag,
       userText: rawText,
       placid_template_uuid: manualUuid = null,
+      master_template_uuid: manualMasterUuid = null,
+      layer_map: manualLayerMap,
+      template_set: manualTemplateSet,
+      master_id: manualMasterId,
       visual_title_id = null,
       sponsor_count: rawSponsorCount,
       visual_model: rawVisualModel = null,
       idempotency_key = null,
     } = body;
 
+    const content_type = String(rawContentType).trim().toLowerCase();
+    const requestedHeadline = headline ?? titulo;
+    const requestedText = text ?? conteudo;
     const visualModel = normalizeVisualModel(rawVisualModel);
+    const normalizedRawVisualModel = typeof rawVisualModel === 'string'
+      ? rawVisualModel.trim().toLowerCase()
+      : null;
+    const historicalMistoRetry = normalizedRawVisualModel === 'misto';
     context = {
       correlationId,
       clientId: requestedClienteId,
       contentType: content_type,
       visualModel: visualModel || rawVisualModel,
       hasVisualTitleId: isUUID(visual_title_id),
-      hasSourceImage: Boolean(rawImage || rawImageAlias),
+      hasSourceImage: Boolean(rawSourceImage || rawImage || rawImageAlias),
     };
     stage = 'validate_request';
     logEvent(context, stage, 'REQUEST_VALIDATION_STARTED');
 
-    if (!['feed', 'reels'].includes(content_type)) {
+    if (!['feed', 'reels', 'story'].includes(content_type)) {
       return errorResponse(
         context,
         'VALIDATION_ERROR',
@@ -272,8 +290,8 @@ Deno.serve(async (req: Request) => {
       );
     }
     if (
-      !titulo || String(titulo).trim().length < 2 ||
-      !conteudo || String(conteudo).trim().length < 5
+      !requestedHeadline || String(requestedHeadline).trim().length < 2 ||
+      !requestedText || String(requestedText).trim().length < 5
     ) {
       return errorResponse(
         context,
@@ -286,17 +304,26 @@ Deno.serve(async (req: Request) => {
     if (rawVisualModel === undefined || rawVisualModel === null || rawVisualModel === '') {
       return errorResponse(
         context,
-        'MASTER_MODEL_REQUIRED',
-        'Selecione o modelo visual antes de gerar a materia.',
+        'VISUAL_MODEL_REQUIRED',
+        'Selecione a finalidade da arte antes de gerar a materia.',
         422,
         'request_validation',
       );
     }
-    if (!visualModel) {
+    if (!visualModel && !historicalMistoRetry) {
       return errorResponse(
         context,
-        'MASTER_MODEL_INVALID',
-        'Modelo visual invalido.',
+        'VISUAL_MODEL_INVALID',
+        'Finalidade da arte invalida.',
+        400,
+        'request_validation',
+      );
+    }
+    if (visualModel && !isVisualModelAllowedForFormat(visualModel, content_type)) {
+      return errorResponse(
+        context,
+        'VISUAL_MODEL_FORMAT_MISMATCH',
+        'Esta finalidade nao esta disponivel para o formato selecionado.',
         400,
         'request_validation',
       );
@@ -313,7 +340,10 @@ Deno.serve(async (req: Request) => {
         'request_validation',
       );
     }
-    if (manualUuid) {
+    if (
+      manualUuid || manualMasterUuid || manualLayerMap !== undefined ||
+      manualTemplateSet !== undefined || manualMasterId !== undefined
+    ) {
       return errorResponse(
         context,
         'MANUAL_TEMPLATE_NOT_ALLOWED',
@@ -333,7 +363,7 @@ Deno.serve(async (req: Request) => {
     }
 
     stage = 'resolve_source_image';
-    const imageUrl = rawImage || rawImageAlias || null;
+    const imageUrl = rawSourceImage || rawImage || rawImageAlias || null;
     logEvent(context, stage, 'SOURCE_IMAGE_RESOLVED');
     if (imageUrl && !isUrl(imageUrl)) {
       return errorResponse(
@@ -383,7 +413,11 @@ Deno.serve(async (req: Request) => {
 
     const clienteId = authorization.clienteId;
     const authenticatedUserId = authorization.userId;
-    context = { ...context, clientId: clienteId, visualModel };
+    context = {
+      ...context,
+      clientId: clienteId,
+      visualModel: visualModel || normalizedRawVisualModel,
+    };
     logEvent(context, stage, 'TENANT_RESOLVED');
     stage = 'build_snapshot';
 
@@ -396,7 +430,7 @@ Deno.serve(async (req: Request) => {
       await supabase
         .schema('ap')
         .from('candidate_news')
-        .select('id,status,render_contract_version,render_snapshot')
+        .select('id,status,render_contract_version,render_snapshot,sponsor_count')
         .eq('cliente_id', clienteId)
         .eq('idempotency_key', idempotency_key)
         .maybeSingle();
@@ -421,17 +455,28 @@ Deno.serve(async (req: Request) => {
         );
       }
     }
+    if (historicalMistoRetry && !existingCandidate) {
+      return errorResponse(
+        context,
+        'VISUAL_MODEL_INVALID',
+        'Finalidade da arte invalida para novas materias.',
+        400,
+        'request_validation',
+      );
+    }
 
-    const userHeadline = typeof rawHeadline === 'string' && rawHeadline.trim()
-      ? rawHeadline.trim()
+    const headlineOverride = rawHeadline ?? headline;
+    const textOverride = rawText ?? text;
+    const userHeadline = typeof headlineOverride === 'string' && headlineOverride.trim()
+      ? headlineOverride.trim()
       : null;
     const userTag = rawTag || rawContextTag
       ? String(rawTag || rawContextTag).toUpperCase().trim()
       : null;
-    const userText = typeof rawText === 'string' && rawText.trim()
-      ? rawText.trim()
+    const userText = typeof textOverride === 'string' && textOverride.trim()
+      ? textOverride.trim()
       : null;
-    const sponsorCount = sponsorCountForVisualModel(visualModel as VisualModel);
+    let sponsorCount: number;
     let renderSnapshotBase: Record<string, unknown>;
 
     // A committed master_v1 candidate is immutable. Its exact original base is
@@ -491,12 +536,14 @@ Deno.serve(async (req: Request) => {
       }
 
       stage = 'build_snapshot';
+      sponsorCount = sponsorCountFromConfig(config);
       renderSnapshotBase = {
         master_config: {
           id: config.id,
           master_template_uuid: config.master_template_uuid,
           enabled: config.enabled,
           visual_model: config.visual_model,
+          sponsor_count: sponsorCount,
         },
         visual_model: config.visual_model,
         layer_map: config.layer_map,
@@ -514,7 +561,49 @@ Deno.serve(async (req: Request) => {
         );
       }
       renderSnapshotBase = frozenBase;
+      const frozenSponsorCount = Number(
+        existingCandidate.sponsor_count ??
+          existingCandidate.render_snapshot?.sponsor_selection?.requested_count ??
+          (frozenBase.master_config as Record<string, unknown> | undefined)?.sponsor_count,
+      );
+      if (
+        !Number.isInteger(frozenSponsorCount) ||
+        frozenSponsorCount < 0 || frozenSponsorCount > 2
+      ) {
+        return errorResponse(
+          context,
+          'IDEMPOTENCY_SNAPSHOT_INVALID',
+          'O snapshot original desta tentativa esta incompleto.',
+          409,
+          'build_snapshot',
+        );
+      }
+      sponsorCount = frozenSponsorCount;
       logEvent(context, stage, 'FROZEN_SNAPSHOT_REUSED');
+    }
+
+    const frozenLayerMap = renderSnapshotBase.layer_map as
+      | Record<string, unknown>
+      | undefined;
+    const sourceImageSupported = typeof frozenLayerMap?.news_image === 'string' &&
+      frozenLayerMap.news_image.trim().length > 0;
+    if (sourceImageSupported && !imageUrl) {
+      return errorResponse(
+        context,
+        'SOURCE_IMAGE_REQUIRED',
+        'Uma imagem e obrigatoria para esta finalidade.',
+        400,
+        'resolve_source_image',
+      );
+    }
+    if (!sourceImageSupported && imageUrl) {
+      return errorResponse(
+        context,
+        'SOURCE_IMAGE_NOT_SUPPORTED',
+        'Esta finalidade nao utiliza imagem de origem.',
+        400,
+        'resolve_source_image',
+      );
     }
 
     stage = 'call_candidate_rpc';
@@ -527,8 +616,8 @@ Deno.serve(async (req: Request) => {
         p_content_type: content_type,
         p_template_set: ROTATION_TEMPLATE_SET,
         p_sponsor_count: sponsorCount,
-        p_titulo: userHeadline || titulo,
-        p_conteudo: userText || conteudo,
+        p_titulo: userHeadline || requestedHeadline,
+        p_conteudo: userText || requestedText,
         p_url_original: url_original || null,
         p_imagem_url: imageUrl,
         p_context_tag: userTag || 'DESTAQUE',
@@ -590,7 +679,7 @@ Deno.serve(async (req: Request) => {
         userHeadline,
         userTag,
         userText,
-        contentType: content_type as 'feed' | 'reels',
+        contentType: content_type as any,
       });
       const { error: updateError } = await supabase
         .schema('ap')
