@@ -9,6 +9,7 @@ import {
   RenderContractError,
   type RenderLayers,
 } from "./renderContract.ts";
+import { buildPlacidErrorTelemetry } from "./placidErrorTelemetry.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -210,7 +211,16 @@ async function buildRenderPlan(
   return legacyPlan(supabase, item, supabaseUrl, true);
 }
 
-async function requestPlacid(templateId: string, layers: RenderLayers) {
+type PlacidRequestContext = {
+  candidateId: string;
+  correlationId: string;
+};
+
+async function requestPlacid(
+  templateId: string,
+  layers: RenderLayers,
+  context: PlacidRequestContext,
+) {
   const apiKey = Deno.env.get("RENDER_API_KEY");
   if (!apiKey) throw new RenderContractError("PLACID_API_KEY_MISSING");
 
@@ -223,6 +233,18 @@ async function requestPlacid(templateId: string, layers: RenderLayers) {
     body: JSON.stringify({ template_uuid: templateId, layers }),
   });
   if (!response.ok) {
+    const responseBody = await response.text().catch(() => "");
+    console.error(
+      "[ap-render-engine] Placid request failed",
+      buildPlacidErrorTelemetry({
+        status: response.status,
+        responseBody,
+        templateUuid: templateId,
+        layerNames: Object.keys(layers),
+        correlationId: context.correlationId,
+        candidateId: context.candidateId,
+      }),
+    );
     throw new RenderContractError(
       "PLACID_REQUEST_FAILED",
       `status=${response.status}`,
@@ -278,6 +300,13 @@ Deno.serve(async (req) => {
     auth: { autoRefreshToken: false, persistSession: false },
   });
   const reqBody = await req.json().catch(() => ({}));
+  const requestedCorrelationId = req.headers.get("x-correlation-id")?.trim();
+  const correlationId = requestedCorrelationId &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        requestedCorrelationId,
+      )
+    ? requestedCorrelationId
+    : crypto.randomUUID();
   const targetId = reqBody.newsId || reqBody.news_id;
   const lockExpiry = new Date(Date.now() - 10 * 60 * 1000).toISOString();
   let query = supabase
@@ -322,7 +351,10 @@ Deno.serve(async (req) => {
         });
       }
 
-      const finalUrl = await requestPlacid(plan.templateId, plan.layers);
+      const finalUrl = await requestPlacid(plan.templateId, plan.layers, {
+        candidateId: item.id,
+        correlationId,
+      });
       const download = await fetch(finalUrl);
       if (!download.ok) {
         throw new RenderContractError(
@@ -374,6 +406,7 @@ Deno.serve(async (req) => {
         sponsor_source: item.render_snapshot?.sponsor_source || null,
         content_type: item.content_type || "feed",
         error_code: error.code,
+        correlation_id: correlationId,
       });
       await supabase
         .schema("ap")
