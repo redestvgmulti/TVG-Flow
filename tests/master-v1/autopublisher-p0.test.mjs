@@ -89,6 +89,19 @@ test('master disabled, missing, invalid, permission denied or query failure bloc
   }
 })
 
+test('disabled visual model fails closed before source image validation', async () => {
+  const generator = await source('supabase/functions/ap-employee-generator/index.ts')
+  const masterResolution = generator.indexOf('config = await requireMasterConfiguration')
+  const sourceImageValidation = generator.indexOf('if (sourceImageSupported && !imageUrl)')
+
+  assert.ok(masterResolution >= 0, 'generator must resolve the live master configuration')
+  assert.ok(
+    sourceImageValidation > masterResolution,
+    'disabled masters must fail closed before SOURCE_IMAGE_REQUIRED is evaluated',
+  )
+  assert.match(generator, /'SOURCE_IMAGE_REQUIRED'/)
+})
+
 test('visual model derives sponsor count and UUID/layers come from master config', async () => {
   assert.equal(sponsorCountFromConfig({ sponsor_count: 2 }), 2)
   assert.equal(sponsorCountFromConfig({ sponsor_count: 1 }), 1)
