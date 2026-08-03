@@ -33,3 +33,11 @@ test('new article modal owns an internal scroll container without changing the s
   assert.match(styles, /\.modal\.modal-large:has\(\.ap-new-article-modal-content\)/)
   assert.match(styles, /\.modal-body[\s\S]*overflow-y:\s*auto/)
 })
+
+test('manual Feed keeps the image dropzone visible before choosing between image-based purposes', async () => {
+  const form = await source('src/components/editorial/ArticleForm.jsx')
+  assert.match(form, /availableModelsRequireSourceImage = availableVisualModels\.length > 0/)
+  assert.match(form, /availableVisualModels\.every\(model => model\.sourceImage === 'required'\)/)
+  assert.match(form, /const sourceImageRequired = selectedModel[\s\S]*availableModelsRequireSourceImage/)
+  assert.match(form, /Clique ou arraste a imagem original aqui/)
+})

@@ -30,7 +30,11 @@ export default function ArticleForm({
     const generationBlocked = visualModelsState !== 'available' ||
         !formData.visual_model || !formData.visual_title_id;
     const selectedModel = availableVisualModels.find(model => model.slug === formData.visual_model);
-    const sourceImageRequired = selectedModel?.sourceImage === 'required';
+    const availableModelsRequireSourceImage = availableVisualModels.length > 0 &&
+        availableVisualModels.every(model => model.sourceImage === 'required');
+    const sourceImageRequired = selectedModel
+        ? selectedModel.sourceImage === 'required'
+        : !formData.visual_model && availableModelsRequireSourceImage;
     const sourceImageSupported = sourceImageRequired;
 
     useEffect(() => {
