@@ -22,6 +22,9 @@ function scopedTable(supabase, table, clienteId) {
 
 function humanize(error, fallback) {
   if (error?.code === '23505') return 'Ja existe um grupo ou selo com este nome para o cliente.'
+  if (/CITY_TITLE_MANAGED_BY_TERRITORIAL_RPC/.test(error?.message || '')) {
+    return 'Este selo é gerenciado pelo cadastro da cidade. Edite-o na área de Regiões.'
+  }
   if (error?.code === '42501') return 'Voce nao tem permissao para alterar estes selos.'
   return fallback
 }
