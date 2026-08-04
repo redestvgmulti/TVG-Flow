@@ -1,6 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import VisualTitlesManager from '../../components/editorial/VisualTitlesManager'
 import SponsorsManager from '../../components/editorial/SponsorsManager'
+import TerritorialRegionsManager from '../../components/editorial/TerritorialRegionsManager'
+import { supabase } from '../../services/supabase'
+import { isTerritorialAdminEnabled } from '../../services/territorialCatalog'
 
 // Operator-facing settings only. Everything technical about the render — Placid
 // template UUIDs, layer maps, rotation scope, membership ordering — is decided
@@ -15,6 +18,41 @@ export default function AutoPublisherMasterV1Settings({
   clienteError,
 }) {
   const [tab, setTab] = useState('titles')
+  const [titleSection, setTitleSection] = useState('groups')
+  const [featureState, setFeatureState] = useState({
+    clienteId: null,
+    enabled: false,
+    error: '',
+  })
+
+  useEffect(() => {
+    let active = true
+    isTerritorialAdminEnabled(supabase, clienteId)
+      .then(enabled => {
+        if (!active) return
+        setFeatureState({
+          clienteId,
+          enabled,
+          error: '',
+        })
+      })
+      .catch(error => {
+        if (!active) return
+        setFeatureState({
+          clienteId,
+          enabled: false,
+          error: error.message || 'Não foi possível verificar a área de Regiões.',
+        })
+      })
+    return () => {
+      active = false
+    }
+  }, [clienteId])
+
+  const featureLoading = featureState.clienteId !== clienteId
+  const territorialEnabled = !featureLoading && featureState.enabled
+  const featureError = !featureLoading ? featureState.error : ''
+  const activeTitleSection = territorialEnabled ? titleSection : 'groups'
 
   if (!clienteId) {
     return (
@@ -68,7 +106,41 @@ export default function AutoPublisherMasterV1Settings({
         </div>
 
         {tab === 'titles' && (
-          <VisualTitlesManager clienteId={clienteId} />
+          <>
+            <h3 className="ap-form-card-title">Selos das Artes</h3>
+            <div className="ap-vt-actions" style={{ marginBottom: 16 }}>
+              <button
+                type="button"
+                className={activeTitleSection === 'groups' ? 'ap-btn-add' : 'ap-btn-outline'}
+                onClick={() => setTitleSection('groups')}
+              >
+                Grupos de selos
+              </button>
+              {territorialEnabled && (
+                <button
+                  type="button"
+                  className={activeTitleSection === 'regions' ? 'ap-btn-add' : 'ap-btn-outline'}
+                  onClick={() => setTitleSection('regions')}
+                >
+                  Regiões
+                </button>
+              )}
+            </div>
+
+            {featureLoading && <p role="status" className="ap-config-intro">Verificando recursos do cliente…</p>}
+            {featureError && <p role="alert" className="ap-vt-alert">{featureError}</p>}
+
+            {activeTitleSection === 'groups' && (
+              <VisualTitlesManager
+                clienteId={clienteId}
+                allowTypeReview={territorialEnabled}
+              />
+            )}
+
+            {territorialEnabled && activeTitleSection === 'regions' && (
+              <TerritorialRegionsManager clienteId={clienteId} />
+            )}
+          </>
         )}
 
         {tab === 'sponsors' && (

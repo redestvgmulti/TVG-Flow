@@ -22,6 +22,7 @@ import {
   updateVisualTitle,
   updateVisualTitleGroup,
 } from '../../services/visualTitleGroups'
+import { setVisualTitleType } from '../../services/territorialCatalog'
 
 const emptyGroup = { nome: '', descricao: '', ordem: 0, ativo: true }
 const emptyTitle = { nome: '', formatos: ['feed', 'reels'], ordem: 0, ativo: true, group_id: '' }
@@ -30,6 +31,14 @@ const FORMAT_LABELS = { feed: 'Feed', reels: 'Reels', story: 'Story' }
 function formatLabels(formats) {
   return formats.map(format => FORMAT_LABELS[format] || format).join(', ')
 }
+
+function visualTitleTypeWithFallback(title, group) {
+  if (title?.tipo === 'cidade' || title?.tipo === 'editorial') return title.tipo
+  const normalizedGroup = String(group?.nome || '').trim().toLocaleLowerCase('pt-BR')
+  return normalizedGroup === 'cidades' ? 'cidade' : 'editorial'
+}
+
+const TYPE_LABELS = { editorial: 'Editorial', cidade: 'Cidade' }
 
 function StatusChip({ ativo }) {
   return <span className={`ap-chip ${ativo ? 'tone-success' : 'tone-neutral'}`}>{ativo ? 'Disponível' : 'Arquivado'}</span>
@@ -140,7 +149,7 @@ function GroupForm({ value, saving, onChange, onSave, onCancel }) {
   </form>
 }
 
-export default function VisualTitlesManager({ clienteId, onChanged }) {
+export default function VisualTitlesManager({ clienteId, onChanged, allowTypeReview = false }) {
   const [groups, setGroups] = useState([])
   const [titles, setTitles] = useState([])
   const [loading, setLoading] = useState(true)
@@ -214,6 +223,21 @@ export default function VisualTitlesManager({ clienteId, onChanged }) {
     } catch (saveError) { setError(saveError.message) } finally { setSaving(false) }
   }
 
+  async function changeTitleType(title, tipo) {
+    if (saving || tipo === visualTitleTypeWithFallback(title, selectedGroup)) return
+    setSaving(true); setError(''); setNotice('')
+    try {
+      await setVisualTitleType(supabase, title.id, tipo)
+      setNotice(`Tipo do selo alterado para ${TYPE_LABELS[tipo]}.`)
+      await load()
+      onChanged?.()
+    } catch (typeError) {
+      setError(typeError.message || 'Não foi possível atualizar o tipo do selo.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   async function toggleArchive(item) {
     setSaving(true); setError('')
     try {
@@ -235,7 +259,37 @@ export default function VisualTitlesManager({ clienteId, onChanged }) {
     {groupForm && <div className="ap-vt-dialog" role="dialog" aria-modal="true" aria-label="Editar grupo"><GroupForm value={groupForm} saving={saving} onChange={setGroupForm} onSave={saveGroup} onCancel={() => setGroupForm(null)} /></div>}
     {titleForm && <div className="ap-vt-dialog" role="dialog" aria-modal="true" aria-label={titleForm.id ? 'Editar selo' : 'Novo selo'}><form onSubmit={event => { event.preventDefault(); saveTitle() }} className="ap-form-card"><h3 className="ap-form-card-title">{titleForm.id ? 'Editar selo' : 'Novo selo'}</h3><label className="ap-field-label">Como este selo será chamado?<input className="ap-input" required placeholder="Ex.: Goiatuba" value={titleForm.nome} onChange={event => setTitleForm({ ...titleForm, nome: event.target.value })} /></label><label className="ap-field-label">Mover para outro grupo<select className="ap-select" value={titleForm.group_id} onChange={event => setTitleForm({ ...titleForm, group_id: event.target.value })}>{groups.map(group => <option key={group.id} value={group.id}>{group.nome}{group.ativo ? '' : ' (arquivado)'}</option>)}</select></label><label className="ap-field-label">Ordem de exibição<input className="ap-input" type="number" min="0" value={titleForm.ordem} onChange={event => setTitleForm({ ...titleForm, ordem: event.target.value })} /></label><fieldset className="ap-vt-fieldset"><legend>Onde este selo poderá ser usado?</legend><label className="ap-vt-check"><input type="checkbox" checked={titleForm.formatos.includes('feed')} onChange={() => setTitleForm(toggleFormat(titleForm, 'feed'))} /> Feed</label><label className="ap-vt-check"><input type="checkbox" checked={titleForm.formatos.includes('reels')} onChange={() => setTitleForm(toggleFormat(titleForm, 'reels'))} /> Reels</label><label className="ap-vt-check"><input type="checkbox" checked={titleForm.formatos.includes('story')} onChange={() => setTitleForm(toggleFormat(titleForm, 'story'))} /> Story</label></fieldset><label className="ap-switch"><input type="checkbox" checked={titleForm.ativo} onChange={event => setTitleForm({ ...titleForm, ativo: event.target.checked })} /><span className="ap-switch-track" /><span className="ap-switch-body"><span className="ap-switch-label">Selo disponível para uso</span></span></label><PngDrop asset={titleForm.id ? { bucket: titleForm.asset_bucket, path: titleForm.asset_path } : null} onChange={setTitleFile} onProcessingChange={setProcessingImage} disabled={saving} /><div className="ap-vt-actions"><button className="ap-btn-add" disabled={saving || processingImage}>{titleForm.id ? 'Salvar alterações' : 'Cadastrar selo'}</button><button type="button" className="ap-btn-outline" onClick={() => { setTitleForm(null); setTitleFile(null); setProcessingImage(false) }}>Cancelar</button></div></form></div>}
     <div className="ap-vt-toolbar"><div className="ap-vt-search"><Search size={16} /><input className="ap-input" placeholder="Buscar selo" value={titleQuery} onChange={event => setTitleQuery(event.target.value)} /></div><select className="ap-select" value={titleFilter} onChange={event => setTitleFilter(event.target.value)}><option value="all">Todos</option><option value="feed">Feed</option><option value="reels">Reels</option><option value="story">Story</option><option value="active">Disponíveis</option><option value="archived">Arquivados</option></select></div>
-    {!visibleTitles.length ? <div className="ap-vt-empty"><p>Este grupo ainda não possui selos.</p><small>Cadastre o primeiro selo para que ele possa ser usado nas matérias.</small></div> : <div className="ap-table-container"><table className="ap-table"><thead><tr><th>Imagem</th><th>Selo</th><th>Usado em</th><th>Posição</th><th>Disponibilidade</th><th>Opções</th></tr></thead><tbody>{visibleTitles.map(title => <tr key={title.id}><td><img className="ap-vt-thumb" src={assetPreviewUrl(supabase, { bucket: title.asset_bucket, path: title.asset_path })} alt={`Prévia do selo ${title.nome}`} /></td><td>{title.nome}</td><td>{formatLabels(title.formatos)}</td><td>{title.ordem}</td><td><StatusChip ativo={title.ativo} /></td><td><div className="ap-vt-actions"><button className="ap-btn-sm" onClick={() => { setTitleForm({ ...title, original_group_id: title.group_id }); setTitleFile(null); setProcessingImage(false) }}>Editar</button><button className="ap-btn-sm" onClick={() => title.ativo ? setConfirmArchive({ type: 'title', ...title }) : toggleArchive({ type: 'title', ...title })}>{title.ativo ? 'Arquivar' : 'Reativar'}</button></div></td></tr>)}</tbody></table></div>}
+    {!visibleTitles.length ? <div className="ap-vt-empty"><p>Este grupo ainda não possui selos.</p><small>Cadastre o primeiro selo para que ele possa ser usado nas matérias.</small></div> : <div className="ap-table-container">
+      <table className="ap-table">
+        <thead><tr><th>Imagem</th><th>Selo</th>{allowTypeReview && <th>Tipo</th>}<th>Usado em</th><th>Posição</th><th>Disponibilidade</th><th>Opções</th></tr></thead>
+        <tbody>{visibleTitles.map(title => {
+          const currentType = visualTitleTypeWithFallback(title, selectedGroup)
+          return <tr key={title.id}>
+            <td><img className="ap-vt-thumb" src={assetPreviewUrl(supabase, { bucket: title.asset_bucket, path: title.asset_path })} alt={`Prévia do selo ${title.nome}`} /></td>
+            <td>{title.nome}</td>
+            {allowTypeReview && <td>
+              <select
+                className="ap-select"
+                aria-label={`Tipo do selo ${title.nome}`}
+                value={currentType}
+                disabled={saving}
+                onChange={event => changeTitleType(title, event.target.value)}
+              >
+                <option value="editorial">Editorial</option>
+                <option value="cidade">Cidade</option>
+              </select>
+            </td>}
+            <td>{formatLabels(title.formatos)}</td>
+            <td>{title.ordem}</td>
+            <td><StatusChip ativo={title.ativo} /></td>
+            <td><div className="ap-vt-actions">
+              <button className="ap-btn-sm" onClick={() => { setTitleForm({ ...title, original_group_id: title.group_id }); setTitleFile(null); setProcessingImage(false) }}>Editar</button>
+              <button className="ap-btn-sm" onClick={() => title.ativo ? setConfirmArchive({ type: 'title', ...title }) : toggleArchive({ type: 'title', ...title })}>{title.ativo ? 'Arquivar' : 'Reativar'}</button>
+            </div></td>
+          </tr>
+        })}</tbody>
+      </table>
+    </div>}
     {error && <p role="alert" className="ap-vt-alert">{error}</p>}{notice && <p role="status" className="ap-config-intro">{notice}</p>}{confirmArchive && <div className="ap-vt-dialog" role="dialog" aria-modal="true" aria-label="Confirmar arquivamento"><div className="ap-form-card"><h3 className="ap-form-card-title">Arquivar este {confirmArchive.type === 'group' ? 'grupo' : 'selo'}?</h3><p className="ap-config-intro">{confirmArchive.type === 'group' ? 'Os selos continuarão salvos, mas o grupo deixará de aparecer em novas seleções.' : 'Este selo ficará indisponível para novas matérias, mas continuará preservado no histórico.'}</p><div className="ap-vt-actions"><button className="ap-btn-add" disabled={saving} onClick={() => toggleArchive(confirmArchive)}>{confirmArchive.type === 'group' ? 'Arquivar grupo' : 'Arquivar selo'}</button><button className="ap-btn-outline" onClick={() => setConfirmArchive(null)}>Cancelar</button></div></div></div>}
   </section>
 
