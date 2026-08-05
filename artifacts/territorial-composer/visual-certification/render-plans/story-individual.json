@@ -1,0 +1,12 @@
+{
+  "path": "territorial_composer_v1",
+  "templateId": "local_story_mock_v1",
+  "layers": {
+    "titulo-materia": {
+      "text": "Mock final Local certification story individual 1785889646358"
+    },
+    "regiao-local": {
+      "image": "http://127.0.0.1:54321/storage/v1/object/public/ap-images/regions/cd287e6e-f273-4d0f-a72d-2a8c391e40e9/litoral-local-20260804/dd6d9b31c57642103a9198c57c303335363533ccfaf839e3d139c70c2501de8b.png"
+    }
+  }
+}

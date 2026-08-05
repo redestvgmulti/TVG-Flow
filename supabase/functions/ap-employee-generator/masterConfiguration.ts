@@ -1,4 +1,4 @@
-export const AP_EMPLOYEE_GENERATOR_VERSION = '2026-08-02-visual-catalog.1';
+export const AP_EMPLOYEE_GENERATOR_VERSION = '2026-08-04-territorial-composer.1';
 
 export const VISUAL_MODEL_FORMATS = Object.freeze({
   tvg: ['feed', 'reels'],
@@ -113,7 +113,7 @@ export function masterConfigIssues(
 
 async function safeRead<T>(
   stage: MasterConfigurationError['stage'],
-  read: () => Promise<QueryResult<T>>,
+  read: () => PromiseLike<QueryResult<T>>,
 ): Promise<T | null> {
   let result: QueryResult<T>;
   try {
@@ -130,8 +130,8 @@ async function safeRead<T>(
 export async function requireMasterConfiguration(input: {
   contentType: string;
   visualModel: VisualModel;
-  readControl: () => Promise<QueryResult<Record<string, unknown>>>;
-  readConfig: () => Promise<QueryResult<Record<string, unknown>>>;
+  readControl: () => PromiseLike<QueryResult<Record<string, unknown>>>;
+  readConfig: () => PromiseLike<QueryResult<Record<string, unknown>>>;
 }): Promise<Record<string, unknown>> {
   const control = await safeRead('master_render_controls', input.readControl);
   if (control?.kill_switch === true) {

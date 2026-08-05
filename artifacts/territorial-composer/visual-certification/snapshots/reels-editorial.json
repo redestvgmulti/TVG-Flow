@@ -1,0 +1,75 @@
+{
+  "city": null,
+  "region": {
+    "id": "2d0d6007-f72f-4b14-860a-3826b2f59ef7",
+    "name": "Litoral Local 20260804",
+    "path": "regions/cd287e6e-f273-4d0f-a72d-2a8c391e40e9/litoral-local-20260804/dd6d9b31c57642103a9198c57c303335363533ccfaf839e3d139c70c2501de8b.png",
+    "bucket": "ap-images",
+    "sha256": "dd6d9b31c57642103a9198c57c303335363533ccfaf839e3d139c70c2501de8b",
+    "version": "dd6d9b31c576"
+  },
+  "composer": {
+    "mode": "editorial",
+    "content_type": "reels"
+  },
+  "template": {
+    "config_id": "f2000000-0000-4000-8000-000000000002",
+    "master_template_uuid": "local_reels_mock_v1"
+  },
+  "layer_map": {
+    "headline": "titulo-materia",
+    "visual_title": "titulo-png",
+    "footer_slot_1": "regiao-local",
+    "footer_slot_2": "patrocinador-1",
+    "footer_slot_3": "patrocinador-2"
+  },
+  "footer_slots": [
+    {
+      "name": "Litoral Local 20260804",
+      "path": "regions/cd287e6e-f273-4d0f-a72d-2a8c391e40e9/litoral-local-20260804/dd6d9b31c57642103a9198c57c303335363533ccfaf839e3d139c70c2501de8b.png",
+      "slot": "footer_slot_1",
+      "bucket": "ap-images",
+      "sha256": "dd6d9b31c57642103a9198c57c303335363533ccfaf839e3d139c70c2501de8b",
+      "version": "dd6d9b31c576",
+      "source_id": "2d0d6007-f72f-4b14-860a-3826b2f59ef7",
+      "source_type": "region"
+    }
+  ],
+  "visual_title": {
+    "id": "aaaaaaa2-0000-4000-8000-000000000001",
+    "name": "Saúde",
+    "path": "visual-titles/local/saude.png",
+    "type": "editorial",
+    "bucket": "ap-images",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "version": "v1"
+  },
+  "render_content": {
+    "headline": "Mock final Local certification reels editorial 1785889646358",
+    "frozen_at": "2026-08-05T00:27:45.840961+00:00",
+    "context_tag": "LOCAL VALIDATION"
+  },
+  "request_intent": {
+    "titulo": "Local certification reels editorial 1785889646358",
+    "city_id": null,
+    "conteudo": "Isolated local content for reels-editorial in visual run 1785889646358.",
+    "region_id": "2d0d6007-f72f-4b14-860a-3826b2f59ef7",
+    "imagem_url": null,
+    "context_tag": "LOCAL VALIDATION",
+    "content_type": "reels",
+    "manual_slots": [],
+    "url_original": null,
+    "composer_mode": "editorial",
+    "visual_title_id": "aaaaaaa2-0000-4000-8000-000000000001"
+  },
+  "sponsor_selection": {
+    "cycle": 1,
+    "items": [],
+    "region_id": "2d0d6007-f72f-4b14-860a-3826b2f59ef7",
+    "reservation_id": "03ea3859-0b95-43fb-842a-013dd887c0f3",
+    "selected_count": 0,
+    "requested_count": 2,
+    "rotation_version": "territorial_region_rotation_v1"
+  },
+  "render_contract_version": "territorial_composer_v1"
+}

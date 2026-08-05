@@ -1,0 +1,83 @@
+{
+  "city": {
+    "id": "53e0ce9f-4f97-48cd-bd91-fbd7ff2fe9b8",
+    "name": "Cidade Atualizada Local 20260804",
+    "path": "cities/cd287e6e-f273-4d0f-a72d-2a8c391e40e9/cidade-atualizada-local-20260804/5b4305d96ea8901a9c071a75bfaa4abe858193660eb4b58fd5bb0e1981b4a7b9.png",
+    "bucket": "ap-images",
+    "sha256": "5b4305d96ea8901a9c071a75bfaa4abe858193660eb4b58fd5bb0e1981b4a7b9",
+    "version": "5b4305d96ea8",
+    "region_id": "2d0d6007-f72f-4b14-860a-3826b2f59ef7",
+    "visual_title_id": "9c99feae-91ca-45c9-be71-8254b788e756"
+  },
+  "region": {
+    "id": "2d0d6007-f72f-4b14-860a-3826b2f59ef7",
+    "name": "Litoral Local 20260804",
+    "path": "regions/cd287e6e-f273-4d0f-a72d-2a8c391e40e9/litoral-local-20260804/dd6d9b31c57642103a9198c57c303335363533ccfaf839e3d139c70c2501de8b.png",
+    "bucket": "ap-images",
+    "sha256": "dd6d9b31c57642103a9198c57c303335363533ccfaf839e3d139c70c2501de8b",
+    "version": "dd6d9b31c576"
+  },
+  "composer": {
+    "mode": "cities",
+    "content_type": "story"
+  },
+  "template": {
+    "config_id": "f2000000-0000-4000-8000-000000000003",
+    "master_template_uuid": "local_story_mock_v1"
+  },
+  "layer_map": {
+    "headline": "titulo-materia",
+    "footer_slot_1": "regiao-local",
+    "footer_slot_2": "patrocinador-1",
+    "footer_slot_3": "patrocinador-2"
+  },
+  "footer_slots": [
+    {
+      "name": "Litoral Local 20260804",
+      "path": "regions/cd287e6e-f273-4d0f-a72d-2a8c391e40e9/litoral-local-20260804/dd6d9b31c57642103a9198c57c303335363533ccfaf839e3d139c70c2501de8b.png",
+      "slot": "footer_slot_1",
+      "bucket": "ap-images",
+      "sha256": "dd6d9b31c57642103a9198c57c303335363533ccfaf839e3d139c70c2501de8b",
+      "version": "dd6d9b31c576",
+      "source_id": "2d0d6007-f72f-4b14-860a-3826b2f59ef7",
+      "source_type": "region"
+    }
+  ],
+  "visual_title": {
+    "id": "9c99feae-91ca-45c9-be71-8254b788e756",
+    "name": "Cidade Atualizada Local 20260804",
+    "path": "cities/cd287e6e-f273-4d0f-a72d-2a8c391e40e9/cidade-atualizada-local-20260804/5b4305d96ea8901a9c071a75bfaa4abe858193660eb4b58fd5bb0e1981b4a7b9.png",
+    "type": "cidade",
+    "bucket": "ap-images",
+    "sha256": "5b4305d96ea8901a9c071a75bfaa4abe858193660eb4b58fd5bb0e1981b4a7b9",
+    "version": "5b4305d96ea8"
+  },
+  "render_content": {
+    "headline": "Mock final Local certification story cities 1785889646358",
+    "frozen_at": "2026-08-05T00:27:58.104556+00:00",
+    "context_tag": "LOCAL VALIDATION"
+  },
+  "request_intent": {
+    "titulo": "Local certification story cities 1785889646358",
+    "city_id": "53e0ce9f-4f97-48cd-bd91-fbd7ff2fe9b8",
+    "conteudo": "Isolated local content for story-cities in visual run 1785889646358.",
+    "region_id": null,
+    "imagem_url": null,
+    "context_tag": "LOCAL VALIDATION",
+    "content_type": "story",
+    "manual_slots": [],
+    "url_original": null,
+    "composer_mode": "cities",
+    "visual_title_id": null
+  },
+  "sponsor_selection": {
+    "cycle": 1,
+    "items": [],
+    "region_id": "2d0d6007-f72f-4b14-860a-3826b2f59ef7",
+    "reservation_id": "43098713-ac6d-4ea8-918d-b295cfc4bd83",
+    "selected_count": 0,
+    "requested_count": 2,
+    "rotation_version": "territorial_region_rotation_v1"
+  },
+  "render_contract_version": "territorial_composer_v1"
+}

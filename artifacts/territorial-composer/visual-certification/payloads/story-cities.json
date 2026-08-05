@@ -1,0 +1,16 @@
+{
+  "cliente_id": "cd287e6e-f273-4d0f-a72d-2a8c391e40e9",
+  "auth_user_id": "11425480-6d02-44c6-b159-34669553e723",
+  "url_original": null,
+  "headline": "Local certification story cities 1785889646358",
+  "text": "Isolated local content for story-cities in visual run 1785889646358.",
+  "context_tag": "LOCAL VALIDATION",
+  "content_type": "story",
+  "source_image": null,
+  "composer_mode": "cities",
+  "region_id": null,
+  "city_id": "53e0ce9f-4f97-48cd-bd91-fbd7ff2fe9b8",
+  "visual_title_id": null,
+  "manual_slots": [],
+  "idempotency_key": "2b7bfa5b-d619-43f2-afb7-7da6d73986c0"
+}

@@ -21,6 +21,16 @@ import {
   type VisualModel,
 } from './masterConfiguration.ts';
 import {
+  normalizeComposerMode,
+  TERRITORIAL_COMPOSER_CONTRACT,
+  territorialComposerEnabled,
+  validateTerritorialComposerIntent,
+} from './territorialComposer.ts';
+import {
+  createAndProcessTerritorialCandidate,
+  TerritorialCandidateRpcError,
+} from './territorialCandidateWorkflow.ts';
+import {
   buildGeneratorLogEvent,
   buildUnexpectedGeneratorLogEvent,
   resolveCorrelationId,
@@ -203,11 +213,26 @@ const SAFE_RPC_ERRORS = new Map<string, { status: number; message: string }>([
   ['SPONSOR_POOL_INSUFFICIENT', { status: 409, message: 'Patrocinadores ativos insuficientes para este modelo visual.' }],
   ['IDEMPOTENCY_KEY_PAYLOAD_MISMATCH', { status: 409, message: 'Esta tentativa nao corresponde a requisicao original.' }],
   ['VISUAL_TITLE_INVALID', { status: 400, message: 'O selo da materia nao esta disponivel.' }],
+  ['TERRITORIAL_COMPOSER_DISABLED', { status: 403, message: 'O compositor territorial nao esta habilitado para este cliente.' }],
+  ['COMPOSER_TEMPLATE_UNAVAILABLE', { status: 409, message: 'Nao existe template territorial ativo para este formato.' }],
+  ['REGION_UNAVAILABLE', { status: 400, message: 'A regiao selecionada nao esta disponivel.' }],
+  ['CITY_UNAVAILABLE', { status: 400, message: 'A cidade selecionada nao esta disponivel.' }],
+  ['CITY_TITLE_INCONSISTENT', { status: 409, message: 'O selo vinculado a cidade esta inconsistente.' }],
+  ['EDITORIAL_TITLE_UNAVAILABLE', { status: 400, message: 'O selo editorial nao esta disponivel.' }],
+  ['VISUAL_TITLE_UNAVAILABLE', { status: 400, message: 'O selo selecionado nao esta disponivel.' }],
+  ['MANUAL_ASSET_UNAVAILABLE', { status: 400, message: 'Um asset manual nao esta disponivel.' }],
+  ['SOURCE_IMAGE_REQUIRED', { status: 400, message: 'Uma imagem e obrigatoria para este formato.' }],
+  ['SOURCE_IMAGE_INVALID', { status: 400, message: 'A imagem de origem precisa usar HTTP ou HTTPS.' }],
+  ['SOURCE_IMAGE_NOT_SUPPORTED', { status: 400, message: 'Este formato nao utiliza imagem de origem.' }],
 ]);
 
 function safeRpcErrorFor(error: unknown) {
   const raw = error && typeof error === 'object' ? error as Record<string, unknown> : {};
   const message = typeof raw.message === 'string' ? raw.message : '';
+  const code = [...SAFE_RPC_ERRORS.keys()].find((candidate) =>
+    message === candidate || message.startsWith(`${candidate} `)
+  );
+  if (code) return { code, ...SAFE_RPC_ERRORS.get(code)! };
   if (raw.code === '23505') {
     return {
       code: 'DUPLICATE_CANDIDATE',
@@ -215,10 +240,7 @@ function safeRpcErrorFor(error: unknown) {
       message: 'Ja existe uma materia ativa com a mesma origem ou titulo.',
     };
   }
-  const code = [...SAFE_RPC_ERRORS.keys()].find((candidate) =>
-    message === candidate || message.startsWith(`${candidate} `)
-  );
-  return code ? { code, ...SAFE_RPC_ERRORS.get(code)! } : undefined;
+  return undefined;
 }
 
 Deno.serve(async (req: Request) => {
@@ -259,6 +281,10 @@ Deno.serve(async (req: Request) => {
       sponsor_count: rawSponsorCount,
       visual_model: rawVisualModel = null,
       idempotency_key = null,
+      composer_mode: rawComposerMode = null,
+      region_id = null,
+      city_id = null,
+      manual_slots: rawManualSlots = [],
     } = body;
 
     const content_type = String(rawContentType).trim().toLowerCase();
@@ -269,6 +295,9 @@ Deno.serve(async (req: Request) => {
       ? rawVisualModel.trim().toLowerCase()
       : null;
     const historicalMistoRetry = normalizedRawVisualModel === 'misto';
+    const composerMode = normalizeComposerMode(rawComposerMode);
+    const composerRequested = rawComposerMode !== undefined &&
+      rawComposerMode !== null && rawComposerMode !== '';
     context = {
       correlationId,
       clientId: requestedClienteId,
@@ -301,7 +330,10 @@ Deno.serve(async (req: Request) => {
         'request_validation',
       );
     }
-    if (rawVisualModel === undefined || rawVisualModel === null || rawVisualModel === '') {
+    if (
+      !composerRequested &&
+      (rawVisualModel === undefined || rawVisualModel === null || rawVisualModel === '')
+    ) {
       return errorResponse(
         context,
         'VISUAL_MODEL_REQUIRED',
@@ -310,7 +342,7 @@ Deno.serve(async (req: Request) => {
         'request_validation',
       );
     }
-    if (!visualModel && !historicalMistoRetry) {
+    if (!composerRequested && !visualModel && !historicalMistoRetry) {
       return errorResponse(
         context,
         'VISUAL_MODEL_INVALID',
@@ -319,7 +351,10 @@ Deno.serve(async (req: Request) => {
         'request_validation',
       );
     }
-    if (visualModel && !isVisualModelAllowedForFormat(visualModel, content_type)) {
+    if (
+      !composerRequested && visualModel &&
+      !isVisualModelAllowedForFormat(visualModel, content_type)
+    ) {
       return errorResponse(
         context,
         'VISUAL_MODEL_FORMAT_MISMATCH',
@@ -374,7 +409,7 @@ Deno.serve(async (req: Request) => {
         'resolve_source_image',
       );
     }
-    if (!isUUID(visual_title_id)) {
+    if (!composerRequested && !isUUID(visual_title_id)) {
       return errorResponse(
         context,
         'VALIDATION_ERROR',
@@ -426,6 +461,33 @@ Deno.serve(async (req: Request) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
+    const composerEnabled = await territorialComposerEnabled(
+      supabase,
+      clienteId,
+    );
+    if (composerRequested && !composerEnabled) {
+      return errorResponse(
+        context,
+        'TERRITORIAL_COMPOSER_DISABLED',
+        'O compositor territorial nao esta habilitado para este cliente.',
+        403,
+        'request_validation',
+      );
+    }
+    if (!composerRequested && composerEnabled) {
+      return errorResponse(
+        context,
+        'COMPOSER_INTENT_REQUIRED',
+        'Selecione o modo de composicao antes de gerar a materia.',
+        400,
+        'request_validation',
+      );
+    }
+
+    const expectedContract = composerEnabled
+      ? TERRITORIAL_COMPOSER_CONTRACT
+      : 'master_v1';
+
     const { data: existingCandidate, error: existingCandidateError } =
       await supabase
         .schema('ap')
@@ -445,7 +507,7 @@ Deno.serve(async (req: Request) => {
     }
     if (existingCandidate) {
       context = { ...context, articleId: existingCandidate.id };
-      if (existingCandidate.render_contract_version !== 'master_v1') {
+      if (existingCandidate.render_contract_version !== expectedContract) {
         return errorResponse(
           context,
           'IDEMPOTENCY_CONTRACT_MISMATCH',
@@ -455,7 +517,7 @@ Deno.serve(async (req: Request) => {
         );
       }
     }
-    if (historicalMistoRetry && !existingCandidate) {
+    if (!composerEnabled && historicalMistoRetry && !existingCandidate) {
       return errorResponse(
         context,
         'VISUAL_MODEL_INVALID',
@@ -476,6 +538,95 @@ Deno.serve(async (req: Request) => {
     const userText = typeof textOverride === 'string' && textOverride.trim()
       ? textOverride.trim()
       : null;
+    if (composerEnabled) {
+      // territorial composer branch
+      const validationFailure = validateTerritorialComposerIntent({
+        mode: composerMode,
+        contentType: content_type,
+        regionId: region_id,
+        cityId: city_id,
+        visualTitleId: visual_title_id,
+        manualSlots: rawManualSlots,
+        rawVisualModel,
+      });
+      if (validationFailure) {
+        return errorResponse(
+          context,
+          validationFailure.code,
+          validationFailure.message,
+          validationFailure.status,
+          'request_validation',
+        );
+      }
+
+      const authorizationHeader = req.headers.get('Authorization')!;
+      const userSupabase = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_ANON_KEY')!,
+        {
+          global: { headers: { Authorization: authorizationHeader } },
+          auth: { autoRefreshToken: false, persistSession: false },
+        },
+      );
+
+      stage = 'call_candidate_rpc';
+      logEvent(context, stage, 'TERRITORIAL_CANDIDATE_RPC_STARTED');
+      let territorialResult;
+      try {
+        territorialResult = await createAndProcessTerritorialCandidate({
+          serviceSupabase: supabase,
+          userSupabase,
+          clienteId,
+          idempotencyKey: idempotency_key,
+          contentType: content_type,
+          composerMode: composerMode!,
+          requestedHeadline: String(requestedHeadline).trim(),
+          requestedText: String(requestedText).trim(),
+          userHeadline,
+          userText,
+          userTag,
+          urlOriginal: typeof url_original === 'string' ? url_original : null,
+          imageUrl: typeof imageUrl === 'string' ? imageUrl : null,
+          regionId: isUUID(region_id) ? region_id : null,
+          cityId: isUUID(city_id) ? city_id : null,
+          visualTitleId: isUUID(visual_title_id) ? visual_title_id : null,
+          manualSlots: Array.isArray(rawManualSlots) ? rawManualSlots : [],
+        });
+      } catch (error) {
+        if (error instanceof TerritorialCandidateRpcError) {
+          const safeRpcError = safeRpcErrorFor(error.raw);
+          return rpcErrorResponse(
+            context,
+            safeRpcError?.code || 'TERRITORIAL_COMPOSER_FAILED',
+            safeRpcError?.message || 'Nao foi possivel preparar a materia.',
+            safeRpcError?.status || 503,
+            error.raw,
+          );
+        }
+        throw error;
+      }
+
+      const news = territorialResult.news;
+      context = { ...context, articleId: news.id };
+      logEvent(
+        context,
+        stage,
+        territorialResult.reused ? 'CANDIDATE_REUSED' : 'CANDIDATE_CREATED',
+      );
+      if (!territorialResult.claimed) {
+        return new Response(
+          JSON.stringify(responseForNews(news, true)),
+          { status: 202, headers: jsonHeaders },
+        );
+      }
+
+      stage = 'complete';
+      logEvent(context, stage, 'GENERATION_COMPLETED');
+      return new Response(
+        JSON.stringify(responseForNews(news, territorialResult.reused)),
+        { status: 200, headers: jsonHeaders },
+      );
+    }
     let sponsorCount: number;
     let renderSnapshotBase: Record<string, unknown>;
 
@@ -550,6 +701,10 @@ Deno.serve(async (req: Request) => {
       };
       logEvent(context, stage, 'MASTER_CONFIG_LOADED');
     } else {
+      if (!existingCandidate) {
+        throw new Error('IDEMPOTENCY_CANDIDATE_MISSING');
+      }
+
       const frozenBase = existingSnapshotBase(existingCandidate);
       if (!frozenBase) {
         return errorResponse(

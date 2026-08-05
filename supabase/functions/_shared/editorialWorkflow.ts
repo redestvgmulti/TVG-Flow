@@ -16,7 +16,7 @@ export interface WorkflowOptions {
     userHeadline?: string | null;
     userTag?: string | null;
     userText?: string | null;
-    contentType?: "feed" | "reels";
+    contentType?: "feed" | "reels" | "story";
 }
 
 export async function runEditorialWorkflow(supabase: SupabaseClient, options: WorkflowOptions) {

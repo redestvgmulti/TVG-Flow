@@ -16,6 +16,14 @@ import {
     visualModelsBlockMessage,
     visualModelsStateFor,
 } from '../../services/masterRuntime';
+import {
+    composerFormErrors,
+    composerRequiresSourceImage,
+    EMPTY_TERRITORIAL_CATALOG,
+    loadTerritorialComposer,
+    TERRITORIAL_COMPOSER_STATUS,
+    territorialComposerIntent,
+} from '../../services/territorialComposer';
 
 // Fallback provider client removed - enforce session ID
 
@@ -32,6 +40,10 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
         image_url: '',
         visual_title_id: null,
         visual_model: '',
+        composer_mode: '',
+        region_id: null,
+        city_id: null,
+        manual_slots: [],
         idempotency_key: null,
     });
 
@@ -40,6 +52,12 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
         killSwitch: false,
         poolCounts: {},
         status: MASTER_RUNTIME_STATUS.IDLE,
+    });
+    const [territorialComposer, setTerritorialComposer] = useState({
+        enabled: false,
+        status: TERRITORIAL_COMPOSER_STATUS.IDLE,
+        catalog: EMPTY_TERRITORIAL_CATALOG,
+        error: '',
     });
     const [visualTitleGroups, setVisualTitleGroups] = useState([]);
     const [visualTitlesLoading, setVisualTitlesLoading] = useState(false);
@@ -71,6 +89,33 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
         }
     }, [isOpen, professionalId, empresaId, clienteId]);
 
+    const loadAvailableTerritorialComposer = useCallback(async () => {
+        if (!isOpen || !clienteId) return;
+        setTerritorialComposer({
+            enabled: true,
+            status: TERRITORIAL_COMPOSER_STATUS.LOADING,
+            catalog: EMPTY_TERRITORIAL_CATALOG,
+            error: '',
+        });
+        try {
+            const result = await loadTerritorialComposer(supabase, clienteId);
+            setTerritorialComposer({ ...result, error: '' });
+        } catch (error) {
+            console.error('[EmployeeMode] TERRITORIAL_COMPOSER_READ_FAILED');
+            setTerritorialComposer({
+                enabled: true,
+                status: TERRITORIAL_COMPOSER_STATUS.ERROR,
+                catalog: EMPTY_TERRITORIAL_CATALOG,
+                error: error?.message || 'N\u00e3o foi poss\u00edvel carregar o compositor territorial.',
+            });
+        }
+    }, [isOpen, clienteId]);
+
+    useEffect(() => {
+        const timeoutId = window.setTimeout(loadAvailableTerritorialComposer, 0);
+        return () => window.clearTimeout(timeoutId);
+    }, [loadAvailableTerritorialComposer]);
+
     const loadAvailableMasterRuntime = useCallback(async () => {
         if (!isOpen || !clienteId) return;
         setMasterRuntime(previous => ({
@@ -94,7 +139,8 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
 
     // Load the fixed master matrix every time the modal opens.
     useEffect(() => {
-        loadAvailableMasterRuntime();
+        const timeoutId = window.setTimeout(loadAvailableMasterRuntime, 0);
+        return () => window.clearTimeout(timeoutId);
     }, [loadAvailableMasterRuntime]);
 
     // ── Load the grouped seal catalog every time the modal opens
@@ -145,7 +191,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
         ),
         [masterRuntime, formData.content_type, runtimeControl],
     );
-    const availableFormats = useMemo(
+    const legacyAvailableFormats = useMemo(
         () => availableContentTypes(
             masterRuntime.configs,
             runtimeControl,
@@ -153,10 +199,15 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
         ),
         [masterRuntime, runtimeControl],
     );
+    const availableFormats = territorialComposer.enabled
+        ? territorialComposer.catalog.available_formats
+        : legacyAvailableFormats;
     const selectedVisualModel = availableVisualModels.find(
         model => model.slug === formData.visual_model,
     );
-    const sourceImageRequired = selectedVisualModel?.sourceImage === 'required';
+    const sourceImageRequired = territorialComposer.enabled
+        ? composerRequiresSourceImage(territorialComposer.catalog, formData.content_type)
+        : selectedVisualModel?.sourceImage === 'required';
     const visualModelsState = visualModelsStateFor(
         masterRuntime.status,
         availableVisualModels,
@@ -250,13 +301,26 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
         const { url_original, context_tag, titulo, conteudo, image_url, content_type, visual_model, visual_title_id } = formData;
 
         // Validation based on unified behavior
-        if (visualModelsState !== 'available') {
+        if (territorialComposer.enabled && territorialComposer.status !== TERRITORIAL_COMPOSER_STATUS.READY) {
+            setErrorMsg(territorialComposer.error || 'Aguarde o carregamento do compositor territorial.');
+            return;
+        }
+        if (!territorialComposer.enabled && visualModelsState !== 'available') {
             setErrorMsg(visualModelsBlockMessage(visualModelsState) || 'Aguarde o carregamento dos modelos visuais.');
             return;
         }
         if (!context_tag) { setErrorMsg('Tag de editoria é obrigatória.'); return; }
+        if (territorialComposer.enabled) {
+            const errors = composerFormErrors(formData, territorialComposer.catalog);
+            const firstError = Object.values(errors)[0];
+            if (firstError) {
+                setErrorMsg(firstError);
+                return;
+            }
+        } else {
         if (!visual_model) { setErrorMsg('Selecione a finalidade da arte.'); return; }
         if (!visual_title_id) { setErrorMsg('Selecione o selo da matéria.'); return; }
+        }
         if (!url_original && !titulo && !conteudo && !image_url && !selectedFile) {
             setErrorMsg('Preencha pelo menos um campo ou insira um link para gerar a matéria.');
             return;
@@ -348,7 +412,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
             let finalAuthUserId = professionalId || user?.id;
             if (finalAuthUserId === 'null') finalAuthUserId = null;
 
-            const payload = {
+            const basePayload = {
                 cliente_id: currentClienteId,
                 auth_user_id: finalAuthUserId,
                 url_original: url_original || null,
@@ -357,15 +421,18 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                 context_tag: context_tag.toUpperCase(),
                 content_type: content_type,
                 source_image: sourceImageRequired ? finalImageUrl : null,
-                visual_title_id: visual_title_id || null,
             };
 
-            // The visual model addresses the fixed template and fixes the
-            // sponsor count; no sponsor_count and no template UUID are sent.
             const idempotencyKey = formData.idempotency_key || crypto.randomUUID();
             if (!formData.idempotency_key) setFormData(previous => ({ ...previous, idempotency_key: idempotencyKey }));
-            payload.visual_model = visual_model;
-            payload.idempotency_key = idempotencyKey;
+            const payload = territorialComposer.enabled
+                ? { ...basePayload, ...territorialComposerIntent(formData), idempotency_key: idempotencyKey }
+                : {
+                    ...basePayload,
+                    visual_title_id: visual_title_id || null,
+                    visual_model,
+                    idempotency_key: idempotencyKey,
+                };
 
             // Validation and Audit
             if (!payload.cliente_id) {
@@ -546,8 +613,11 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
     // Fetch History when tab changes
     useEffect(() => {
         if (!isOpen || activeTab !== 'history' || !user?.id) return;
-        setHistoryPage(0);
-        fetchHistory(0, false);
+        const timeoutId = window.setTimeout(() => {
+            setHistoryPage(0);
+            fetchHistory(0, false);
+        }, 0);
+        return () => window.clearTimeout(timeoutId);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, activeTab, user]);
 
@@ -701,6 +771,11 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                 availableFormats={availableFormats}
                                 visualModelsState={visualModelsState}
                                 onRetryVisualModels={loadAvailableMasterRuntime}
+                                territorialComposerEnabled={territorialComposer.enabled}
+                                territorialCatalog={territorialComposer.catalog}
+                                territorialComposerState={territorialComposer.status}
+                                territorialComposerError={territorialComposer.error}
+                                onRetryTerritorialComposer={loadAvailableTerritorialComposer}
                                 visualTitleGroups={visualTitleGroups}
                                 visualTitlesLoading={visualTitlesLoading}
                                 visualTitlesError={visualTitlesError}
