@@ -17,7 +17,7 @@ export interface EditorialInput {
     rules: any[];
     ragContext: any[];
     openaiKey: string;
-    contentType?: 'feed' | 'reels';
+    contentType?: 'feed' | 'reels' | 'story';
     // ── Hybrid fields (human-defined, IA must not override) ──
     userHeadline?: string | null;
     userTag?: string | null;
@@ -47,6 +47,8 @@ export async function buildEditorialPrompt(sbAdmin: SupabaseClient, data: Editor
 
     if (contentType === 'reels') {
         systemPrompt += "\n\nVocê está criando conteúdo para REELS, mas mantenha o rigor informativo. Não use linguagem de 'produtor de vídeo', use linguagem de 'jornalista digital'.";
+    } else if (contentType === 'story') {
+        systemPrompt += "\n\nVoce esta criando conteudo para STORIES. Produza texto conciso para leitura vertical, preserve o rigor informativo e nao trate o formato como Feed ou Reels.";
     }
 
     // 2. HYBRID HUMAN LOCK — injected right after system before any other instructions

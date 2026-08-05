@@ -26,7 +26,7 @@ const root = new URL('../../', import.meta.url)
 const source = path => readFile(new URL(path, root), 'utf8')
 
 test('generator release marker is unique to the visual catalog expansion', async () => {
-  assert.equal(AP_EMPLOYEE_GENERATOR_VERSION, '2026-08-02-visual-catalog.1')
+  assert.equal(AP_EMPLOYEE_GENERATOR_VERSION, '2026-08-04-territorial-composer.1')
 
   const generator = await source('supabase/functions/ap-employee-generator/index.ts')
   assert.match(generator, /correlation_id: context\.correlationId/)

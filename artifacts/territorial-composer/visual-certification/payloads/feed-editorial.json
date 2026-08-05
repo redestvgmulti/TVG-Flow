@@ -1,0 +1,16 @@
+{
+  "cliente_id": "cd287e6e-f273-4d0f-a72d-2a8c391e40e9",
+  "auth_user_id": "11425480-6d02-44c6-b159-34669553e723",
+  "url_original": null,
+  "headline": "Local certification feed editorial 1785889646358",
+  "text": "Isolated local content for feed-editorial in visual run 1785889646358.",
+  "context_tag": "LOCAL VALIDATION",
+  "content_type": "feed",
+  "source_image": "http://127.0.0.1:4176/pwa-192x192.png",
+  "composer_mode": "editorial",
+  "region_id": "2d0d6007-f72f-4b14-860a-3826b2f59ef7",
+  "city_id": null,
+  "visual_title_id": "aaaaaaa2-0000-4000-8000-000000000001",
+  "manual_slots": [],
+  "idempotency_key": "08264458-fd1f-4dfd-b98d-3b00eb0fcdd8"
+}

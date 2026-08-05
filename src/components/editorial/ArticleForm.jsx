@@ -1,7 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { ImageIcon, Video, BookOpen, CheckCircle2, RefreshCcw } from 'lucide-react';
 import VisualTitleCombobox from './VisualTitleCombobox';
+import TerritorialComposerFields from './TerritorialComposerFields';
 import { retainCompatibleVisualTitleId } from '../../services/visualTitleCatalog';
+import {
+    composerRequiresSourceImage,
+} from '../../services/territorialComposer';
 
 export default function ArticleForm({
     mode = 'admin',
@@ -21,23 +25,32 @@ export default function ArticleForm({
     visualModelsState = 'loading',
     onRetryVisualModels,
     selectedFile,
-    setSelectedFile
+    setSelectedFile,
+    territorialComposerEnabled = false,
+    territorialCatalog = null,
+    territorialComposerState = 'disabled',
+    territorialComposerError = '',
+    onRetryTerritorialComposer,
 }) {
     const [isDragging, setIsDragging] = useState(false);
     const [visualTitleFormatNotice, setVisualTitleFormatNotice] = useState('');
     const visualModelsLoaded = visualModelsState === 'available' ||
         (visualModelsState === 'empty' && visualModelOptions.length > 0);
-    const generationBlocked = visualModelsState !== 'available' ||
-        !formData.visual_model || !formData.visual_title_id;
+    const generationBlocked = territorialComposerEnabled
+        ? territorialComposerState !== 'ready'
+        : visualModelsState !== 'available' || !formData.visual_model || !formData.visual_title_id;
     const selectedModel = availableVisualModels.find(model => model.slug === formData.visual_model);
     const availableModelsRequireSourceImage = availableVisualModels.length > 0 &&
         availableVisualModels.every(model => model.sourceImage === 'required');
-    const sourceImageRequired = selectedModel
-        ? selectedModel.sourceImage === 'required'
-        : !formData.visual_model && availableModelsRequireSourceImage;
+    const sourceImageRequired = territorialComposerEnabled
+        ? composerRequiresSourceImage(territorialCatalog, formData.content_type)
+        : selectedModel
+            ? selectedModel.sourceImage === 'required'
+            : !formData.visual_model && availableModelsRequireSourceImage;
     const sourceImageSupported = sourceImageRequired;
 
     useEffect(() => {
+        if (territorialComposerEnabled) return;
         if (visualModelsState !== 'available') return;
         const selectedStillValid = availableVisualModels.some(model => model.slug === formData.visual_model);
         const nextModel = selectedStillValid
@@ -46,9 +59,25 @@ export default function ArticleForm({
         if (nextModel !== formData.visual_model) {
             setFormData(previous => ({ ...previous, visual_model: nextModel }));
         }
-    }, [availableVisualModels, formData.visual_model, setFormData, visualModelsState]);
+    }, [availableVisualModels, formData.visual_model, setFormData, territorialComposerEnabled, visualModelsState]);
 
     function selectContentType(contentType) {
+        if (territorialComposerEnabled) {
+            setSelectedFile(null);
+            setVisualTitleFormatNotice('');
+            setFormData(previous => ({
+                ...previous,
+                content_type: contentType,
+                visual_model: '',
+                visual_title_id: null,
+                region_id: null,
+                city_id: null,
+                manual_slots: [],
+                image_url: '',
+                idempotency_key: null,
+            }));
+            return;
+        }
         const retainedId = retainCompatibleVisualTitleId(visualTitleGroups, formData.visual_title_id, contentType);
         const isCompatible = !formData.visual_title_id || retainedId === formData.visual_title_id;
         // A model is only offered when its master config exists for the format,
@@ -78,7 +107,7 @@ export default function ArticleForm({
             </div>
 
             {/* Modelo visual: junto com o formato, endereça o template fixo. */}
-            {visualModelsLoaded ? (
+            {!territorialComposerEnabled && (visualModelsLoaded ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: '#f8fafc', padding: '16px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
                     <label style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>Finalidade da arte <span style={{ color: '#ef4444' }}>*</span></label>
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -119,7 +148,28 @@ export default function ArticleForm({
                 <div role="status" style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px 16px', fontSize: '13px', color: '#475569' }}>
                     Carregando modelos visuais...
                 </div>
+            ))}
+
+            {territorialComposerEnabled && territorialComposerState === 'loading' && (
+                <div role="status" style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: 14, color: '#475569' }}>
+                    Carregando compositor territorial...
+                </div>
             )}
+            {territorialComposerEnabled && territorialComposerState === 'error' && (
+                <div role="alert" style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 12, padding: 14, color: '#991b1b', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <span>{territorialComposerError || 'N\u00e3o foi poss\u00edvel carregar o compositor territorial.'}</span>
+                    <button type="button" onClick={onRetryTerritorialComposer} style={{ alignSelf: 'flex-start', border: '1px solid #ef4444', background: '#fff', color: '#991b1b', borderRadius: 8, padding: '8px 10px', fontWeight: 600, cursor: 'pointer' }}>Recarregar compositor</button>
+                </div>
+            )}
+            {territorialComposerEnabled && territorialComposerState === 'ready' && (
+                <TerritorialComposerFields
+                    formData={formData}
+                    setFormData={setFormData}
+                    catalog={territorialCatalog}
+                    errors={errors}
+                />
+            )}
+
 
             {/* Tag Obrigatória */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
@@ -133,6 +183,8 @@ export default function ArticleForm({
             </div>
 
             {/* Selo da mat\u00e9ria: o combobox preserva apenas visual_title_id. */}
+            {!territorialComposerEnabled && <>
+
             <VisualTitleCombobox
                 groups={visualTitleGroups}
                 value={formData.visual_title_id || null}
@@ -144,6 +196,8 @@ export default function ArticleForm({
                 onChange={visualTitleId => { setVisualTitleFormatNotice(''); setFormData({ ...formData, visual_title_id: visualTitleId }); }}
             />
             {visualTitleFormatNotice && <small role="status" style={{ color: '#92400e' }}>{visualTitleFormatNotice}</small>}
+
+            </>}
             {/* Link Origem */}
             <div style={{ padding: '16px', background: '#e0f2fe', border: '1px solid #bae6fd', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
                 <label style={{ fontSize: '14px', fontWeight: 700, color: '#0284c7', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Link Origem <span style={{ color: '#ef4444' }}>*</span></label>

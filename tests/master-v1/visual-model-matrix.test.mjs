@@ -150,12 +150,14 @@ test('Story uses two distinct sponsors and never sends source image or fixed lay
 test('frontend payloads never carry UUID, sponsor_count or layer_map', async () => {
   for (const file of ['src/pages/admin/AutoPublisher.jsx', 'src/pages/admin/EmployeeMode.jsx']) {
     const code = await source(file)
-    const payloadBlock = [...code.matchAll(/const payload = \{[\s\S]*?\n\s*\};?/gi)]
+    const payloadBlock = [...code.matchAll(/const basePayload = \{[\s\S]*?\n\s*\};?/gi)]
       .map(match => match[0])
-      .find(block => block.includes('visual_title_id')) || ''
+      .find(block => block.includes('source_image')) || ''
     assert.match(payloadBlock, /headline:/)
     assert.match(payloadBlock, /text:/)
     assert.match(payloadBlock, /source_image:/)
     assert.doesNotMatch(payloadBlock, /placid_template_uuid|master_template_uuid|sponsor_count|layer_map|template_set/)
+    assert.match(code, /visual_title_id:\s*(?:formData\.)?visual_title_id \|\| null/)
+    assert.match(code, /territorialComposerIntent\(formData\)/)
   }
 })
