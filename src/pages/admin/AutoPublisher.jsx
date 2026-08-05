@@ -179,7 +179,7 @@ export default function AutoPublisher() {
         const { data, error } = await supabase
             .schema('ap')
             .from('candidate_news')
-            .select(`id, titulo, headline, caption, render_url, imagem_url, imagem_storage, image_external,
+            .select(`id, titulo, headline, caption, render_url, imagem_url, imagem_storage,
                      status, created_at, context_tag, content_type,
                      template_nome_snapshot, roteiro_studio, duracao_estimada, broll_sugestao,
                      studio_media_image_url, studio_media_video_url, enviado_para_studio,
