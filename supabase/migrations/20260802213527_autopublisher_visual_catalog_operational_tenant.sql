@@ -14,8 +14,12 @@ BEGIN
         FROM public.clientes AS client
         WHERE client.id = 'cd287e6e-f273-4d0f-a72d-2a8c391e40e9'::uuid
     ) THEN
-        RAISE EXCEPTION 'AUTOPUBLISHER_OPERATIONAL_TENANT_NOT_FOUND'
-            USING ERRCODE = '23503';
+        -- This file is an operational rollout for one existing tenant, not a
+        -- universal schema seed. Empty databases, CI and other installations
+        -- must not manufacture that tenant or receive its Placid catalog.
+        RAISE NOTICE
+            'AUTOPUBLISHER_OPERATIONAL_TENANT_ABSENT: catalog rollout skipped';
+        RETURN;
     END IF;
 
     -- Conversion must never merge misto with an already-existing tvg_img row.
