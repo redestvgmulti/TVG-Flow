@@ -4,7 +4,8 @@ export type RenderLayers = Record<string, RenderLayer>;
 export type RenderPath =
   | "legacy"
   | "master_profile_v1"
-  | "master_rotation_v1";
+  | "master_rotation_v1"
+  | "territorial_composer_v1";
 
 type JsonRecord = Record<string, unknown>;
 type MasterContentType = "feed" | "reels" | "story";
@@ -261,6 +262,9 @@ export function detectRenderPath(item: JsonRecord): RenderPath {
   const snapshot = item.render_snapshot;
   const candidateVersion = stringValue(item.render_contract_version);
   if (!isRecord(snapshot)) {
+    if (candidateVersion === "territorial_composer_v1") {
+      throw new RenderContractError("COMPOSER_SNAPSHOT_MISSING");
+    }
     if (candidateVersion === "master_v1") {
       throw new RenderContractError("MASTER_SNAPSHOT_MISSING");
     }
@@ -269,6 +273,22 @@ export function detectRenderPath(item: JsonRecord): RenderPath {
 
   const snapshotVersion = stringValue(snapshot.render_contract_version);
   const sponsorSource = stringValue(snapshot.sponsor_source);
+
+  if (
+    snapshotVersion === "territorial_composer_v1" ||
+    candidateVersion === "territorial_composer_v1"
+  ) {
+    if (
+      snapshotVersion !== "territorial_composer_v1" ||
+      candidateVersion !== "territorial_composer_v1"
+    ) {
+      throw new RenderContractError(
+        "COMPOSER_SNAPSHOT_MISSING",
+        "version_mismatch",
+      );
+    }
+    return "territorial_composer_v1";
+  }
 
   if (sponsorSource === "rotation_v1") {
     if (

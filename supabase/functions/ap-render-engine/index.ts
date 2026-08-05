@@ -9,6 +9,7 @@ import {
   RenderContractError,
   type RenderLayers,
 } from "./renderContract.ts";
+import { prepareTerritorialComposerRender } from "./territorialRenderContract.ts";
 import { buildPlacidErrorTelemetry } from "./placidErrorTelemetry.ts";
 
 const corsHeaders = {
@@ -19,7 +20,11 @@ const corsHeaders = {
 };
 
 type RenderPlan = {
-  path: "legacy" | "master_profile_v1" | "master_rotation_v1";
+  path:
+    | "legacy"
+    | "master_profile_v1"
+    | "master_rotation_v1"
+    | "territorial_composer_v1";
   templateId: string;
   layers: RenderLayers;
   fallbackReason?: string;
@@ -162,6 +167,10 @@ async function buildRenderPlan(
   supabaseUrl: string,
 ): Promise<RenderPlan> {
   const path = detectRenderPath(item);
+
+  if (path === "territorial_composer_v1") {
+    return prepareTerritorialComposerRender(item, supabaseUrl);
+  }
 
   if (path === "master_rotation_v1") {
     const frozen = prepareRotationV1Render(item, supabaseUrl);
@@ -383,17 +392,22 @@ Deno.serve(async (req) => {
 
       const renderUrl =
         `${supabaseUrl}/storage/v1/object/public/ap-renders/${path}`;
-      const { error: persistError } = await supabase
-        .schema("ap")
-        .from("candidate_news")
-        .update({
-          render_url: renderUrl,
-          imagem_url: renderUrl,
-          status: "approved",
-          render_started_at: null,
-          completed_at: new Date().toISOString(),
-        })
-        .eq("id", item.id);
+      const { error: persistError } = plan.path === "territorial_composer_v1"
+        ? await supabase.schema("ap").rpc(
+          "complete_territorial_composer_render",
+          { p_candidate_id: item.id, p_render_url: renderUrl },
+        )
+        : await supabase
+          .schema("ap")
+          .from("candidate_news")
+          .update({
+            render_url: renderUrl,
+            imagem_url: renderUrl,
+            status: "approved",
+            render_started_at: null,
+            completed_at: new Date().toISOString(),
+          })
+          .eq("id", item.id);
       if (persistError) {
         throw new RenderContractError("RENDER_PERSIST_FAILED");
       }
@@ -408,15 +422,29 @@ Deno.serve(async (req) => {
         error_code: error.code,
         correlation_id: correlationId,
       });
-      await supabase
-        .schema("ap")
-        .from("candidate_news")
-        .update({
-          status: "failed",
-          error_log: error.message,
-          render_started_at: null,
-        })
-        .eq("id", item.id);
+      const { error: failurePersistError } =
+        item.render_contract_version === "territorial_composer_v1"
+          ? await supabase.schema("ap").rpc(
+            "fail_territorial_composer_render",
+            { p_candidate_id: item.id, p_error_code: error.code },
+          )
+          : await supabase
+            .schema("ap")
+            .from("candidate_news")
+            .update({
+              status: "failed",
+              error_log: error.message,
+              render_started_at: null,
+            })
+            .eq("id", item.id);
+      if (failurePersistError) {
+        console.error("[ap-render-engine] failure persistence failed", {
+          candidate_news_id: item.id,
+          render_contract_version: item.render_contract_version || "legacy",
+          correlation_id: correlationId,
+          error_code: "RENDER_FAILURE_PERSIST_FAILED",
+        });
+      }
       results.push({ id: item.id, status: "error", error: error.code });
     }
   }

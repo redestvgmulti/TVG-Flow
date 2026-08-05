@@ -26,6 +26,14 @@ import {
     visualModelsBlockMessage,
     visualModelsStateFor,
 } from '../../services/masterRuntime'
+import {
+    composerFormErrors,
+    composerRequiresSourceImage,
+    EMPTY_TERRITORIAL_CATALOG,
+    loadTerritorialComposer,
+    TERRITORIAL_COMPOSER_STATUS,
+    territorialComposerIntent,
+} from '../../services/territorialComposer'
 
 // ──────────────────────────────────────────────────────────
 // Tab config
@@ -83,6 +91,10 @@ export default function AutoPublisher() {
         content_type: 'feed',
         visual_title_id: null,
         visual_model: '',
+        composer_mode: '',
+        region_id: null,
+        city_id: null,
+        manual_slots: [],
         idempotency_key: null
     })
     const [visualTitleGroups, setVisualTitleGroups] = useState([])
@@ -93,6 +105,12 @@ export default function AutoPublisher() {
         killSwitch: false,
         poolCounts: {},
         status: MASTER_RUNTIME_STATUS.IDLE,
+    })
+    const [territorialComposer, setTerritorialComposer] = useState({
+        enabled: false,
+        status: TERRITORIAL_COMPOSER_STATUS.IDLE,
+        catalog: EMPTY_TERRITORIAL_CATALOG,
+        error: '',
     })
     const [manualFormErrors, setManualFormErrors] = useState({})
     const [isSubmittingManual, setIsSubmittingManual] = useState(false)
@@ -128,6 +146,10 @@ export default function AutoPublisher() {
             content_type: 'feed',
             visual_title_id: null,
             visual_model: '',
+            composer_mode: '',
+            region_id: null,
+            city_id: null,
+            manual_slots: [],
             idempotency_key: null
         })
         setSelectedFile(null)
@@ -210,8 +232,36 @@ export default function AutoPublisher() {
 
     useEffect(() => {
         if (!isManualModalOpen || !clienteId) return
-        loadAvailableVisualTitles()
+        const timeoutId = window.setTimeout(loadAvailableVisualTitles, 0)
+        return () => window.clearTimeout(timeoutId)
     }, [clienteId, isManualModalOpen, loadAvailableVisualTitles])
+
+    const loadAvailableTerritorialComposer = useCallback(async () => {
+        if (!isManualModalOpen || !clienteId) return
+        setTerritorialComposer({
+            enabled: true,
+            status: TERRITORIAL_COMPOSER_STATUS.LOADING,
+            catalog: EMPTY_TERRITORIAL_CATALOG,
+            error: '',
+        })
+        try {
+            const result = await loadTerritorialComposer(supabase, clienteId)
+            setTerritorialComposer({ ...result, error: '' })
+        } catch (error) {
+            console.error('[AutoPublisher] TERRITORIAL_COMPOSER_READ_FAILED')
+            setTerritorialComposer({
+                enabled: true,
+                status: TERRITORIAL_COMPOSER_STATUS.ERROR,
+                catalog: EMPTY_TERRITORIAL_CATALOG,
+                error: error?.message || 'N\u00e3o foi poss\u00edvel carregar o compositor territorial.',
+            })
+        }
+    }, [clienteId, isManualModalOpen])
+
+    useEffect(() => {
+        const timeoutId = window.setTimeout(loadAvailableTerritorialComposer, 0)
+        return () => window.clearTimeout(timeoutId)
+    }, [loadAvailableTerritorialComposer])
 
     const loadAvailableMasterRuntime = useCallback(async () => {
         if (!isManualModalOpen || !clienteId) return
@@ -236,7 +286,8 @@ export default function AutoPublisher() {
 
     // Load the fixed master matrix every time the manual modal opens.
     useEffect(() => {
-        loadAvailableMasterRuntime()
+        const timeoutId = window.setTimeout(loadAvailableMasterRuntime, 0)
+        return () => window.clearTimeout(timeoutId)
     }, [loadAvailableMasterRuntime])
 
     // Each (cliente, content_type, visual_model) row is one fixed Placid
@@ -265,7 +316,7 @@ export default function AutoPublisher() {
         ),
         [masterRuntime, formData.content_type, runtimeControl],
     )
-    const availableFormats = useMemo(
+    const legacyAvailableFormats = useMemo(
         () => availableContentTypes(
             masterRuntime.configs,
             runtimeControl,
@@ -273,10 +324,15 @@ export default function AutoPublisher() {
         ),
         [masterRuntime, runtimeControl],
     )
+    const availableFormats = territorialComposer.enabled
+        ? territorialComposer.catalog.available_formats
+        : legacyAvailableFormats
     const selectedVisualModel = availableVisualModels.find(
         model => model.slug === formData.visual_model,
     )
-    const sourceImageRequired = selectedVisualModel?.sourceImage === 'required'
+    const sourceImageRequired = territorialComposer.enabled
+        ? composerRequiresSourceImage(territorialComposer.catalog, formData.content_type)
+        : selectedVisualModel?.sourceImage === 'required'
     const visualModelsState = visualModelsStateFor(
         masterRuntime.status,
         availableVisualModels,
@@ -285,9 +341,11 @@ export default function AutoPublisher() {
     // ── Load on tab change + realtime
     useEffect(() => {
         if (!clienteId) return
-        fetchSystemConfig()
-        fetchCounts()
-        fetchItems(tab)
+        const timeoutId = window.setTimeout(() => {
+            fetchSystemConfig()
+            fetchCounts()
+            fetchItems(tab)
+        }, 0)
 
         const channel = supabase
             .channel('autopublisher-realtime')
@@ -297,7 +355,10 @@ export default function AutoPublisher() {
             })
             .subscribe()
 
-        return () => supabase.removeChannel(channel)
+        return () => {
+            window.clearTimeout(timeoutId)
+            supabase.removeChannel(channel)
+        }
     }, [clienteId, tab, fetchCounts, fetchItems, fetchSystemConfig])
 
     // ── Actions
@@ -465,7 +526,11 @@ export default function AutoPublisher() {
         e.preventDefault()
         if (isSubmittingManual) return;
 
-        if (visualModelsState !== 'available') {
+        if (territorialComposer.enabled && territorialComposer.status !== TERRITORIAL_COMPOSER_STATUS.READY) {
+            toast.error(territorialComposer.error || 'Aguarde o carregamento do compositor territorial.')
+            return
+        }
+        if (!territorialComposer.enabled && visualModelsState !== 'available') {
             const message = visualModelsBlockMessage(visualModelsState) || 'Aguarde o carregamento dos modelos visuais.'
             toast.error(message)
             return
@@ -479,12 +544,16 @@ export default function AutoPublisher() {
             newErrors.context_tag = 'Tag é obrigatória.'
         }
 
+        if (territorialComposer.enabled) {
+            Object.assign(newErrors, composerFormErrors(formData, territorialComposer.catalog))
+        } else {
         if (!formData.visual_title_id) {
             newErrors.visual_title_id = 'Selecione o selo da mat\u00e9ria para usar a rota\u00e7\u00e3o de patrocinadores.'
         }
 
         if (!formData.visual_model) {
             newErrors.visual_model = 'Selecione a finalidade da arte.'
+        }
         }
 
         if (!isLinkMode) {
@@ -585,7 +654,7 @@ export default function AutoPublisher() {
         let finalAuthUserId = user?.id || null
         if (finalAuthUserId === 'null') finalAuthUserId = null
 
-        const payload = {
+        const basePayload = {
             cliente_id: clienteId,
             auth_user_id: finalAuthUserId,
             url_original: formData.url_original || null,
@@ -594,15 +663,18 @@ export default function AutoPublisher() {
             context_tag: formData.context_tag.toUpperCase(),
             content_type: formData.content_type || 'feed',
             source_image: sourceImageRequired ? finalImageUrl : null,
-            visual_title_id: formData.visual_title_id || null,
         }
 
         const idempotencyKey = formData.idempotency_key || crypto.randomUUID()
         if (!formData.idempotency_key) setFormData(previous => ({ ...previous, idempotency_key: idempotencyKey }))
-        // The visual model addresses the fixed template and fixes the sponsor
-        // count; the operator never sends sponsor_count nor a template UUID.
-        payload.visual_model = formData.visual_model
-        payload.idempotency_key = idempotencyKey
+        const payload = territorialComposer.enabled
+            ? { ...basePayload, ...territorialComposerIntent(formData), idempotency_key: idempotencyKey }
+            : {
+                ...basePayload,
+                visual_title_id: formData.visual_title_id || null,
+                visual_model: formData.visual_model,
+                idempotency_key: idempotencyKey,
+            }
 
         try {
             const { error } = await supabase.functions.invoke('ap-employee-generator', { body: payload })
@@ -892,7 +964,7 @@ export default function AutoPublisher() {
             {/* ── Modal Nova Matéria */}
             <Modal
                 isOpen={isManualModalOpen}
-                onClose={() => { setManualModalOpen(false); setSelectedFile(null); setFormData({ url_original: '', titulo: '', conteudo: '', image_url: '', context_tag: '', content_type: 'feed', visual_title_id: null, visual_model: '', idempotency_key: null }) }}
+                onClose={resetManualModal}
                 title="Nova Matéria"
                 icon={Brain}
                 size="lg"
@@ -909,7 +981,7 @@ export default function AutoPublisher() {
                     errors={manualFormErrors}
                     onSubmit={submitManualNews}
                     isSubmitting={isSubmittingManual}
-                    onCancel={() => { setManualModalOpen(false); setSelectedFile(null); }}
+                    onCancel={resetManualModal}
                     availableVisualModels={availableVisualModels}
                     visualModelOptions={visualModelOptions}
                     availableFormats={availableFormats}
@@ -919,6 +991,11 @@ export default function AutoPublisher() {
                     onRetryVisualTitles={loadAvailableVisualTitles}
                     visualModelsState={visualModelsState}
                     onRetryVisualModels={loadAvailableMasterRuntime}
+                    territorialComposerEnabled={territorialComposer.enabled}
+                    territorialCatalog={territorialComposer.catalog}
+                    territorialComposerState={territorialComposer.status}
+                    territorialComposerError={territorialComposer.error}
+                    onRetryTerritorialComposer={loadAvailableTerritorialComposer}
                     selectedFile={selectedFile}
                     setSelectedFile={setSelectedFile}
                 />
