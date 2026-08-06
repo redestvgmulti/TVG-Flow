@@ -254,7 +254,7 @@ export default function EditTaskModal({ task, isOpen, onClose, onSuccess, curren
 
     return createPortal(
         <div className="modal-backdrop" onClick={onClose}>
-            <div ref={modalRef} className="modal modal-large" onClick={e => e.stopPropagation()} style={{ boxShadow: '0 32px 64px -16px rgba(0,0,0,0.25)', borderRadius: '24px' }}>
+            <div ref={modalRef} className="modal modal-large edit-task-modal" onClick={e => e.stopPropagation()} style={{ boxShadow: '0 32px 64px -16px rgba(0,0,0,0.25)', borderRadius: '24px' }}>
                 
                 {/* Header */}
                 <div className="modal-header" style={{ padding: '24px 32px', backgroundColor: '#fff', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>

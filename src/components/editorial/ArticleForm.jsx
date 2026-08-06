@@ -7,6 +7,27 @@ import {
     composerRequiresSourceImage,
 } from '../../services/territorialComposer';
 
+const FORMAT_ICONS = {
+    feed: ImageIcon,
+    reels: Video,
+    story: BookOpen,
+};
+
+function FieldLabel({ children, required, optional }) {
+    return (
+        <label className="ap-af-label">
+            <span>{children}</span>
+            {required && <span className="ap-req" aria-hidden="true">*</span>}
+            {optional && <span className="ap-opt">(opcional)</span>}
+        </label>
+    );
+}
+
+function FieldError({ message }) {
+    if (!message) return null;
+    return <span className="ap-field-error">{message}</span>;
+}
+
 export default function ArticleForm({
     mode = 'admin',
     formData,
@@ -48,6 +69,7 @@ export default function ArticleForm({
             ? selectedModel.sourceImage === 'required'
             : !formData.visual_model && availableModelsRequireSourceImage;
     const sourceImageSupported = sourceImageRequired;
+    const submitModifier = mode === 'admin' ? '' : 'ap-af-submit--employee';
 
     useEffect(() => {
         if (territorialComposerEnabled) return;
@@ -84,81 +106,107 @@ export default function ArticleForm({
         // so drop it and let the operator re-pick one that actually exists.
         setSelectedFile(null);
         setFormData({ ...formData, content_type: contentType, visual_title_id: retainedId, visual_model: '', image_url: '' });
-        setVisualTitleFormatNotice(isCompatible ? '' : 'O selo selecionado n\u00e3o est\u00e1 dispon\u00edvel para este formato.');
+        setVisualTitleFormatNotice(isCompatible ? '' : 'O selo selecionado não está disponível para este formato.');
+    }
+
+    function pickVisualModel(model) {
+        if (model.sourceImage !== 'required') setSelectedFile(null);
+        setFormData({
+            ...formData,
+            visual_model: model.slug,
+            image_url: model.sourceImage === 'required' ? formData.image_url : '',
+        });
+    }
+
+    function onDropFile(file) {
+        if (!file) return;
+        setSelectedFile(file);
+        setFormData({ ...formData, image_url: '' });
     }
 
     return (
-        <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px', width: '100%' }}>
+        <form onSubmit={onSubmit} className="ap-af">
             {/* Formato */}
-            <div style={{ display: 'flex', gap: '8px', background: '#f1f5f9', padding: '6px', borderRadius: '16px', flexWrap: 'wrap' }}>
+            <div className="ap-af-format" role="tablist">
                 {availableFormats.map(({ slug: val, label: lbl }) => {
-                    const icon = val === 'feed'
-                        ? <ImageIcon size={18} key="feed" />
-                        : val === 'reels'
-                            ? <Video size={18} key="reels" />
-                            : <BookOpen size={18} key="story" />;
+                    const Icon = FORMAT_ICONS[val] ?? ImageIcon;
+                    const active = formData.content_type === val;
                     return (
-                    <button key={val} type="button" onClick={() => selectContentType(val)}
-                        style={{ flex: '1 1 120px', padding: '10px 8px', borderRadius: '12px', border: 'none', background: formData.content_type === val ? '#fff' : 'transparent', color: formData.content_type === val ? '#0f172a' : '#64748b', fontWeight: 600, fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', boxShadow: formData.content_type === val ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', cursor: 'pointer', transition: 'all 0.2s' }}>
-                        {icon} <span style={{ whiteSpace: 'nowrap' }}>{lbl}</span>
-                    </button>
+                        <button
+                            key={val}
+                            type="button"
+                            role="tab"
+                            aria-selected={active}
+                            onClick={() => selectContentType(val)}
+                            className={`ap-af-format-btn${active ? ' ap-af-format-btn--active' : ''}`}
+                        >
+                            <Icon size={18} aria-hidden="true" />
+                            <span>{lbl}</span>
+                        </button>
                     );
                 })}
             </div>
 
             {/* Modelo visual: junto com o formato, endereça o template fixo. */}
             {!territorialComposerEnabled && (visualModelsLoaded ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: '#f8fafc', padding: '16px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
-                    <label style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>Finalidade da arte <span style={{ color: '#ef4444' }}>*</span></label>
-                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                        {visualModelOptions.map(model => (
-                            <div key={model.slug} style={{ flex: '1 1 140px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <button type="button" disabled={!model.available}
-                                onClick={() => {
-                                    if (model.sourceImage !== 'required') setSelectedFile(null);
-                                    setFormData({
-                                        ...formData,
-                                        visual_model: model.slug,
-                                        image_url: model.sourceImage === 'required' ? formData.image_url : '',
-                                    });
-                                }}
-                                aria-pressed={formData.visual_model === model.slug}
-                                style={{ width: '100%', padding: '12px 10px', borderRadius: '12px', border: formData.visual_model === model.slug ? '1px solid #0f172a' : '1px solid #cbd5e1', background: formData.visual_model === model.slug ? '#0f172a' : '#fff', color: formData.visual_model === model.slug ? '#fff' : '#334155', fontWeight: 600, fontSize: '14px', cursor: model.available ? 'pointer' : 'not-allowed', opacity: model.available ? 1 : 0.55, transition: 'all 0.2s' }}>
-                                {model.label}
-                            </button>
-                            {!model.available && <small style={{ color: '#64748b', lineHeight: 1.25 }}>{model.unavailableReason}</small>}
-                            </div>
-                        ))}
+                <div className="ap-af-panel">
+                    <FieldLabel required>Finalidade da arte</FieldLabel>
+                    <div className="ap-af-vmodel-grid">
+                        {visualModelOptions.map(model => {
+                            const active = formData.visual_model === model.slug;
+                            const disabled = !model.available;
+                            const cls = [
+                                'ap-af-vmodel-btn',
+                                active && 'ap-af-vmodel-btn--active',
+                                disabled && 'ap-af-vmodel-btn--disabled',
+                            ].filter(Boolean).join(' ');
+                            return (
+                                <div key={model.slug} className="ap-af-vmodel-cell">
+                                    <button
+                                        type="button"
+                                        disabled={disabled}
+                                        onClick={() => pickVisualModel(model)}
+                                        aria-pressed={active}
+                                        className={cls}
+                                    >
+                                        {model.label}
+                                    </button>
+                                    {disabled && model.unavailableReason && (
+                                        <small className="ap-af-vmodel-reason">{model.unavailableReason}</small>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
-                    {typeof errors.visual_model === 'string' && <span style={{ color: '#ef4444', fontSize: '12px', fontWeight: 600 }}>{errors.visual_model}</span>}
-                    <small style={{ color: '#64748b' }}>A finalidade define a configuração da arte automaticamente.</small>
+                    <FieldError message={typeof errors.visual_model === 'string' ? errors.visual_model : ''} />
+                    <small className="ap-af-hint">A finalidade define a configuração da arte automaticamente.</small>
                 </div>
             ) : visualModelsState === 'error' ? (
-                <div role="alert" style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: '12px', padding: '14px 16px', fontSize: '13px', color: '#991b1b', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '10px' }}>
+                <div role="alert" className="ap-af-alert ap-af-alert--error">
                     <span>Não foi possível carregar os modelos visuais. Tente novamente.</span>
-                    <button type="button" onClick={onRetryVisualModels} style={{ border: '1px solid #ef4444', background: '#fff', color: '#991b1b', borderRadius: '8px', padding: '8px 10px', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                        <RefreshCcw size={14} /> Recarregar configuração
+                    <button type="button" onClick={onRetryVisualModels} className="ap-af-alert-retry">
+                        <RefreshCcw size={14} aria-hidden="true" /> Recarregar configuração
                     </button>
                 </div>
             ) : visualModelsState === 'empty' ? (
-                <div role="status" style={{ background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: '12px', padding: '14px 16px', fontSize: '13px', color: '#92400e' }}>
+                <div role="status" className="ap-af-alert ap-af-alert--warning">
                     Nenhum modelo visual está habilitado para este formato.
                 </div>
             ) : (
-                <div role="status" style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px 16px', fontSize: '13px', color: '#475569' }}>
+                <div role="status" className="ap-af-alert ap-af-alert--info">
                     Carregando modelos visuais...
                 </div>
             ))}
 
             {territorialComposerEnabled && territorialComposerState === 'loading' && (
-                <div role="status" style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: 14, color: '#475569' }}>
+                <div role="status" className="ap-af-alert ap-af-alert--info">
                     Carregando compositor territorial...
                 </div>
             )}
             {territorialComposerEnabled && territorialComposerState === 'error' && (
-                <div role="alert" style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 12, padding: 14, color: '#991b1b', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <span>{territorialComposerError || 'N\u00e3o foi poss\u00edvel carregar o compositor territorial.'}</span>
-                    <button type="button" onClick={onRetryTerritorialComposer} style={{ alignSelf: 'flex-start', border: '1px solid #ef4444', background: '#fff', color: '#991b1b', borderRadius: 8, padding: '8px 10px', fontWeight: 600, cursor: 'pointer' }}>Recarregar compositor</button>
+                <div role="alert" className="ap-af-alert ap-af-alert--error">
+                    <span>{territorialComposerError || 'Não foi possível carregar o compositor territorial.'}</span>
+                    <button type="button" onClick={onRetryTerritorialComposer} className="ap-af-alert-retry">Recarregar compositor</button>
                 </div>
             )}
             {territorialComposerEnabled && territorialComposerState === 'ready' && (
@@ -170,21 +218,20 @@ export default function ArticleForm({
                 />
             )}
 
-
-            {/* Tag Obrigatória */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
-                <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Editoria (Tag) <span style={{ color: '#ef4444' }}>*</span></label>
+            {/* Editoria (Tag) */}
+            <div className="ap-af-field">
+                <FieldLabel required>Editoria (Tag)</FieldLabel>
                 <input
+                    className={`ap-af-input${typeof errors.context_tag === 'string' ? ' ap-af-input--error' : ''}`}
                     value={formData.context_tag || ''}
                     onChange={e => setFormData({ ...formData, context_tag: e.target.value.toUpperCase() })}
                     placeholder="Ex: URGENTE"
-                    style={{ width: '100%', padding: '14px', borderRadius: '12px', border: typeof errors.context_tag === 'string' ? '1px solid #ef4444' : '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' }}
                 />
+                <FieldError message={typeof errors.context_tag === 'string' ? errors.context_tag : ''} />
             </div>
 
-            {/* Selo da mat\u00e9ria: o combobox preserva apenas visual_title_id. */}
+            {/* Selo da matéria: o combobox preserva apenas visual_title_id. */}
             {!territorialComposerEnabled && <>
-
             <VisualTitleCombobox
                 groups={visualTitleGroups}
                 value={formData.visual_title_id || null}
@@ -193,144 +240,137 @@ export default function ArticleForm({
                 error={visualTitlesError}
                 onRetry={onRetryVisualTitles}
                 fieldError={typeof errors.visual_title_id === 'string' ? errors.visual_title_id : ''}
-                onChange={visualTitleId => { setVisualTitleFormatNotice(''); setFormData({ ...formData, visual_title_id: visualTitleId }); }}
+                onChange={visualTitleId => {
+                    setVisualTitleFormatNotice('');
+                    setFormData({ ...formData, visual_title_id: visualTitleId });
+                }}
             />
-            {visualTitleFormatNotice && <small role="status" style={{ color: '#92400e' }}>{visualTitleFormatNotice}</small>}
-
+            {visualTitleFormatNotice && (
+                <small role="status" className="ap-af-hint ap-field-error">{visualTitleFormatNotice}</small>
+            )}
             </>}
+
             {/* Link Origem */}
-            <div style={{ padding: '16px', background: '#e0f2fe', border: '1px solid #bae6fd', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
-                <label style={{ fontSize: '14px', fontWeight: 700, color: '#0284c7', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Link Origem <span style={{ color: '#ef4444' }}>*</span></label>
-                <p style={{ margin: 0, fontSize: '13px', color: '#0369a1' }}>A IA irá extrair o conteúdo desta URL.</p>
+            <div className="ap-af-linkbox">
+                <FieldLabel required>Link Origem</FieldLabel>
+                <p className="ap-af-linkbox-hint">A IA irá extrair o conteúdo desta URL.</p>
                 <input
+                    className={`ap-af-input ap-af-input--link${typeof errors.url_original === 'string' ? ' ap-af-input--error' : ''}`}
                     value={formData.url_original || ''}
                     onChange={e => setFormData({ ...formData, url_original: e.target.value })}
                     placeholder="https://globo.com/noticia..."
-                    style={{ width: '100%', padding: '14px', borderRadius: '10px', border: typeof errors.url_original === 'string' ? '1px solid #ef4444' : '1px solid #7dd3fc', fontSize: '15px', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' }}
                 />
+                <FieldError message={typeof errors.url_original === 'string' ? errors.url_original : ''} />
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', opacity: 0.6 }}>
-                <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
-                <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Ou complete manualmente</span>
-                <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
+            <div className="ap-af-divider">
+                <span className="ap-af-divider__line" />
+                <span className="ap-af-divider__label">Ou complete manualmente</span>
+                <span className="ap-af-divider__line" />
             </div>
 
             {/* Headline */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
-                <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>
-                    Headline Maior <span style={{ color: '#ef4444' }}>*</span>
-                </label>
+            <div className="ap-af-field">
+                <FieldLabel required>Headline Maior</FieldLabel>
                 <input
+                    className={`ap-af-input${typeof errors.titulo === 'string' ? ' ap-af-input--error' : ''}`}
                     value={formData.titulo || ''}
                     onChange={e => setFormData({ ...formData, titulo: e.target.value })}
                     placeholder="Ex: Novo viaduto é inaugurado..."
-                    style={{ width: '100%', padding: '14px', borderRadius: '12px', border: typeof errors.titulo === 'string' ? '1px solid #ef4444' : '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' }}
                 />
+                <FieldError message={typeof errors.titulo === 'string' ? errors.titulo : ''} />
             </div>
 
             {/* Texto Base */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
-                <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Texto Base da Matéria <span style={{ color: '#ef4444' }}>*</span></label>
+            <div className="ap-af-field">
+                <FieldLabel required>Texto Base da Matéria</FieldLabel>
                 <textarea
+                    rows={4}
+                    className={`ap-af-textarea${typeof errors.conteudo === 'string' ? ' ap-af-textarea--error' : ''}`}
                     value={formData.conteudo || ''}
                     onChange={e => setFormData({ ...formData, conteudo: e.target.value })}
                     placeholder="Escreva a notícia base. A IA revisará e criará a caption com hashtags..."
-                    rows={4}
-                    style={{ width: '100%', padding: '14px', borderRadius: '12px', border: typeof errors.conteudo === 'string' ? '1px solid #ef4444' : '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', resize: 'vertical', minHeight: '80px', boxSizing: 'border-box' }}
                 />
+                <FieldError message={typeof errors.conteudo === 'string' ? errors.conteudo : ''} />
             </div>
 
             {/* Imagem aparece apenas quando o contrato da finalidade a utiliza. */}
             {sourceImageSupported && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
-                    <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Foto (Fundo do Card){sourceImageRequired && <span style={{ color: '#ef4444' }}> *</span>}</label>
+                <div className="ap-af-field">
+                    <FieldLabel required={sourceImageRequired}>Foto (Fundo do Card)</FieldLabel>
                     <div
-                        onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
+                        role="button"
+                        tabIndex={0}
+                        aria-label="Selecionar imagem"
+                        className={`ap-af-dropzone${isDragging ? ' ap-af-dropzone--active' : ''}`}
+                        onDragOver={e => {
+                            e.preventDefault();
+                            setIsDragging(true);
+                        }}
                         onDragLeave={() => setIsDragging(false)}
                         onDrop={e => {
                             e.preventDefault();
                             setIsDragging(false);
-                            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-                                setSelectedFile(e.dataTransfer.files[0]);
-                                setFormData({ ...formData, image_url: '' });
-                            }
-                        }}
-                        style={{
-                            border: isDragging ? '2px dashed #3b82f6' : '2px dashed #cbd5e1',
-                            borderRadius: '12px',
-                            padding: '20px 16px',
-                            textAlign: 'center',
-                            background: isDragging ? '#eff6ff' : '#f8fafc',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            gap: '8px'
+                            onDropFile(e.dataTransfer.files?.[0]);
                         }}
                         onClick={() => document.getElementById(`upload-input-${mode}`).click()}
+                        onKeyDown={e => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                document.getElementById(`upload-input-${mode}`).click();
+                            }
+                        }}
                     >
                         <input
                             id={`upload-input-${mode}`}
                             type="file"
                             accept="image/*"
-                            style={{ display: 'none' }}
-                            onChange={(e) => {
-                                if (e.target.files && e.target.files[0]) {
-                                    setSelectedFile(e.target.files[0]);
-                                    setFormData({ ...formData, image_url: '' });
-                                }
-                            }}
+                            onChange={e => onDropFile(e.target.files?.[0])}
                         />
 
                         {selectedFile ? (
                             <>
-                                <div style={{ background: '#dcfce7', color: '#166534', padding: '8px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <CheckCircle2 size={16} /> Arquivo Anexado: {selectedFile.name}
-                                </div>
-                                <span style={{ fontSize: '12px', color: '#64748b' }}>Clique para alterar</span>
+                                <span className="ap-af-dropzone-chip">
+                                    <CheckCircle2 size={16} aria-hidden="true" /> Arquivo Anexado: {selectedFile.name}
+                                </span>
+                                <span className="ap-af-dropzone-hint">Clique para alterar</span>
                             </>
                         ) : (
                             <>
-                                <div style={{ background: '#e2e8f0', width: '40px', height: '40px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    <ImageIcon size={20} color="#64748b" />
-                                </div>
-                                <span style={{ fontSize: '14px', color: '#475569', fontWeight: 500 }}>
+                                <span className="ap-af-dropzone-circle">
+                                    <ImageIcon size={20} aria-hidden="true" />
+                                </span>
+                                <span className="ap-af-dropzone-label">
                                     Clique ou arraste a imagem original aqui
                                 </span>
                             </>
                         )}
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '8px 0' }}>
-                        <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
-                        <span style={{ fontSize: '11px', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase' }}>OU URL</span>
-                        <div style={{ height: '1px', background: '#cbd5e1', flex: 1 }}></div>
+                    <div className="ap-af-divider">
+                        <span className="ap-af-divider__line" />
+                        <span className="ap-af-divider__label ap-af-divider__label--subtle">OU URL</span>
+                        <span className="ap-af-divider__line" />
                     </div>
 
                     <input
+                        className={`ap-af-input${typeof errors.image_url === 'string' ? ' ap-af-input--error' : ''}`}
                         value={formData.image_url || ''}
                         onChange={e => {
                             setFormData({ ...formData, image_url: e.target.value });
                             if (e.target.value) setSelectedFile(null);
                         }}
                         placeholder="https://exemplo.com/foto.jpg"
-                        style={{ width: '100%', padding: '14px', borderRadius: '12px', border: typeof errors.image_url === 'string' ? '1px solid #ef4444' : '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', appearance: 'none', boxSizing: 'border-box' }}
-                        onFocus={e => e.target.style.borderColor = '#94a3b8'}
-                        onBlur={e => {
-                            if (!errors.image_url) {
-                                e.target.style.borderColor = '#cbd5e1';
-                            }
-                        }}
                     />
+                    <FieldError message={typeof errors.image_url === 'string' ? errors.image_url : ''} />
                 </div>
             )}
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #e2e8f0' }}>
-                <button type="submit" disabled={isSubmitting || generationBlocked} style={{ width: '100%', background: isSubmitting || generationBlocked ? '#cbd5e1' : (mode === 'admin' ? '#111827' : '#2563eb'), color: '#fff', border: 'none', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: isSubmitting || generationBlocked ? 'not-allowed' : 'pointer', opacity: isSubmitting || generationBlocked ? 0.7 : 1, transition: 'all 0.2s', boxShadow: mode === 'admin' ? 'none' : '0 4px 6px -1px rgba(37, 99, 235, 0.2)' }}>
+            <div className="ap-af-footer">
+                <button type="submit" disabled={isSubmitting || generationBlocked} className={`ap-af-submit ${submitModifier}`.trim()}>
                     {isSubmitting ? (
                         <>
-                            <div style={{ width: '18px', height: '18px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                            <span className="ap-af-submit-spinner" aria-hidden="true" />
                             Gerando...
                         </>
                     ) : (
@@ -338,7 +378,7 @@ export default function ArticleForm({
                     )}
                 </button>
                 {onCancel && (
-                    <button type="button" onClick={onCancel} style={{ background: 'transparent', color: '#64748b', border: 'none', padding: '16px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>
+                    <button type="button" onClick={onCancel} className="ap-af-cancel">
                         Cancelar
                     </button>
                 )}

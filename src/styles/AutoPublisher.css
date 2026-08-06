@@ -1297,14 +1297,448 @@
   border-radius: 8px;
 }
 
-/* Rodapé de ações */
-.ap-af-footer {
+/* ── ArticleForm — tokens consolidados ─────────────────────── */
+/* Container raiz do formulário (substitui inline style). */
+.ap-af {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+}
+
+/* Marcadores em labels */
+.ap-req { color: var(--color-danger); margin-left: 4px; }
+.ap-opt { color: var(--color-text-tertiary); font-weight: var(--weight-regular); margin-left: 4px; }
+
+/* Mensagens de erro de campo e de validação inline. */
+.ap-field-error {
+  color: var(--color-danger);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+}
+
+/* Field wrapper genérico (label + controle + hint + erro). */
+.ap-af-field {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-top: 4px;
-  padding-top: 16px;
-  border-top: 1px solid var(--color-border, #E9EDF2);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Input/textarea base — herda de .input quando usado em conjunto, mas
+   também funciona standalone para o ArticleForm que hoje não usa .input. */
+.ap-af-input,
+.ap-af-textarea {
+  width: 100%;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
+  font-family: var(--font-body);
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-surface);
+  box-sizing: border-box;
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    background-color var(--transition-fast);
+  outline: none;
+}
+
+.ap-af-textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.ap-af-input:focus,
+.ap-af-textarea:focus {
+  border-color: var(--color-text-tertiary);
+  box-shadow: 0 0 0 3px var(--color-primary-light);
+}
+
+.ap-af-input::placeholder,
+.ap-af-textarea::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+.ap-af-input--error,
+.ap-af-textarea--error {
+  border-color: var(--color-danger);
+}
+
+.ap-af-input--error:focus,
+.ap-af-textarea--error:focus {
+  border-color: var(--color-danger);
+  box-shadow: 0 0 0 3px var(--color-danger-bg);
+}
+
+.ap-af-input--link {
+  border-color: #7DD3FC;
+}
+
+.ap-af-input--link:focus {
+  border-color: #7DD3FC;
+}
+
+/* Label padrão dentro do formulário. */
+.ap-af-label {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+}
+
+/* Hint discreto embaixo de um campo. */
+.ap-af-hint {
+  color: var(--color-text-tertiary);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+}
+
+/* Divisor "Ou complete manualmente" / "OU URL". */
+.ap-af-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  opacity: 0.6;
+}
+
+.ap-af-divider__line {
+  height: 1px;
+  background: var(--color-border);
+  flex: 1;
+}
+
+.ap-af-divider__label {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ap-af-divider__label--subtle {
+  color: var(--color-text-tertiary);
+  font-weight: var(--weight-semibold);
+}
+
+/* ── Seletor de formato (segmented) ──────────────────────── */
+.ap-af-format {
+  display: flex;
+  gap: 6px;
+  background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
+  padding: 6px;
+  border-radius: var(--radius-lg);
+  flex-wrap: wrap;
+}
+
+.ap-af-format-btn {
+  flex: 1 1 120px;
+  padding: 10px 8px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-weight: var(--weight-semibold);
+  font-size: var(--text-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.ap-af-format-btn:hover:not(.ap-af-format-btn--active) {
+  color: var(--color-text-primary);
+}
+
+.ap-af-format-btn--active {
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  box-shadow: var(--shadow-1);
+}
+
+/* ── Painel de modelo visual ──────────────────────────────── */
+.ap-af-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--color-bg-app);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+}
+
+.ap-af-panel-label {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+}
+
+.ap-af-vmodel-grid {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: stretch;
+}
+
+.ap-af-vmodel-cell {
+  flex: 1 1 140px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ap-af-vmodel-btn {
+  width: 100%;
+  height: 100%;
+  padding: 12px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-surface);
+  color: var(--color-text-secondary);
+  font-weight: var(--weight-semibold);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.ap-af-vmodel-btn--active {
+  border-color: var(--color-text-primary);
+  background: var(--color-text-primary);
+  color: var(--color-text-inverse);
+}
+
+.ap-af-vmodel-btn:disabled,
+.ap-af-vmodel-btn--disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.ap-af-vmodel-reason {
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+  line-height: 1.25;
+}
+
+/* ── Alerts do painel (loading/empty/error) ──────────────── */
+.ap-af-alert {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: 14px var(--space-4);
+  font-size: var(--text-sm);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+}
+
+.ap-af-alert--info {
+  background: var(--color-bg-app);
+  color: var(--color-text-secondary);
+}
+
+.ap-af-alert--warning {
+  background: var(--color-warning-bg);
+  border-color: #FCD34D;
+  color: #92400E;
+}
+
+.ap-af-alert--error {
+  background: var(--color-danger-bg);
+  border-color: #FCA5A5;
+  color: #991B1B;
+}
+
+.ap-af-alert-retry {
+  border: 1px solid var(--color-danger);
+  background: var(--color-bg-surface);
+  color: #991B1B;
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background-color var(--transition-fast);
+}
+
+.ap-af-alert-retry:hover {
+  background: var(--color-bg-subtle);
+}
+
+/* ── Caixa de destaque do link (cor da marca) ─────────────── */
+.ap-af-linkbox {
+  padding: var(--space-4);
+  background: var(--color-primary-light);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.ap-af-linkbox-label {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  color: var(--color-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ap-af-linkbox-hint {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-primary-hover);
+}
+
+/* ── Dropzone de imagem ──────────────────────────────────── */
+.ap-af-dropzone {
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 20px var(--space-4);
+  text-align: center;
+  background: var(--color-bg-app);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  transition:
+    border-color var(--transition-fast),
+    background-color var(--transition-fast);
+}
+
+.ap-af-dropzone--active {
+  border-color: var(--color-primary);
+  background: var(--color-primary-light);
+}
+
+.ap-af-dropzone-chip {
+  background: var(--color-success-bg);
+  color: #166534;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ap-af-dropzone-circle {
+  background: var(--color-bg-subtle);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary);
+}
+
+.ap-af-dropzone-hint {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+
+.ap-af-dropzone-label {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  font-weight: var(--weight-medium);
+}
+
+.ap-af-dropzone input[type="file"] {
+  display: none;
+}
+
+/* ── Rodapé de ações ─────────────────────────────────────── */
+.ap-af-footer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: 10px;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.ap-af-submit {
+  width: 100%;
+  background: var(--color-text-primary);
+  color: var(--color-text-inverse);
+  border: none;
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.ap-af-submit--employee {
+  background: var(--color-primary);
+  box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
+}
+
+.ap-af-submit--employee:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+  transform: translateY(-1px);
+}
+
+.ap-af-submit:disabled {
+  background: var(--color-border);
+  color: var(--color-text-inverse);
+  cursor: not-allowed;
+  opacity: 0.7;
+  box-shadow: none;
+  transform: none;
+}
+
+.ap-af-submit-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: var(--color-text-inverse);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.ap-af-cancel {
+  background: transparent;
+  color: var(--color-text-secondary);
+  border: none;
+  padding: var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  transition:
+    color var(--transition-fast),
+    background-color var(--transition-fast);
+}
+
+.ap-af-cancel:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-subtle);
 }
 
 /* ── Empty State ──────────────────────────────────────────── */

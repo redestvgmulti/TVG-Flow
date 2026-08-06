@@ -792,6 +792,19 @@
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12) !important;
 }
 
+/* The OS editor shares the large modal shell, but its form can be taller
+   than the viewport. Keep the header/footer visible and scroll only content. */
+.modal.modal-large.edit-task-modal .modal-header,
+.modal.modal-large.edit-task-modal .modal-footer {
+    flex: 0 0 auto;
+}
+
+.modal.modal-large.edit-task-modal .modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
 /* Remove padding from MacroTaskDetail when inside modal */
 .modal-large .macro-task-container {
     padding: 24px !important;
