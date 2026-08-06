@@ -28,6 +28,27 @@ function FieldError({ message }) {
     return <span className="ap-field-error">{message}</span>;
 }
 
+const FORMAT_ICONS = {
+    feed: ImageIcon,
+    reels: Video,
+    story: BookOpen,
+};
+
+function FieldLabel({ children, required, optional }) {
+    return (
+        <label className="ap-af-label">
+            <span>{children}</span>
+            {required && <span className="ap-req" aria-hidden="true">*</span>}
+            {optional && <span className="ap-opt">(opcional)</span>}
+        </label>
+    );
+}
+
+function FieldError({ message }) {
+    if (!message) return null;
+    return <span className="ap-field-error">{message}</span>;
+}
+
 export default function ArticleForm({
     mode = 'admin',
     formData,
@@ -69,6 +90,7 @@ export default function ArticleForm({
             ? selectedModel.sourceImage === 'required'
             : !formData.visual_model && availableModelsRequireSourceImage;
     const sourceImageSupported = sourceImageRequired;
+    const submissionDisabled = Boolean(isSubmitting || generationBlocked);
     const submitModifier = mode === 'admin' ? '' : 'ap-af-submit--employee';
 
     useEffect(() => {
@@ -367,7 +389,7 @@ export default function ArticleForm({
             )}
 
             <div className="ap-af-footer">
-                <button type="submit" disabled={isSubmitting || generationBlocked} className={`ap-af-submit ${submitModifier}`.trim()}>
+                <button type="submit" disabled={submissionDisabled} className={`ap-af-submit ${submitModifier}`.trim()}>
                     {isSubmitting ? (
                         <>
                             <span className="ap-af-submit-spinner" aria-hidden="true" />
