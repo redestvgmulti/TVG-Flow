@@ -1,5 +1,5 @@
 -- Certifies that registering a sponsor is ONE transactional operation that
--- yields the sponsor plus both rotation memberships, with automatic ordering,
+-- yields the sponsor plus all three format memberships, with automatic ordering,
 -- and that no partial state can survive a failure.
 -- Self-contained: everything runs inside one transaction and is rolled back.
 \set ON_ERROR_STOP on
@@ -30,11 +30,14 @@ BEGIN
 END;
 $$;
 
--- ── One call creates the sponsor AND both memberships ──────────────────────
+-- ── One call creates exactly the Feed, Reels and Story memberships ─────────
 DO $$
 DECLARE
     v jsonb;
     v_id uuid;
+    v_formats text[];
+    v_response_formats text[];
+    v_scope_is_valid boolean;
 BEGIN
     v := ap.create_render_sponsor(
         '33333333-3333-4333-8333-333333333333',
@@ -51,9 +54,46 @@ BEGIN
             v #>> '{sponsor,slug}';
     END IF;
 
-    IF (SELECT count(*) FROM ap.render_sponsor_scope_memberships m
-        WHERE m.sponsor_id = v_id) <> 2 THEN
-        RAISE EXCEPTION 'ASSERTION: registration did not create both memberships';
+    SELECT
+        array_agg(m.content_type ORDER BY m.content_type),
+        bool_and(
+            m.cliente_id = '33333333-3333-4333-8333-333333333333'
+            AND m.template_set = 'default'
+            AND m.ativo
+        )
+    INTO v_formats, v_scope_is_valid
+    FROM ap.render_sponsor_scope_memberships AS m
+    WHERE m.sponsor_id = v_id;
+
+    IF v_formats IS DISTINCT FROM ARRAY['feed', 'reels', 'story']::text[] THEN
+        RAISE EXCEPTION
+            'ASSERTION: registration formats must be exactly feed,reels,story (got %)',
+            v_formats;
+    END IF;
+
+    IF NOT COALESCE(v_scope_is_valid, false) THEN
+        RAISE EXCEPTION
+            'ASSERTION: a membership escaped the sponsor tenant or default active scope';
+    END IF;
+
+    SELECT array_agg(item ->> 'content_type' ORDER BY item ->> 'content_type')
+    INTO v_response_formats
+    FROM jsonb_array_elements(v -> 'memberships') AS item;
+
+    IF v_response_formats IS DISTINCT FROM ARRAY['feed', 'reels', 'story']::text[] THEN
+        RAISE EXCEPTION
+            'ASSERTION: RPC response formats must be exactly feed,reels,story (got %)',
+            v_response_formats;
+    END IF;
+
+    IF EXISTS (
+        SELECT 1
+        FROM ap.render_sponsor_scope_memberships AS m
+        WHERE m.cliente_id = '33333333-3333-4333-8333-333333333333'
+          AND m.sponsor_id <> v_id
+    ) THEN
+        RAISE EXCEPTION
+            'ASSERTION: registration associated a membership with the wrong sponsor';
     END IF;
 
     IF NOT EXISTS (
@@ -72,9 +112,17 @@ BEGIN
         RAISE EXCEPTION 'ASSERTION: reels membership missing or out of scope';
     END IF;
 
-    -- First sponsor of the tenant starts the queue.
+    IF NOT EXISTS (
+        SELECT 1 FROM ap.render_sponsor_scope_memberships m
+        WHERE m.sponsor_id = v_id AND m.content_type = 'story'
+          AND m.template_set = 'default' AND m.ativo
+    ) THEN
+        RAISE EXCEPTION 'ASSERTION: story membership missing or out of scope';
+    END IF;
+    -- First sponsor of the tenant starts every format queue.
+
     IF (SELECT count(*) FROM ap.render_sponsor_scope_memberships m
-        WHERE m.sponsor_id = v_id AND m.ordem = 0) <> 2 THEN
+        WHERE m.sponsor_id = v_id AND m.ordem = 0) <> 3 THEN
         RAISE EXCEPTION 'ASSERTION: first sponsor did not start at position 0';
     END IF;
 END;
@@ -256,6 +304,19 @@ DECLARE
             'master_template_uuid', '3pm4re4blrizh', 'visual_model', 'misto'),
         'visual_model', 'misto',
         'layer_map', '{"headline":"titulo-materia"}'::jsonb);
+    v_base_reels jsonb := jsonb_build_object(
+        'master_config', jsonb_build_object(
+            'master_template_uuid', 'xcxtk9tt7syfd', 'visual_model', 'tvg'),
+        'visual_model', 'tvg',
+        'layer_map', '{"headline":"titulo-materia"}'::jsonb);
+    v_base_story jsonb := jsonb_build_object(
+        'master_config', jsonb_build_object(
+            'master_template_uuid', 'x3djtbqorrtqc', 'visual_model', 'story'),
+        'visual_model', 'story',
+        'layer_map', '{"headline":"titulo-materia"}'::jsonb);
+    v_feed_index_before integer;
+    v_state_formats text[];
+
     v jsonb;
 BEGIN
     v := ap.create_candidate_with_sponsors(
@@ -282,6 +343,51 @@ BEGIN
         WHERE cliente_id = '33333333-3333-4333-8333-333333333333'
           AND content_type = 'feed') <> 1 THEN
         RAISE EXCEPTION 'ASSERTION: tvg and misto did not share one feed cursor';
+    END IF;
+
+    SELECT current_index
+    INTO v_feed_index_before
+    FROM ap.render_sponsor_rotation_state
+    WHERE cliente_id = '33333333-3333-4333-8333-333333333333'
+      AND template_set = 'default'
+      AND content_type = 'feed';
+
+    v := ap.create_candidate_with_sponsors(
+        '33333333-3333-4333-8333-333333333333', gen_random_uuid(),
+        'reels', 'default', 1::smallint, 'Materia Reels', 'txt',
+        NULL, NULL, 'DESTAQUE', NULL, NULL, 'master_v1', v_base_reels);
+    IF jsonb_array_length(v -> 'sponsor_selection' -> 'items') <> 1 THEN
+        RAISE EXCEPTION 'ASSERTION: reels did not consume its own sponsor';
+    END IF;
+
+    v := ap.create_candidate_with_sponsors(
+        '33333333-3333-4333-8333-333333333333', gen_random_uuid(),
+        'story', 'default', 1::smallint, 'Materia Story', 'txt',
+        NULL, NULL, 'DESTAQUE', NULL, NULL, 'master_v1', v_base_story);
+    IF jsonb_array_length(v -> 'sponsor_selection' -> 'items') <> 1 THEN
+        RAISE EXCEPTION 'ASSERTION: story did not consume its own sponsor';
+    END IF;
+
+    SELECT array_agg(content_type ORDER BY content_type)
+    INTO v_state_formats
+    FROM ap.render_sponsor_rotation_state
+    WHERE cliente_id = '33333333-3333-4333-8333-333333333333'
+      AND template_set = 'default';
+
+    IF v_state_formats IS DISTINCT FROM ARRAY['feed', 'reels', 'story']::text[] THEN
+        RAISE EXCEPTION
+            'ASSERTION: rotation states must be independent for feed,reels,story (got %)',
+            v_state_formats;
+    END IF;
+
+    IF (
+        SELECT current_index
+        FROM ap.render_sponsor_rotation_state
+        WHERE cliente_id = '33333333-3333-4333-8333-333333333333'
+          AND template_set = 'default'
+          AND content_type = 'feed'
+    ) IS DISTINCT FROM v_feed_index_before THEN
+        RAISE EXCEPTION 'ASSERTION: reels or story reused the feed rotation state';
     END IF;
 END;
 $$;
