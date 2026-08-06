@@ -1,16 +1,16 @@
 export const GENERATOR_STAGES = [
-  'startup',
-  'authenticate',
-  'resolve_tenant',
-  'parse_request',
-  'request_validation',
-  'validate_request',
-  'load_master',
-  'resolve_visual_title',
-  'resolve_source_image',
-  'build_snapshot',
-  'call_candidate_rpc',
-  'complete',
+  "startup",
+  "authenticate",
+  "resolve_tenant",
+  "parse_request",
+  "request_validation",
+  "validate_request",
+  "load_master",
+  "resolve_visual_title",
+  "resolve_source_image",
+  "build_snapshot",
+  "call_candidate_rpc",
+  "complete",
 ] as const;
 
 export type GeneratorStage = typeof GENERATOR_STAGES[number];
@@ -21,7 +21,7 @@ const MAX_MESSAGE_LENGTH = 240;
 const MAX_ERROR_NAME_LENGTH = 80;
 
 export function resolveCorrelationId(value: unknown): string {
-  if (typeof value === 'string' && UUID_PATTERN.test(value.trim())) {
+  if (typeof value === "string" && UUID_PATTERN.test(value.trim())) {
     return value.trim().toLowerCase();
   }
   return crypto.randomUUID();
@@ -29,54 +29,60 @@ export function resolveCorrelationId(value: unknown): string {
 
 function stringValue(value: unknown): string {
   if (value instanceof Error) return value.message || value.name;
-  if (typeof value === 'string') return value;
-  if (value === null || value === undefined) return 'unknown_error';
+  if (typeof value === "string") return value;
+  if (value === null || value === undefined) return "unknown_error";
   try {
     return String(value);
   } catch {
-    return 'unknown_error';
+    return "unknown_error";
   }
 }
 
 function redactSecrets(value: string): string {
   return value
     // JWTs, whether or not they are prefixed by Bearer.
-    .replace(/\beyJ[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\b/g, '[redacted-jwt]')
+    .replace(
+      /\beyJ[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\b/g,
+      "[redacted-jwt]",
+    )
     // Never retain bearer credentials or an Authorization value.
-    .replace(/\bBearer\s+[^\s,;]+/gi, 'Bearer [redacted]')
-    .replace(/\bauthorization\s*[:=]\s*[^,;\s]+/gi, 'authorization=[redacted]')
+    .replace(/\bBearer\s+[^\s,;]+/gi, "Bearer [redacted]")
+    .replace(/\bauthorization\s*[:=]\s*[^,;\s]+/gi, "authorization=[redacted]")
     // Signed/query-string URLs can carry storage or credential material.
-    .replace(/https?:\/\/[^\s"'<>]+\?[^\s"'<>]+/gi, '[redacted-url]')
+    .replace(/https?:\/\/[^\s"'<>]+\?[^\s"'<>]+/gi, "[redacted-url]")
     // Common secret-bearing key/value pairs in SDK and PostgREST messages.
-    .replace(/\b(api[_-]?key|access[_-]?token|refresh[_-]?token|service[_-]?role[_-]?key|secret|token|signature|sig)\s*[:=]\s*[^,;\s]+/gi, '$1=[redacted]');
+    .replace(
+      /\b(api[_-]?key|access[_-]?token|refresh[_-]?token|service[_-]?role[_-]?key|secret|token|signature|sig)\s*[:=]\s*[^,;\s]+/gi,
+      "$1=[redacted]",
+    );
 }
 
 export function sanitizeUnexpectedMessage(error: unknown): string {
   const message = redactSecrets(stringValue(error))
-    .replace(/\s+/g, ' ')
+    .replace(/\s+/g, " ")
     .trim();
 
   if (/\b(?:PGRST\d+|PostgREST)\b/i.test(message)) {
-    return 'postgrest_request_failed';
+    return "postgrest_request_failed";
   }
   if (/\b(?:permission denied|42501)\b/i.test(message)) {
-    return 'database_permission_denied';
+    return "database_permission_denied";
   }
   if (/\b(?:jwt|authorization|auth)\b/i.test(message)) {
-    return 'authentication_operation_failed';
+    return "authentication_operation_failed";
   }
-  if (!message) return 'unknown_error';
+  if (!message) return "unknown_error";
   return message.slice(0, MAX_MESSAGE_LENGTH);
 }
 
 function normalizedStack(error: unknown): string {
-  const stack = error instanceof Error && typeof error.stack === 'string'
+  const stack = error instanceof Error && typeof error.stack === "string"
     ? error.stack
-    : '';
+    : "";
   return redactSecrets(stack)
-    .replace(/https?:\/\/[^\s)]+/gi, '[url]')
-    .replace(/:\d+:\d+/g, ':line:column')
-    .replace(/\s+/g, ' ')
+    .replace(/https?:\/\/[^\s)]+/gi, "[url]")
+    .replace(/:\d+:\d+/g, ":line:column")
+    .replace(/\s+/g, " ")
     .trim()
     .slice(0, 4096);
 }
@@ -89,22 +95,27 @@ function fnv1a64(value: string): string {
     hash ^= BigInt(value.charCodeAt(index));
     hash = BigInt.asUintN(64, hash * 0x100000001b3n);
   }
-  return hash.toString(16).padStart(16, '0');
+  return hash.toString(16).padStart(16, "0");
 }
 
-export function stackFingerprint(error: unknown, stage: GeneratorStage): string {
+export function stackFingerprint(
+  error: unknown,
+  stage: GeneratorStage,
+): string {
   const errorName = error instanceof Error && error.name
     ? error.name.slice(0, MAX_ERROR_NAME_LENGTH)
-    : 'Error';
-  return `fnv1a64:${fnv1a64(`${errorName}\n${normalizedStack(error)}\n${stage}`)}`;
+    : "Error";
+  return `fnv1a64:${
+    fnv1a64(`${errorName}\n${normalizedStack(error)}\n${stage}`)
+  }`;
 }
 
 function safeUuid(value: unknown): string | null {
-  return typeof value === 'string' && UUID_PATTERN.test(value) ? value : null;
+  return typeof value === "string" && UUID_PATTERN.test(value) ? value : null;
 }
 
 function safeEnum(value: unknown, allowed: readonly string[]): string | null {
-  return typeof value === 'string' && allowed.includes(value) ? value : null;
+  return typeof value === "string" && allowed.includes(value) ? value : null;
 }
 
 export type GeneratorLogContext = {
@@ -118,34 +129,41 @@ export type GeneratorLogContext = {
   hasSourceImage?: boolean;
 };
 
-export function buildGeneratorLogEvent(input: GeneratorLogContext & {
-  functionVersion: string;
-  code: string;
-}) {
+export function buildGeneratorLogEvent(
+  input: GeneratorLogContext & {
+    functionVersion: string;
+    code: string;
+  },
+) {
   return {
-    component: 'ap-employee-generator',
+    component: "ap-employee-generator",
     function_version: input.functionVersion,
     correlation_id: resolveCorrelationId(input.correlationId),
     stage: input.stage,
     code: input.code,
     cliente_id: safeUuid(input.clientId),
-    content_type: safeEnum(input.contentType, ['feed', 'reels', 'story']),
-    visual_model: safeEnum(input.visualModel, ['tvg', 'misto']),
+    content_type: safeEnum(input.contentType, ["feed", "reels", "story"]),
+    visual_model: safeEnum(input.visualModel, ["tvg", "misto"]),
     has_visual_title_id: Boolean(input.hasVisualTitleId),
     has_source_image: Boolean(input.hasSourceImage),
     article_id: safeUuid(input.articleId),
   };
 }
 
-export function buildUnexpectedGeneratorLogEvent(input: GeneratorLogContext & {
-  functionVersion: string;
-  error: unknown;
-}) {
+export function buildUnexpectedGeneratorLogEvent(
+  input: GeneratorLogContext & {
+    functionVersion: string;
+    error: unknown;
+  },
+) {
   const errorName = input.error instanceof Error && input.error.name
-    ? sanitizeUnexpectedMessage(input.error.name).slice(0, MAX_ERROR_NAME_LENGTH)
-    : 'Error';
+    ? sanitizeUnexpectedMessage(input.error.name).slice(
+      0,
+      MAX_ERROR_NAME_LENGTH,
+    )
+    : "Error";
   return {
-    ...buildGeneratorLogEvent({ ...input, code: 'UNEXPECTED_GENERATOR_ERROR' }),
+    ...buildGeneratorLogEvent({ ...input, code: "UNEXPECTED_GENERATOR_ERROR" }),
     error_name: errorName,
     sanitized_message: sanitizeUnexpectedMessage(input.error),
     stack_fingerprint: stackFingerprint(input.error, input.stage),

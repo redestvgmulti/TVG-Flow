@@ -135,17 +135,37 @@ export async function createAndProcessTerritorialCandidate(input: {
       claimed: true,
     };
   } catch (error) {
-    await releaseReservation(
-      input.serviceSupabase,
-      news.id,
-      error instanceof Error ? error.message : "generation_failed",
-    );
-    await input.serviceSupabase
-      .schema("ap")
-      .from("candidate_news")
-      .update({ processing_started_at: null })
-      .eq("id", news.id)
-      .eq("status", "processing");
+    try {
+      if (news?.id) {
+        await releaseReservation(
+          input.serviceSupabase,
+          news.id,
+          error instanceof Error ? error.message : "generation_failed",
+        );
+      }
+    } catch (cleanupError) {
+      console.error("territorial_cleanup_error", {
+        candidate_id: news?.id,
+        error: cleanupError,
+      });
+    }
+
+    if (news?.id) {
+      try {
+        await input.serviceSupabase
+          .schema("ap")
+          .from("candidate_news")
+          .update({ processing_started_at: null })
+          .eq("id", news.id)
+          .eq("status", "processing");
+      } catch (dbError) {
+        console.error("territorial_cleanup_db_error", {
+          candidate_id: news.id,
+          error: dbError,
+        });
+      }
+    }
+
     throw error;
   }
 }
