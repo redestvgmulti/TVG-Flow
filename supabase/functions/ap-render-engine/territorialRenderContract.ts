@@ -4,8 +4,7 @@ type JsonRecord = Record<string, unknown>;
 type ComposerContentType = "feed" | "reels" | "story";
 
 type ComposerLayerMap = {
-  headline: string;
-  tag?: string;
+  headline?: string;
   news_image?: string;
   visual_title?: string;
   footer_slot_1: string;
@@ -16,7 +15,6 @@ type ComposerLayerMap = {
 const CONTRACT_VERSION = "territorial_composer_v1";
 const LAYER_KEYS = new Set([
   "headline",
-  "tag",
   "news_image",
   "visual_title",
   "footer_slot_1",
@@ -124,11 +122,7 @@ function validateLayerMap(
   }
 
   const map: ComposerLayerMap = {
-    headline: requireString(
-      value.headline,
-      "COMPOSER_LAYER_MAP_INVALID",
-      "headline",
-    ),
+    headline: stringValue(value.headline) || undefined,
     footer_slot_1: requireString(
       value.footer_slot_1,
       "COMPOSER_LAYER_MAP_INVALID",
@@ -144,25 +138,34 @@ function validateLayerMap(
       "COMPOSER_LAYER_MAP_INVALID",
       "footer_slot_3",
     ),
-    tag: stringValue(value.tag) || undefined,
     news_image: stringValue(value.news_image) || undefined,
     visual_title: stringValue(value.visual_title) || undefined,
   };
 
-  if (contentType === "story" && map.visual_title) {
-    throw new RenderContractError("STORY_VISUAL_TITLE_LAYER_FORBIDDEN");
-  }
-  if (contentType !== "story" && !map.visual_title) {
+  if (contentType === "story") {
+    if (map.visual_title) {
+      throw new RenderContractError("STORY_VISUAL_TITLE_LAYER_FORBIDDEN");
+    }
+    if (map.headline) {
+      throw new RenderContractError("STORY_HEADLINE_LAYER_FORBIDDEN");
+    }
+    if (map.news_image) {
+      throw new RenderContractError("STORY_NEWS_IMAGE_LAYER_FORBIDDEN");
+    }
+  } else if (!map.headline || !map.visual_title) {
     throw new RenderContractError(
       "COMPOSER_LAYER_MAP_INVALID",
-      "visual_title",
+      !map.headline ? "headline" : "visual_title",
     );
   }
-  if (contentType !== "feed" && (map.news_image || map.tag)) {
+  if (contentType === "feed" && !map.news_image) {
     throw new RenderContractError(
       "COMPOSER_LAYER_MAP_INVALID",
-      "format_layer",
+      "news_image",
     );
+  }
+  if (contentType === "reels" && map.news_image) {
+    throw new RenderContractError("REELS_NEWS_IMAGE_FORBIDDEN");
   }
 
   const physicalNames = Object.values(map).filter(Boolean) as string[];
@@ -253,12 +256,13 @@ export function prepareTerritorialComposerRender(
       "render_content",
     );
   }
-  addText(
-    layers,
-    layerMap.headline,
-    requireString(renderContent.headline, "HEADLINE_MISSING", "headline"),
-  );
-  addText(layers, layerMap.tag, renderContent.context_tag);
+  if (contentType !== "story") {
+    addText(
+      layers,
+      layerMap.headline,
+      requireString(renderContent.headline, "HEADLINE_MISSING", "headline"),
+    );
+  }
 
   if (layerMap.news_image) {
     const newsImageUrl = requireHttpUrl(

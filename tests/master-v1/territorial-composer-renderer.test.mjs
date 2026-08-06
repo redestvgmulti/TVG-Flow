@@ -20,12 +20,14 @@ const asset = (suffix, path = `assets/${suffix}.png`) => ({
 
 function item(contentType, mode, slotCount = 3) {
   const layerMap = {
-    headline: 'titulo-materia',
     footer_slot_1: 'regiao-1',
     footer_slot_2: 'patrocinador-1',
     footer_slot_3: 'patrocinador-2',
   }
-  if (contentType !== 'story') layerMap.visual_title = 'titulo-png'
+  if (contentType !== 'story') {
+    layerMap.headline = 'titulo-materia'
+    layerMap.visual_title = 'titulo-png'
+  }
   if (contentType === 'feed') layerMap.news_image = 'news-image'
 
   return {
@@ -74,7 +76,11 @@ for (const contentType of ['feed', 'reels', 'story']) {
       assert.equal(first.templateId, `composer_${contentType}_local`)
       assert.deepEqual(first, retry)
       assert.deepEqual(candidate, before)
-      assert.equal(first.layers['titulo-materia'].text, `${contentType} ${mode}`)
+      if (contentType === 'story') {
+        assert.equal(first.layers['titulo-materia'], undefined)
+      } else {
+        assert.equal(first.layers['titulo-materia'].text, `${contentType} ${mode}`)
+      }
       candidate.headline = 'mutated after snapshot'
       candidate.context_tag = 'MUTATED'
       candidate.imagem_url = 'https://local.test/mutated.png'

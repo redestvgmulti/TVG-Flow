@@ -341,7 +341,6 @@ VALUES
         'story',
         'composer_story_local',
         '{
-            "headline":"titulo-materia",
             "footer_slot_1":"regiao-1",
             "footer_slot_2":"patrocinador-1",
             "footer_slot_3":"patrocinador-2"
