@@ -2,7 +2,7 @@ BEGIN;
 SELECT plan(15);
 
 -- Mocks
-CREATE OR REPLACE FUNCTION ap.require_territorial_composer_access(cliente_id uuid) RETURNS uuid LANGUAGE sql AS $$ SELECT '9da6a905-fe94-4c88-912a-e1bcd7a6f6f7'::uuid; $$;
+CREATE OR REPLACE FUNCTION ap.require_territorial_composer_access(p_cliente_id uuid) RETURNS uuid LANGUAGE sql AS $$ SELECT '9da6a905-fe94-4c88-912a-e1bcd7a6f6f7'::uuid; $$;
 
 -- 1. Individual + Feed + imagem + selo + slots manuais;
 -- 2. Individual com region_id null;
