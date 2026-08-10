@@ -145,18 +145,22 @@
         bottom: 0 !important;
         left: 0 !important;
 
-        width: 85vw !important;
-        max-width: 85vw !important;
+        width: min(320px, 88vw) !important;
+        max-width: 88vw !important;
 
-        padding-top: env(safe-area-inset-top) !important;
-        padding-bottom: env(safe-area-inset-bottom) !important;
+        padding-top: max(24px, env(safe-area-inset-top)) !important;
+        padding-bottom: max(16px, env(safe-area-inset-bottom)) !important;
         padding-left: max(16px, env(safe-area-inset-left)) !important;
         padding-right: max(16px, env(safe-area-inset-right)) !important;
 
-        background: var(--color-bg-surface, #fff) !important;
+        /* Preserve the desktop navigation theme on mobile. The previous white
+           override hid the light sidebar text and made the menu look empty. */
+        background: var(--color-bg-sidebar, #0F1218) !important;
+        color: var(--color-text-inverse, #fff) !important;
+        border-right: 1px solid var(--color-border-sidebar) !important;
         z-index: 1200 !important;
 
-        overflow-y: auto !important;
+        overflow-y: hidden !important;
         overflow-x: hidden !important;
 
         /* Animação suave */
@@ -176,8 +180,7 @@
         left: 0 !important;
         right: 0 !important;
 
-        /* PARA EXATAMENTE ANTES DO BOTTOM NAV */
-        bottom: calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom) + 8px) !important;
+        bottom: 0 !important;
 
         background: rgba(0, 0, 0, 0.4) !important;
         backdrop-filter: blur(4px) !important;
