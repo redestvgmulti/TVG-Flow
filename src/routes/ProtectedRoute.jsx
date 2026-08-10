@@ -1,6 +1,7 @@
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import AccountBlockedScreen from '../components/AccountBlockedScreen'
+import LoadingScreen from '../components/LoadingScreen'
 
 function ProtectedRoute({ children }) {
     const { user, loading, accountStatus, connectionStatus, authStatus } = useAuth()
@@ -11,7 +12,7 @@ function ProtectedRoute({ children }) {
     // eliminating intermediate "ghost" loading screens in iOS PWA.
     // The App.jsx routing will handle showing Login screen directly.
     if (loading || authStatus === 'booting') {
-        return null
+        return <LoadingScreen message="Verificando sua sessão..." />
     }
 
 

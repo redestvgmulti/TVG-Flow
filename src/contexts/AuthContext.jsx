@@ -4,6 +4,7 @@ import { normalizeRole } from '../utils/roles'
 import { authMonitor, AUTH_EVENTS } from '../utils/authMonitor'
 
 const AuthContext = createContext({})
+const SESSION_BOOT_TIMEOUT_MS = 10000
 
 export { AuthContext } // Export the context
 
@@ -43,16 +44,37 @@ export function AuthProvider({ children }) {
     useEffect(() => {
         let mounted = true
 
+        const getSessionWithTimeout = async () => {
+            let timeoutId
+            try {
+                return await Promise.race([
+                    supabase.auth.getSession(),
+                    new Promise((_, reject) => {
+                        timeoutId = setTimeout(() => reject(new Error('Session bootstrap timed out')), SESSION_BOOT_TIMEOUT_MS)
+                    })
+                ])
+            } finally {
+                clearTimeout(timeoutId)
+            }
+        }
+
         const initSession = async () => {
             try {
                 // PHASE 1: SESSION BOOTSTRAP (BLOCKING)
                 // We only wait for Supabase to tell us if a session exists.
-                const { data: { session }, error } = await supabase.auth.getSession()
+                const { data: { session }, error } = await getSessionWithTimeout()
 
                 if (!mounted) return
 
                 if (error) {
                     console.error('[Auth] Session recovery error:', error)
+                    authMonitor.logEvent(AUTH_EVENTS.SESSION_FAILED, { reason: 'bootstrap_error' })
+                    setSession(null)
+                    setUser(null)
+                    userRef.current = null
+                    setAuthReady(false)
+                    setAuthStatus('unauthenticated')
+                    return
                     // Session error ignored - SDK handles recovery
                     // ⚠️ NÃO limpar estado - pode ser erro transitório
                 }
@@ -69,7 +91,7 @@ export function AuthProvider({ children }) {
                     // Don't clear user during boot - wait for SIGNED_OUT event
                     if (error) {
                         authMonitor.logEvent(AUTH_EVENTS.SESSION_FAILED, { reason: 'transient_error' })
-                        setAuthStatus('booting')
+                        setAuthStatus('unauthenticated')
                     } else {
                         authMonitor.logEvent(AUTH_EVENTS.BOOT_TO_UNAUTH, { reason: 'no_session_in_storage' })
                         setAuthStatus('unauthenticated')
@@ -84,7 +106,12 @@ export function AuthProvider({ children }) {
             } catch (err) {
                 console.error('[Auth] Exception during session init:', err)
                 // 🔐 Exception during boot ≠ Logout
-                setAuthStatus('booting')
+                authMonitor.logEvent(AUTH_EVENTS.SESSION_FAILED, { reason: 'bootstrap_exception' })
+                setSession(null)
+                setUser(null)
+                userRef.current = null
+                setAuthReady(false)
+                setAuthStatus('unauthenticated')
             } finally {
                 // END OF PHASE 1
                 // We MUST unlock the app now. Profile fetching happens next but doesn't block UI.
