@@ -44,6 +44,30 @@ serve(async (req: Request) => {
             throw new Error('Unauthorized: Only admins can perform this action')
         }
 
+        const { data: requesterLinks, error: requesterLinksError } = await supabaseAdmin
+            .from('empresa_profissionais')
+            .select('empresa_id')
+            .eq('profissional_id', user.id)
+            .eq('ativo', true)
+
+        if (requesterLinksError) throw requesterLinksError
+
+        const requesterCompanyIds = [...new Set((requesterLinks || []).map(link => link.empresa_id))]
+        const { data: tenantCompanies, error: tenantCompaniesError } = requesterCompanyIds.length
+            ? await supabaseAdmin
+                .from('empresas')
+                .select('id')
+                .in('id', requesterCompanyIds)
+                .eq('empresa_tipo', 'tenant')
+            : { data: [], error: null }
+
+        if (tenantCompaniesError) throw tenantCompaniesError
+        if ((tenantCompanies || []).length !== 1) {
+            throw new Error('Não foi possível determinar o tenant ativo do administrador.')
+        }
+
+        const tenantId = tenantCompanies[0].id
+
         // 3. Parse Body
         const { email, nome, area_id, role, ativo } = await req.json()
 
@@ -109,6 +133,18 @@ serve(async (req: Request) => {
                 if (dbError) throw new Error(`Database Error: ${dbError.message}`)
             }
 
+            const { error: linkError } = await supabaseAdmin
+                .from('empresa_profissionais')
+                .insert({
+                    empresa_id: tenantId,
+                    profissional_id: userId,
+                    funcao: role === 'admin' ? 'Admin' : 'membro',
+                    role: role || 'profissional',
+                    ativo: true
+                })
+
+            if (linkError) throw new Error(`Company link error: ${linkError.message}`)
+
         } catch (postCreateError) {
             const err = postCreateError as Error
             console.error('Rolling back user creation due to error:', err)
@@ -121,6 +157,7 @@ serve(async (req: Request) => {
             JSON.stringify({
                 success: true,
                 id: userId,
+                tenantId,
                 inviteLink: actionLink, // Return the link!
                 message: 'Profissional criado com sucesso! Copie o link de convite.'
             }),

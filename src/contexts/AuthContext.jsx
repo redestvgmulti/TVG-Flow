@@ -85,6 +85,7 @@ export function AuthProvider({ children }) {
                     setUser(session.user)
                     userRef.current = session.user
                     setAuthReady(true)
+                    fetchProfessionalData(session.user.id, session.user)
                     setAuthStatus('authenticated') // 🔐 AUTHENTICATED
                 } else {
                     // 🔐 CRITICAL FIX: Boot state ≠ Unauthenticated
@@ -146,8 +147,10 @@ export function AuthProvider({ children }) {
             }
 
             // 🛡️ CRITICAL: Set authReady=true ONLY after JWT is injected
-            if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-                authMonitor.logEvent(event === 'SIGNED_IN' ? AUTH_EVENTS.SIGNED_IN : AUTH_EVENTS.TOKEN_REFRESHED)
+            if (['SIGNED_IN', 'TOKEN_REFRESHED', 'INITIAL_SESSION', 'PASSWORD_RECOVERY'].includes(event)) {
+                if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+                    authMonitor.logEvent(event === 'SIGNED_IN' ? AUTH_EVENTS.SIGNED_IN : AUTH_EVENTS.TOKEN_REFRESHED)
+                }
                 setAuthReady(true)
                 setAuthStatus('authenticated') // 🔐 AUTHENTICATED
                 // ONLY fetch professional data if we have a valid session
@@ -329,12 +332,13 @@ export function AuthProvider({ children }) {
 
         if (error) throw error
 
-        // 1. SECURE BACKEND CHECK - REMOVED (RBAC Canonical Fix)
-        // Super Admin status is now exclusively determined by professionals.role
+        const { data: identity, error: identityError } = await supabase.rpc('get_current_identity')
+        if (identityError) throw identityError
+        if (!identity?.has_profile || !identity?.ativo) {
+            throw new Error('Usuário sem perfil ativo no sistema')
+        }
 
-        let safeRole = null
-
-        return { ...data, role: safeRole }
+        return { ...data, role: identity.role }
     }
 
     async function signOut() {
