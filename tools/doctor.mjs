@@ -78,7 +78,10 @@ function checkWsodRisks() {
   }
 }
 
-function runCommand(label, command, commandArgs) {
+function runNpmCommand(label, npmArgs) {
+  const isWindows = process.platform === 'win32'
+  const command = isWindows ? (process.env.ComSpec || 'cmd.exe') : 'npm'
+  const commandArgs = isWindows ? ['/d', '/s', '/c', 'npm.cmd', ...npmArgs] : npmArgs
   const result = spawnSync(command, commandArgs, { cwd: root, encoding: 'utf8' })
   if (result.status === 0) {
     add('pass', `${label}_PASS`, `${label} executado com sucesso.`)
@@ -121,10 +124,10 @@ checkWsodRisks()
 if (args.has('--dev')) await checkDevServer()
 
 if (args.has('--build') || args.has('--full')) {
-  runCommand('BUILD', process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'build'])
+  runNpmCommand('BUILD', ['run', 'build'])
 }
 if (args.has('--lint') || args.has('--full')) {
-  runCommand('LINT', process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'lint'])
+  runNpmCommand('LINT', ['run', 'lint'])
 }
 
 for (const kind of ['pass', 'warn', 'fail']) {

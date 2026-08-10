@@ -28,27 +28,6 @@ function FieldError({ message }) {
     return <span className="ap-field-error">{message}</span>;
 }
 
-const FORMAT_ICONS = {
-    feed: ImageIcon,
-    reels: Video,
-    story: BookOpen,
-};
-
-function FieldLabel({ children, required, optional }) {
-    return (
-        <label className="ap-af-label">
-            <span>{children}</span>
-            {required && <span className="ap-req" aria-hidden="true">*</span>}
-            {optional && <span className="ap-opt">(opcional)</span>}
-        </label>
-    );
-}
-
-function FieldError({ message }) {
-    if (!message) return null;
-    return <span className="ap-field-error">{message}</span>;
-}
-
 export default function ArticleForm({
     mode = 'admin',
     formData,
