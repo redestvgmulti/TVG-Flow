@@ -2,7 +2,7 @@ import {
     LayoutGrid,
     CheckSquare,
     Calendar,
-    FolderOpen,
+    Bot,
     PlusSquare,
     User,
     BarChart,
@@ -58,9 +58,9 @@ export const NAV_ITEMS = [
     },
     {
         key: 'content',
-        label: 'Conteúdo',
+        label: 'Assistentes',
         path: '/staff/content',
-        icon: FolderOpen,
+        icon: Bot,
         roles: ['staff', 'profissional'],
         showOnMobileBottom: true
     },
@@ -100,9 +100,9 @@ export const NAV_ITEMS = [
     },
     {
         key: 'admin-content',
-        label: 'Conteúdo',
+        label: 'Assistentes',
         path: '/admin/content',
-        icon: FolderOpen,
+        icon: Bot,
         roles: ['admin', 'super_admin'],
         showOnMobileBottom: false // Hidden per User Request (Jan 2026)
     },

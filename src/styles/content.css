@@ -42,6 +42,39 @@
     transform: scale(0.99);
 }
 
+.assistants-header { display: flex; justify-content: space-between; align-items: center; gap: var(--space-4); }
+.assistants-subtitle { color: var(--color-text-secondary); }
+.assistants-subtitle { margin: 4px 0 0; font-size: var(--text-sm); }
+.assistant-card { border-color: var(--color-primary, #2563EB); padding: 0; position: relative; }
+.assistant-card-body { padding: 26px 20px 20px; }
+.assistant-profile-heading { align-items: center; display: flex; flex-direction: column; gap: 10px; text-align: center; }
+.assistant-profile-avatar { background: var(--color-bg-surface, #fff); border: 4px solid var(--color-primary-light, #EFF6FF); border-radius: 50%; box-shadow: 0 4px 14px rgba(15, 23, 42, 0.16); height: 94px; object-fit: cover; width: 94px; }
+.assistant-profile-label { color: var(--color-primary, #2563EB); display: block; font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.06em; margin-bottom: 4px; text-transform: uppercase; }
+.assistant-profile-heading .company-name { max-width: 100%; }
+
+/* Modal de Assistentes: mesma estrutura premium do AutoPublisher. */
+.assistant-modal-form { display: flex; flex-direction: column; gap: 20px; }
+.assistant-modal-field { display: flex; flex-direction: column; gap: 8px; }
+.assistant-modal-field > label { color: var(--color-text-primary); font-size: 0.875rem; font-weight: 600; }
+.assistant-modal-field > label span { color: var(--color-danger, #DC2626); }
+.assistant-modal-field input:not([type="file"]) { background: var(--color-bg-surface, #fff); border: 1px solid var(--color-border, #E5E7EB); border-radius: 12px; box-sizing: border-box; color: var(--color-text-primary); font: inherit; font-size: 0.9375rem; outline: none; padding: 13px 14px; transition: border-color var(--transition-fast, 150ms ease), box-shadow var(--transition-fast, 150ms ease); width: 100%; }
+.assistant-modal-field input:not([type="file"]):focus { border-color: var(--color-primary, #2563EB); box-shadow: 0 0 0 3px var(--color-primary-light, #EFF6FF); }
+.assistant-avatar-picker { align-items: center; background: var(--color-bg-subtle, #F0F2F5); border: 2px solid var(--color-border, #E5E7EB); border-radius: 50%; cursor: pointer; display: flex; height: 132px; justify-content: center; margin: 2px auto 0; overflow: visible; position: relative; transition: border-color var(--transition-fast, 150ms ease), box-shadow var(--transition-fast, 150ms ease); width: 132px; }
+.assistant-avatar-picker:hover, .assistant-avatar-picker--dragging { border-color: var(--color-primary, #2563EB); box-shadow: 0 0 0 4px var(--color-primary-light, #EFF6FF); }
+.assistant-avatar-picker input[type="file"] { cursor: pointer; height: 100%; inset: 0; opacity: 0; position: absolute; width: 100%; z-index: 2; }
+.assistant-avatar-picker img, .assistant-avatar-placeholder { border-radius: 50%; height: 100%; object-fit: cover; overflow: hidden; width: 100%; }
+.assistant-avatar-placeholder { align-items: center; color: var(--color-text-tertiary); display: flex; justify-content: center; }
+.assistant-avatar-camera { align-items: center; background: var(--color-primary, #2563EB); border: 3px solid var(--color-bg-surface, #fff); border-radius: 50%; bottom: -4px; color: #fff; display: flex; height: 38px; justify-content: center; pointer-events: none; position: absolute; right: -4px; width: 38px; z-index: 3; }
+.assistant-avatar-help { color: var(--color-text-tertiary); font-size: 0.75rem; margin-top: 4px; text-align: center; }
+.assistant-card-menu { position: absolute; right: 12px; top: 12px; z-index: 3; }
+.assistant-menu-trigger { align-items: center; background: var(--color-bg-surface, #fff); border: 1px solid var(--color-border, #E5E7EB); border-radius: 50%; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12); color: var(--color-text-secondary); cursor: pointer; display: inline-flex; height: 36px; justify-content: center; padding: 0; transition: background 0.15s ease, color 0.15s ease; width: 36px; }
+.assistant-menu-trigger:hover, .assistant-menu-trigger[aria-expanded="true"] { background: var(--color-primary-light, #EFF6FF); color: var(--color-primary, #2563EB); }
+.assistant-menu-popover { background: var(--color-bg-surface, #fff); border: 1px solid var(--color-border, #E5E7EB); border-radius: 12px; box-shadow: 0 12px 24px rgba(15, 23, 42, 0.16); display: flex; flex-direction: column; margin-top: 8px; min-width: 142px; overflow: hidden; padding: 4px; position: absolute; right: 0; }
+.assistant-menu-popover button { align-items: center; background: transparent; border: 0; border-radius: 8px; color: var(--color-text-primary); cursor: pointer; display: flex; font: inherit; font-size: var(--text-sm); gap: 8px; padding: 9px 10px; text-align: left; width: 100%; }
+.assistant-menu-popover button:hover { background: var(--color-bg-subtle, #F3F4F6); }
+.assistant-menu-popover .assistant-menu-remove { color: var(--color-danger, #DC2626); }
+.confirm-modal-content { text-align: center; }
+
 /* Pendente de configuração — acento de alerta (classe era usada e nunca definida) */
 .content-card-pending {
     border-color: var(--color-warning, #D97706);
@@ -230,6 +263,8 @@
 
 /* Responsive Adjustments */
 @media (max-width: 768px) {
+    .assistants-header { align-items: flex-start; flex-direction: column; }
+
     .company-avatar {
         width: 40px;
         height: 40px;
