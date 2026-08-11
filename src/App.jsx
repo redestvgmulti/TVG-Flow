@@ -61,7 +61,7 @@ function App() {
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return
     
-    const bc = new BroadcastChannel('flowos-pwa-sync')
+    const bc = new BroadcastChannel('tvg-hub-pwa-sync')
     let refreshing = false
 
     // On the very first load there is no SW controlling the page. Because the

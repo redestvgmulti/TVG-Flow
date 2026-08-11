@@ -1,5 +1,5 @@
 {
-    "name": "TVG Flow - Gestão Operacional",
+    "name": "TVG Hub - Gestão Operacional",
     "short_name": "TVG",
     "description": "Centro de comando operacional para agência TVG",
     "start_url": "/",
@@ -61,13 +61,25 @@
             "src": "/icons/icon-192x192.png",
             "sizes": "192x192",
             "type": "image/png",
-            "purpose": "any maskable"
+            "purpose": "any"
         },
         {
             "src": "/icons/icon-512x512.png",
             "sizes": "512x512",
             "type": "image/png",
             "purpose": "any maskable"
+        },
+        {
+            "src": "/icons/maskable-icon-192x192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "maskable"
+        },
+        {
+            "src": "/icons/maskable-icon-512x512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
         }
     ],
     "shortcuts": [

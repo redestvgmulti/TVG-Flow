@@ -7,7 +7,9 @@
 .admin-layout {
   display: grid;
   grid-template-columns: var(--sidebar-width) 1fr;
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
   background-color: var(--color-bg-app);
 }
 
@@ -43,14 +45,27 @@
 
 /* Sidebar Brand */
 .sidebar .sidebar-header {
-  margin-bottom: 40px;
-  padding: 0 12px;
+  margin-bottom: 38px;
+  padding: 0 10px;
+  border-bottom: none;
 }
 
 .brand-logo {
   display: flex;
   align-items: center;
   gap: 12px;
+  background: #02040c;
+  border-radius: 3px;
+}
+
+.brand-logo-image {
+  display: block;
+  width: 148px;
+  height: 44px;
+  object-fit: cover;
+  object-position: center 52%;
+  border-radius: 3px;
+  mix-blend-mode: screen;
 }
 
 .brand-dot {
@@ -62,8 +77,10 @@
 }
 
 .sidebar .brand-dot {
-  background-color: var(--color-sidebar-accent);
-  box-shadow: 0 0 12px rgba(110, 155, 245, 0.6);
+  width: 9px;
+  height: 9px;
+  background-color: #2563EB;
+  box-shadow: 0 0 12px rgba(37, 99, 235, 0.65);
 }
 
 .brand-logo h2 {
@@ -76,7 +93,25 @@
 }
 
 .sidebar .brand-logo h2 {
+  font-size: 17px;
+  font-weight: 800;
   color: var(--color-text-inverse);
+}
+
+.sidebar .brand-logo {
+  width: 148px;
+  height: 44px;
+  overflow: hidden;
+  background: transparent;
+  border-radius: 0;
+}
+
+.sidebar .brand-logo-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 52%;
+  mix-blend-mode: screen;
 }
 
 /* Navigation */
@@ -340,8 +375,15 @@
 .popup-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.popup-header > div:last-child {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .popup-avatar {
@@ -357,14 +399,21 @@
 }
 
 .popup-name {
+  margin: 0;
   font-weight: 600;
   color: var(--color-text-inverse);
   font-size: 14px;
+  line-height: 1.25;
 }
 
 .popup-email {
+  margin: 0;
   font-size: 12px;
   color: var(--color-text-inverse-dim);
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .popup-divider {
@@ -453,6 +502,32 @@
   border: 1px solid var(--color-border);
   border-radius: 999px;
   box-shadow: var(--shadow-1);
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.system-pill:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-2);
+}
+
+.system-pill:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.system-pill:disabled {
+  cursor: default;
+}
+
+.system-pill--critical {
+  border-color: rgba(220, 38, 38, 0.3);
+}
+
+.system-pill--attention {
+  border-color: rgba(217, 119, 6, 0.3);
 }
 
 .status-dot {
@@ -461,6 +536,22 @@
   background-color: var(--color-success);
   border-radius: 50%;
   box-shadow: 0 0 0 2px var(--color-success-bg);
+}
+
+.system-pill--critical .status-dot {
+  background-color: var(--color-danger);
+  box-shadow: 0 0 0 2px var(--color-danger-bg);
+}
+
+.system-pill--attention .status-dot {
+  background-color: var(--color-warning);
+  box-shadow: 0 0 0 2px var(--color-warning-bg);
+}
+
+.system-pill--unavailable .status-dot,
+.system-pill--loading .status-dot {
+  background-color: var(--color-text-tertiary);
+  box-shadow: none;
 }
 
 .status-text {
@@ -571,8 +662,10 @@
     top: 0;
     left: 0;
     bottom: 0;
-    width: 280px;
-    z-index: 1000;
+    width: min(320px, 85vw);
+    max-width: 85vw;
+    z-index: 1200;
+    overflow-y: auto;
     transform: translateX(-100%);
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
@@ -778,7 +871,7 @@
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border-top: 1px solid rgba(255, 255, 255, 0.5);
-    z-index: 100;
+    z-index: 1100;
     padding-bottom: env(safe-area-inset-bottom);
     box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.08);
     /* Stronger shadow for floating feel */
@@ -836,6 +929,6 @@
 
   /* Ensure content is not hidden behind the nav */
   .admin-content {
-    padding-bottom: 90px;
+    padding-bottom: calc(80px + env(safe-area-inset-bottom) + 16px);
   }
 }

@@ -6,7 +6,7 @@ import LoadingScreen from './LoadingScreen'
 import '../styles/update-banner.css'
 
 /**
- * DEFINITIVE UPDATE BANNER - FlowOS
+ * DEFINITIVE UPDATE BANNER - TVG Hub
  * 
  * Depends exclusively on vite-plugin-pwa (useUpdateCheck hook).
  * No more version.json polling or localStorage hacks.
@@ -66,7 +66,7 @@ export function UpdateBanner() {
                     </div>
                     <div className="update-banner-text">
                         <div className="update-banner-headline">
-                            O FlowOS evoluiu.
+                            O TVG Hub evoluiu.
                         </div>
                         <div className="update-banner-subtitle">
                             Atualize para receber melhorias de desempenho e estabilidade.

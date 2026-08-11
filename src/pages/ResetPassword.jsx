@@ -85,7 +85,7 @@ export default function ResetPassword() {
                 <div style={{ textAlign: 'center', marginBottom: '24px' }}>
                     <h1 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '8px', color: 'var(--color-text-primary)' }}>Definir Senha</h1>
                     <p style={{ color: 'var(--color-text-secondary)', fontSize: '14px' }}>
-                        Crie uma senha segura para acessar o TVG Flow.
+                        Crie uma senha segura para acessar o TVG Hub.
                     </p>
                 </div>
 
@@ -173,7 +173,7 @@ export default function ResetPassword() {
                 </form>
 
                 <div style={{ marginTop: '24px', textAlign: 'center', borderTop: '1px solid var(--color-border)', paddingTop: '16px' }}>
-                    <p style={{ fontSize: '12px', color: 'var(--color-text-tertiary)' }}>TVG Flow • Sistema Administrativo Seguro</p>
+                    <p style={{ fontSize: '12px', color: 'var(--color-text-tertiary)' }}>TVG Hub • Sistema Administrativo Seguro</p>
                 </div>
             </div>
         </div>

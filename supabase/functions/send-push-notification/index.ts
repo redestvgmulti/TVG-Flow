@@ -126,7 +126,7 @@ serve(async (req: Request) => {
                 const payload = JSON.stringify({
                     title: notification.title,
                     message: notification.message,
-                    icon: '/icon-192x192.png',
+                    icon: '/icons/icon-192x192.png',
                     badge: '/badge-72x72.png',
                     timestamp: Date.now(),
                     url: '/staff/tasks' // Action URL

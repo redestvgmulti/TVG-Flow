@@ -3,7 +3,7 @@ import { supabase } from '../../services/supabase'
 import * as Icons from 'lucide-react'
 
 // ──────────────────────────────────────────────────────────
-// AutoPublisherTemplates — FlowOS V2 Design System
+// AutoPublisherTemplates — TVG Hub V2 Design System
 // ──────────────────────────────────────────────────────────
 
 export default function AutoPublisherTemplates() {

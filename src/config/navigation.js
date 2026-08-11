@@ -1,174 +1,27 @@
-import {
-    LayoutGrid,
-    CheckSquare,
-    Calendar,
-    Bot,
-    PlusSquare,
-    User,
-    BarChart,
-    Users,
-    Building,
-    Settings,
-    Rss
-} from 'lucide-react'
+import { LayoutGrid, CheckSquare, Calendar, Bot, PlusSquare, User, BarChart, Users, Building, Rss } from 'lucide-react'
 
-// Single Source of Truth for Navigation
+// Single source of truth for every role-aware navigation surface.
 export const NAV_ITEMS = [
-    // --- STAFF ROUTES ---
-    {
-        key: 'dashboard',
-        label: 'Dashboard',
-        path: '/staff/dashboard',
-        icon: LayoutGrid,
-        roles: ['staff', 'profissional'],
-        showOnMobileBottom: true, // Mental entry point for app
-    },
-    {
-        key: 'tasks',
-        label: 'Tarefas',
-        path: '/staff/tasks',
-        icon: CheckSquare,
-        roles: ['staff', 'profissional'],
-        showOnMobileBottom: true
-    },
-    {
-        key: 'calendar',
-        label: 'Agenda',
-        path: '/staff/calendar',
-        icon: Calendar,
-        roles: ['staff', 'profissional'],
-        showOnMobileBottom: true
-    },
-    {
-        key: 'staff-meetings',
-        label: 'Reuniões',
-        path: '/staff/meetings',
-        icon: Calendar,
-        roles: ['staff'],
-        showOnMobileBottom: false // Accessible via Agenda tab/filter
-    },
-    {
-        key: 'request',
-        label: 'Solicitar',
-        path: '/staff/requests/new',
-        icon: PlusSquare,
-        roles: ['staff', 'profissional'],
-        isCTA: true,
-        showOnMobileBottom: false // Converted to FAB on mobile
-    },
-    {
-        key: 'content',
-        label: 'Assistentes',
-        path: '/staff/content',
-        icon: Bot,
-        roles: ['staff', 'profissional'],
-        showOnMobileBottom: true
-    },
-    {
-        key: 'staff-autopublisher',
-        label: 'Criar Matérias',
-        path: '?modal=employee-mode',
-        icon: Rss,
-        roles: ['staff', 'profissional', 'employee'],
-        showOnMobileBottom: false
-    },
-    {
-        key: 'profile',
-        label: 'Perfil',
-        path: '/staff/profile',
-        icon: User,
-        roles: ['staff', 'profissional'],
-        showOnMobileBottom: true // Typically handled separately in code but defined here for completeness
-    },
+    { key: 'dashboard', label: 'Dashboard', path: '/staff/dashboard', icon: LayoutGrid, roles: ['staff', 'profissional'], section: 'staff', showOnMobileBottom: true },
+    { key: 'tasks', label: 'Tarefas', path: '/staff/tasks', icon: CheckSquare, roles: ['staff', 'profissional'], section: 'staff', showOnMobileBottom: true },
+    { key: 'calendar', label: 'Agenda', path: '/staff/calendar', icon: Calendar, roles: ['staff', 'profissional'], section: 'staff', showOnMobileBottom: true },
+    { key: 'staff-meetings', label: 'Reuniões', path: '/staff/meetings', icon: Calendar, roles: ['staff'], section: 'staff', showOnMobileBottom: false },
+    { key: 'request', label: 'Solicitar', path: '/staff/requests/new', icon: PlusSquare, roles: ['staff', 'profissional'], section: 'staff', isCTA: true, showOnMobileBottom: false },
+    { key: 'content', label: 'Assistentes', path: '/staff/content', icon: Bot, roles: ['staff', 'profissional'], section: 'staff', showOnMobileBottom: true },
+    { key: 'staff-autopublisher', label: 'Criar Matérias', path: '?modal=employee-mode', icon: Rss, roles: ['staff', 'profissional', 'employee'], section: 'tools', showOnMobileBottom: false },
+    { key: 'profile', label: 'Perfil', path: '/staff/profile', icon: User, roles: ['staff', 'profissional'], section: 'staff', showOnMobileBottom: true },
 
-    // --- ADMIN ROUTES ---
-    {
-        key: 'admin-dashboard',
-        label: 'Dashboard',
-        path: '/admin',
-        icon: LayoutGrid,
-        roles: ['admin', 'super_admin'],
-        showOnMobileBottom: true
-    },
-    {
-        key: 'admin-tasks',
-        label: 'Tarefas',
-        path: '/admin/tasks',
-        icon: CheckSquare,
-        roles: ['admin', 'super_admin'],
-        showOnMobileBottom: true
-    },
-    {
-        key: 'admin-content',
-        label: 'Assistentes',
-        path: '/admin/content',
-        icon: Bot,
-        roles: ['admin', 'super_admin'],
-        showOnMobileBottom: false // Hidden per User Request (Jan 2026)
-    },
-    {
-        key: 'admin-calendar',
-        label: 'Agenda',
-        path: '/admin/calendar',
-        icon: Calendar,
-        roles: ['admin', 'super_admin'],
-        showOnMobileBottom: false
-    },
-    {
-        key: 'admin-meetings',
-        label: 'Reuniões',
-        path: '/admin/meetings',
-        icon: Users,
-        roles: ['admin', 'super_admin'],
-        showOnMobileBottom: true
-    },
-    {
-        key: 'admin-team',
-        label: 'Equipe',
-        path: '/admin/professionals',
-        icon: Users,
-        roles: ['admin', 'super_admin'],
-        showOnMobileBottom: false
-    },
-    {
-        key: 'admin-reports',
-        label: 'Relatórios',
-        path: '/admin/reports',
-        icon: BarChart,
-        roles: ['admin', 'super_admin'],
-        showOnMobileBottom: true
-    },
-    {
-        key: 'admin-autopublisher',
-        label: 'AutoPublisher',
-        path: '/admin/autopublisher',
-        icon: Rss,
-        roles: ['admin', 'super_admin'],
-        showOnMobileBottom: false
-    }
+    { key: 'admin-dashboard', label: 'Dashboard', path: '/admin', icon: LayoutGrid, roles: ['admin', 'super_admin'], section: 'main', showOnMobileBottom: true },
+    { key: 'admin-tasks', label: 'Tarefas', path: '/admin/tasks', icon: CheckSquare, roles: ['admin', 'super_admin'], section: 'main', showOnMobileBottom: true },
+    { key: 'admin-content', label: 'Assistentes', path: '/admin/content', icon: Bot, roles: ['admin', 'super_admin'], section: 'main', showOnMobileBottom: false },
+    { key: 'admin-calendar', label: 'Agenda', path: '/admin/calendar', icon: Calendar, roles: ['admin', 'super_admin'], section: 'main', showOnMobileBottom: false },
+    { key: 'admin-meetings', label: 'Reuniões', path: '/admin/meetings', icon: Users, roles: ['admin', 'super_admin'], section: 'main', showOnMobileBottom: true },
+    { key: 'admin-autopublisher', label: 'AutoPublisher', path: '/admin/autopublisher', icon: Rss, roles: ['admin', 'super_admin'], section: 'main', showOnMobileBottom: false },
+    { key: 'admin-companies', label: 'Empresas', path: '/admin/companies', icon: Building, roles: ['admin', 'super_admin'], section: 'management', showOnMobileBottom: false },
+    { key: 'admin-team', label: 'Equipe', path: '/admin/professionals', icon: Users, roles: ['admin', 'super_admin'], section: 'management', showOnMobileBottom: false },
+    { key: 'admin-reports', label: 'Relatórios', path: '/admin/reports', icon: BarChart, roles: ['admin', 'super_admin'], section: 'management', showOnMobileBottom: true },
 ]
 
-// Secondary/Management links (Desktop Sidebar specific often)
-export const MANAGEMENT_ITEMS = [
-    {
-        key: 'companies',
-        label: 'Empresas',
-        path: '/admin/companies',
-        icon: Building,
-        roles: ['admin']
-    },
-    {
-        key: 'professionals',
-        label: 'Funcionários',
-        path: '/admin/professionals',
-        icon: Users,
-        roles: ['admin']
-    },
-    {
-        key: 'reports',
-        label: 'Relatórios',
-        path: '/admin/reports',
-        icon: BarChart,
-        roles: ['admin']
-    }
-]
+export function getNavigationItemsForRole(role) {
+    return NAV_ITEMS.filter((item) => item.roles.includes(role))
+}

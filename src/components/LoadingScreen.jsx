@@ -6,8 +6,7 @@ export default function LoadingScreen({ message }) {
         <div className="dashboard-loading-overlay full-screen-loader">
             <div className="loading-logo-wrapper">
                 <div className="brand-logo">
-                    <div className="brand-dot"></div>
-                    <h2>TVG Flow</h2>
+                    <img className="brand-logo-image" src="/images/tvg-hub-brand.png" alt="TVG Hub" />
                 </div>
             </div>
             {message && <p className="loading-message-fade">{message}</p>}

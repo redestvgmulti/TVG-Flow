@@ -1,4 +1,4 @@
-/* Super Admin Layout - FlowOS Institutional Design */
+/* Super Admin Layout - TVG Hub Institutional Design */
 
 .super-admin-layout {
     display: flex;
@@ -216,4 +216,22 @@
     .super-admin-content {
         margin-left: 0;
     }
+}
+
+.super-admin-logo-surface {
+    display: inline-flex;
+    width: 148px;
+    height: 44px;
+    overflow: hidden;
+    background: #02040c;
+    border-radius: 3px;
+}
+
+.super-admin-logo-image {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center 52%;
+    mix-blend-mode: screen;
 }

@@ -1,5 +1,5 @@
 /*
- * MOBILE LAYOUT FIXES - FlowOS
+ * MOBILE LAYOUT FIXES - TVG Hub
  * App nativo iOS-like behavior
  * 
  * Aplicado APENAS em mobile (≤ 768px)
@@ -160,7 +160,7 @@
         border-right: 1px solid var(--color-border-sidebar) !important;
         z-index: 1200 !important;
 
-        overflow-y: hidden !important;
+        overflow-y: auto !important;
         overflow-x: hidden !important;
 
         /* Animação suave */
@@ -180,7 +180,7 @@
         left: 0 !important;
         right: 0 !important;
 
-        bottom: 0 !important;
+        bottom: calc(80px + env(safe-area-inset-bottom) + 8px) !important;
 
         background: rgba(0, 0, 0, 0.4) !important;
         backdrop-filter: blur(4px) !important;

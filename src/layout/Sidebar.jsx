@@ -3,63 +3,26 @@ import { NavLink } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { usePermission } from '../hooks/usePermission' // NEW: Use permission hook
 import { supabase } from '../services/supabase'
-import {
-    CheckSquare,
-    Calendar,
-    Settings,
-    Users,
-    BarChart,
-    ChevronRight,
-    LogOut,
-    Building,
-    FolderOpen
-} from 'lucide-react'
-import { NAV_ITEMS, MANAGEMENT_ITEMS } from '../config/navigation'
+import { Settings, ChevronRight, LogOut } from 'lucide-react'
+import { getNavigationItemsForRole } from '../config/navigation'
 
 function Sidebar({ mobileMenuOpen, onClose }) {
-    const { user, professionalName, signOut } = useAuth()
+    const { user, role, professionalName, signOut } = useAuth()
     const { isSuperAdmin, isAdmin, isStaff } = usePermission() // NEW: Centralized permissions
 
     // Derived roles just for rendering logic (simplifies JSX conditions)
     const canSeeAdminMenu = isAdmin() || isSuperAdmin()
     const canSeeStaffMenu = isStaff()
+    const roleItems = getNavigationItemsForRole(role)
+    const adminMainItems = roleItems.filter((item) => item.section === 'main')
+    const managementItems = roleItems.filter((item) => item.section === 'management')
+    const staffItems = roleItems.filter((item) => item.section === 'staff')
+    const toolItems = roleItems.filter((item) => item.section === 'tools')
 
     const [adminPanelOpen, setAdminPanelOpen] = useState(true)
     const [profileOpen, setProfileOpen] = useState(false)
     const [incompleteTaskCount, setIncompleteTaskCount] = useState(0)
     const [upcomingMeetingsCount, setUpcomingMeetingsCount] = useState(0)
-
-    // Fetch incomplete task count and meetings count for staff
-    useEffect(() => {
-        if (canSeeStaffMenu) {
-            fetchIncompleteTaskCount()
-            fetchUpcomingMeetingsCount()
-
-            // Subscribe to real-time updates for tasks
-            const taskSubscription = supabase
-                .channel('task_changes')
-                .on('postgres_changes', {
-                    event: '*',
-                    schema: 'public',
-                    table: 'tarefas'
-                }, () => {
-                    fetchIncompleteTaskCount()
-                })
-                .subscribe()
-
-            // Subscribe to real-time updates for meetings
-            const meetingSubscription = supabase
-                .channel('meeting_changes')
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'reunioes' }, () => fetchUpcomingMeetingsCount())
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'reunioes_participantes' }, () => fetchUpcomingMeetingsCount())
-                .subscribe()
-
-            return () => {
-                taskSubscription.unsubscribe()
-                meetingSubscription.unsubscribe()
-            }
-        }
-    }, [canSeeStaffMenu])
 
     async function fetchIncompleteTaskCount() {
         try {
@@ -107,6 +70,36 @@ function Sidebar({ mobileMenuOpen, onClose }) {
         }
     }
 
+    // Counts are non-blocking: a failed badge never prevents navigation.
+    useEffect(() => {
+        if (!canSeeStaffMenu) return undefined
+
+        const initialRefresh = window.setTimeout(() => {
+            fetchIncompleteTaskCount()
+            fetchUpcomingMeetingsCount()
+        }, 0)
+
+        const taskSubscription = supabase
+            .channel('task_changes')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'tarefas' }, fetchIncompleteTaskCount)
+            .subscribe()
+
+        const meetingSubscription = supabase
+            .channel('meeting_changes')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'reunioes' }, fetchUpcomingMeetingsCount)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'reunioes_participantes' }, fetchUpcomingMeetingsCount)
+            .subscribe()
+
+        return () => {
+            window.clearTimeout(initialRefresh)
+            taskSubscription.unsubscribe()
+            meetingSubscription.unsubscribe()
+        }
+        // The count loaders read the current authenticated user and are only
+        // re-subscribed when the role changes.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [canSeeStaffMenu])
+
     // Helper to get initials
     const getInitials = (name) => {
         return (name || 'U').charAt(0).toUpperCase()
@@ -132,8 +125,7 @@ function Sidebar({ mobileMenuOpen, onClose }) {
                 {/* Logo Area */}
                 <div className="sidebar-header">
                     <div className="brand-logo">
-                        <div className="brand-dot"></div>
-                        <h2>TVG Flow</h2>
+                        <img className="brand-logo-image" src="/images/tvg-hub-sidebar-brand.png" alt="TVG Hub" />
                     </div>
                 </div>
 
@@ -144,7 +136,7 @@ function Sidebar({ mobileMenuOpen, onClose }) {
                         <>
                             <div className="nav-section">
                                 <p className="nav-label">MENU PRINCIPAL</p>
-                                {NAV_ITEMS.filter(item => (item.roles.includes('admin') || item.roles.includes('super_admin')) && !item.isCTA && item.key !== 'admin-team' && item.key !== 'admin-reports').map(item => (
+                                {adminMainItems.filter((item) => !item.isCTA).map(item => (
                                     <NavLink
                                         key={item.key}
                                         to={item.path}
@@ -174,11 +166,11 @@ function Sidebar({ mobileMenuOpen, onClose }) {
 
                                     {adminPanelOpen && (
                                         <div className="nav-sub">
-                                            {MANAGEMENT_ITEMS.map(item => (
+                                            {managementItems.map(item => (
                                                 <NavLink
                                                     key={item.key}
                                                     to={item.path}
-                                                    className="nav-sub-item"
+                                                    className={({ isActive }) => `nav-sub-item ${isActive ? 'active' : ''}`}
                                                     onClick={handleNavClick}
                                                 >
                                                     <item.icon size={16} />
@@ -197,7 +189,7 @@ function Sidebar({ mobileMenuOpen, onClose }) {
                         <div className="nav-section">
                             <p className="nav-label">MEU ESPAÇO</p>
 
-                            {NAV_ITEMS.filter(item => (item.roles.includes('staff') || item.roles.includes('profissional')) && item.key !== 'profile' && item.key !== 'staff-autopublisher').map(item => (
+                            {staffItems.map(item => (
                                 <NavLink
                                     key={item.key}
                                     to={item.path}
@@ -223,10 +215,10 @@ function Sidebar({ mobileMenuOpen, onClose }) {
                     )}
 
                     {/* FERRMENTAS (Disponível para todos exceto admin) */}
-                    {!canSeeAdminMenu && (
+                    {canSeeStaffMenu && toolItems.length > 0 && (
                         <div className="nav-section">
                             <p className="nav-label">FERRAMENTAS</p>
-                            {NAV_ITEMS.filter(item => item.key === 'staff-autopublisher').map(item => (
+                            {toolItems.map(item => (
                                 <NavLink
                                     key={item.key}
                                     to={item.path}

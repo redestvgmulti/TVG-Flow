@@ -17,7 +17,7 @@ This Edge Function replaces pg_cron for automatic notification queue processing.
 ### 1. Deploy Function
 
 ```bash
-cd /Users/geovanepanini/Dev/FlowOS
+cd /Users/geovanepanini/Dev/TVG-Flow
 supabase functions deploy process-notifications
 ```
 

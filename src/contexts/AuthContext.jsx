@@ -308,8 +308,9 @@ export function AuthProvider({ children }) {
             setProfessionalId(identity.id)
             setProfessionalName(identity.nome)
 
-            // RBAC CANONICAL FIX: Role is strictly from RPC
-            setRole(identity.role)
+            // Keep every consumer on the canonical role contract. The database
+            // still has legacy `profissional` records, which map to `staff`.
+            setRole(normalizeRole(identity.role))
 
             setAccountStatus(identity.ativo ? 'active' : 'suspended')
             setLoading(false)
@@ -338,7 +339,7 @@ export function AuthProvider({ children }) {
             throw new Error('Usuário sem perfil ativo no sistema')
         }
 
-        return { ...data, role: identity.role }
+        return { ...data, role: normalizeRole(identity.role) }
     }
 
     async function signOut() {

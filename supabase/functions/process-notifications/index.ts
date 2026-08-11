@@ -1,5 +1,5 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// FlowOS Phase 3 — Async Notifications: Queue Processor Edge Function
+// TVG Hub Phase 3 — Async Notifications: Queue Processor Edge Function
 // HARDENED: Zero sensitive data leakage + Intelligent pg_cron fallback
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 

@@ -41,7 +41,9 @@ export default function SuperAdminLayout() {
                 >
                     {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
                 </button>
-                <span className="logo-text">FlowOS</span>
+                <span className="super-admin-logo-surface">
+                    <img className="super-admin-logo-image" src="/images/tvg-hub-brand.png" alt="TVG Hub" />
+                </span>
             </header>
 
             {mobileMenuOpen && (
@@ -50,7 +52,9 @@ export default function SuperAdminLayout() {
 
             <aside className={`super-admin-sidebar ${mobileMenuOpen ? 'mobile-open' : ''}`}>
                 <div className="sidebar-header">
-                    <span className="logo-text">FlowOS</span>
+                    <span className="super-admin-logo-surface">
+                        <img className="super-admin-logo-image" src="/images/tvg-hub-brand.png" alt="TVG Hub" />
+                    </span>
                 </div>
 
                 <nav className="sidebar-nav">

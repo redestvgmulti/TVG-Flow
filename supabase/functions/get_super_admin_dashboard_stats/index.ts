@@ -110,7 +110,7 @@ serve(async (req) => {
 
         // Executive summary
         const recentGrowth = tenants.filter(t => new Date(t.created_at) > thirtyDaysAgo).length
-        const summary = `${totalTenants} empresa${totalTenants !== 1 ? 's' : ''} ativa${totalTenants !== 1 ? 's' : ''} no FlowOS, sistema ${healthStatus.status === 'healthy' ? 'estável' : 'com atenções necessárias'} e ${recentGrowth > 0 ? 'crescimento consistente' : 'sem novos clientes'} nos últimos 30 dias.`
+        const summary = `${totalTenants} empresa${totalTenants !== 1 ? 's' : ''} ativa${totalTenants !== 1 ? 's' : ''} no TVG Hub, sistema ${healthStatus.status === 'healthy' ? 'estável' : 'com atenções necessárias'} e ${recentGrowth > 0 ? 'crescimento consistente' : 'sem novos clientes'} nos últimos 30 dias.`
 
         return new Response(
             JSON.stringify({

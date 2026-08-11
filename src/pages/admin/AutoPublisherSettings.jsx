@@ -5,7 +5,7 @@ import AutoPublisherMasterV1Settings from './AutoPublisherMasterV1Settings'
 
 
 // ──────────────────────────────────────────────────────────
-// AutoPublisherSettings — FlowOS V2 Design System
+// AutoPublisherSettings — TVG Hub V2 Design System
 // ──────────────────────────────────────────────────────────
 
 export default function AutoPublisherSettings({ clienteId, clienteError }) {

@@ -52,7 +52,7 @@ export default function SuperAdminDashboard() {
             <div className="super-admin-container">
                 <div className="dashboard-header">
                     <h1>Painel Super Admin</h1>
-                    <p className="dashboard-subtitle">Visão Executiva do FlowOS</p>
+                    <p className="dashboard-subtitle">Visão Executiva do TVG Hub</p>
                 </div>
                 <div className="error-state card">
                     <p>❌ Erro ao carregar dados: {error}</p>
@@ -86,7 +86,7 @@ export default function SuperAdminDashboard() {
             {/* Header */}
             <div className="dashboard-header">
                 <h1>Painel Super Admin</h1>
-                <p className="dashboard-subtitle">Visão Executiva do FlowOS</p>
+                <p className="dashboard-subtitle">Visão Executiva do TVG Hub</p>
             </div>
 
             {/* BLOCO 1: Métricas Principais */}
@@ -97,7 +97,7 @@ export default function SuperAdminDashboard() {
                         <Building2 size={24} color="#3b82f6" />
                     </div>
                     <div className="metric-content">
-                        <h3 className="metric-label">Empresas Ativas no FlowOS</h3>
+                        <h3 className="metric-label">Empresas Ativas no TVG Hub</h3>
                         <p className="metric-value">{metrics?.totalTenants || 0}</p>
                         <span className="metric-description">Total de tenants vendidos</span>
                     </div>

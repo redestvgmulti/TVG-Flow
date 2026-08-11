@@ -29,7 +29,7 @@ export default function TaskSummaryModal({ task, onClose, onUpdate, onEdit, onDe
         try {
             setLoading(true)
             // Fetch checklist items (tarefas_itens or tarefas_micro depending on implementation)
-            // Assuming 'tarefas_itens' for checklist based on typical FlowOS structure (or check usage)
+            // Assuming 'tarefas_itens' for checklist based on typical TVG Hub structure (or check usage)
             // Since I don't have the full schema map in head, I'll assume 'tarefas_itens' or check 
             // 'tarefas_micro' if that's what's used. The previous prompts mentioned 'tarefas_micro'.
             // Let's try 'tarefas_micro' which seems to be the one used for operational feed.

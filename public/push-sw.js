@@ -51,7 +51,7 @@ self.addEventListener('push', async (event) => {
         }
 
         await self.registration.showNotification(
-            data.title || 'TVG Flow',
+            data.title || 'TVG Hub',
             notificationOptions
         )
     } catch (error) {

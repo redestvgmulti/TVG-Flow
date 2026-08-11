@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 72" role="img" aria-labelledby="title">
+  <title id="title">TVG Hub</title>
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#2563eb"/><stop offset="1" stop-color="#06b6d4"/></linearGradient>
+  </defs>
+  <rect x="2" y="8" width="56" height="56" rx="17" fill="url(#g)"/>
+  <path d="M17 25h26v7H33v23h-7V32H17z" fill="#fff"/>
+  <text x="76" y="50" fill="#0f172a" font-family="Arial, sans-serif" font-size="42" font-weight="700" letter-spacing="-1.8">TVG Hub</text>
+</svg>
