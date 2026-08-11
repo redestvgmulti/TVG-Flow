@@ -1,6 +1,15 @@
 
 import { supabase } from './supabase'
 
+async function getFunctionError(error, fallbackMessage) {
+    if (error?.context) {
+        const body = await error.context.json().catch(() => null)
+        if (body?.error) return body.error
+    }
+
+    return error?.message || fallbackMessage
+}
+
 export const professionalsService = {
     // List all professionals (Admin only via RLS)
     async list() {
@@ -8,6 +17,7 @@ export const professionalsService = {
         const { data: professionals, error: profError } = await supabase
             .from('profissionais')
             .select('id, nome, email, role, ativo, created_at')
+            .eq('ativo', true)
             .order('created_at', { ascending: false })
 
         if (profError) throw profError
@@ -88,10 +98,10 @@ export const professionalsService = {
             body: { professional_id: id }
         })
 
-        if (error) throw new Error(error.message || 'Erro de conexão com o servidor')
+        if (error) throw new Error(await getFunctionError(error, 'Erro de conexão com o servidor'))
         if (data?.error) throw new Error(data.error)
 
-        return true
+        return data
     },
 
     // Generate manual recovery link (via Edge Function)

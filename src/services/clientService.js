@@ -1,5 +1,14 @@
 import { supabase } from './supabase';
 
+async function getFunctionError(error, fallbackMessage) {
+    if (error?.context) {
+        const body = await error.context.json().catch(() => null);
+        if (body?.error) return body.error;
+    }
+
+    return error?.message || fallbackMessage;
+}
+
 
 /**
  * Client Service - Manages operational companies (empresas operacionais)
@@ -32,6 +41,7 @@ export const clientService = {
             .from('empresas')
             .select('*')
             .eq('empresa_tipo', 'operacional')
+            .eq('ativo', true)
             .order('nome');
 
         if (error) throw error;
@@ -124,12 +134,13 @@ export const clientService = {
             throw new Error('Operation not allowed for staff');
         }
 
-        // RLS enforces permission
-        const { error } = await supabase
-            .from('empresas')
-            .delete()
-            .eq('id', id);
+        const { data, error } = await supabase.functions.invoke('deactivate-company', {
+            body: { company_id: id }
+        });
 
-        if (error) throw error;
+        if (error) throw new Error(await getFunctionError(error, 'Erro ao desativar empresa'));
+        if (data?.error) throw new Error(data.error);
+
+        return data;
     }
 };

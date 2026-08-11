@@ -336,7 +336,7 @@ export default function ProfessionalsList() {
                                     disabled={isSubmitting}
                                     className="btn btn-danger"
                                 >
-                                    {isSubmitting ? 'Excluindo...' : 'Sim, Excluir'}
+                                    {isSubmitting ? 'Desativando...' : 'Sim, desativar'}
                                 </button>
                             </div>
                         </div>

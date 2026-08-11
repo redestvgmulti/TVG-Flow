@@ -60,15 +60,15 @@ export default function ProfessionalEdit() {
 
     const handleDelete = async () => {
         const confirmMessage = prompt(
-            `ATENÇÃO: Digite "DELETAR" para confirmar a exclusão PERMANENTE de ${professional.nome}.`
+            `ATENÇÃO: Digite "DESATIVAR" para revogar o acesso de ${professional.nome}. O histórico operacional será preservado.`
         )
 
-        if (confirmMessage !== 'DELETAR') return
+        if (confirmMessage !== 'DESATIVAR') return
 
         setIsDeleting(true)
         try {
             await professionalsService.delete(id)
-            toast.success('Profissional excluído permanentemente.')
+            toast.success('Profissional desativado e acesso revogado.')
             navigate('/admin/professionals')
         } catch (error) {
             console.error('Error deleting:', error)
@@ -125,7 +125,7 @@ export default function ProfessionalEdit() {
                         Zona de Perigo
                     </h3>
                     <p style={{ color: 'var(--color-text-secondary)', fontSize: '13px', marginTop: '6px', marginBottom: 0 }}>
-                        A exclusão é irreversível e removerá todo o histórico de acesso deste usuário.
+                        A desativação revoga o acesso e remove os vínculos operacionais, preservando o histórico de tarefas.
                     </p>
                 </div>
                 <button
@@ -133,9 +133,9 @@ export default function ProfessionalEdit() {
                     disabled={isDeleting}
                     className="btn btn-danger"
                 >
-                    {isDeleting ? 'Excluindo...' : (
+                    {isDeleting ? 'Desativando...' : (
                         <>
-                            <Trash2 size={16} /> Excluir Profissional
+                            <Trash2 size={16} /> Desativar Profissional
                         </>
                     )}
                 </button>

@@ -2,6 +2,7 @@ import { createPortal } from 'react-dom'
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
+import { clientService } from '../../services/clientService'
 import { ArrowLeft, Users, Plus, Trash2, Edit, Briefcase, UserCheck, Link2Off } from 'lucide-react'
 import { toast } from 'sonner'
 import '../../styles/companies.css'
@@ -190,18 +191,12 @@ function CompanyDetails() {
 
     async function handleDeleteCompany() {
         try {
-            const { error } = await supabase
-                .from('empresas')
-                .delete()
-                .eq('id', id)
-
-            if (error) throw error
-
-            toast.success('Empresa excluída com sucesso')
+            await clientService.delete(id)
+            toast.success('Empresa desativada com sucesso')
             navigate('/admin/companies')
         } catch (error) {
             console.error('Error deleting company:', error)
-            toast.error('Erro ao excluir empresa. Verifique se existem dependências.')
+            toast.error(error.message || 'Erro ao desativar empresa')
         }
     }
 
@@ -251,7 +246,7 @@ function CompanyDetails() {
                     <button
                         onClick={() => setShowDeleteModal(true)}
                         className="btn-icon btn-delete-trigger"
-                        title="Excluir Empresa"
+                        title="Desativar Empresa"
                     >
                         <Trash2 size={20} />
                     </button>
@@ -464,7 +459,7 @@ function CompanyDetails() {
                 <div className="modal-backdrop" onClick={() => setShowDeleteModal(false)}>
                     <div className="modal modal-danger-wrapper" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
-                            <h3 className="modal-danger-title">Excluir Empresa</h3>
+                            <h3 className="modal-danger-title">Desativar Empresa</h3>
                             <button onClick={() => setShowDeleteModal(false)} className="modal-close">
                                 <Plus size={20} style={{ transform: 'rotate(45deg)' }} />
                             </button>
@@ -476,7 +471,7 @@ function CompanyDetails() {
                             </div>
                             <h4 className="modal-confirmation-title">Tem certeza?</h4>
                             <p className="modal-confirmation-text">
-                                Você está prestes a excluir a empresa <strong>{company?.nome}</strong>. Esta ação não pode ser desfeita.
+                                Você está prestes a desativar a empresa <strong>{company?.nome}</strong>. Os dados e o histórico serão preservados, mas os vínculos operacionais serão removidos.
                             </p>
                         </div>
 
@@ -491,7 +486,7 @@ function CompanyDetails() {
                                 onClick={handleDeleteCompany}
                                 className="btn btn-danger-primary w-full"
                             >
-                                Sim, excluir empresa
+                                Sim, desativar empresa
                             </button>
                         </div>
                     </div>

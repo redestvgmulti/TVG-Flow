@@ -243,7 +243,7 @@ export default function ProfessionalForm({ initialData, onSubmit, onCancel, onDe
 
             {/* RODAPÉ — Danger Zone + CTA Final */}
             <div className="professional-form__footer">
-                {/* Excluir (esquerda) */}
+                {/* Desativar (esquerda) */}
                 {isEditMode && onDelete ? (
                     <button
                         type="button"
@@ -251,7 +251,7 @@ export default function ProfessionalForm({ initialData, onSubmit, onCancel, onDe
                         className="professional-form__delete-btn"
                     >
                         <AlertTriangle size={16} />
-                        Excluir
+                        Desativar
                     </button>
                 ) : (
                     <div />

@@ -2,6 +2,7 @@ import { createPortal } from 'react-dom'
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
+import { clientService } from '../../services/clientService'
 import { Building2, Users, Plus, Search, Edit2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { SkeletonCard } from '../../components/Skeleton'
@@ -14,6 +15,7 @@ function Companies() {
     const [searchTerm, setSearchTerm] = useState('')
     const [showModal, setShowModal] = useState(false)
     const [editingCompany, setEditingCompany] = useState(null)
+    const [isDeactivating, setIsDeactivating] = useState(false)
     const [formData, setFormData] = useState({
         nome: '',
         cnpj: '',
@@ -144,6 +146,28 @@ function Companies() {
         } catch (error) {
             console.error('Error saving company:', error)
             toast.error(editingCompany ? 'Erro ao atualizar empresa' : 'Erro ao criar empresa')
+        }
+    }
+
+    async function handleDeactivateCompany() {
+        if (!editingCompany || isDeactivating) return
+
+        const confirmed = window.confirm(
+            `Desativar ${editingCompany.nome}? Os dados serão preservados, mas os vínculos operacionais serão removidos.`
+        )
+        if (!confirmed) return
+
+        try {
+            setIsDeactivating(true)
+            await clientService.delete(editingCompany.id)
+            toast.success('Empresa desativada com sucesso')
+            handleCloseModal()
+            await fetchCompanies(currentTenantId)
+        } catch (error) {
+            console.error('Error deactivating company:', error)
+            toast.error(error.message || 'Erro ao desativar empresa')
+        } finally {
+            setIsDeactivating(false)
         }
     }
 
@@ -370,10 +394,21 @@ function Companies() {
                             </div>
 
                             <div className="modal-footer">
+                                {editingCompany && formData.ativo && (
+                                    <button
+                                        type="button"
+                                        onClick={handleDeactivateCompany}
+                                        className="btn btn-danger"
+                                        disabled={isDeactivating}
+                                        style={{ marginRight: 'auto' }}
+                                    >
+                                        {isDeactivating ? 'Desativando...' : 'Desativar empresa'}
+                                    </button>
+                                )}
                                 <button type="button" onClick={handleCloseModal} className="btn btn-secondary">
                                     Cancelar
                                 </button>
-                                <button type="submit" className="btn btn-primary">
+                                <button type="submit" className="btn btn-primary" disabled={isDeactivating}>
                                     {editingCompany ? 'Salvar Alterações' : 'Criar Empresa'}
                                 </button>
                             </div>
