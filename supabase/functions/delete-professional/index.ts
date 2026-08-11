@@ -51,14 +51,16 @@ serve(async (req: Request) => {
 
         if (signOutError || banError) {
             console.error('Auth revocation error:', signOutError || banError)
-            throw new Error('A conta foi desativada, mas a revogação de sessão falhou. Tente novamente para concluir.')
         }
 
         return new Response(
             JSON.stringify({
                 success: true,
                 status: result?.status,
-                message: 'Profissional desativado e acesso revogado com sucesso'
+                auth_revocation_pending: Boolean(signOutError || banError),
+                message: signOutError || banError
+                    ? 'Profissional desativado com sucesso. O acesso operacional já foi removido, mas não foi possível confirmar a revogação de sessão agora.'
+                    : 'Profissional desativado e acesso revogado com sucesso'
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
         )

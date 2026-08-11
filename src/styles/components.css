@@ -2605,6 +2605,13 @@ textarea.input:focus {
     transform-style: preserve-3d;
 }
 
+.loading-wordmark {
+    display: block;
+    width: 148px;
+    height: 44px;
+    object-fit: contain;
+}
+
 .loading-message-fade {
     margin-top: 32px;
     font-size: 14px;
