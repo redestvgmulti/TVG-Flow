@@ -1,4 +1,3 @@
-import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import AppLayout from './layout/AppLayout'
 import AdminLayout from './layout/AdminLayout'
@@ -57,47 +56,6 @@ function App() {
   // PWA Update System
   useVersionGate()
 
-  // Controller change listener for Vite PWA updates
-  useEffect(() => {
-    if (!('serviceWorker' in navigator)) return
-    
-    const bc = new BroadcastChannel('tvg-hub-pwa-sync')
-    let refreshing = false
-
-    // On the very first load there is no SW controlling the page. Because the
-    // service worker uses skipWaiting + clientsClaim, it activates and claims the
-    // page right after render, firing `controllerchange` even though nothing was
-    // updated. Reloading then throws the user out mid-interaction (e.g. while
-    // typing login credentials). Only reload on a genuine update — i.e. when a
-    // controller already existed when this listener was installed.
-    const hadController = !!navigator.serviceWorker.controller
-
-    const handleControllerChange = () => {
-      if (!hadController) return
-      if (refreshing) return
-      refreshing = true
-      bc.postMessage({ type: 'RELOAD_REQUESTED' })
-      window.location.reload()
-    }
-    
-    const handleBroadcastChannelMessage = (event) => {
-      if (event.data?.type === 'RELOAD_REQUESTED') {
-        if (refreshing) return
-        refreshing = true
-        window.location.reload()
-      }
-    }
-    
-    navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange)
-    bc.addEventListener('message', handleBroadcastChannelMessage)
-    
-    return () => {
-      navigator.serviceWorker.removeEventListener('controllerchange', handleControllerChange)
-      bc.removeEventListener('message', handleBroadcastChannelMessage)
-      bc.close()
-    }
-  }, [])
-  
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AuthProvider>

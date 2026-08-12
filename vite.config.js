@@ -53,8 +53,9 @@ export default defineConfig({
         importScripts: ['/push-sw.js'], // Import push notification logic
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         cleanupOutdatedCaches: true,
-        clientsClaim: true, // Part 8 - Service Worker Improvement
-        skipWaiting: true, // Force new SW to take control immediately
+        clientsClaim: true,
+        // Keep updates waiting until the user confirms them in UpdateBanner.
+        skipWaiting: false,
         navigateFallback: '/index.html', // Offline fallback for navigation requests
         navigateFallbackDenylist: [
           /^\/api\//,  // Never fallback for API routes

@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { useState } from 'react'
+import { AnimatePresence } from 'framer-motion'
 import { RefreshCw } from 'lucide-react'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'
 import LoadingScreen from './LoadingScreen'
@@ -19,28 +19,13 @@ export function UpdateBanner() {
     const handleUpdate = async () => {
         setIsUpdating(true)
         
-        // Triggers SW update (skipWaiting)
-        // This will trigger 'controllerchange' event in App.jsx
+        // vite-plugin-pwa owns the controller change and performs one reload.
         try {
-            updateServiceWorker(true)
+            await updateServiceWorker(true)
         } catch (err) {
             console.error('[PWA] updateServiceWorker failed:', err)
+            setIsUpdating(false)
         }
-
-        // Safety Fallback: If no reload happens in 5 seconds, force it.
-        // This handles cases where the SW is broken or deadlock occurs.
-        setTimeout(() => {
-            const fallbackCount = parseInt(sessionStorage.getItem('pwa_fallback_reload_count') || '0')
-            
-            if (fallbackCount >= 2) {
-                console.error('[PWA] Multiple fallback reloads detected. Stopping loop.')
-                setIsUpdating(false)
-                return
-            }
-
-            sessionStorage.setItem('pwa_fallback_reload_count', (fallbackCount + 1).toString())
-            window.location.reload()
-        }, 5000)
     }
 
     // If update triggered, show loading
