@@ -92,9 +92,10 @@ serve(async (req: Request) => {
 
         if (!tenantId) throw new Error('Unable to determine the administrator tenant.')
 
-        // 4. Generate Invite Link (Auth)
-        // Instead of sending email, we generate the link to return to the admin
-        const { data: authData, error: authError } = await supabaseAdmin.auth.admin.generateLink({
+        // 4. Generate an invite for a new account or a recovery link for an
+        // existing account. Retrying a deactivated professional must provision
+        // the account instead of failing on the duplicate email.
+        const inviteResult = await supabaseAdmin.auth.admin.generateLink({
             type: 'invite',
             email: email,
             options: {
@@ -103,13 +104,26 @@ serve(async (req: Request) => {
             }
         })
 
-        if (authError) {
-            if (authError.message.includes('already been registered')) {
-                throw new Error('Este e-mail já está cadastrado no sistema (Auth).')
-            }
-            throw authError
+        let authData = inviteResult.data
+        let reusedExistingAccount = false
+
+        if (inviteResult.error) {
+            if (!inviteResult.error.message.includes('already been registered')) throw inviteResult.error
+
+            const recoveryResult = await supabaseAdmin.auth.admin.generateLink({
+                type: 'recovery',
+                email,
+                options: {
+                    redirectTo: `${Deno.env.get('FRONTEND_URL') || 'http://localhost:5173'}/reset-password`
+                }
+            })
+
+            if (recoveryResult.error) throw recoveryResult.error
+            authData = recoveryResult.data
+            reusedExistingAccount = true
         }
 
+        if (!authData?.user) throw new Error('Unable to generate an access link.')
         const userId = authData.user.id
         const actionLink = authData.properties.action_link
 
@@ -120,16 +134,19 @@ serve(async (req: Request) => {
                 .from('profissionais')
                 .select('id')
                 .eq('email', email)
-                .single()
+                .maybeSingle()
 
             if (existingProfile) {
+                if (existingProfile.id !== userId) {
+                    throw new Error('Profile and Auth account do not match.')
+                }
+
                 const { error: updateError } = await supabaseAdmin
                     .from('profissionais')
                     .update({
                         nome: nome,
                         area_id: area_id || null,
-                        role: role || 'profissional',
-                        ativo: ativo !== undefined ? ativo : true
+                        ativo: true
                     })
                     .eq('id', existingProfile.id)
 
@@ -150,23 +167,37 @@ serve(async (req: Request) => {
                 if (dbError) throw new Error(`Database Error: ${dbError.message}`)
             }
 
-            const { error: linkError } = await supabaseAdmin
+            const { data: existingLink, error: existingLinkError } = await supabaseAdmin
                 .from('empresa_profissionais')
-                .insert({
-                    empresa_id: tenantId,
-                    profissional_id: userId,
-                    funcao: role === 'admin' ? 'Admin' : 'membro',
-                    role: role || 'profissional',
-                    ativo: true
-                })
+                .select('id')
+                .eq('empresa_id', tenantId)
+                .eq('profissional_id', userId)
+                .maybeSingle()
+
+            if (existingLinkError) throw existingLinkError
+
+            const linkError = existingLink
+                ? (await supabaseAdmin
+                    .from('empresa_profissionais')
+                    .update({ ativo: true })
+                    .eq('id', existingLink.id)).error
+                : (await supabaseAdmin
+                    .from('empresa_profissionais')
+                    .insert({
+                        empresa_id: tenantId,
+                        profissional_id: userId,
+                        funcao: role === 'admin' ? 'Admin' : 'membro',
+                        role: role || 'profissional',
+                        ativo: true
+                    })).error
 
             if (linkError) throw new Error(`Company link error: ${linkError.message}`)
 
         } catch (postCreateError) {
             const err = postCreateError as Error
             console.error('Rolling back user creation due to error:', err)
-            // ROLLBACK: Delete the auth user if the DB insert failed
-            await supabaseAdmin.auth.admin.deleteUser(userId)
+            // Never delete a pre-existing Auth account during a failed retry.
+            if (!reusedExistingAccount) await supabaseAdmin.auth.admin.deleteUser(userId)
             throw err
         }
 
@@ -175,8 +206,11 @@ serve(async (req: Request) => {
                 success: true,
                 id: userId,
                 tenantId,
+                reusedExistingAccount,
                 inviteLink: actionLink, // Return the link!
-                message: 'Profissional criado com sucesso! Copie o link de convite.'
+                message: reusedExistingAccount
+                    ? 'Profissional reativado com sucesso! Copie o link de acesso.'
+                    : 'Profissional criado com sucesso! Copie o link de convite.'
             }),
             {
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },

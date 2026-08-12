@@ -1,6 +1,5 @@
 
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
 import {
     Users, UserPlus, Search, Mail, CheckCircle, XCircle, Edit, X, Copy
 } from 'lucide-react'
@@ -11,7 +10,6 @@ import { SkeletonTable } from '../../../components/Skeleton'
 import '../../../styles/professionals.css'
 
 export default function ProfessionalsList() {
-    const navigate = useNavigate()
     const [professionals, setProfessionals] = useState([])
     const [loading, setLoading] = useState(true)
     const [searchTerm, setSearchTerm] = useState('')
@@ -24,6 +22,7 @@ export default function ProfessionalsList() {
     // Create & Success State
     const [inviteLink, setInviteLink] = useState(null)
     const [createdName, setCreatedName] = useState('')
+    const [reusedExistingAccount, setReusedExistingAccount] = useState(false)
 
     const [selectedProfessional, setSelectedProfessional] = useState(null)
     const [isSubmitting, setIsSubmitting] = useState(false)
@@ -105,7 +104,10 @@ export default function ProfessionalsList() {
             if (response.inviteLink) {
                 setInviteLink(response.inviteLink)
                 setCreatedName(formData.nome)
-                toast.success('Profissional criado! Copie o link de convite.')
+                setReusedExistingAccount(Boolean(response.reusedExistingAccount))
+                toast.success(response.reusedExistingAccount
+                    ? 'Profissional reativado! Copie o link de acesso.'
+                    : 'Profissional criado! Copie o link de convite.')
                 await loadData() // Reload list in background
             } else {
                 toast.success('Profissional criado com sucesso!')
@@ -129,6 +131,7 @@ export default function ProfessionalsList() {
         setIsCreateModalOpen(false)
         setInviteLink(null)
         setCreatedName('')
+        setReusedExistingAccount(false)
     }
 
     const filtered = professionals.filter(p =>
@@ -161,6 +164,7 @@ export default function ProfessionalsList() {
                     onClick={() => {
                         setInviteLink(null)
                         setCreatedName('')
+                        setReusedExistingAccount(false)
                         setIsCreateModalOpen(true)
                     }}
                     className="btn btn-primary"
@@ -354,7 +358,7 @@ export default function ProfessionalsList() {
                         <div className="modal-header border-b border-gray-100 flex items-center justify-between p-6">
                             <div>
                                 <h3 className="text-xl font-bold text-gray-800">
-                                    {inviteLink ? 'Profissional Criado!' : 'Novo Profissional'}
+                                    {inviteLink ? (reusedExistingAccount ? 'Profissional Reativado!' : 'Profissional Criado!') : 'Novo Profissional'}
                                 </h3>
                                 <p className="text-sm text-gray-500 mt-1">
                                     {inviteLink
@@ -377,7 +381,7 @@ export default function ProfessionalsList() {
                                     {/* Título de sucesso */}
                                     <div>
                                         <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--color-text-primary)', margin: 0 }}>
-                                            Profissional Criado!
+                                            {reusedExistingAccount ? 'Profissional Reativado!' : 'Profissional Criado!'}
                                         </h3>
                                         <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', marginTop: '6px', marginBottom: 0 }}>
                                             Envie o link de acesso abaixo para <strong style={{ color: 'var(--color-text-primary)' }}>{createdName}</strong>.
@@ -398,7 +402,7 @@ export default function ProfessionalsList() {
                                             <CheckCircle size={16} style={{ color: 'var(--color-success)', marginTop: '2px', flexShrink: 0 }} />
                                             <div style={{ flex: 1 }}>
                                                 <p style={{ margin: 0, fontSize: '13px', color: 'var(--color-success)', fontWeight: 600 }}>
-                                                    Link de convite gerado.
+                                                    {reusedExistingAccount ? 'Link de acesso gerado.' : 'Link de convite gerado.'}
                                                 </p>
                                                 <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: 'var(--color-text-secondary)' }}>
                                                     Use o botão abaixo para copiar e enviar ao usuário.
