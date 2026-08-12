@@ -65,7 +65,7 @@ export const professionalsService = {
         if (error) {
             // Tenta extrair a mensagem do corpo se o supabase-js não fez
             console.error('Edge Function Error Object:', error);
-            throw new Error(error.message || 'Erro de conexão com o servidor')
+            throw new Error(await getFunctionError(error, 'Connection error'))
         }
 
         if (data?.success === false || data?.error) {

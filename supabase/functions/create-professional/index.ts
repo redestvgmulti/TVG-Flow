@@ -62,18 +62,35 @@ serve(async (req: Request) => {
             : { data: [], error: null }
 
         if (tenantCompaniesError) throw tenantCompaniesError
-        if ((tenantCompanies || []).length !== 1) {
+        if ((tenantCompanies || []).length !== 1 && requesterProfile.role !== 'super_admin') {
             throw new Error('Não foi possível determinar o tenant ativo do administrador.')
         }
 
-        const tenantId = tenantCompanies[0].id
+        let tenantId = tenantCompanies[0]?.id
 
         // 3. Parse Body
-        const { email, nome, area_id, role, ativo } = await req.json()
+        const { email, nome, area_id, role, ativo, tenant_id: requestedTenantId } = await req.json()
 
         if (!email || !nome) {
             throw new Error('Missing required fields: email, nome')
         }
+
+        // Only a Super Admin may select a tenant explicitly. The Edge Function
+        // remains the sole owner of the membership insert for every flow.
+        if (requesterProfile.role === 'super_admin' && requestedTenantId) {
+            const { data: targetTenant, error: targetTenantError } = await supabaseAdmin
+                .from('empresas')
+                .select('id')
+                .eq('id', requestedTenantId)
+                .eq('empresa_tipo', 'tenant')
+                .maybeSingle()
+
+            if (targetTenantError) throw targetTenantError
+            if (!targetTenant) throw new Error('Invalid target tenant.')
+            tenantId = targetTenant.id
+        }
+
+        if (!tenantId) throw new Error('Unable to determine the administrator tenant.')
 
         // 4. Generate Invite Link (Auth)
         // Instead of sending email, we generate the link to return to the admin

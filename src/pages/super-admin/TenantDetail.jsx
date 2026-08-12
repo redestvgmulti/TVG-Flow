@@ -48,7 +48,7 @@ export default function TenantDetail() {
 
             toast.success(`Empresa ${newStatus === 'active' ? 'reativada' : 'suspensa'} com sucesso`)
             fetchDetails()
-        } catch (error) {
+        } catch {
             toast.error('Erro ao atualizar status')
         }
     }
@@ -96,28 +96,19 @@ export default function TenantDetail() {
                 body: {
                     nome: newAdminData.nome,
                     email: newAdminData.email,
-                    role: 'admin', // Default to admin for this flow
-                    area_id: null
+                    role: 'admin',
+                    area_id: null,
+                    tenant_id: id
                 }
             })
 
-            if (createError) throw new Error(createError.message)
+            if (createError) {
+                const errorBody = await createError.context?.json().catch(() => null)
+                throw new Error(errorBody?.error || createError.message)
+            }
             if (createData?.error) throw new Error(createData.error)
 
-            const newUserId = createData.id
             const inviteLink = createData.inviteLink
-
-            // 2. Link to this Tenant
-            const { error: linkError } = await supabase
-                .from('empresa_profissionais')
-                .insert([{
-                    empresa_id: id, // from useParams
-                    profissional_id: newUserId,
-                    funcao: 'Admin',
-                    ativo: true
-                }])
-
-            if (linkError) throw linkError
 
             // Success
             toast.success('Admin criado com sucesso!')
