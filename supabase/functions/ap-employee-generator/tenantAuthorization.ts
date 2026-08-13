@@ -86,7 +86,7 @@ export async function authorizeOperationalTenant({
 
   const { data: allowedRows, error: allowedError } = await userSupabase
     .schema("ap")
-    .rpc("get_user_cliente_ids");
+    .rpc("get_operational_cliente_ids");
   if (allowedError) {
     throw new TenantAuthorizationError("TENANT_NOT_FOUND", 403);
   }
