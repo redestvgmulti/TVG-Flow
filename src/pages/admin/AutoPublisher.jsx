@@ -968,6 +968,7 @@ export default function AutoPublisher() {
                 title="Nova Matéria"
                 icon={Brain}
                 size="lg"
+                className="ap-new-article-modal"
             >
                 <div className="ap-new-article-modal-content">
                     <ArticleForm

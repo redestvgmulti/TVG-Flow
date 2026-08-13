@@ -24,6 +24,7 @@ export default function Modal({
     iconColor = 'var(--color-primary)',
     iconBg = 'var(--color-primary-light)',
     size = 'md', // 'md' | 'lg'
+    className = '',
     footer,
     closeOnBackdrop = true,
     children,
@@ -82,7 +83,7 @@ export default function Modal({
         <div className="modal-backdrop" onClick={closeOnBackdrop ? onClose : undefined}>
             <div
                 ref={cardRef}
-                className={`modal ${size === 'lg' ? 'modal-large' : ''}`}
+                className={`modal ${size === 'lg' ? 'modal-large' : ''} ${className}`.trim()}
                 onClick={(e) => e.stopPropagation()}
                 role="dialog"
                 aria-modal="true"
