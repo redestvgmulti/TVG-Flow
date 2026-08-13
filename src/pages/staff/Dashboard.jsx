@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -25,7 +25,7 @@ import '../../styles/staff-tasks.css'
 
 function StaffDashboard() {
     const navigate = useNavigate()
-    const { professionalName, professionalId, loading: authLoading, authReady, user } = useAuth()
+    const { professionalName, professionalId, loading: authLoading, authReady } = useAuth()
     const { registerRefresh, unregisterRefresh } = useRefresh()
     const [stats, setStats] = useState({
         pending: 0,
@@ -35,39 +35,11 @@ function StaffDashboard() {
     })
     const [recentTasks, setRecentTasks] = useState([])
     const [productivityData, setProductivityData] = useState([])
-    const [dataLoading, setDataLoading] = useState(true)
-    const [isRefreshing, setIsRefreshing] = useState(false) // C3: Desktop refresh
+    const [, setDataLoading] = useState(true)
+    const [, setIsRefreshing] = useState(false) // C3: Desktop refresh
 
-    // 🛡️ CRITICAL GUARD: Prevent rendering and queries if auth is not ready
-    // This eliminates 401 errors from JWT race condition
-    if (authLoading) {
-        return <LoadingScreen />
-    }
-
-    if (!authReady) {
-        return <LoadingScreen />  // Wait for JWT to be injected in Supabase client
-    }
-
-    if (!professionalId) {
-        return <LoadingScreen />  // Wait for AuthContext to load professionalId
-    }
-
-    useEffect(() => {
-        // Only fetch if we have professionalId AND auth is ready
-        if (!professionalId || !authReady) {
-            return
-        }
-
-        fetchDashboardData()
-
-        registerRefresh(async () => {
-            await fetchDashboardData(true)
-        })
-
-        return () => unregisterRefresh()
-    }, [professionalId])
-
-    async function fetchDashboardData(silent = false) {
+    // Keep the loader stable across auth hydration and pull-to-refresh.
+    const fetchDashboardData = useCallback(async (silent = false) => {
         setIsRefreshing(true) // C3: Track refresh
         try {
             if (!silent) setDataLoading(true)
@@ -207,24 +179,36 @@ function StaffDashboard() {
 
             setRecentTasks(sortedTasks.slice(0, 20)) // C3: Increased to 20 for scroll
 
-        } catch (error) {
+        } catch {
             // Error handled silently
         } finally {
             setDataLoading(false)
             setIsRefreshing(false) // C3: Clear refresh
         }
-    }
+    }, [professionalId])
 
-    // C3: Desktop manual refresh handler
-    async function handleManualRefresh() {
-        await fetchDashboardData(true)
-    }
+    useEffect(() => {
+        // Only fetch if we have professionalId AND auth is ready
+        if (!professionalId || !authReady) {
+            return
+        }
 
-    if (authLoading || !professionalId) {
+        const timeoutId = window.setTimeout(fetchDashboardData, 0)
+        registerRefresh(() => fetchDashboardData(true))
+
+        return () => {
+            window.clearTimeout(timeoutId)
+            unregisterRefresh()
+        }
+    }, [professionalId, authReady, fetchDashboardData, registerRefresh, unregisterRefresh])
+
+    // Keep every hook above this guard. Auth starts asynchronously, so
+    // returning before useEffect would change the hook order after hydration.
+    if (authLoading || !authReady || !professionalId) {
         return (
             <div className="dashboard-container">
                 <div style={{ height: '60vh', display: 'flex', alignItems: 'center' }}>
-                    <LoadingScreen message={authLoading ? 'Autenticando...' : 'Carregando perfil...'} />
+                    <LoadingScreen message={authLoading || !authReady ? 'Autenticando...' : 'Carregando perfil...'} />
                 </div>
             </div>
         )
