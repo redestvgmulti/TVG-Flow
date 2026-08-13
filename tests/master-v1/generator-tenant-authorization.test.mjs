@@ -35,7 +35,7 @@ function client({
       return {
         async rpc(functionName) {
           calls.push(['schemaRpc', functionName])
-          assert.equal(functionName, 'get_user_cliente_ids')
+          assert.equal(functionName, 'get_operational_cliente_ids')
           return {
             data: clients.map(cliente_id => ({ cliente_id })),
             error: clientsError,
@@ -106,7 +106,7 @@ test('a valid caller can select an explicitly authorized client', async () => {
   assert.deepEqual(result, { clienteId: CLIENT_B, userId: USER })
   assert.deepEqual(mock.calls, [
     ['getUser', 'signed-token'],
-    ['schemaRpc', 'get_user_cliente_ids'],
+    ['schemaRpc', 'get_operational_cliente_ids'],
   ])
 })
 
