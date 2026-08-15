@@ -631,7 +631,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
 
     return createPortal(
         <div className="modal-backdrop" onClick={onClose}>
-            <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '560px', maxHeight: '90vh' }}>
+            <div className="modal employee-mode-modal" onClick={e => e.stopPropagation()}>
 
                 {/* Header */}
                 <div className="modal-header">
@@ -645,7 +645,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                 </div>
 
                 {/* Tabs */}
-                <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', background: '#fff', padding: '0 20px' }}>
+                <div className="employee-mode-modal-tabs" style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', background: '#fff', padding: '0 20px' }}>
                     <button
                         onClick={() => setActiveTab('create')}
                         style={{ padding: '16px 20px', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: 600, color: activeTab === 'create' ? '#3b82f6' : '#64748b', borderBottom: activeTab === 'create' ? '2px solid #3b82f6' : '2px solid transparent', transition: 'all 0.2s' }}
@@ -661,7 +661,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                 </div>
 
                 {/* Scrollable Content */}
-                <div style={{ display: 'flex', flexDirection: 'column', padding: '20px', gap: '20px', overflowY: 'auto', flex: 1, WebkitOverflowScrolling: 'touch', width: '100%', boxSizing: 'border-box' }}>
+                <div className="employee-mode-modal-body" style={{ display: 'flex', flexDirection: 'column', padding: '20px', gap: '20px', width: '100%', boxSizing: 'border-box' }}>
 
                     {errorMsg && (
                         <div style={{ background: '#fef2f2', border: '1px solid #fecaca', padding: '16px', borderRadius: '12px', marginBottom: '10px', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>

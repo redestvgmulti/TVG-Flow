@@ -29,9 +29,20 @@ test('a disabled preset remains fail-closed and reports its homologation state',
 test('new article modal owns an internal scroll container without changing the shared modal', async () => {
   const page = await source('src/pages/admin/AutoPublisher.jsx')
   const styles = await source('src/styles/AutoPublisher.css')
+  assert.match(page, /className="ap-new-article-modal"/)
   assert.match(page, /ap-new-article-modal-content/)
-  assert.match(styles, /\.modal\.modal-large:has\(\.ap-new-article-modal-content\)/)
-  assert.match(styles, /\.modal-body[\s\S]*overflow-y:\s*auto/)
+  assert.match(styles, /\.modal\.ap-new-article-modal\s*\{[^}]*overflow:\s*hidden/)
+  assert.match(styles, /\.modal\.ap-new-article-modal \.modal-body\s*\{[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto/)
+})
+
+test('employee article modal constrains the shell and scrolls only its content', async () => {
+  const page = await source('src/pages/admin/EmployeeMode.jsx')
+  const styles = await source('src/styles/components.css')
+  assert.match(page, /className="modal employee-mode-modal"/)
+  assert.match(page, /className="employee-mode-modal-tabs"/)
+  assert.match(page, /className="employee-mode-modal-body"/)
+  assert.match(styles, /\.modal\.employee-mode-modal\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*height:[^;]+;[^}]*overflow:\s*hidden/)
+  assert.match(styles, /\.employee-mode-modal-body\s*\{[^}]*flex:\s*1 1 auto;[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto/)
 })
 
 test('manual Feed keeps the image dropzone visible before choosing between image-based purposes', async () => {

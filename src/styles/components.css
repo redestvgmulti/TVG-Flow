@@ -1351,6 +1351,30 @@ textarea:focus {
     padding: var(--space-8);
 }
 
+/* EmployeeMode has a tab row between the header and its scrollable content. */
+.modal.employee-mode-modal {
+    display: flex;
+    flex-direction: column;
+    height: min(90vh, calc(100dvh - 32px));
+    max-width: 560px;
+    max-height: calc(100dvh - 32px);
+    overflow: hidden;
+}
+
+.employee-mode-modal .modal-header,
+.employee-mode-modal-tabs {
+    flex: 0 0 auto;
+}
+
+.employee-mode-modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    -webkit-overflow-scrolling: touch;
+}
+
 .modal-footer {
     padding: var(--space-6) var(--space-8);
     border-top: 1px solid rgba(0, 0, 0, 0.03);
