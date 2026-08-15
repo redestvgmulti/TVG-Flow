@@ -20,6 +20,26 @@ serve(async (req) => {
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
         )
 
+        const authorization = req.headers.get('Authorization')
+        const accessToken = authorization?.replace(/^Bearer\s+/i, '')
+
+        if (!accessToken) {
+            return new Response(
+                JSON.stringify({ error: 'Authentication required' }),
+                { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+        }
+
+        const { data: authData, error: authError } = await supabaseClient.auth.getUser(accessToken)
+        const authenticatedUserId = authData?.user?.id
+
+        if (authError || !authenticatedUserId) {
+            return new Response(
+                JSON.stringify({ error: 'Invalid authentication' }),
+                { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+        }
+
         const {
             empresa_id: empresa_id_from_client,
             cliente_id,
@@ -31,17 +51,26 @@ serve(async (req) => {
             prioridade,
             workflow_stages,
             drive_link,
-            created_by
+            created_by: requestedCreatedBy
         } = await req.json()
+
+        if (requestedCreatedBy && requestedCreatedBy !== authenticatedUserId) {
+            return new Response(
+                JSON.stringify({ error: 'Creator does not match the authenticated user' }),
+                { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+        }
+
+        const created_by = authenticatedUserId
 
         console.log('Received payload:', { empresa_id_from_client, titulo, workflow_stages: workflow_stages?.length, created_by })
 
         // ──────────────────────────────────────────────────────────────
         // VALIDATION: required fields
         // ──────────────────────────────────────────────────────────────
-        if (!empresa_id_from_client || !titulo || !deadline_at || !created_by) {
+        if (!empresa_id_from_client || !titulo || !deadline_at) {
             return new Response(
-                JSON.stringify({ error: 'Missing required fields: empresa_id, titulo, deadline_at, created_by' }),
+                JSON.stringify({ error: 'Missing required fields: empresa_id, titulo, deadline_at' }),
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             )
         }

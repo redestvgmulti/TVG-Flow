@@ -7,6 +7,13 @@ import { supabase } from './supabase';
  * Criar nova tarefa
  */
 export const createTask = async (taskData) => {
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    const creatorId = authData?.user?.id;
+
+    if (authError || !creatorId) {
+        throw new Error('Não foi possível identificar quem está criando a OS');
+    }
+
     const { data, error } = await supabase
         .from('tarefas')
         .insert([{
@@ -20,6 +27,7 @@ export const createTask = async (taskData) => {
             research_link: taskData.research_link || null,
             final_link: taskData.final_link || null,
             status: 'pendente',
+            created_by: creatorId,
         }])
         .select(`
       *,
