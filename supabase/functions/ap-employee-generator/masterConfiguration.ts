@@ -1,5 +1,5 @@
 export const AP_EMPLOYEE_GENERATOR_VERSION =
-  "2026-08-04-territorial-composer.1";
+  "2026-08-15-employee-material-delivery.1";
 
 export const VISUAL_MODEL_FORMATS = Object.freeze(
   {

@@ -14,7 +14,7 @@ const generatorUrl = new URL(
 
 test('manual generator creates only master_v1 candidates', async () => {
   const source = await readFile(generatorUrl, 'utf8')
-  assert.match(source, /p_render_contract_version: 'master_v1'/)
+  assert.match(source, /p_render_contract_version: ["']master_v1["']/)
   assert.match(source, /VISUAL_MODEL_REQUIRED/)
   assert.doesNotMatch(source, /render_contract_version:\s*['"]legacy['"]/)
   assert.doesNotMatch(source, /get_and_advance_template|rotateTemplate/)

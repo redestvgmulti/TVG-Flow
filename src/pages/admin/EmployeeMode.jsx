@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../../services/supabase';
-import { Check, CheckCircle2, Copy, Download, X, AlertCircle, RefreshCcw, ImageIcon, Brain, Search, SearchCode, Video, Image as ImageIconLucide, Loader2 } from 'lucide-react';
+import { Check, CheckCircle2, Copy, Download, X, AlertCircle, RefreshCcw, ImageIcon, Brain, Search, SearchCode, Video, Image as ImageIconLucide, Loader2, Share2 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import ArticleForm from '../../components/editorial/ArticleForm';
 import CreatorSignature from '../../components/ui/CreatorSignature';
@@ -28,25 +28,76 @@ import {
 
 // Fallback provider client removed - enforce session ID
 
+const createInitialFormData = () => ({
+    url_original: '',
+    titulo: '',
+    conteudo: '',
+    context_tag: '',
+    content_type: 'feed',
+    image_url: '',
+    visual_title_id: null,
+    visual_model: '',
+    source_mode: 'link',
+    composer_mode: '',
+    region_id: null,
+    city_id: null,
+    manual_slots: [],
+    idempotency_key: null,
+});
+
+function versionedRenderUrl(url, completedAt) {
+    if (!url) return null;
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}rendered=${encodeURIComponent(completedAt || Date.now())}`;
+}
+
+function sourceInputKey(formData, selectedFile) {
+    return JSON.stringify({
+        mode: formData.source_mode || 'link',
+        url: formData.url_original?.trim() || '',
+        title: formData.titulo?.trim() || '',
+        text: formData.conteudo?.trim() || '',
+        image: formData.image_url?.trim() || '',
+        file: selectedFile ? `${selectedFile.name}:${selectedFile.size}:${selectedFile.lastModified}` : '',
+    });
+}
+
+function validateSource(mode, { url, title, text, hasImage }) {
+    if (mode === 'link') {
+        try {
+            const parsed = new URL(url);
+            if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('protocol');
+        } catch {
+            return 'Informe um link HTTP ou HTTPS válido.';
+        }
+    }
+    if (title.trim().length < 8) return 'A fonte precisa ter um título claro com pelo menos 8 caracteres.';
+    if (mode === 'image' && !hasImage) return 'Envie uma imagem para usar o modo Imagem.';
+    const minimum = mode === 'image' ? 40 : 120;
+    if (text.trim().length < minimum) {
+        return mode === 'image'
+            ? 'Inclua um briefing factual com pelo menos 40 caracteres.'
+            : 'A fonte precisa ter pelo menos 120 caracteres de conteúdo verificável.';
+    }
+    return '';
+}
+
+function materialFileName(type, headline, extension) {
+    const slug = String(headline || 'materia')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')
+        .slice(0, 48) || 'materia';
+    return `${type === 'reels' ? 'frame' : 'arte'}-${slug}.${extension}`;
+}
+
 export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaId }) {
-    const { user: ctxUser, professionalId } = useAuth();
+    const { user: ctxUser, professionalId, professionalName } = useAuth();
     const user = propUser || ctxUser;
 
-    const [formData, setFormData] = useState({
-        url_original: '',
-        titulo: '',
-        conteudo: '',
-        context_tag: '',
-        content_type: 'feed',
-        image_url: '',
-        visual_title_id: null,
-        visual_model: '',
-        composer_mode: '',
-        region_id: null,
-        city_id: null,
-        manual_slots: [],
-        idempotency_key: null,
-    });
+    const [formData, setFormData] = useState(createInitialFormData);
 
     const [masterRuntime, setMasterRuntime] = useState({
         configs: [],
@@ -68,11 +119,16 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
     const [successData, setSuccessData] = useState(null);
     const [renderUrl, setRenderUrl] = useState(null); // Polled render result
     const [isPollingRender, setIsPollingRender] = useState(false);
+    const [renderStatus, setRenderStatus] = useState(null);
+    const [renderError, setRenderError] = useState('');
+    const [sourcePreview, setSourcePreview] = useState(null);
+    const [isDownloading, setIsDownloading] = useState(false);
+    const [isSharing, setIsSharing] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
     // Publication tracking per generated article
     const [actionBaixou, setActionBaixou] = useState(false);
     const [actionCopiou, setActionCopiou] = useState(false);
-    const [isPublished, setIsPublished] = useState(false);
+    const isPublished = actionBaixou && actionCopiou;
 
     // Multi-tenant resolution
     const [clienteId, setClienteId] = useState(empresaId || null);
@@ -214,37 +270,84 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
         availableVisualModels,
     );
 
-    // Poll for render_url after employee submits — render runs async in background
+    const applyMaterialRecord = useCallback((record) => {
+        if (!record) return false;
+        setRenderStatus(record.status || null);
+        setSuccessData(previous => previous ? {
+            ...previous,
+            ...record,
+            news_id: record.id || previous.news_id,
+            template_nome: record.template_nome_snapshot || previous.template_nome,
+            roteiro: record.roteiro_studio || record.roteiro_json || previous.roteiro,
+        } : previous);
+        setActionBaixou(Boolean(record.acao_baixou));
+        setActionCopiou(Boolean(record.acao_copiou));
+
+        if (record.render_url) {
+            setRenderUrl(versionedRenderUrl(record.render_url, record.render_completed_at));
+            setRenderError('');
+            setIsPollingRender(false);
+            return true;
+        }
+        if (record.status === 'failed') {
+            setRenderError(record.error_log || 'A arte não pôde ser gerada. Tente criar um novo material.');
+            setIsPollingRender(false);
+            return true;
+        }
+        return false;
+    }, []);
+
+    // Realtime is the primary completion signal; polling is the bounded
+    // fallback for reconnects, suspended tabs, and mobile browsers.
     useEffect(() => {
-        if (!isPollingRender || !successData?.news_id) return;
+        if (!isPollingRender || !successData?.news_id || !user?.id) return;
 
+        let cancelled = false;
+        let pollTimer;
         let attempts = 0;
-        const MAX_ATTEMPTS = 20; // ~60 seconds
+        const maxAttempts = 36;
+        const topic = `employee-material:${user.id}:${successData.news_id}`;
 
-        const interval = setInterval(async () => {
-            attempts++;
-            try {
-                const { data } = await supabase
-                    .from('ap_candidate_news_complete')
-                    .select('render_url, status')
-                    .eq('id', successData.news_id)
-                    .maybeSingle();
+        const refreshMaterial = async () => {
+            if (cancelled) return;
+            window.clearTimeout(pollTimer);
+            const { data, error } = await supabase
+                .from('ap_candidate_news_complete')
+                .select('id, status, headline, caption, context_tag, content_type, template_nome_snapshot, render_url, render_completed_at, error_log, roteiro_json, roteiro_studio, acao_baixou, acao_copiou')
+                .eq('id', successData.news_id)
+                .maybeSingle();
 
-                if (data?.render_url) {
-                    setRenderUrl(data.render_url);
-                    setIsPollingRender(false);
-                    clearInterval(interval);
-                } else if (attempts >= MAX_ATTEMPTS || data?.status === 'failed') {
-                    setIsPollingRender(false);
-                    clearInterval(interval);
-                }
-            } catch (e) {
-                console.error('[EmployeeMode] Polling error:', e);
+            if (cancelled) return;
+            if (error) {
+                console.error('[EmployeeMode] MATERIAL_REFRESH_FAILED', error);
+            } else if (applyMaterialRecord(data)) {
+                return;
             }
-        }, 3000);
 
-        return () => clearInterval(interval);
-    }, [isPollingRender, successData?.news_id]);
+            attempts += 1;
+            if (attempts >= maxAttempts) {
+                setIsPollingRender(false);
+                setRenderError('A arte continua em processamento. Você pode atualizar agora ou acompanhar em Meu Histórico.');
+                return;
+            }
+            pollTimer = window.setTimeout(refreshMaterial, 5000);
+        };
+
+        const channel = supabase
+            .channel(topic, { config: { private: true } })
+            .on('broadcast', { event: 'material_changed' }, () => refreshMaterial())
+            .subscribe(status => {
+                if (status === 'SUBSCRIBED') refreshMaterial();
+            });
+
+        pollTimer = window.setTimeout(refreshMaterial, 1500);
+
+        return () => {
+            cancelled = true;
+            window.clearTimeout(pollTimer);
+            supabase.removeChannel(channel);
+        };
+    }, [applyMaterialRecord, isPollingRender, successData?.news_id, user?.id]);
 
     // Tab state: 'create' | 'history'
     const [activeTab, setActiveTab] = useState('create');
@@ -257,18 +360,36 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
     const [copiedHistoryItems, setCopiedHistoryItems] = useState({});
     const ITEMS_PER_PAGE = 20;
 
-    const handleCopyHistory = (item) => {
+    const handleCopyHistory = async (item) => {
         if (!item.caption) return;
-        navigator.clipboard.writeText(item.caption);
-        setCopiedHistoryItems(prev => ({ ...prev, [item.id]: true }));
-        setTimeout(() => {
-            setCopiedHistoryItems(prev => ({ ...prev, [item.id]: false }));
-        }, 2000);
+        try {
+            await navigator.clipboard.writeText(item.caption);
+            await markActionInDB(item.id, 'copy');
+            setCopiedHistoryItems(prev => ({ ...prev, [item.id]: true }));
+            setTimeout(() => {
+                setCopiedHistoryItems(prev => ({ ...prev, [item.id]: false }));
+            }, 2000);
+        } catch (error) {
+            console.error('[EmployeeMode] HISTORY_COPY_FAILED', error);
+            setErrorMsg('Não foi possível copiar o texto deste material.');
+        }
     };
 
     // File Upload State
     const [selectedFile, setSelectedFile] = useState(null);
     const [isUploading, setIsUploading] = useState(false);
+
+    useEffect(() => {
+        setSourcePreview(null);
+    }, [
+        formData.source_mode,
+        formData.url_original,
+        formData.titulo,
+        formData.conteudo,
+        formData.image_url,
+        selectedFile,
+    ]);
+
     // Upload image to Supabase if file is selected
     const handleFileUpload = async (file) => {
         setIsUploading(true);
@@ -300,6 +421,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
         if (isSubmitting) return;
 
         const { url_original, context_tag, titulo, conteudo, image_url, content_type, visual_model, visual_title_id } = formData;
+        const sourceMode = formData.source_mode || 'link';
 
         // Validation based on unified behavior
         if (territorialComposer.enabled && territorialComposer.status !== TERRITORIAL_COMPOSER_STATUS.READY) {
@@ -322,8 +444,12 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
         if (!visual_model) { setErrorMsg('Selecione a finalidade da arte.'); return; }
         if (!visual_title_id) { setErrorMsg('Selecione o selo da matéria.'); return; }
         }
-        if (!url_original && !titulo && !conteudo && !image_url && !selectedFile) {
-            setErrorMsg('Preencha pelo menos um campo ou insira um link para gerar a matéria.');
+        if (sourceMode === 'link' && !url_original) {
+            setErrorMsg('Informe o link da matéria para analisar a fonte.');
+            return;
+        }
+        if (sourceMode !== 'link' && !titulo && !conteudo) {
+            setErrorMsg('Informe o título e os fatos confirmados da matéria.');
             return;
         }
 
@@ -355,7 +481,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
         setSuccessData(null);
 
         try {
-            if (url_original) {
+            if (sourceMode === 'link' && url_original) {
                 // Check for duplicates
                 const { data: existingNews, error: searchError } = await supabase
                     .from('ap_candidate_news')
@@ -382,12 +508,14 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                 }
             }
 
-            let scrapedTitle = '';
-            let scrapedConteudo = '';
-            let scrapedImage = '';
+            const inputKey = sourceInputKey(formData, selectedFile);
+            const reusablePreview = sourcePreview?.inputKey === inputKey ? sourcePreview : null;
+            let scrapedTitle = reusablePreview?.resolvedTitle || '';
+            let scrapedConteudo = reusablePreview?.resolvedText || '';
+            let scrapedImage = reusablePreview?.resolvedImage || '';
 
             // Auto-Scraping Logic
-            if (url_original) {
+            if (sourceMode === 'link' && !reusablePreview) {
                 const { data, error } = await supabase.functions.invoke('ap-link-scraper', {
                     body: { url: url_original }
                 });
@@ -400,7 +528,32 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                 scrapedImage = data.image_url || '';
             }
 
-            let finalImageUrl = image_url || scrapedImage || null;
+            const resolvedTitle = sourceMode === 'link' ? scrapedTitle : titulo.trim();
+            const resolvedText = sourceMode === 'link' ? scrapedConteudo : conteudo.trim();
+            const resolvedImage = image_url || scrapedImage || '';
+            const sourceError = validateSource(sourceMode, {
+                url: url_original,
+                title: resolvedTitle,
+                text: resolvedText,
+                hasImage: Boolean(resolvedImage || selectedFile),
+            });
+            if (sourceError) throw new Error(sourceError);
+
+            if (!reusablePreview) {
+                setSourcePreview({
+                    inputKey,
+                    title: resolvedTitle,
+                    excerpt: resolvedText.slice(0, 260) + (resolvedText.length > 260 ? '…' : ''),
+                    contentLength: resolvedText.length,
+                    hasImage: Boolean(resolvedImage || selectedFile),
+                    resolvedTitle,
+                    resolvedText,
+                    resolvedImage,
+                });
+                return;
+            }
+
+            let finalImageUrl = resolvedImage || null;
             if (selectedFile && sourceImageRequired) {
                 finalImageUrl = await handleFileUpload(selectedFile);
             }
@@ -416,12 +569,13 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
             const basePayload = {
                 cliente_id: currentClienteId,
                 auth_user_id: finalAuthUserId,
-                url_original: url_original || null,
-                headline: titulo || scrapedTitle || 'Pauta OMNI',
-                text: conteudo || scrapedConteudo || '',
+                url_original: sourceMode === 'link' ? url_original : null,
+                headline: resolvedTitle,
+                text: resolvedText,
                 context_tag: context_tag.toUpperCase(),
                 content_type: content_type,
                 source_image: sourceImageRequired ? finalImageUrl : null,
+                source_mode: sourceMode,
             };
 
             const idempotencyKey = formData.idempotency_key || crypto.randomUUID();
@@ -482,15 +636,15 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
             if (parsedData?.error) throw new Error(parsedData.error);
 
             setSuccessData(parsedData);
-            setRenderUrl(null);
-            setActionBaixou(false);
-            setActionCopiou(false);
-            setIsPublished(false);
+            setSourcePreview(null);
+            setRenderStatus(parsedData?.status || null);
+            setRenderError('');
+            setRenderUrl(versionedRenderUrl(parsedData?.render_url, parsedData?.render_completed_at));
+            setActionBaixou(Boolean(parsedData?.downloaded));
+            setActionCopiou(Boolean(parsedData?.copied));
 
             // If render is pending (employee flow), start polling
-            if (parsedData?.render_pending && parsedData?.news_id) {
-                setIsPollingRender(true);
-            }
+            setIsPollingRender(Boolean(parsedData?.render_pending && parsedData?.news_id && !parsedData?.render_url));
         } catch (err) {
             setErrorMsg(err.message || 'Erro ao gerar matéria. Verifique os templates ativos.');
         } finally {
@@ -498,20 +652,25 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
         }
     };
 
-    const markActionInDB = async (newsId, field) => {
-        if (!newsId) return;
-        // Update the action flag
-        const update = { [field]: true };
-        // Check if other flag is already set
-        // Check if other flag is already set
-        const otherVal = field === 'acao_baixou' ? actionCopiou : actionBaixou;
-        // If other flag is ALREADY true, promote to published
-        if (otherVal) {
-            update.status = 'published';
+    const markActionInDB = async (newsId, action) => {
+        if (!newsId) return null;
+        const { data, error } = await supabase
+            .schema('ap')
+            .rpc('record_employee_material_action', {
+                p_candidate_id: newsId,
+                p_action: action,
+            });
+        if (error) throw error;
+        if (newsId === successData?.news_id) {
+            setActionBaixou(Boolean(data?.downloaded));
+            setActionCopiou(Boolean(data?.copied));
         }
-        await supabase.schema('ap').from('candidate_news')
-            .update(update)
-            .eq('id', newsId);
+        setHistoryItems(previous => previous.map(item => item.id === newsId ? {
+            ...item,
+            acao_baixou: Boolean(data?.downloaded),
+            acao_copiou: Boolean(data?.copied),
+        } : item));
+        return data;
     };
 
     const handleCopy = async () => {
@@ -521,66 +680,121 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
         // Removido a concatenação forçada de Roteiro + Legenda para Reels, para manter a legenda "clean" como solicitado.
         // O roteiro continua sendo exibido no modal para consulta se for Reels.
 
-        navigator.clipboard.writeText(copyText);
-        const newCopiou = true;
-        setActionCopiou(newCopiou);
-        if (successData?.news_id) {
-            await markActionInDB(successData.news_id, 'acao_copiou');
-            if (actionBaixou) setIsPublished(true);
+        try {
+            await navigator.clipboard.writeText(copyText);
+            if (successData?.news_id) {
+                await markActionInDB(successData.news_id, 'copy');
+            } else {
+                setActionCopiou(true);
+            }
+        } catch (error) {
+            console.error('[EmployeeMode] COPY_FAILED', error);
+            setErrorMsg('Não foi possível copiar a legenda. Verifique a permissão da área de transferência.');
         }
     };
 
-    const handleDownloadUrl = async (url, type = 'feed') => {
-        if (!url) return;
-
-        // Evita erro de CORS (net::ERR_FAILED) no fetch e avisos do SW no console
-        if (url.includes('/storage/v1/object/')) {
-            const separator = url.includes('?') ? '&' : '?';
-            const downloadUrl = `${url}${separator}download=`;
-            const link = document.createElement('a');
-            link.href = downloadUrl;
-            link.download = '';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            return;
-        }
+    const handleDownloadUrl = async (url, type = 'feed', headline = successData?.headline) => {
+        if (!url) throw new Error('A arte ainda não está disponível para download.');
 
         try {
-            const response = await fetch(url);
+            const response = await fetch(url, { cache: 'no-store' });
+            if (!response.ok) throw new Error(`HTTP_${response.status}`);
             const blob = await response.blob();
-            let ext = '.bin';
-            if (blob.type === 'image/jpeg') ext = '.jpg';
-            else if (blob.type === 'image/png') ext = '.png';
-            else if (blob.type === 'video/mp4') ext = '.mp4';
-            else if (blob.type === 'image/webp') ext = '.webp';
-            else {
-                const match = url.match(/\.([a-z0-9]+)(?:[?#]|$)/i);
-                if (match) ext = `.${match[1].toLowerCase()}`;
-            }
+            if (!blob.size) throw new Error('EMPTY_FILE');
+            const extensionByType = {
+                'image/jpeg': 'jpg',
+                'image/png': 'png',
+                'image/webp': 'webp',
+                'video/mp4': 'mp4',
+            };
+            const extension = extensionByType[blob.type] || 'bin';
+            const fileName = materialFileName(type, headline, extension);
 
             const objUrl = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = objUrl;
-            link.download = type === 'reels' ? `frame_${Date.now()}${ext}` : `materia_${Date.now()}${ext}`;
+            link.download = fileName;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            window.URL.revokeObjectURL(objUrl);
-        } catch (e) {
-            console.error("Erro ao baixar:", e);
-            window.open(url, '_blank');
+            window.setTimeout(() => window.URL.revokeObjectURL(objUrl), 1000);
+            return { started: true, fileName, blob };
+        } catch (error) {
+            console.error('[EmployeeMode] VERIFIED_DOWNLOAD_FAILED', error);
+            if (!url.includes('/storage/v1/object/')) throw error;
+            const fileName = materialFileName(type, headline, 'png');
+            const separator = url.includes('?') ? '&' : '?';
+            const link = document.createElement('a');
+            link.href = `${url}${separator}download=${encodeURIComponent(fileName)}`;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            return { started: true, fileName, blob: null };
         }
     };
 
     const handleDownload = async () => {
         const url = renderUrl || successData?.render_url;
-        await handleDownloadUrl(url, successData?.content_type);
-        const newBaixou = true;
-        setActionBaixou(newBaixou);
-        if (successData?.news_id) {
-            await markActionInDB(successData.news_id, 'acao_baixou');
-            if (actionCopiou) setIsPublished(true);
+        if (!url) {
+            setRenderError('A arte ainda não terminou. Atualize o status antes de baixar.');
+            setIsPollingRender(Boolean(successData?.news_id));
+            return;
+        }
+        setIsDownloading(true);
+        setErrorMsg('');
+        try {
+            await handleDownloadUrl(url, successData?.content_type);
+            if (successData?.news_id) {
+                await markActionInDB(successData.news_id, 'download');
+            } else {
+                setActionBaixou(true);
+            }
+        } catch (error) {
+            console.error('[EmployeeMode] DOWNLOAD_FAILED', error);
+            setErrorMsg('Não foi possível iniciar o download da arte. Tente novamente.');
+        } finally {
+            setIsDownloading(false);
+        }
+    };
+
+    const handleShare = async () => {
+        const url = renderUrl || successData?.render_url;
+        if (!url || !navigator.share) return;
+        setIsSharing(true);
+        setErrorMsg('');
+        try {
+            const response = await fetch(url, { cache: 'no-store' });
+            if (!response.ok) throw new Error(`HTTP_${response.status}`);
+            const blob = await response.blob();
+            if (!blob.size) throw new Error('EMPTY_FILE');
+            const extension = blob.type === 'image/jpeg' ? 'jpg' : blob.type === 'image/webp' ? 'webp' : 'png';
+            const file = new File([blob], materialFileName(successData?.content_type, successData?.headline, extension), { type: blob.type || 'image/png' });
+            const shareData = { files: [file], title: successData?.headline || 'Material TVG Flow', text: successData?.caption || '' };
+            if (!navigator.canShare?.(shareData)) throw new Error('FILE_SHARE_UNAVAILABLE');
+            await navigator.share(shareData);
+        } catch (error) {
+            if (error?.name !== 'AbortError') {
+                console.error('[EmployeeMode] SHARE_FAILED', error);
+                setErrorMsg('O compartilhamento direto não está disponível neste dispositivo. Baixe a arte para compartilhar.');
+            }
+        } finally {
+            setIsSharing(false);
+        }
+    };
+
+    const handleHistoryDownload = async (item) => {
+        if (!item.render_url) return;
+        try {
+            await handleDownloadUrl(
+                versionedRenderUrl(item.render_url, item.render_completed_at),
+                item.content_type,
+                item.headline || item.titulo,
+            );
+            await markActionInDB(item.id, 'download');
+        } catch (error) {
+            console.error('[EmployeeMode] HISTORY_DOWNLOAD_FAILED', error);
+            setErrorMsg('Não foi possível iniciar o download deste material.');
         }
     };
 
@@ -589,7 +803,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
         try {
             const { data, error } = await supabase
                 .from('ap_candidate_news_complete')
-                .select('id, titulo, headline, caption, render_url, gerado_em, created_at, status, template_nome_snapshot, context_tag, fonte_id, criado_por_user_id, creator_name_snapshot')
+                .select('id, titulo, headline, caption, render_url, render_completed_at, gerado_em, created_at, status, content_type, acao_baixou, acao_copiou, template_nome_snapshot, context_tag, fonte_id, criado_por_user_id, creator_name_snapshot')
                 .eq('criado_por_user_id', user?.id)
                 .order('gerado_em', { ascending: false })
                 .range(page * ITEMS_PER_PAGE, (page + 1) * ITEMS_PER_PAGE - 1);
@@ -675,13 +889,23 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                         successData ? (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', animation: 'fadeIn 0.5s ease-out' }}>
 
-                                <div style={{ background: '#dcfce7', border: '1px solid #bbf7d0', padding: '16px', borderRadius: '12px', display: 'flex', gap: '12px', alignItems: 'center' }}>
-                                    <CheckCircle2 color="#16a34a" size={24} />
+                                <div style={{ background: renderUrl ? '#dcfce7' : '#eff6ff', border: `1px solid ${renderUrl ? '#bbf7d0' : '#bfdbfe'}`, padding: '16px', borderRadius: '12px', display: 'flex', gap: '12px', alignItems: 'center' }}>
+                                    {renderUrl ? <CheckCircle2 color="#16a34a" size={24} /> : <Loader2 color="#2563eb" size={24} className={isPollingRender ? 'spin' : ''} />}
                                     <div>
-                                        <h3 style={{ margin: 0, fontSize: '15px', color: '#166534', fontWeight: 700 }}>Material Pronto! ({successData.content_type === 'reels' ? 'Reels' : 'Feed'})</h3>
-                                        <span style={{ fontSize: '13px', color: '#15803d' }}>Template usado: {successData.template_nome}</span>
+                                        <h3 style={{ margin: 0, fontSize: '15px', color: renderUrl ? '#166534' : '#1d4ed8', fontWeight: 700 }}>
+                                            {renderUrl ? 'Material pronto para usar' : 'Conteúdo criado • produzindo a arte'} ({successData.content_type === 'reels' ? 'Reels' : successData.content_type === 'story' ? 'Story' : 'Feed'})
+                                        </h3>
+                                        <span style={{ fontSize: '13px', color: renderUrl ? '#15803d' : '#3b82f6' }}>
+                                            {successData.template_nome ? `Template: ${successData.template_nome}` : `Status: ${renderStatus || successData.status || 'processando'}`}
+                                        </span>
                                     </div>
                                 </div>
+
+                                <CreatorSignature
+                                    name={successData.creator_name || successData.creator_name_snapshot || professionalName || user?.user_metadata?.nome || user?.email}
+                                    createdAt={successData.created_at || successData.gerado_em}
+                                    compact
+                                />
 
                                 {/* Render Zone — shows spinner while polling, card when ready */}
                                 {renderUrl ? (
@@ -695,6 +919,16 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                         </div>
                                         <p style={{ margin: 0, fontSize: '14px', color: '#0284c7', fontWeight: 700, textAlign: 'center' }}>Gerando arte...</p>
                                         <p style={{ margin: 0, fontSize: '12px', color: '#38bdf8', textAlign: 'center' }}>O Placid está renderizando seu card. Aguarde alguns segundos.</p>
+                                    </div>
+                                ) : renderError ? (
+                                    <div style={{ width: '100%', borderRadius: '16px', border: '1px solid #fed7aa', background: '#fff7ed', padding: '28px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', boxSizing: 'border-box' }}>
+                                        <AlertCircle size={24} color="#ea580c" />
+                                        <p style={{ margin: 0, fontSize: '13px', color: '#9a3412', textAlign: 'center', lineHeight: 1.5 }}>{renderError}</p>
+                                        {renderStatus !== 'failed' && (
+                                            <button type="button" onClick={() => { setRenderError(''); setIsPollingRender(true); }} style={{ border: '1px solid #fdba74', background: '#fff', color: '#9a3412', borderRadius: '9px', padding: '9px 12px', fontWeight: 600, cursor: 'pointer' }}>
+                                                Atualizar status agora
+                                            </button>
+                                        )}
                                     </div>
                                 ) : successData?.pending_review ? (
                                     <div style={{ width: '100%', borderRadius: '16px', border: '1px solid #dcfce7', background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)', padding: '32px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px', boxSizing: 'border-box' }}>
@@ -720,7 +954,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                     <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '16px', border: '1px dashed #cbd5e1', position: 'relative' }}>
                                         <h4 style={{ margin: '0 0 8px 0', fontSize: '13px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700 }}>Roteiro Sugerido</h4>
                                         <p style={{ margin: 0, fontSize: '15px', color: '#334155', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
-                                            {successData.roteiro}
+                                            {typeof successData.roteiro === 'string' ? successData.roteiro : JSON.stringify(successData.roteiro, null, 2)}
                                         </p>
                                     </div>
                                 )}
@@ -747,13 +981,18 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
 
                                 {/* Action Buttons */}
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '10px' }}>
-                                    <button onClick={handleDownload} disabled={isPollingRender && !renderUrl} style={{ width: '100%', background: actionBaixou ? '#16a34a' : (isPollingRender && !renderUrl) ? '#94a3b8' : '#111827', color: '#fff', border: 'none', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', boxShadow: '0 4px 6px -1px rgba(17, 24, 39, 0.1)', cursor: (isPollingRender && !renderUrl) ? 'not-allowed' : 'pointer', transition: 'all 0.2s' }}>
-                                        {actionBaixou ? <CheckCircle2 size={18} /> : <Download size={18} />} {actionBaixou ? 'Frame/Resumo Baixado!' : (isPollingRender && !renderUrl) ? 'Aguardando arte...' : 'Baixar Imagem/Moldura'}
+                                    <button onClick={handleDownload} disabled={!renderUrl || isDownloading} style={{ width: '100%', background: actionBaixou ? '#16a34a' : !renderUrl ? '#94a3b8' : '#111827', color: '#fff', border: 'none', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', boxShadow: '0 4px 6px -1px rgba(17, 24, 39, 0.1)', cursor: (!renderUrl || isDownloading) ? 'not-allowed' : 'pointer', transition: 'all 0.2s' }}>
+                                        {isDownloading ? <Loader2 size={18} className="spin" /> : actionBaixou ? <CheckCircle2 size={18} /> : <Download size={18} />} {isDownloading ? 'Preparando arquivo...' : actionBaixou ? 'Download iniciado' : !renderUrl ? 'Aguardando a arte' : 'Baixar arte em alta qualidade'}
                                     </button>
+                                    {renderUrl && typeof navigator.share === 'function' && (
+                                        <button onClick={handleShare} disabled={isSharing} style={{ width: '100%', background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', padding: '14px', borderRadius: '12px', fontSize: '14px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: isSharing ? 'not-allowed' : 'pointer' }}>
+                                            {isSharing ? <Loader2 size={18} className="spin" /> : <Share2 size={18} />} {isSharing ? 'Abrindo compartilhamento...' : 'Compartilhar arte e legenda'}
+                                        </button>
+                                    )}
                                     <button onClick={handleCopy} style={{ width: '100%', background: '#fff', color: actionCopiou ? '#16a34a' : '#111827', border: actionCopiou ? '2px solid #16a34a' : '1px solid #e2e8f0', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: 'pointer', transition: 'all 0.2s' }}>
                                         {actionCopiou ? <><CheckCircle2 size={18} color="#16a34a" /> Copiado!</> : <><Copy size={18} /> Copiar {successData.content_type === 'reels' ? 'Roteiro e Legenda' : 'Legenda'}</>}
                                     </button>
-                                    <button onClick={() => { setSuccessData(null); setFormData({ url_original: '', titulo: '', conteudo: '', context_tag: '', content_type: 'feed', image_url: '', visual_title_id: null, visual_model: '', idempotency_key: null }); setSelectedFile(null); }} style={{ background: 'transparent', color: '#64748b', border: 'none', padding: '16px', fontSize: '14px', fontWeight: 600, marginTop: '4px', cursor: 'pointer' }}>
+                                    <button onClick={() => { setSuccessData(null); setFormData(createInitialFormData()); setSelectedFile(null); setSourcePreview(null); setRenderUrl(null); setRenderStatus(null); setRenderError(''); setIsPollingRender(false); }} style={{ background: 'transparent', color: '#64748b', border: 'none', padding: '16px', fontSize: '14px', fontWeight: 600, marginTop: '4px', cursor: 'pointer' }}>
 
                                         Novo Conteúdo
                                     </button>
@@ -782,6 +1021,8 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                 visualTitlesError={visualTitlesError}
                                 selectedFile={selectedFile}
                                 setSelectedFile={setSelectedFile}
+                                sourcePreview={sourcePreview}
+                                onDiscardSourcePreview={() => setSourcePreview(null)}
                             />
                         )
                     )}
@@ -802,7 +1043,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                         {/* Row 1: Image & Basic Info */}
                                         <div style={{ display: 'flex', padding: '16px', gap: '16px', borderBottom: '1px solid #f1f5f9' }}>
                                             {item.render_url ? (
-                                                <img src={item.render_url} alt="" style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '10px', border: '1px solid #e2e8f0', cursor: 'pointer' }} onClick={() => window.open(item.render_url, '_blank')} />
+                                                <img src={versionedRenderUrl(item.render_url, item.render_completed_at)} alt="" style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '10px', border: '1px solid #e2e8f0', cursor: 'pointer' }} onClick={() => window.open(versionedRenderUrl(item.render_url, item.render_completed_at), '_blank', 'noopener,noreferrer')} />
                                             ) : ['pending_render', 'processing'].includes(item.status) ? (
                                                 <div style={{ width: '80px', height: '80px', background: '#f8fafc', borderRadius: '10px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: '1px dashed #3b82f6' }}>
                                                     <RefreshCcw size={18} color="#3b82f6" className="spin" style={{ marginBottom: '4px' }}/>
@@ -848,7 +1089,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                                     </button>
                                                 )}
                                                 <button 
-                                                    onClick={() => item.render_url && handleDownloadUrl(item.render_url)} 
+                                                    onClick={() => handleHistoryDownload(item)}
                                                     disabled={!item.render_url}
                                                     style={{ 
                                                         flex: 1, 

@@ -33,7 +33,7 @@ test('manual sponsor_count and UUID are rejected before rotation', async () => {
 
 test('master lookup is scoped by tenant, format and visual model', async () => {
   const source = await readFile(generatorUrl, 'utf8')
-  assert.match(source, /\.eq\('cliente_id', clienteId\)[\s\S]*\.eq\('content_type', content_type\)[\s\S]*\.eq\('visual_model', visualModel\)/)
+  assert.match(source, /\.eq\(["']cliente_id["'], clienteId\)[\s\S]*\.eq\(["']content_type["'], content_type\)[\s\S]*\.eq\(["']visual_model["'], visualModel\)/)
 
   const config = {
     id: 'master',
@@ -60,9 +60,9 @@ test('master lookup is scoped by tenant, format and visual model', async () => {
 
 test('master path delegates creation to the transactional RPC', async () => {
   const source = await readFile(generatorUrl, 'utf8')
-  assert.match(source, /rpc\('create_candidate_with_sponsors'/)
+  assert.match(source, /rpc\(["']create_candidate_with_sponsors["']/)
   assert.match(source, /p_sponsor_count: sponsorCount/)
-  assert.match(source, /p_render_contract_version: 'master_v1'/)
+  assert.match(source, /p_render_contract_version: ["']master_v1["']/)
   assert.match(source, /p_render_snapshot_base: renderSnapshotBase/)
 })
 

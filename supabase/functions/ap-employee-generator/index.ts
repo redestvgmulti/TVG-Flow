@@ -31,6 +31,11 @@ import {
   TerritorialCandidateRpcError,
 } from "./territorialCandidateWorkflow.ts";
 import {
+  inferEmployeeSourceMode,
+  normalizeEmployeeSourceMode,
+  validateEmployeeSourceQuality,
+} from "./sourceQuality.ts";
+import {
   buildGeneratorLogEvent,
   buildUnexpectedGeneratorLogEvent,
   type GeneratorStage,
@@ -153,16 +158,30 @@ function unexpectedErrorResponse(
   );
 }
 
-const responseForNews = (news: any, reused = false) => ({
-  success: true,
-  reused,
-  news_id: news.id,
-  status: news.status,
-  headline: news.headline ?? null,
-  caption: news.caption ?? null,
-  context_tag: news.context_tag ?? null,
-  render_pending: news.status === "pending_render",
-});
+const responseForNews = (news: any, reused = false) => {
+  const renderUrl = news.render_url ?? null;
+  return {
+    success: true,
+    reused,
+    news_id: news.id,
+    status: news.status,
+    headline: news.headline ?? null,
+    caption: news.caption ?? null,
+    context_tag: news.context_tag ?? null,
+    content_type: news.content_type ?? null,
+    template_nome: news.template_nome_snapshot ?? null,
+    render_url: renderUrl,
+    render_completed_at: news.render_completed_at ?? null,
+    render_pending: !renderUrl &&
+      ["processing", "pending_render", "pending_review"].includes(news.status),
+    pending_review: news.status === "pending_review",
+    roteiro: news.roteiro_studio ?? news.roteiro_json ?? null,
+    downloaded: Boolean(news.acao_baixou),
+    copied: Boolean(news.acao_copiou),
+    created_at: news.gerado_em ?? news.created_at ?? null,
+    creator_name: news.creator_name_snapshot ?? null,
+  };
+};
 
 function visualTitleErrorResponse(
   context: LogContext,
@@ -338,6 +357,7 @@ Deno.serve(async (req: Request) => {
       sponsor_count: rawSponsorCount,
       visual_model: rawVisualModel = null,
       idempotency_key = null,
+      source_mode: rawSourceMode = null,
       composer_mode: rawComposerMode = null,
       region_id = null,
       city_id = null,
@@ -457,6 +477,9 @@ Deno.serve(async (req: Request) => {
 
     stage = "resolve_source_image";
     const imageUrl = rawSourceImage || rawImage || rawImageAlias || null;
+    const explicitSourceMode = normalizeEmployeeSourceMode(rawSourceMode);
+    const sourceMode = explicitSourceMode ||
+      inferEmployeeSourceMode(url_original, imageUrl);
     logEvent(context, stage, "SOURCE_IMAGE_RESOLVED");
     if (imageUrl && !isUrl(imageUrl)) {
       return errorResponse(
@@ -466,6 +489,34 @@ Deno.serve(async (req: Request) => {
         400,
         "resolve_source_image",
       );
+    }
+    if (rawSourceMode !== null && rawSourceMode !== undefined &&
+      !explicitSourceMode) {
+      return errorResponse(
+        context,
+        "SOURCE_MODE_INVALID",
+        "Escolha uma origem valida para a materia.",
+        400,
+        "request_validation",
+      );
+    }
+    if (explicitSourceMode) {
+      const sourceQualityIssue = validateEmployeeSourceQuality({
+        sourceMode,
+        headline: requestedHeadline,
+        text: requestedText,
+        sourceUrl: url_original,
+        imageUrl,
+      });
+      if (sourceQualityIssue) {
+        return errorResponse(
+          context,
+          sourceQualityIssue.code,
+          sourceQualityIssue.message,
+          422,
+          "request_validation",
+        );
+      }
     }
     if (!composerRequested && !isUUID(visual_title_id)) {
       return errorResponse(
@@ -648,6 +699,7 @@ Deno.serve(async (req: Request) => {
           userTag,
           urlOriginal: typeof url_original === "string" ? url_original : null,
           imageUrl: typeof imageUrl === "string" ? imageUrl : null,
+          sourceMode,
           regionId: isUUID(region_id) ? region_id : null,
           cityId: isUUID(city_id) ? city_id : null,
           visualTitleId: isUUID(visual_title_id) ? visual_title_id : null,
@@ -683,6 +735,7 @@ Deno.serve(async (req: Request) => {
 
       stage = "complete";
       logEvent(context, stage, "GENERATION_COMPLETED");
+      scheduleTargetedRender(context, news);
       return new Response(
         JSON.stringify(responseForNews(news, territorialResult.reused)),
         { status: 200, headers: jsonHeaders },
@@ -879,6 +932,7 @@ Deno.serve(async (req: Request) => {
       rpcResult.reused &&
       ["pending_render", "pending_review", "approved"].includes(news.status)
     ) {
+      scheduleTargetedRender(context, news);
       return new Response(
         JSON.stringify(responseForNews(news, true)),
         { status: 200, headers: jsonHeaders },
@@ -899,6 +953,8 @@ Deno.serve(async (req: Request) => {
         userTag,
         userText,
         contentType: content_type as any,
+        sourceMode,
+        imageUrl: typeof imageUrl === "string" ? imageUrl : null,
       });
       const { error: updateError } = await supabase
         .schema("ap")
@@ -915,6 +971,10 @@ Deno.serve(async (req: Request) => {
       if (updateError) throw new Error("CANDIDATE_UPDATE_FAILED");
 
       logEvent(context, stage, "GENERATION_COMPLETED");
+      scheduleTargetedRender(context, {
+        ...news,
+        status: "pending_render",
+      });
       return new Response(
         JSON.stringify(responseForNews({
           ...news,
@@ -938,6 +998,47 @@ Deno.serve(async (req: Request) => {
     return unexpectedErrorResponse(context, stage, error);
   }
 });
+
+function scheduleTargetedRender(context: LogContext, news: any) {
+  if (!news?.id || news.status !== "pending_render" || news.render_url) return;
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !serviceRoleKey) {
+    logEvent(context, "complete", "TARGETED_RENDER_CONFIG_MISSING", "error");
+    return;
+  }
+
+  const task = (async () => {
+    const response = await fetch(`${supabaseUrl}/functions/v1/ap-render-engine`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${serviceRoleKey}`,
+        apikey: serviceRoleKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ news_id: news.id }),
+      signal: AbortSignal.timeout(120_000),
+    });
+    if (!response.ok) {
+      throw new Error(`RENDER_HTTP_${response.status}`);
+    }
+    await response.arrayBuffer();
+    logEvent(context, "complete", "TARGETED_RENDER_COMPLETED");
+  })().catch((error) => {
+    console.error(JSON.stringify({
+      ...buildGeneratorLogEvent({
+        ...context,
+        stage: "complete",
+        code: "TARGETED_RENDER_FAILED",
+      }),
+      sanitized_message: sanitizeUnexpectedMessage(error),
+    }));
+  });
+
+  EdgeRuntime.waitUntil(task);
+  logEvent(context, "complete", "TARGETED_RENDER_SCHEDULED");
+}
 
 // This endpoint only creates master_v1 candidates. Historical legacy retries
 // remain supported by ap-render-engine from the immutable candidate snapshot;

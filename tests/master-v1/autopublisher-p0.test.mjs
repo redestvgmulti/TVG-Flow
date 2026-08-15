@@ -26,7 +26,7 @@ const root = new URL('../../', import.meta.url)
 const source = path => readFile(new URL(path, root), 'utf8')
 
 test('generator release marker is unique to the visual catalog expansion', async () => {
-  assert.equal(AP_EMPLOYEE_GENERATOR_VERSION, '2026-08-04-territorial-composer.1')
+  assert.equal(AP_EMPLOYEE_GENERATOR_VERSION, '2026-08-15-employee-material-delivery.1')
 
   const generator = await source('supabase/functions/ap-employee-generator/index.ts')
   assert.match(generator, /correlation_id: context\.correlationId/)
@@ -99,7 +99,7 @@ test('disabled visual model fails closed before source image validation', async 
     sourceImageValidation > masterResolution,
     'disabled masters must fail closed before SOURCE_IMAGE_REQUIRED is evaluated',
   )
-  assert.match(generator, /'SOURCE_IMAGE_REQUIRED'/)
+  assert.match(generator, /["']SOURCE_IMAGE_REQUIRED["']/)
 })
 
 test('visual model derives sponsor count and UUID/layers come from master config', async () => {
@@ -122,8 +122,8 @@ test('new manual path never consults legacy template/profile tables', async () =
   assert.doesNotMatch(generator, /\.from\(['"]templates['"]\)/)
   assert.doesNotMatch(generator, /\.from\(['"]template_render_profiles['"]\)/)
   assert.doesNotMatch(generator, /get_and_advance_template/)
-  assert.match(generator, /rpc\('create_candidate_with_sponsors'/)
-  assert.match(generator, /p_render_contract_version: 'master_v1'/)
+  assert.match(generator, /rpc\(["']create_candidate_with_sponsors["']/)
+  assert.match(generator, /p_render_contract_version: ["']master_v1["']/)
 })
 
 test('committed master retry reuses frozen request base without live config lookup', async () => {
@@ -162,7 +162,8 @@ test('frontend distinguishes loading, empty, error and available', () => {
 
 test('frontend blocks both empty and error, retries loading, and shows enabled model', async () => {
   const form = await source('src/components/editorial/ArticleForm.jsx')
-  assert.match(form, /disabled=\{isSubmitting \|\| generationBlocked\}/)
+  assert.match(form, /const submissionDisabled = Boolean\(isSubmitting \|\| generationBlocked\)/)
+  assert.match(form, /disabled=\{submissionDisabled\}/)
   assert.match(form, /visualModelsState === 'error'/)
   assert.match(form, /visualModelsState === 'empty'/)
   assert.match(form, /onRetryVisualModels/)

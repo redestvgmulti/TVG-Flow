@@ -72,17 +72,24 @@ export default defineConfig({
             handler: 'NetworkOnly', // ← CRITICAL: No caching for auth
           },
 
-          // 📊 DATA API — NETWORK FIRST WITH CACHE FALLBACK
-          // Rest API can be cached for performance, but prioritize fresh data
+          // 🔒 DATA API — NEVER CACHE TENANT OR JOB STATE
+          // Authenticated responses can differ by user and change immediately.
           {
             urlPattern: /^https:\/\/gyooxmpyxncrezjiljrj\.supabase\.co\/rest\/.*$/,
+            handler: 'NetworkOnly',
+          },
+
+          // Render paths may be overwritten after a retry. Prefer the network
+          // so the employee never receives an older artifact.
+          {
+            urlPattern: /^https:\/\/gyooxmpyxncrezjiljrj\.supabase\.co\/storage\/v1\/object\/public\/ap-renders\/.*$/,
             handler: 'NetworkFirst',
             options: {
-              cacheName: 'supabase-data-api',
-              networkTimeoutSeconds: 10,
+              cacheName: 'autopublisher-renders',
+              networkTimeoutSeconds: 15,
               expiration: {
-                maxEntries: 50,
-                maxAgeSeconds: 60 * 60 * 24 // 24 hours
+                maxEntries: 30,
+                maxAgeSeconds: 60 * 60
               },
               cacheableResponse: {
                 statuses: [0, 200]

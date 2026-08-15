@@ -17,17 +17,19 @@ export interface WorkflowOptions {
     userTag?: string | null;
     userText?: string | null;
     contentType?: "feed" | "reels" | "story";
+    sourceMode?: "link" | "text" | "image";
+    imageUrl?: string | null;
 }
 
 export async function runEditorialWorkflow(supabase: SupabaseClient, options: WorkflowOptions) {
-    const { newsId, clienteId, actionType = "standard", userHeadline, userTag, userText, contentType = "feed" } = options;
+    const { newsId, clienteId, actionType = "standard", userHeadline, userTag, userText, contentType = "feed", sourceMode, imageUrl } = options;
 
     console.log(`[WORKFLOW] [runEditorialWorkflow] Processing newsId=${newsId} for clienteId=${clienteId} (Action: ${actionType})`);
 
     // 1. Fetch Item Data (needed for fallback and context)
     const { data: item, error: fetchErr } = await supabase.schema("ap")
         .from("candidate_news")
-        .select("titulo, conteudo, categoria, context_tag, url_original, headline, caption, status")
+        .select("titulo, conteudo, categoria, context_tag, url_original, imagem_url, headline, caption, status")
         .eq("id", newsId)
         .single();
 
@@ -100,7 +102,8 @@ export async function runEditorialWorkflow(supabase: SupabaseClient, options: Wo
         prompt: prompt,
         baseUrl: context.settings?.api_base_url || undefined,
         temperature: context.settings?.temperature || 0.7,
-        maxTokens: actionType === "process_studio" ? 2000 : 1500
+        maxTokens: actionType === "process_studio" ? 2000 : 1500,
+        imageUrl: sourceMode === "image" ? (imageUrl || item.imagem_url || null) : null,
     });
 
     // 6. Log Usage (Audit)

@@ -9,6 +9,7 @@ export interface CallLLMParams {
   prompt: string
   temperature: number
   maxTokens: number
+  imageUrl?: string | null
 }
 
 export interface CallLLMResult {
@@ -39,10 +40,22 @@ export async function callLLM({
   model,
   prompt,
   temperature,
-  maxTokens
+  maxTokens,
+  imageUrl,
 }: CallLLMParams): Promise<CallLLMResult> {
   let cleanBaseUrl = normalizeBaseUrl(baseUrl || '');
   let cleanModel = model.trim();
+  let normalizedImageUrl: string | null = null;
+  if (imageUrl) {
+    try {
+      const parsedImageUrl = new URL(imageUrl);
+      if (parsedImageUrl.protocol === 'http:' || parsedImageUrl.protocol === 'https:') {
+        normalizedImageUrl = parsedImageUrl.toString();
+      }
+    } catch {
+      normalizedImageUrl = null;
+    }
+  }
 
   // 1. AUTO-ROUTING INTELLIGENCE (Override based on API Key Prefix)
   // This makes the system resilient against client misconfiguration.
@@ -101,7 +114,18 @@ export async function callLLM({
 
     body = {
       model: cleanModel,
-      messages: [{ role: 'user', content: prompt }],
+      messages: [{
+        role: 'user',
+        content: normalizedImageUrl
+          ? [
+              {
+                type: 'image',
+                source: { type: 'url', url: normalizedImageUrl },
+              },
+              { type: 'text', text: prompt },
+            ]
+          : prompt,
+      }],
       temperature,
       max_tokens: maxTokens
     }
@@ -138,7 +162,15 @@ export async function callLLM({
 
     body = {
       model: cleanModel,
-      messages: [{ role: 'user', content: prompt }],
+      messages: [{
+        role: 'user',
+        content: normalizedImageUrl
+          ? [
+              { type: 'text', text: prompt },
+              { type: 'image_url', image_url: { url: normalizedImageUrl } },
+            ]
+          : prompt,
+      }],
       temperature,
       max_tokens: maxTokens
     }

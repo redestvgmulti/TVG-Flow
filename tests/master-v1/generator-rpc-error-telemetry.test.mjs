@@ -15,8 +15,8 @@ const migration = fs.readFileSync(
 )
 
 test('candidate RPC conflicts are sanitized and returned as a safe 409', () => {
-  assert.match(generator, /raw\.code === '23505'/)
-  assert.match(generator, /code: 'DUPLICATE_CANDIDATE'/)
+  assert.match(generator, /raw\.code === ["']23505["']/)
+  assert.match(generator, /code: ["']DUPLICATE_CANDIDATE["']/)
   assert.match(generator, /sanitized_message: sanitizeUnexpectedMessage/)
   assert.match(generator, /return rpcErrorResponse\(/)
 })

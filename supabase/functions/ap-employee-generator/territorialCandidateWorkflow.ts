@@ -60,6 +60,7 @@ export async function createAndProcessTerritorialCandidate(input: {
   userTag: string | null;
   urlOriginal: string | null;
   imageUrl: string | null;
+  sourceMode: "link" | "text" | "image";
   regionId: string | null;
   cityId: string | null;
   visualTitleId: string | null;
@@ -110,6 +111,8 @@ export async function createAndProcessTerritorialCandidate(input: {
       userTag: input.userTag,
       userText: input.userText,
       contentType: input.contentType as any,
+      sourceMode: input.sourceMode,
+      imageUrl: input.imageUrl,
     });
     const { data: finalizeResult, error: finalizeError } = await input
       .serviceSupabase
