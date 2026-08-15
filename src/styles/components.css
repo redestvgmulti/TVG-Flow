@@ -2774,3 +2774,59 @@ textarea.input:focus {
         grid-template-columns: 1fr !important;
     }
 }
+.creator-signature {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.625rem;
+    min-width: 0;
+    color: #334155;
+}
+
+.creator-signature__avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    flex: 0 0 2rem;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #e0e7ff, #dbeafe);
+    border: 1px solid #c7d2fe;
+    color: #3730a3;
+    font-size: 0.6875rem;
+    font-weight: 800;
+    letter-spacing: 0.025em;
+}
+
+.creator-signature__content {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    line-height: 1.25;
+}
+
+.creator-signature__name {
+    overflow: hidden;
+    color: #334155;
+    font-size: 0.75rem;
+    font-weight: 650;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.creator-signature__time {
+    color: #94a3b8;
+    font-size: 0.6875rem;
+    white-space: nowrap;
+}
+
+.creator-signature--compact {
+    gap: 0.5rem;
+}
+
+.creator-signature--compact .creator-signature__avatar {
+    width: 1.75rem;
+    height: 1.75rem;
+    flex-basis: 1.75rem;
+    font-size: 0.625rem;
+}

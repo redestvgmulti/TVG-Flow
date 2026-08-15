@@ -4,6 +4,7 @@ import { Calendar, Clock, Info, Calendar as CalendarIcon, X } from 'lucide-react
 import { listMeetingsStaff, confirmPresence } from '../../services/meetingService'
 import { useAuth } from '../../contexts/AuthContext'
 import { toast } from 'sonner'
+import CreatorSignature from '../../components/ui/CreatorSignature'
 import '../../styles/components.css'
 import '../../styles/meetings.css'
 
@@ -113,6 +114,12 @@ export default function StaffMeetings() {
                                     <h3 className="task-item-title">{meeting.titulo}</h3>
                                 </div>
 
+                                <CreatorSignature
+                                    name={meeting.criada_por_name_snapshot || meeting.profissionais?.nome}
+                                    createdAt={meeting.created_at}
+                                    compact
+                                />
+
                                 <div className="meeting-card-meta">
                                     <span className="meeting-date flex items-center gap-1">
                                         <CalendarIcon size={14} />
@@ -156,6 +163,11 @@ export default function StaffMeetings() {
                             </button>
                         </div>
                         <div className="modal-content">
+                            <CreatorSignature
+                                name={selectedMeeting.criada_por_name_snapshot || selectedMeeting.profissionais?.nome}
+                                createdAt={selectedMeeting.created_at}
+                            />
+
                             <div className="form-group">
                                 <label>Título</label>
                                 <div className="p-3 bg-base-200 rounded-lg">{selectedMeeting.titulo}</div>

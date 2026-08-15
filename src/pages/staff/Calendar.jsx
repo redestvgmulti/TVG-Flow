@@ -7,6 +7,7 @@ import { fetchStaffCalendarEvents } from '../../services/calendarService'
 import { Calendar as CalendarIcon, Clock, ExternalLink, AlertCircle, CheckCircle } from 'lucide-react'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 import '../../styles/calendar.css'
+import CreatorSignature from '../../components/ui/CreatorSignature'
 
 const localizer = dateFnsLocalizer({
     format,
@@ -170,6 +171,12 @@ function StaffTaskDetailModal({ event, onClose }) {
                 <div className="modal-body">
                     <div className="task-detail-header">
                         <h2 className="task-detail-title">{task.funcao}</h2>
+
+                        <CreatorSignature
+                            name={task.tarefa?.created_by_name_snapshot}
+                            createdAt={task.tarefa?.created_at}
+                            compact
+                        />
 
                         <div className="task-detail-metadata">
                             <span className="task-detail-badge task-detail-badge--micro">

@@ -19,6 +19,7 @@ import {
 import { AreaChart, Area, ResponsiveContainer, XAxis, Tooltip, CartesianGrid } from 'recharts'
 import { PageTransition } from '../../components/PageTransition'
 import LoadingScreen from '../../components/LoadingScreen'
+import CreatorSignature from '../../components/ui/CreatorSignature'
 import '../../styles/staff-dashboard.css'
 import '../../styles/staff-tasks.css'
 
@@ -71,7 +72,7 @@ function StaffDashboard() {
 
                 supabase
                     .from('tarefas')
-                    .select('id, titulo, deadline, status, prioridade, created_at, concluida_at, drive_link')
+                    .select('id, titulo, deadline, status, prioridade, created_at, concluida_at, drive_link, created_by_name_snapshot, creator:profissionais!created_by(nome)')
                     .eq('assigned_to', professionalId)
                     .order('deadline', { ascending: true })
             ])
@@ -375,6 +376,12 @@ function StaffDashboard() {
                                                 <h3 className="staff-task-title">
                                                     {task.titulo}
                                                 </h3>
+
+                                                <CreatorSignature
+                                                    name={task.created_by_name_snapshot || task.creator?.nome}
+                                                    createdAt={task.created_at}
+                                                    compact
+                                                />
 
                                                 <div className="staff-task-meta">
                                                     {task.deadline && (

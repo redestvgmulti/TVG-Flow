@@ -3,6 +3,7 @@ import { X, Calendar, User, CheckCircle2, Circle, Clock, ArrowRight } from 'luci
 import { supabase } from '../../services/supabase'
 import { formatDistanceToNow } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import CreatorSignature from '../ui/CreatorSignature'
 
 import { RefreshCw, Pencil, Trash2, ExternalLink } from 'lucide-react'
 
@@ -121,6 +122,11 @@ export default function TaskSummaryModal({ task, onClose, onUpdate, onEdit, onDe
 
                 <div className="modal-header-content">
                     <h2 className="modal-task-title">{task.titulo}</h2>
+                    <CreatorSignature
+                        name={task.created_by_name_snapshot || task.creator?.nome}
+                        createdAt={task.created_at}
+                        compact
+                    />
                     <div className="modal-meta-row">
                         <div className="meta-item">
                             <Clock size={13} />

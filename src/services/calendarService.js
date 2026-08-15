@@ -62,8 +62,13 @@ export async function fetchAdminCalendarEvents() {
 
 
     // Transform to calendar events
+    const parentTaskMap = new Map((macroTasks || []).map(task => [task.id, task]))
+    const enrichedMicroTasks = (microTasks || []).map(task => ({
+      ...task,
+      tarefa: parentTaskMap.get(task.tarefa_id) || null
+    }))
     const macroEvents = transformMacroTasks(macroTasks || [])
-    const microEvents = transformMicroTasks(microTasks || [])
+    const microEvents = transformMicroTasks(enrichedMicroTasks)
     const meetingEvents = transformMeetings(meetings || [])
 
     const allEvents = [...macroEvents, ...microEvents, ...meetingEvents]
@@ -96,6 +101,19 @@ export async function fetchStaffCalendarEvents(professionalId) {
       throw error
     }
 
+    const parentTaskIds = [...new Set((microTasks || []).map(task => task.tarefa_id).filter(Boolean))]
+    let parentTaskMap = new Map()
+
+    if (parentTaskIds.length > 0) {
+      const { data: parentTasks, error: parentTaskError } = await supabase
+        .from('tarefas')
+        .select('id, titulo, created_at, created_by_name_snapshot')
+        .in('id', parentTaskIds)
+
+      if (parentTaskError) throw parentTaskError
+      parentTaskMap = new Map((parentTasks || []).map(task => [task.id, task]))
+    }
+
 
 
     // Fetch meetings where staff is participant (RLS handles filtering)
@@ -111,7 +129,11 @@ export async function fetchStaffCalendarEvents(professionalId) {
 
 
 
-    const events = transformMicroTasks(microTasks || [])
+    const enrichedMicroTasks = (microTasks || []).map(task => ({
+      ...task,
+      tarefa: parentTaskMap.get(task.tarefa_id) || null
+    }))
+    const events = transformMicroTasks(enrichedMicroTasks)
     const meetingEvents = transformMeetings(meetings || [])
 
     const allEvents = [...events, ...meetingEvents]

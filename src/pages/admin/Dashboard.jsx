@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
 import { getDashboardMetrics, getRecentTasks } from '../../services/dashboardMetrics'
+import CreatorSignature from '../../components/ui/CreatorSignature'
 import {
     AreaChart,
     Area,
@@ -496,6 +497,11 @@ export default function Painel() {
                                             <span className="task-title">{task.titulo}</span>
                                         </div>
                                         <div className="task-meta">
+                                            <CreatorSignature
+                                                name={task.created_by_name_snapshot || task.creator?.nome}
+                                                createdAt={task.created_at}
+                                                compact
+                                            />
                                             <span className="user-text">
                                                 {displayResponsible}
                                             </span>

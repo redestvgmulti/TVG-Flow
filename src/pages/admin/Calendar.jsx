@@ -5,6 +5,7 @@ import ptBR from 'date-fns/locale/pt-BR'
 import { fetchAdminCalendarEvents, getEventClasses } from '../../services/calendarService'
 import { Calendar as CalendarIcon, Clock, User, ExternalLink, AlertCircle, CheckCircle } from 'lucide-react'
 import { SkeletonTable } from '../../components/Skeleton'
+import CreatorSignature from '../../components/ui/CreatorSignature'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 import '../../styles/calendar.css'
 
@@ -173,6 +174,14 @@ function TaskDetailModal({ event, onClose }) {
                         <h2 className="task-detail-title">
                             {isMacro ? task.titulo : task.funcao}
                         </h2>
+
+                        {(isMacro || task.tarefa) && (
+                            <CreatorSignature
+                                name={isMacro ? task.created_by_name_snapshot : task.tarefa?.created_by_name_snapshot}
+                                createdAt={isMacro ? task.created_at : task.tarefa?.created_at}
+                                compact
+                            />
+                        )}
 
                         <div className="task-detail-metadata">
                             <span className={`task-detail-badge task-detail-badge--${isMacro ? 'macro' : 'micro'}`}>

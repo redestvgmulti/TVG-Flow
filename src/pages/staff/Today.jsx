@@ -3,6 +3,7 @@ import { supabase } from '../../services/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { toast } from 'sonner'
 import { CheckCircle2, AlertCircle, Calendar, Clock, ArrowRight } from 'lucide-react'
+import CreatorSignature from '../../components/ui/CreatorSignature'
 
 function Today() {
     const { professionalId, professionalName } = useAuth()
@@ -25,7 +26,7 @@ function Today() {
 
             const { data, error } = await supabase
                 .from('tarefas')
-                .select('id, titulo, deadline, status, priority, drive_link')
+                .select('id, titulo, deadline, status, priority, drive_link, created_at, created_by_name_snapshot, creator:profissionais!created_by(nome)')
                 .eq('assigned_to', professionalId)
                 .or(`deadline.gte.${todayStr},and(deadline.lt.${todayStr},status.neq.completed)`)
                 .order('deadline')
@@ -134,6 +135,13 @@ function Today() {
                                         <h3 className="font-semibold text-gray-900 leading-tight">
                                             {task.titulo}
                                         </h3>
+                                        <div className="mt-2">
+                                            <CreatorSignature
+                                                name={task.created_by_name_snapshot || task.creator?.nome}
+                                                createdAt={task.created_at}
+                                                compact
+                                            />
+                                        </div>
                                     </div>
                                 </div>
 

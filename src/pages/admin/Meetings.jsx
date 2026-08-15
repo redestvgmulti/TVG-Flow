@@ -11,6 +11,7 @@ import {
 } from '../../services/meetingService'
 import { useAuth } from '../../contexts/AuthContext'
 import { SkeletonList } from '../../components/Skeleton'
+import CreatorSignature from '../../components/ui/CreatorSignature'
 import '../../styles/components.css'
 import '../../styles/meetings.css'
 
@@ -288,6 +289,11 @@ function Meetings() {
                         <div key={meeting.id} className="task-item">
                             <div className="task-item-content">
                                 <h3 className="task-item-title">{meeting.titulo}</h3>
+                                <CreatorSignature
+                                    name={meeting.criada_por_name_snapshot || meeting.profissionais?.nome}
+                                    createdAt={meeting.created_at}
+                                    compact
+                                />
 
                                 <div className="meeting-card-meta">
                                     <span className="meeting-date flex items-center gap-1">

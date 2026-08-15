@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { fileService } from '../services/fileService'
 import { completeMicroTask, updateMicroTaskStatus, loadWorkflowProfessionals, returnMicroTask } from '../utils/taskExecution'
 import ReturnReasonModal from './ReturnReasonModal'
+import CreatorSignature from './ui/CreatorSignature'
 import { useFocusTrap } from '../hooks/useFocusTrap'
 import '../styles/macro-task.css'
 
@@ -97,7 +98,8 @@ export default function MacroTaskDetail({ taskId, onBack, isModal = false, onEdi
                 .from('tarefas')
                 .select(`
                     *,
-                    cliente:empresas!cliente_id(nome)
+                    cliente:empresas!cliente_id(nome),
+                    creator:profissionais!created_by(id, nome)
                 `)
                 .eq('id', taskId)
                 .single()
@@ -293,6 +295,11 @@ export default function MacroTaskDetail({ taskId, onBack, isModal = false, onEdi
                         </div>
                     </div>
                     <h1 className="macro-task-title">{task.titulo}</h1>
+                    <CreatorSignature
+                        name={task.created_by_name_snapshot || task.creator?.nome}
+                        createdAt={task.created_at}
+                        compact
+                    />
                 </div>
 
 

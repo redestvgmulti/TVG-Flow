@@ -13,6 +13,7 @@ import { SkeletonCard, SkeletonTable } from '../../components/Skeleton'
 import { toast } from 'sonner'
 import ArticleForm from '../../components/editorial/ArticleForm'
 import Modal from '../../components/ui/Modal'
+import CreatorSignature from '../../components/ui/CreatorSignature'
 import {
     availableContentTypes,
     availableVisualModelsForFormat,
@@ -202,7 +203,8 @@ export default function AutoPublisher() {
             .schema('ap')
             .from('candidate_news')
             .select(`id, titulo, headline, caption, render_url, imagem_url, imagem_storage,
-                     status, created_at, context_tag, content_type,
+                     status, created_at, context_tag, content_type, fonte_id,
+                     criado_por_user_id, creator_name_snapshot,
                      template_nome_snapshot, roteiro_studio, duracao_estimada, broll_sugestao,
                      studio_media_image_url, studio_media_video_url, enviado_para_studio,
                      instagram_post_id, horario_agendado`)
@@ -841,7 +843,7 @@ export default function AutoPublisher() {
                                             <th>Matéria</th>
                                             <th style={{ width: 130 }}>Status</th>
                                             <th style={{ width: 100 }}>Formato</th>
-                                            <th style={{ width: 150 }}>Coletada em</th>
+                                            <th style={{ width: 210 }}>Criada por</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -850,8 +852,13 @@ export default function AutoPublisher() {
                                                 <td style={{ fontWeight: 500, color: '#0f172a' }}>{item.titulo}</td>
                                                 <td><StatusBadge status={item.status} errorLog={item.error_log} /></td>
                                                 <td><FormatBadge type={item.content_type} /></td>
-                                                <td style={{ fontSize: 12, color: '#94a3b8' }}>
-                                                    {new Date(item.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+                                                <td>
+                                                    <CreatorSignature
+                                                        name={item.creator_name_snapshot}
+                                                        createdAt={item.created_at}
+                                                        automated={Boolean(item.fonte_id)}
+                                                        compact
+                                                    />
                                                 </td>
                                             </tr>
                                         ))}
@@ -917,6 +924,7 @@ export default function AutoPublisher() {
                                             <th style={{ width: 100 }}>Arte</th>
                                             <th>Matéria</th>
                                             <th style={{ width: 100 }}>Formato</th>
+                                            <th style={{ width: 210 }}>Criada por</th>
                                             <th style={{ width: 160 }}>Publicada em</th>
                                             <th style={{ width: 60, textAlign: 'center' }}>IG</th>
                                         </tr>
@@ -940,6 +948,14 @@ export default function AutoPublisher() {
                                                     {item.caption && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{item.caption}</div>}
                                                 </td>
                                                 <td><FormatBadge type={item.content_type} /></td>
+                                                <td>
+                                                    <CreatorSignature
+                                                        name={item.creator_name_snapshot}
+                                                        createdAt={item.created_at}
+                                                        automated={Boolean(item.fonte_id)}
+                                                        compact
+                                                    />
+                                                </td>
                                                 <td style={{ fontSize: 12, color: '#94a3b8' }}>
                                                     {item.horario_agendado
                                                         ? new Date(item.horario_agendado).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
@@ -1194,6 +1210,15 @@ function PendenteCard({ item, onReject, onStudio, onApproveSelected, onEdit, isP
                 )}
             </div>
 
+            <div style={{ padding: '10px 16px 0' }}>
+                <CreatorSignature
+                    name={item.creator_name_snapshot}
+                    createdAt={item.created_at}
+                    automated={Boolean(item.fonte_id)}
+                    compact
+                />
+            </div>
+
             {/* Botões de ação */}
             <div className="ap-card-actions-wrap">
                 <div className="ap-card-btn-row">
@@ -1373,6 +1398,15 @@ function AprovadaCard({ item, onPublish, onReject, isProcessing }) {
                     <Check size={12} /> Aprovado por {item.approved_by_name}
                 </div>
             )}
+
+            <div style={{ padding: '2px 16px 10px' }}>
+                <CreatorSignature
+                    name={item.creator_name_snapshot}
+                    createdAt={item.created_at}
+                    automated={Boolean(item.fonte_id)}
+                    compact
+                />
+            </div>
 
             {/* Botões: Baixar Arte + Copiar Legenda */}
             <div className="ap-card-actions-wrap">

@@ -212,7 +212,7 @@ export async function getRecentTasks(limit = 6) {
         // AND status not completed/concluded/cancelled.
         const { data: urgentTasks, error: urgentError } = await supabase
             .from('tarefas')
-            .select('id, status, titulo, deadline, priority, created_at, assigned_to, drive_link')
+            .select('id, status, titulo, deadline, priority, created_at, assigned_to, drive_link, created_by_name_snapshot, creator:profissionais!created_by(nome)')
             .not('status', 'in', '("completed","concluída","concluida","cancelada")')
             .lt('deadline', shortly) // Anything due before tomorrow 24h
             .order('deadline', { ascending: true }) // Most urgent first (oldest deadline)
@@ -229,7 +229,7 @@ export async function getRecentTasks(limit = 6) {
 
             let query = supabase
                 .from('tarefas')
-                .select('id, status, titulo, deadline, priority, created_at, assigned_to, drive_link')
+                .select('id, status, titulo, deadline, priority, created_at, assigned_to, drive_link, created_by_name_snapshot, creator:profissionais!created_by(nome)')
                 .not('status', 'in', '("completed","concluída","concluida","cancelada")')
                 .order('created_at', { ascending: false }) // Newest first
                 .limit(needed)

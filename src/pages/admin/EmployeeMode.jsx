@@ -4,6 +4,7 @@ import { supabase } from '../../services/supabase';
 import { Check, CheckCircle2, Copy, Download, X, AlertCircle, RefreshCcw, ImageIcon, Brain, Search, SearchCode, Video, Image as ImageIconLucide, Loader2 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import ArticleForm from '../../components/editorial/ArticleForm';
+import CreatorSignature from '../../components/ui/CreatorSignature';
 import {
     availableContentTypes,
     availableVisualModelsForFormat,
@@ -588,7 +589,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
         try {
             const { data, error } = await supabase
                 .from('ap_candidate_news_complete')
-                .select('id, titulo, headline, caption, render_url, gerado_em, status, template_nome_snapshot, context_tag')
+                .select('id, titulo, headline, caption, render_url, gerado_em, created_at, status, template_nome_snapshot, context_tag, fonte_id, criado_por_user_id, creator_name_snapshot')
                 .eq('criado_por_user_id', user?.id)
                 .order('gerado_em', { ascending: false })
                 .range(page * ITEMS_PER_PAGE, (page + 1) * ITEMS_PER_PAGE - 1);
@@ -816,9 +817,13 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
 
                                             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                                                 <h4 style={{ margin: '0 0 4px 0', fontSize: '15px', color: '#1e293b', fontWeight: 600, lineHeight: 1.3 }}>{item.headline || item.titulo || 'Materia Sem Título'}</h4>
-                                                <div style={{ fontSize: '12px', color: '#64748b', display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                                    <span>{item.gerado_em ? new Date(item.gerado_em).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : ''}</span>
-                                                    •
+                                                <CreatorSignature
+                                                    name={item.creator_name_snapshot}
+                                                    createdAt={item.gerado_em || item.created_at}
+                                                    automated={Boolean(item.fonte_id)}
+                                                    compact
+                                                />
+                                                <div style={{ fontSize: '12px', color: '#64748b', marginTop: '6px' }}>
                                                     <span style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px', fontWeight: 500 }}>{item.template_nome_snapshot || 'Desconhecido'}</span>
                                                 </div>
                                             </div>

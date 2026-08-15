@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import MacroTaskDetail from '../../components/MacroTaskDetail'
 import EditTaskModal from '../../components/EditTaskModal'
 import { SkeletonTable } from '../../components/Skeleton'
+import CreatorSignature from '../../components/ui/CreatorSignature'
 import { useAuth } from '../../contexts/AuthContext'
 import '../../styles/adminTasks.css'
 
@@ -193,6 +194,10 @@ function Tasks() {
                 .select(`
                     *,
                     cliente:empresas!cliente_id (
+                        id,
+                        nome
+                    ),
+                    creator:profissionais!created_by (
                         id,
                         nome
                     ),
@@ -444,6 +449,10 @@ function Tasks() {
                 .from('tarefas')
                 .select(`
                     *,
+                    creator:profissionais!created_by (
+                        id,
+                        nome
+                    ),
                     micro_tasks:tarefas_micro (
                         id,
                         status,
@@ -510,6 +519,11 @@ function Tasks() {
             return
         }
 
+        if (!user?.id) {
+            toast.error('Não foi possível identificar quem está criando a OS')
+            return
+        }
+
         setSubmitting(true)
 
         try {
@@ -522,7 +536,8 @@ function Tasks() {
                 deadline: formData.deadline,
                 priority: formData.priority,
                 status: formData.status,
-                drive_link: formData.drive_link.trim() || null
+                drive_link: formData.drive_link.trim() || null,
+                created_by: user.id
             }
 
             const { error } = await supabase
@@ -1035,6 +1050,7 @@ function Tasks() {
                                     </th>
                                     <th>Título</th>
                                     <th>Cliente</th>
+                                    <th>Criada por</th>
                                     <th>Atribuída a</th>
                                     <th>Prazo</th>
                                     <th>Status</th>
@@ -1071,6 +1087,13 @@ function Tasks() {
                                             </td>
                                             <td>
                                                 {task.cliente?.nome || 'Sem cliente associado'}
+                                            </td>
+                                            <td>
+                                                <CreatorSignature
+                                                    name={task.created_by_name_snapshot || task.creator?.nome}
+                                                    createdAt={task.created_at}
+                                                    compact
+                                                />
                                             </td>
                                             <td>
                                                 {task.micro_tasks && task.micro_tasks.length > 0 ? (
@@ -1477,4 +1500,3 @@ function Tasks() {
 }
 
 export default Tasks
-

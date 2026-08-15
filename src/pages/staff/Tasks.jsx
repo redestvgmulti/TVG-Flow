@@ -18,12 +18,12 @@ import {
     Trash2,
     Workflow,
     Paperclip,
-    Download,
-    User
+    Download
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '../../contexts/AuthContext'
 import { useRefresh } from '../../contexts/RefreshContext'
+import CreatorSignature from '../../components/ui/CreatorSignature'
 import { fileService } from '../../services/fileService'
 import ReturnReasonModal from '../../components/ReturnReasonModal'
 import EditTaskModal from '../../components/EditTaskModal'
@@ -127,6 +127,7 @@ export default function StaffTasks() {
                             depends_on: mt.depends_on,
                             peso: mt.peso,
                             created_at: mt.created_at,
+                            os_created_at: osTask.created_at,
                             updated_at: mt.updated_at,
                             concluida_at: mt.concluida_at,
 
@@ -139,7 +140,8 @@ export default function StaffTasks() {
 
                             // Criador da OS & Empresa
                             criador_id: osTask.criador?.id || null,
-                            criador_nome: osTask.criador?.nome || 'Não identificado',
+                            created_by_name_snapshot: osTask.created_by_name_snapshot,
+                            criador_nome: osTask.created_by_name_snapshot || osTask.criador?.nome || null,
                             cliente_nome: osTask.cliente?.nome || '',
 
                             // Flags e referências
@@ -155,7 +157,7 @@ export default function StaffTasks() {
                     allTasks.push({
                         ...osTask,
                         // Ensure we map the joined data correctly for simple tasks too
-                        criador_nome: osTask.criador?.nome || 'Não identificado',
+                        criador_nome: osTask.created_by_name_snapshot || osTask.criador?.nome || null,
                         cliente_nome: osTask.cliente?.nome || '',
                         is_micro_task: false,
                         is_os_simples: true,
@@ -527,24 +529,6 @@ function TaskCard({ task, onClick }) {
                     <span className={`staff-task-status-dot ${statusClass}`}></span>
                     <span className="staff-task-status-text">{statusText}</span>
 
-                    {/* Novo formato: Dot + Criador + Dot + Empresa */}
-                    {task.status === 'pendente' && (task.criador_nome || task.cliente_nome) && (
-                        <div className="staff-task-origin-info">
-                            {task.criador_nome && (
-                                <>
-                                    <span className="dot-separator">•</span>
-                                    <span className="origin-creator">{task.criador_nome.split(' ')[0]}</span>
-                                </>
-                            )}
-                            {task.cliente_nome && (
-                                <>
-                                    <span className="dot-separator">•</span>
-                                    <span className="origin-company">{task.cliente_nome}</span>
-                                </>
-                            )}
-                        </div>
-                    )}
-
                     {isOverdue && (
                         <span className="staff-task-badge-overdue">
                             <AlertCircle size={10} />
@@ -561,6 +545,17 @@ function TaskCard({ task, onClick }) {
                 <h3 className="staff-task-title">
                     {task.titulo}
                 </h3>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                    <CreatorSignature
+                        name={task.created_by_name_snapshot || task.criador_nome}
+                        createdAt={task.os_created_at || task.created_at}
+                        compact
+                    />
+                    {task.cliente_nome && (
+                        <span className="origin-company">{task.cliente_nome}</span>
+                    )}
+                </div>
 
                 {/* Dependency Indicator */}
                 {task.status === 'bloqueada' && (
@@ -831,17 +826,13 @@ function ExecutionView({ task, onBack, onUpdateStatus, onDeleteTask, user, role,
                 </div>
 
                 {/* Origin Info (New) */}
-                {(task.criador_nome || task.cliente_nome) && (
+                {(task.criador_nome || task.created_by_name_snapshot || task.cliente_nome) && (
                     <div className="execution-origin-info" style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem', color: '#6B7280' }}>
-                        {task.criador_nome && (
-                            <span className="origin-creator">
-                                <User size={14} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'text-bottom' }} />
-                                {task.criador_nome}
-                            </span>
-                        )}
-                        {task.criador_nome && task.cliente_nome && (
-                            <span className="dot-separator">•</span>
-                        )}
+                        <CreatorSignature
+                            name={task.created_by_name_snapshot || task.criador_nome}
+                            createdAt={task.os_created_at || task.created_at}
+                            compact
+                        />
                         {task.cliente_nome && (
                             <span className="origin-company" style={{ fontWeight: 500, color: '#4B5563' }}>
                                 {task.cliente_nome}
