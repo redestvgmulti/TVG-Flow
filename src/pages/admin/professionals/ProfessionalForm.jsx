@@ -1,29 +1,21 @@
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { CheckCircle, Copy, RefreshCw, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import { professionalsService } from '../../../services/professionals'
 import '../../../styles/professional-form.css'
 
 export default function ProfessionalForm({ initialData, onSubmit, onCancel, onDelete, isSubmitting, isEditMode = false, hideCancelButton = false }) {
-    const [formData, setFormData] = useState({
+    const [formData, setFormData] = useState(() => ({
         nome: '',
         email: '',
         role: 'staff',
-        area_id: null
-    })
+        area_id: null,
+        ...(initialData || {})
+    }))
 
     const [recoveryLink, setRecoveryLink] = useState(null)
     const [isGeneratingLink, setIsGeneratingLink] = useState(false)
-
-    useEffect(() => {
-        if (initialData) {
-            setFormData(prev => ({
-                ...prev,
-                ...initialData
-            }))
-        }
-    }, [initialData])
 
     const handleGenerateLink = async () => {
         if (!formData.email) return
