@@ -37,13 +37,8 @@ export default function ProfessionalEdit() {
     const handleUpdate = async (formData) => {
         setIsSubmitting(true)
         try {
-            // Remove sensitive/readonly fields before sending if needed, 
-            // though service/API usually ignores them or we handle it there.
-            // API update expects: { nome, role, ativo, area_id }
             const payload = {
                 nome: formData.nome,
-                role: formData.role,
-                ativo: formData.ativo,
                 area_id: formData.area_id
             }
 

@@ -1,86 +1,53 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { corsHeaders } from '../_shared/cors.ts'
+import { createAdminClient, requireActiveOperator } from '../_shared/operatorAuth.ts'
 
-const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+const ALLOWED_UPDATE_KEYS = new Set(['nome', 'area_id', 'role'])
 
 serve(async (req: Request) => {
-    if (req.method === 'OPTIONS') {
-        return new Response('ok', { headers: corsHeaders })
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+
+  try {
+    if (req.method !== 'POST') throw new Error('METHOD_NOT_ALLOWED')
+
+    const supabaseAdmin = createAdminClient()
+    const operator = await requireActiveOperator(req, supabaseAdmin)
+    const { professional_id, payload } = await req.json()
+
+    if (typeof professional_id !== 'string' || !professional_id) {
+      throw new Error('PROFESSIONAL_ID_REQUIRED')
+    }
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      throw new Error('INVALID_UPDATE_PAYLOAD')
     }
 
-    try {
-        const supabaseAdmin = createClient(
-            Deno.env.get('SUPABASE_URL') ?? '',
-            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-            {
-                auth: {
-                    autoRefreshToken: false,
-                    persistSession: false
-                }
-            }
-        )
-
-        const { professional_id, payload } = await req.json()
-
-        // Validar dados
-        if (!professional_id) {
-            throw new Error('professional_id é obrigatório')
-        }
-        if (!payload) {
-            throw new Error('Payload de atualização é obrigatório')
-        }
-
-        // Obter o ID do usuário que está fazendo a requisição
-        const authHeader = req.headers.get('Authorization')
-        if (!authHeader) {
-            throw new Error('Não autenticado')
-        }
-
-        const token = authHeader.replace('Bearer ', '')
-        const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token)
-
-        if (userError || !user) {
-            throw new Error('Usuário não autenticado')
-        }
-
-        // Verificar se o usuário atual é admin
-        const { data: currentUser, error: currentUserError } = await supabaseAdmin
-            .from('profissionais')
-            .select('role')
-            .eq('id', user.id)
-            .single()
-
-        if (currentUserError || !currentUser) {
-            throw new Error('Usuário solicitante não encontrado')
-        }
-
-        if (!['admin', 'super_admin'].includes(currentUser.role)) {
-            throw new Error('Apenas administradores podem atualizar profissionais')
-        }
-
-        // Executar atualização usando service_role para bypassar RLS
-        const { data, error: updateError } = await supabaseAdmin
-            .from('profissionais')
-            .update(payload)
-            .eq('id', professional_id)
-            .select()
-
-        if (updateError) throw updateError
-
-        return new Response(
-            JSON.stringify({ success: true, data }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
-        )
-
-    } catch (error) {
-        const err = error as Error
-        console.error('Edge Function Error:', err)
-        return new Response(
-            JSON.stringify({ error: err.message }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-        )
+    const unexpectedKeys = Object.keys(payload).filter((key) => !ALLOWED_UPDATE_KEYS.has(key))
+    if (unexpectedKeys.length > 0) {
+      throw new Error(`FORBIDDEN_FIELDS: ${unexpectedKeys.join(', ')}`)
     }
+
+    if (operator.role !== 'super_admin' && Object.hasOwn(payload, 'role')) {
+      throw new Error('ROLE_SCOPE_FORBIDDEN: Only a super administrator may change roles.')
+    }
+
+    const { data, error } = await supabaseAdmin.rpc('update_professional_identity', {
+      p_actor_id: operator.id,
+      p_professional_id: professional_id,
+      p_updates: payload
+    })
+
+    if (error) throw error
+
+    return new Response(JSON.stringify({ success: true, data }), {
+      status: 200,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  } catch (error) {
+    const err = error as Error
+    console.error('[update-professional]', err.message)
+    return new Response(JSON.stringify({ success: false, error: err.message }), {
+      status: err.message.startsWith('UNAUTHORIZED') ? 401 : 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
 })

@@ -304,13 +304,18 @@ export function AuthProvider({ children }) {
                 throw new Error('Professional profile not found')
             }
 
+            const canonicalRole = normalizeRole(identity.role)
+            if (!canonicalRole || identity.access_ready !== true) {
+                console.error('[Auth] Identity is not ready for access:', identity.access_reason)
+                setAccountStatus(identity.ativo ? 'suspended' : 'inactive')
+                throw new Error(`Identity access denied: ${identity.access_reason || 'INVALID_IDENTITY'}`)
+            }
+
             // Update state - prioritizando a resposta RPC
             setProfessionalId(identity.id)
             setProfessionalName(identity.nome)
 
-            // Keep every consumer on the canonical role contract. The database
-            // still has legacy `profissional` records, which map to `staff`.
-            setRole(normalizeRole(identity.role))
+            setRole(canonicalRole)
 
             setAccountStatus(identity.ativo ? 'active' : 'suspended')
             setLoading(false)
@@ -335,11 +340,13 @@ export function AuthProvider({ children }) {
 
         const { data: identity, error: identityError } = await supabase.rpc('get_current_identity')
         if (identityError) throw identityError
-        if (!identity?.has_profile || !identity?.ativo) {
-            throw new Error('Usuário sem perfil ativo no sistema')
+        const canonicalRole = normalizeRole(identity?.role)
+        if (!identity?.has_profile || !identity?.ativo || identity?.access_ready !== true || !canonicalRole) {
+            await supabase.auth.signOut({ scope: 'local' })
+            throw new Error('Usuário sem perfil, papel ou tenant ativo no sistema')
         }
 
-        return { ...data, role: normalizeRole(identity.role) }
+        return { ...data, role: canonicalRole }
     }
 
     async function signOut() {

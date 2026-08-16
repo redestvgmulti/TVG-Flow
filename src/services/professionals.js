@@ -77,8 +77,8 @@ export const professionalsService = {
     },
 
     async update(id, payload) {
-        // Payload: { nome, role, ativo, area_id }
-        // Using Edge Function to bypass potential RLS restrictions
+        // Role/status/email are server-managed. Tenant admins edit identity
+        // fields only; deactivation has a separate audited flow.
         const { data, error } = await supabase.functions.invoke('update-professional', {
             body: {
                 professional_id: id,

@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { normalizeRole } from '../utils/roles';
 
 async function getFunctionError(error, fallbackMessage) {
     if (error?.context) {
@@ -25,14 +26,16 @@ export const clientService = {
         // 🔒 RBAC: Rely on RLS + Backend Identity
         const { data: identity, error: idError } = await supabase.rpc('get_current_identity');
         if (idError || !identity) throw new Error('Falha ao identificar usuário');
+        const role = normalizeRole(identity.role);
+        if (!identity.access_ready || !role) throw new Error('Identidade sem acesso ativo');
 
         // Super admins don't manage operational companies via this service
-        if (identity.role === 'super_admin') {
+        if (role === 'super_admin') {
             return [];
         }
 
         // Staff cannot list companies
-        if (identity.role === 'staff') {
+        if (role === 'staff') {
             throw new Error('Operation not allowed for staff');
         }
 
@@ -51,14 +54,16 @@ export const clientService = {
     create: async (clientData) => {
         const { data: identity, error: idError } = await supabase.rpc('get_current_identity');
         if (idError || !identity) throw new Error('Falha ao identificar usuário');
+        const role = normalizeRole(identity.role);
+        if (!identity.access_ready || !role) throw new Error('Identidade sem acesso ativo');
 
         // Super admins cannot create operational companies
-        if (identity.role === 'super_admin') {
+        if (role === 'super_admin') {
             throw new Error('Super admins cannot create operational companies');
         }
 
         // Staff cannot create companies
-        if (identity.role === 'staff') {
+        if (role === 'staff') {
             throw new Error('Operation not allowed for staff');
         }
 
@@ -98,12 +103,14 @@ export const clientService = {
     update: async (id, updates) => {
         const { data: identity, error: idError } = await supabase.rpc('get_current_identity');
         if (idError || !identity) throw new Error('Falha ao identificar usuário');
+        const role = normalizeRole(identity.role);
+        if (!identity.access_ready || !role) throw new Error('Identidade sem acesso ativo');
 
-        if (identity.role === 'super_admin') {
+        if (role === 'super_admin') {
             throw new Error('Super admins cannot update operational companies');
         }
 
-        if (identity.role === 'staff') {
+        if (role === 'staff') {
             throw new Error('Operation not allowed for staff');
         }
 
@@ -125,12 +132,14 @@ export const clientService = {
     delete: async (id) => {
         const { data: identity, error: idError } = await supabase.rpc('get_current_identity');
         if (idError || !identity) throw new Error('Falha ao identificar usuário');
+        const role = normalizeRole(identity.role);
+        if (!identity.access_ready || !role) throw new Error('Identidade sem acesso ativo');
 
-        if (identity.role === 'super_admin') {
+        if (role === 'super_admin') {
             throw new Error('Super admins cannot delete operational companies');
         }
 
-        if (identity.role === 'staff') {
+        if (role === 'staff') {
             throw new Error('Operation not allowed for staff');
         }
 

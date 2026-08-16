@@ -11,3 +11,21 @@ max_rows = 1000
 
 [functions.ap-employee-generator]
 verify_jwt = true
+
+[functions.create-professional]
+verify_jwt = true
+
+[functions.update-professional]
+verify_jwt = true
+
+[functions.delete-professional]
+verify_jwt = true
+
+[functions.generate-recovery-link]
+verify_jwt = true
+
+[functions.create-tenant]
+verify_jwt = true
+
+[functions.bootstrap-admin-tenant]
+verify_jwt = true

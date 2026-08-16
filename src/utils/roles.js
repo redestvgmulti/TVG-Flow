@@ -7,7 +7,8 @@
  * - 'admin'
  * - 'staff'
  * 
- * Any other value (including 'profissional') is normalized to 'staff'.
+ * The temporary `profissional` alias remains readable during rollout. Unknown
+ * or missing roles fail closed and never gain staff access implicitly.
  */
 
 export const CANONICAL_ROLES = {
@@ -21,16 +22,16 @@ export const CANONICAL_ROLES = {
  * 
  * Mappings:
  * - 'super_admin' -> 'super_admin'
- * - 'admin' -> 'admin'0.
+ * - 'admin' -> 'admin'
  * - 'staff' -> 'staff'
  * - 'profissional' -> 'staff' (Legacy mapping)
- * - anything else -> 'staff' (Safe fallback)
+ * - anything else -> null (fail closed)
  * 
  * @param {string|null} rawRole - The role string from database or auth provider
- * @returns {string} - The canonical role
+ * @returns {'super_admin'|'admin'|'staff'|null} - The canonical role
  */
 export function normalizeRole(rawRole) {
-    if (!rawRole) return CANONICAL_ROLES.STAFF
+    if (!rawRole) return null
 
     const normalized = String(rawRole).toLowerCase().trim()
 
@@ -43,7 +44,7 @@ export function normalizeRole(rawRole) {
         case 'profissional': // Legacy role mapping
             return CANONICAL_ROLES.STAFF
         default:
-            console.warn(`[RoleNormalization] Unknown role '${rawRole}' normalized to 'staff'`)
-            return CANONICAL_ROLES.STAFF
+            console.error(`[RoleNormalization] Unknown role '${rawRole}' denied`)
+            return null
     }
 }

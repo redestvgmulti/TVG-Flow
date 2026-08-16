@@ -256,7 +256,8 @@ export default function ProfessionalsList() {
                                             <button
                                                 onClick={() => handleEditClick(prof)}
                                                 className="btn-icon"
-                                                title="Editar"
+                                                title={prof.role === 'staff' ? 'Editar' : 'Papel administrativo gerenciado pelo Super Admin'}
+                                                disabled={prof.role !== 'staff'}
                                             >
                                                 <Edit size={18} />
                                             </button>

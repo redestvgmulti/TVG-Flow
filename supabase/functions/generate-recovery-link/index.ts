@@ -1,89 +1,73 @@
-
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { corsHeaders } from '../_shared/cors.ts'
+import { createAdminClient, normalizeEmail, requireActiveOperator } from '../_shared/operatorAuth.ts'
 
-const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
-serve(async (req) => {
-    if (req.method === 'OPTIONS') {
-        return new Response('ok', { headers: corsHeaders })
+  try {
+    if (req.method !== 'POST') throw new Error('METHOD_NOT_ALLOWED')
+
+    const supabaseAdmin = createAdminClient()
+    const operator = await requireActiveOperator(req, supabaseAdmin)
+    const { email: rawEmail } = await req.json()
+    const email = normalizeEmail(rawEmail)
+
+    const { data: target, error: targetError } = await supabaseAdmin
+      .from('profissionais')
+      .select('id, role, ativo')
+      .ilike('email', email)
+      .maybeSingle()
+
+    if (targetError) throw targetError
+    if (!target || target.ativo !== true) throw new Error('ACTIVE_TARGET_NOT_FOUND')
+    if (target.role === 'super_admin') throw new Error('SUPER_ADMIN_PROTECTED')
+
+    if (operator.role === 'admin') {
+      if (target.role !== 'staff') {
+        throw new Error('ROLE_SCOPE_FORBIDDEN: Tenant admins may reset staff access only.')
+      }
+
+      const { data: targetTenantLinks, error: tenantError } = await supabaseAdmin
+        .from('empresa_profissionais')
+        .select('empresa_id, empresas!inner(id, empresa_tipo, ativo)')
+        .eq('profissional_id', target.id)
+        .eq('ativo', true)
+        .eq('empresas.empresa_tipo', 'tenant')
+        .eq('empresas.ativo', true)
+
+      if (tenantError) throw tenantError
+      const targetTenantIds = [...new Set((targetTenantLinks ?? []).map((link: { empresa_id: string }) => link.empresa_id))]
+      if (targetTenantIds.length !== 1 || targetTenantIds[0] !== operator.tenantIds[0]) {
+        throw new Error('TENANT_SCOPE_FORBIDDEN')
+      }
     }
 
-    try {
-        const supabaseAdmin = createClient(
-            Deno.env.get('SUPABASE_URL') ?? '',
-            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-            { auth: { autoRefreshToken: false, persistSession: false } }
-        )
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.generateLink({
+      type: 'recovery',
+      email,
+      options: {
+        redirectTo: `${Deno.env.get('FRONTEND_URL') || 'http://localhost:5173'}/reset-password`
+      }
+    })
 
-        const authHeader = req.headers.get('Authorization')
-        if (!authHeader) throw new Error('Missing Authorization header')
+    if (authError) throw authError
+    if (authData.user.id !== target.id) throw new Error('AUTH_PROFILE_MISMATCH')
 
-        const supabaseClient = createClient(
-            Deno.env.get('SUPABASE_URL') ?? '',
-            Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-            { global: { headers: { Authorization: authHeader } } }
-        )
-
-        // 1. Security Check: Admin Only
-        const { data: { user }, error: userError } = await supabaseClient.auth.getUser()
-        if (userError || !user) throw new Error('Unauthorized: Invalid token')
-
-        const { data: requesterProfile, error: profileError } = await supabaseAdmin
-            .from('profissionais')
-            .select('role')
-            .eq('id', user.id)
-            .single()
-
-        if (profileError || !requesterProfile || requesterProfile.role !== 'admin') {
-            throw new Error('Unauthorized: Only admins can perform this action')
-        }
-
-        // 2. Parse Body
-        const { email } = await req.json()
-
-        if (!email) {
-            throw new Error('Missing required field: email')
-        }
-
-        // 3. Generate Recovery Link (Auth)
-        const { data: authData, error: authError } = await supabaseAdmin.auth.admin.generateLink({
-            type: 'recovery',
-            email: email,
-            options: {
-                redirectTo: `${Deno.env.get('FRONTEND_URL') || 'http://localhost:5173'}/reset-password`
-            }
-        })
-
-        if (authError) {
-            throw authError
-        }
-
-        const actionLink = authData.properties.action_link
-
-        return new Response(
-            JSON.stringify({
-                success: true,
-                recoveryLink: actionLink,
-                message: 'Link de recuperação gerado com sucesso.'
-            }),
-            {
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-                status: 200
-            }
-        )
-
-    } catch (error) {
-        console.error('Edge Function Error:', error)
-        return new Response(
-            JSON.stringify({ error: error.message, success: false }),
-            {
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-                status: 400
-            }
-        )
-    }
+    return new Response(JSON.stringify({
+      success: true,
+      recoveryLink: authData.properties.action_link,
+      message: 'Link de recuperação gerado com sucesso.'
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  } catch (error) {
+    const err = error as Error
+    console.error('[generate-recovery-link]', err.message)
+    return new Response(JSON.stringify({ success: false, error: err.message }), {
+      status: err.message.startsWith('UNAUTHORIZED') ? 401 : 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
 })

@@ -3,16 +3,14 @@ import { useState, useEffect } from 'react'
 import { CheckCircle, Copy, RefreshCw, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import { professionalsService } from '../../../services/professionals'
-import { supabase } from '../../../services/supabase'
 import '../../../styles/professional-form.css'
 
 export default function ProfessionalForm({ initialData, onSubmit, onCancel, onDelete, isSubmitting, isEditMode = false, hideCancelButton = false }) {
     const [formData, setFormData] = useState({
         nome: '',
         email: '',
-        role: 'profissional',
-        area_id: null,
-        ativo: true
+        role: 'staff',
+        area_id: null
     })
 
     const [recoveryLink, setRecoveryLink] = useState(null)
@@ -55,13 +53,9 @@ export default function ProfessionalForm({ initialData, onSubmit, onCancel, onDe
     const handleSubmit = (e) => {
         e.preventDefault()
 
-        const payload = {
-            nome: formData.nome,
-            email: formData.email,
-            role: formData.role,
-            area_id: formData.area_id,
-            ativo: formData.ativo
-        }
+        const payload = isEditMode
+            ? { nome: formData.nome, area_id: formData.area_id }
+            : { nome: formData.nome, email: formData.email, area_id: formData.area_id, role: 'staff' }
 
         onSubmit(payload)
     }
@@ -79,11 +73,10 @@ export default function ProfessionalForm({ initialData, onSubmit, onCancel, onDe
                     <input
                         type="text"
                         required
-                        className={`input ${isEditMode ? 'professional-form__input--disabled' : ''}`}
+                        className="input"
                         value={formData.nome}
                         onChange={e => setFormData({ ...formData, nome: e.target.value })}
                         placeholder="Ex: Ana Silva"
-                        disabled={isEditMode}
                     />
                 </div>
 
@@ -109,89 +102,21 @@ export default function ProfessionalForm({ initialData, onSubmit, onCancel, onDe
                 </div>
             </div>
 
-            {/* BLOCO 2 — PERMISSÕES DO SISTEMA */}
             {isEditMode && (
                 <div className="professional-form__permissions">
-                    {/* Admin Confirmation Alert */}
-                    {formData.role === 'admin' && initialData?.role !== 'admin' && (
-                        <div className="professional-form__admin-alert">
-                            <AlertTriangle size={20} className="professional-form__admin-alert-icon" />
-                            <div className="professional-form__admin-alert-content">
-                                <p className="professional-form__admin-alert-title">
-                                    Atenção: Acesso Administrativo
-                                </p>
-                                <p className="professional-form__admin-alert-text">
-                                    Você está concedendo permissões de administrador. Este usuário terá acesso total ao sistema.
-                                </p>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Grid: Admin Toggle + Ativo */}
-                    <div className="professional-form__grid">
-                        {/* Admin Toggle */}
-                        <div className="professional-form__group">
-                            <label className="professional-form__label professional-form__label--spaced">
-                                Acesso ao Sistema
-                            </label>
-                            <div className="professional-form__toggle-container">
-                                <label className="professional-form__toggle">
-                                    <input
-                                        type="checkbox"
-                                        checked={formData.role === 'admin'}
-                                        onChange={e => setFormData({ ...formData, role: e.target.checked ? 'admin' : 'profissional' })}
-                                    />
-                                    <span className="professional-form__toggle-slider"></span>
-                                </label>
-                                <div>
-                                    <p className="professional-form__toggle-label">
-                                        {formData.role === 'admin' ? 'Administrador' : 'Profissional'}
-                                    </p>
-                                    <p className="professional-form__toggle-description">
-                                        {formData.role === 'admin' ? 'Acesso total ao sistema' : 'Acesso básico'}
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Checkbox: Usuário Ativo */}
-                        <div className="professional-form__checkbox-wrapper">
-                            <input
-                                type="checkbox"
-                                id="ativo"
-                                className="professional-form__checkbox"
-                                checked={formData.ativo}
-                                onChange={e => setFormData({ ...formData, ativo: e.target.checked })}
-                            />
-                            <label htmlFor="ativo" className="professional-form__checkbox-label">
-                                <strong>Usuário Ativo</strong>
-                                <span className="professional-form__checkbox-hint">
-                                    Login habilitado
-                                </span>
-                            </label>
-                        </div>
+                    <div className="professional-form__group">
+                        <label className="professional-form__label">Acesso ao Sistema</label>
+                        <p className="professional-form__toggle-description">
+                            {formData.role === 'admin'
+                                ? 'Administrador — alterações de papel são exclusivas do Super Admin.'
+                                : 'Staff — acesso operacional do tenant.'}
+                        </p>
                     </div>
                 </div>
             )}
 
-            {/* Creation Mode Status Toggle */}
-            {!isEditMode && (
-                <div className="professional-form__checkbox-wrapper">
-                    <input
-                        type="checkbox"
-                        id="ativo"
-                        className="professional-form__checkbox"
-                        checked={formData.ativo}
-                        onChange={e => setFormData({ ...formData, ativo: e.target.checked })}
-                    />
-                    <label htmlFor="ativo" className="professional-form__checkbox-label">
-                        <strong>Usuário Ativo</strong>
-                    </label>
-                </div>
-            )}
-
             {/* BLOCO 3 — ACESSO (Ação contextual - apenas edit mode) */}
-            {isEditMode && (
+            {isEditMode && formData.role === 'staff' && (
                 <div className="professional-form__access">
                     <h3 className="professional-form__access-title">
                         Acesso
@@ -244,7 +169,7 @@ export default function ProfessionalForm({ initialData, onSubmit, onCancel, onDe
             {/* RODAPÉ — Danger Zone + CTA Final */}
             <div className="professional-form__footer">
                 {/* Desativar (esquerda) */}
-                {isEditMode && onDelete ? (
+                {isEditMode && formData.role === 'staff' && onDelete ? (
                     <button
                         type="button"
                         onClick={onDelete}
