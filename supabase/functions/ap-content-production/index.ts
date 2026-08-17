@@ -5,7 +5,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { runEditorialWorkflow } from "../_shared/editorialWorkflow.ts";
+import { canonicalEditorialFields } from "../_shared/canonicalEditorial.mjs";
 import { Telemetry } from "../_shared/telemetry.ts";
 import { createAdminClient, requireActiveOperator } from "../_shared/operatorAuth.ts";
 import { isTrustedInternalRequest } from "../_shared/internalWorkerAuth.ts";
@@ -22,9 +22,6 @@ const corsHeaders = {
 
 const BATCH_LIMIT = 5;
 const LOCK_EXPIRY_MINUTES = 10;
-const LLM_RETRY_CAP = 3;
-const LLM_COST_ESTIMATE = 0.00015; // GPT-4o-mini rough avg cost
-
 Deno.serve(async (req: Request) => {
     if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
     if (req.method !== "POST") {
@@ -47,16 +44,20 @@ Deno.serve(async (req: Request) => {
 
     const internalRequest = isTrustedInternalRequest(req);
     const actionType = body.action || "cron";
-    const userHeadline = body.userHeadline || null;
-    const userTag = body.userTag || null;
-    const userText = body.userText || null;
 
     let authorizedClienteId: string | null = null;
+    let operator: { id: string; email: string } | null = null;
+    if (internalRequest && actionType === "approve_for_ig") {
+        return new Response(JSON.stringify({ error: "HUMAN_APPROVAL_REQUIRED" }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+    }
     if (!internalRequest) {
         try {
             // AutoPublisher exposes these operations to tenant administrators.
             // SERVICE_ROLE below is used only after this user and tenant gate.
-            await requireActiveOperator(req, createAdminClient(), ["admin"]);
+            operator = await requireActiveOperator(req, createAdminClient(), ["admin"]);
             if (!["process_studio", "approve_for_ig", "process_selected"].includes(actionType)) {
                 return new Response(JSON.stringify({ error: "ACTION_FORBIDDEN" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
             }
@@ -88,7 +89,7 @@ Deno.serve(async (req: Request) => {
     } else {
         query = query
           .or(`processing_started_at.is.null,processing_started_at.lt.${expiryCutoff}`)
-          .in("status", ["selected", "pending_production"])
+          .eq("status", "selected")
           .order("created_at", { ascending: true })
           .limit(BATCH_LIMIT);
         if (!internalRequest && authorizedClienteId) {
@@ -118,6 +119,59 @@ Deno.serve(async (req: Request) => {
             return new Response(JSON.stringify({ error: "TENANT_FORBIDDEN" }), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
     }
+
+    if (actionType === "approve_for_ig") {
+        const item = items?.[0];
+        if (!item || !operator) {
+            return new Response(JSON.stringify({ error: "HUMAN_APPROVAL_REQUIRED" }), {
+                status: 403,
+                headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+        }
+
+        // Compare-and-set keeps approval human, tenant-authorized and race-safe.
+        const approvedAt = new Date().toISOString();
+        const { data, error } = await supabase
+            .schema("ap").from("candidate_news")
+            .update({
+                status: "approved",
+                approved_by: operator.id,
+                approved_by_name: operator.email,
+                approved_at: approvedAt,
+            })
+            .eq("id", item.id)
+            .eq("status", "pending_review")
+            .is("processing_started_at", null)
+            .select("id, status")
+            .maybeSingle();
+
+        if (error) {
+            return new Response(JSON.stringify({ error: "APPROVAL_FAILED" }), {
+                status: 500,
+                headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+        }
+        if (!data) {
+            return new Response(JSON.stringify({ error: "APPROVAL_INVALID_STATE" }), {
+                status: 409,
+                headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+        }
+
+        const telemetry = new Telemetry(supabase);
+        await telemetry.logStart({
+            worker_name: "ap-content-production",
+            worker_id: workerId,
+            news_id: item.id,
+            cliente_id: item.cliente_id,
+            action: "human_approval",
+        });
+        await telemetry.logSuccess(0, { next_status: "approved", approved_by: operator.id });
+        return new Response(JSON.stringify({ ok: true, results: [{ id: item.id, status: "approved" }] }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+    }
+
     const results = [];
 
     for (const item of items ?? []) {
@@ -130,46 +184,43 @@ Deno.serve(async (req: Request) => {
             action: actionType
         });
 
-        const lockTime = new Date().toISOString();
-        const { data: lockData } = await supabase
-            .schema("ap").from("candidate_news")
-            .update({
-                processing_started_at: lockTime,
-                llm_attempts: (item.llm_attempts || 0) + 1,
-                worker_id: workerId
+        const { data: lockData, error: lockError } = await supabase
+            .schema("ap")
+            .rpc("acquire_content_production_lock", {
+                p_candidate_id: item.id,
+                p_expected_cliente_id: item.cliente_id,
+                p_expected_status: item.status,
+                p_expected_processing_started_at: item.processing_started_at,
+                p_expected_worker_id: item.worker_id,
+                p_worker_id: workerId,
             })
-            .eq("id", item.id)
-            .or(`processing_started_at.is.null,processing_started_at.lt.${expiryCutoff}`)
-            .select("id");
+            .maybeSingle();
 
-        if (!lockData?.length) {
+        if (lockError || !lockData) {
             await telemetry.logError("acquire_failed_lock_contention");
             continue;
         }
 
+        const lockTime = lockData.processing_started_at;
         try {
-            const result = await runEditorialWorkflow(supabase, {
-                newsId: item.id,
-                clienteId: item.cliente_id,
-                actionType: (actionType === "process_studio" ? "process_studio" : "standard") as any,
-                userHeadline,
-                userTag,
-                userText,
-                contentType: item.content_type || "feed"
-            });
+            const canonical = canonicalEditorialFields(item);
+            const isStudio = actionType === "process_studio";
+            const nextStatus = isStudio ? "pending_review" : "pending_render";
 
-            const nextStatus = actionType === "approve_for_ig" ? "pending_render" : "pending_production";
-            
-            let updatePayload: any = {
-                headline: result.headline,
-                caption: result.caption,
-                roteiro_json: result.roteiro_json,
-                context_tag: result.context_tag,
+            const updatePayload: any = {
                 status: nextStatus,
                 processing_started_at: null,
                 completed_at: new Date().toISOString(),
                 worker_id: null
             };
+            if (isStudio) {
+                updatePayload.roteiro_studio = canonical.roteiro_studio;
+            } else {
+                updatePayload.headline = canonical.headline;
+                updatePayload.caption = canonical.caption;
+                updatePayload.roteiro_json = canonical.roteiro_json;
+                updatePayload.context_tag = canonical.context_tag;
+            }
 
             const { data: relData, error: relErr } = await supabase
                 .schema("ap").from("candidate_news")
@@ -180,12 +231,11 @@ Deno.serve(async (req: Request) => {
 
             if (relErr || !relData?.length) throw new Error("Release FAILED");
 
-            await telemetry.logSuccess(LLM_COST_ESTIMATE, { next_status: nextStatus });
+            await telemetry.logSuccess(0, { next_status: nextStatus, editorial_source: "persisted_input" });
             results.push({ id: item.id, status: "success" });
 
         } catch (err: any) {
-            const nextAttempts = (item.llm_attempts || 0) + 1;
-            const finalStatus = nextAttempts >= LLM_RETRY_CAP ? "failed" : item.status;
+            const finalStatus = item.status;
 
             await supabase.schema("ap").from("candidate_news").update({
                 status: finalStatus,

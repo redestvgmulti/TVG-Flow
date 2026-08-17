@@ -960,7 +960,7 @@ SELECT pg_temp.assert_true(
     (
         SELECT
             reservation.status = 'committed'
-            AND candidate.status = 'approved'
+            AND candidate.status = 'pending_review'
             AND candidate.render_url = 'https://local.test/render.png'
             AND candidate.render_snapshot #>> '{render_content,headline}'
                 = 'Frozen final headline'
@@ -990,7 +990,7 @@ SELECT pg_temp.assert_true(
     (
         SELECT
             reservation.status = 'committed'
-            AND candidate.status = 'approved'
+            AND candidate.status = 'pending_review'
             AND candidate.error_log IS NULL
         FROM ap.territorial_sponsor_reservations AS reservation
         JOIN ap.candidate_news AS candidate

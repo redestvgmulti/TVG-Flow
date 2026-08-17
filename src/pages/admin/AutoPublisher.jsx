@@ -394,8 +394,9 @@ export default function AutoPublisher() {
     }
 
     async function handleApproveSelected(item) {
-        const approvableStatuses = ['selected', 'pending_review', 'studio_selected', 'studio_ready']
-        if (!approvableStatuses.includes(item.status)) return
+        const canPrepareRender = item.status === 'selected'
+        const canApproveReview = item.status === 'pending_review'
+        if (!canPrepareRender && !canApproveReview) return
 
         // Part 2 - Frontend Validation
         if (item.content_type === 'feed' && !item.imagem_url && !item.imagem_storage && !item.render_url) {
@@ -405,27 +406,12 @@ export default function AutoPublisher() {
 
         setIsProcessing(true)
         try {
-            // 'approve_for_ig' = aprovação humana explícita.
-            // O worker usa os dados já salvos no banco (headline/caption/context_tag)
-            // e move o status para pending_render antes de chamar o render engine.
-            const authUser = await supabase.auth.getUser()
-            const user = authUser.data?.user
-            const userName = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email || 'Editor'
-
-            // Ensure we clear any stale lock before pushing to production/render
-            await supabase.schema('ap').from('candidate_news').update({
-                processing_started_at: null
-            }).eq('id', item.id)
-
+            // Selected material is prepared for render; only a rendered item in
+            // pending_review can use the human approval action.
             const { data, error: prodError } = await supabase.functions.invoke('ap-content-production', {
                 body: {
-                    action: 'approve_for_ig',
-                    newsId: item.id,
-                    userHeadline: item.headline || null,
-                    userTag: item.context_tag || null,
-                    userText: item.caption || null,
-                    approved_by_id: user?.id || null,
-                    approved_by_name: userName
+                    action: canPrepareRender ? 'process_selected' : 'approve_for_ig',
+                    newsId: item.id
                 }
             })
             if (prodError) throw prodError
@@ -434,7 +420,9 @@ export default function AutoPublisher() {
             // Status is now 'pending_render' — the ap-render-engine cron worker
             // will pick it up automatically. Do NOT invoke render directly:
             // that would bypass idempotency guards and cause duplicate renders.
-            toast.success("Aprovado! Arte entrará na fila de renderização automaticamente.")
+            toast.success(canPrepareRender
+                ? "Matéria enviada para renderização. Ela ficará pendente de revisão quando a arte estiver pronta."
+                : "Matéria aprovada para publicação.")
         } catch {
             toast.error("Falha ao aprovar matéria.")
         }
@@ -1233,7 +1221,7 @@ function PendenteCard({ item, onReject, onStudio, onApproveSelected, onEdit, isP
                     </button>
                     <button className="ap-card-btn-primary" onClick={handleApprove} disabled={isProcessing || isApprovingLocal}>
                         {isApprovingLocal ? <Loader2 size={14} className="ap-spin-icon" /> : null}
-                        {isApprovingLocal ? 'Aprovando...' : 'Aprovar'}
+                        {isApprovingLocal ? (item.status === 'selected' ? 'Preparando...' : 'Aprovando...') : (item.status === 'selected' ? 'Gerar arte' : 'Aprovar')}
                     </button>
                 </div>
             </div>

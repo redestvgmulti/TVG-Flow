@@ -1,4 +1,4 @@
-import { runEditorialWorkflow } from "../_shared/editorialWorkflow.ts";
+import { canonicalEditorialFields } from "../_shared/canonicalEditorial.mjs";
 
 export class TerritorialCandidateRpcError extends Error {
   raw: unknown;
@@ -104,25 +104,18 @@ export async function createAndProcessTerritorialCandidate(input: {
   }
 
   try {
-    const result = await runEditorialWorkflow(input.serviceSupabase, {
-      newsId: news.id,
-      clienteId: input.clienteId,
-      userHeadline: input.userHeadline,
-      userTag: input.userTag,
-      userText: input.userText,
-      contentType: input.contentType as any,
-      sourceMode: input.sourceMode,
-      imageUrl: input.imageUrl,
-    });
+    // Territorial candidates use the persisted input as editorial truth too.
+    // The finalizer only freezes render fields; it must not rewrite content.
+    const canonical = canonicalEditorialFields(news);
     const { data: finalizeResult, error: finalizeError } = await input
       .serviceSupabase
       .schema("ap")
       .rpc("finalize_territorial_composer_candidate", {
         p_candidate_id: news.id,
-        p_headline: result.headline,
-        p_caption: result.caption,
-        p_context_tag: result.context_tag,
-        p_roteiro_json: result.roteiro_json,
+        p_headline: canonical.headline,
+        p_caption: canonical.caption,
+        p_context_tag: canonical.context_tag,
+        p_roteiro_json: canonical.roteiro_json,
       });
     if (finalizeError) {
       throw new TerritorialCandidateRpcError(finalizeError);

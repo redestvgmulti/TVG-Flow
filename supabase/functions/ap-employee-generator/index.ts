@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { runEditorialWorkflow } from "../_shared/editorialWorkflow.ts";
+import { canonicalEditorialFields } from "../_shared/canonicalEditorial.mjs";
 import {
   resolveVisualTitleForCreation,
   shouldResolveVisualTitleForCreation,
@@ -926,7 +926,7 @@ Deno.serve(async (req: Request) => {
       rpcResult.reused ? "CANDIDATE_REUSED" : "CANDIDATE_CREATED",
     );
     stage = "complete";
-    logEvent(context, stage, "EDITORIAL_PROCESSING_STARTED");
+    logEvent(context, stage, "EDITORIAL_SOURCE_CONFIRMED");
 
     if (
       rpcResult.reused &&
@@ -946,31 +946,24 @@ Deno.serve(async (req: Request) => {
     }
 
     try {
-      const result = await runEditorialWorkflow(supabase, {
-        newsId: news.id,
-        clienteId,
-        userHeadline,
-        userTag,
-        userText,
-        contentType: content_type as any,
-        sourceMode,
-        imageUrl: typeof imageUrl === "string" ? imageUrl : null,
-      });
+      // The submitted content is already editorially authored. Do not send it
+      // to an LLM or replace it with a generated headline/caption.
+      const canonical = canonicalEditorialFields(news);
       const { error: updateError } = await supabase
         .schema("ap")
         .from("candidate_news")
         .update({
           status: "pending_render",
-          headline: result.headline,
-          caption: result.caption,
-          context_tag: result.context_tag,
-          roteiro_json: result.roteiro_json,
+          headline: canonical.headline,
+          caption: canonical.caption,
+          context_tag: canonical.context_tag,
+          roteiro_json: canonical.roteiro_json,
           processing_started_at: null,
         })
         .eq("id", news.id);
       if (updateError) throw new Error("CANDIDATE_UPDATE_FAILED");
 
-      logEvent(context, stage, "GENERATION_COMPLETED");
+      logEvent(context, stage, "EDITORIAL_SOURCE_PERSISTED");
       scheduleTargetedRender(context, {
         ...news,
         status: "pending_render",
@@ -979,9 +972,9 @@ Deno.serve(async (req: Request) => {
         JSON.stringify(responseForNews({
           ...news,
           status: "pending_render",
-          headline: result.headline,
-          caption: result.caption,
-          context_tag: result.context_tag,
+          headline: canonical.headline,
+          caption: canonical.caption,
+          context_tag: canonical.context_tag,
         }, Boolean(rpcResult.reused))),
         { status: 200, headers: jsonHeaders },
       );

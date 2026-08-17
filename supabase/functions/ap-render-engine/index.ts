@@ -403,7 +403,7 @@ Deno.serve(async (req) => {
           .update({
             render_url: renderUrl,
             imagem_url: renderUrl,
-            status: "approved",
+            status: "pending_review",
             render_started_at: null,
             completed_at: new Date().toISOString(),
           })
