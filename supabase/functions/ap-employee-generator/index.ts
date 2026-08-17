@@ -235,6 +235,42 @@ async function claimEditorialProcessing(supabase: any, newsId: string) {
   return Boolean(data?.id);
 }
 
+async function assertBacklogProductionAccess(
+  userSupabase: any,
+  backlogId: string,
+  clienteId: string,
+  urlOriginal: unknown,
+) {
+  const { error } = await userSupabase
+    .schema("ap")
+    .rpc("assert_news_backlog_production_access", {
+      p_backlog_id: backlogId,
+      p_cliente_id: clienteId,
+      p_url_original: typeof urlOriginal === "string" ? urlOriginal : "",
+    });
+  return error;
+}
+
+async function linkBacklogCandidate(
+  serviceSupabase: any,
+  backlogId: string,
+  clienteId: string,
+  candidateId: string,
+  actorUserId: string,
+  urlOriginal: unknown,
+) {
+  const { error } = await serviceSupabase
+    .schema("ap")
+    .rpc("link_news_backlog_candidate", {
+      p_backlog_id: backlogId,
+      p_cliente_id: clienteId,
+      p_candidate_id: candidateId,
+      p_actor_user_id: actorUserId,
+      p_url_original: typeof urlOriginal === "string" ? urlOriginal : "",
+    });
+  return error;
+}
+
 function existingSnapshotBase(candidate: any): Record<string, unknown> | null {
   const request = candidate?.render_snapshot?.idempotency?.request;
   const base = request?.render_snapshot_base;
@@ -362,6 +398,7 @@ Deno.serve(async (req: Request) => {
       region_id = null,
       city_id = null,
       manual_slots: rawManualSlots = [],
+      backlog_id: rawBacklogId = null,
     } = body;
 
     const content_type = String(rawContentType).trim().toLowerCase();
@@ -375,6 +412,9 @@ Deno.serve(async (req: Request) => {
     const composerMode = normalizeComposerMode(rawComposerMode);
     const composerRequested = rawComposerMode !== undefined &&
       rawComposerMode !== null && rawComposerMode !== "";
+    const backlogId = rawBacklogId === null || rawBacklogId === undefined || rawBacklogId === ""
+      ? null
+      : String(rawBacklogId);
     context = {
       correlationId,
       clientId: requestedClienteId,
@@ -474,6 +514,24 @@ Deno.serve(async (req: Request) => {
         "request_validation",
       );
     }
+    if (backlogId && !isUUID(backlogId)) {
+      return errorResponse(
+        context,
+        "BACKLOG_ID_INVALID",
+        "A pauta selecionada e invalida.",
+        400,
+        "request_validation",
+      );
+    }
+    if (backlogId && (typeof url_original !== "string" || !url_original.trim())) {
+      return errorResponse(
+        context,
+        "BACKLOG_SOURCE_REQUIRED",
+        "A pauta selecionada precisa manter o link de origem.",
+        400,
+        "request_validation",
+      );
+    }
 
     stage = "resolve_source_image";
     const imageUrl = rawSourceImage || rawImage || rawImageAlias || null;
@@ -568,6 +626,14 @@ Deno.serve(async (req: Request) => {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+    const userSupabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      {
+        global: { headers: { Authorization: req.headers.get("Authorization")! } },
+        auth: { autoRefreshToken: false, persistSession: false },
+      },
     );
 
     const composerEnabled = await territorialComposerEnabled(
@@ -671,15 +737,23 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      const authorizationHeader = req.headers.get("Authorization")!;
-      const userSupabase = createClient(
-        Deno.env.get("SUPABASE_URL")!,
-        Deno.env.get("SUPABASE_ANON_KEY")!,
-        {
-          global: { headers: { Authorization: authorizationHeader } },
-          auth: { autoRefreshToken: false, persistSession: false },
-        },
-      );
+      if (backlogId) {
+        const backlogError = await assertBacklogProductionAccess(
+          userSupabase,
+          backlogId,
+          clienteId,
+          url_original,
+        );
+        if (backlogError) {
+          return errorResponse(
+            context,
+            "BACKLOG_PRODUCTION_FORBIDDEN",
+            "Esta pauta nao esta mais disponivel para sua producao.",
+            403,
+            "backlog_authorization",
+          );
+        }
+      }
 
       stage = "call_candidate_rpc";
       logEvent(context, stage, "TERRITORIAL_CANDIDATE_RPC_STARTED");
@@ -726,6 +800,26 @@ Deno.serve(async (req: Request) => {
         stage,
         territorialResult.reused ? "CANDIDATE_REUSED" : "CANDIDATE_CREATED",
       );
+      if (backlogId) {
+        const backlogLinkError = await linkBacklogCandidate(
+          supabase,
+          backlogId,
+          clienteId,
+          news.id,
+          authenticatedUserId,
+          url_original,
+        );
+        if (backlogLinkError) {
+          return errorResponse(
+            context,
+            "BACKLOG_LINK_FAILED",
+            "Nao foi possivel vincular a pauta a materia. Tente novamente com a mesma tentativa.",
+            503,
+            "backlog_link",
+          );
+        }
+      }
+
       if (!territorialResult.claimed) {
         return new Response(
           JSON.stringify(responseForNews(news, true)),
@@ -880,6 +974,23 @@ Deno.serve(async (req: Request) => {
 
     stage = "call_candidate_rpc";
     logEvent(context, stage, "CANDIDATE_RPC_STARTED");
+    if (backlogId) {
+      const backlogError = await assertBacklogProductionAccess(
+        userSupabase,
+        backlogId,
+        clienteId,
+        url_original,
+      );
+      if (backlogError) {
+        return errorResponse(
+          context,
+          "BACKLOG_PRODUCTION_FORBIDDEN",
+          "Esta pauta nao esta mais disponivel para sua producao.",
+          403,
+          "backlog_authorization",
+        );
+      }
+    }
     const { data: rpcResult, error: rotationError } = await supabase
       .schema("ap")
       .rpc("create_candidate_with_sponsors", {
@@ -920,6 +1031,25 @@ Deno.serve(async (req: Request) => {
       );
     }
     context = { ...context, articleId: news.id };
+    if (backlogId) {
+      const backlogLinkError = await linkBacklogCandidate(
+        supabase,
+        backlogId,
+        clienteId,
+        news.id,
+        authenticatedUserId,
+        url_original,
+      );
+      if (backlogLinkError) {
+        return errorResponse(
+          context,
+          "BACKLOG_LINK_FAILED",
+          "Nao foi possivel vincular a pauta a materia. Tente novamente com a mesma tentativa.",
+          503,
+          "backlog_link",
+        );
+      }
+    }
     logEvent(
       context,
       stage,

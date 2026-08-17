@@ -4,6 +4,7 @@ import { supabase } from '../../services/supabase';
 import { Check, CheckCircle2, Copy, Download, X, AlertCircle, RefreshCcw, ImageIcon, Brain, Search, SearchCode, Video, Image as ImageIconLucide, Loader2, Share2 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import ArticleForm from '../../components/editorial/ArticleForm';
+import NewsBacklogPanel from '../../components/editorial/NewsBacklogPanel';
 import CreatorSignature from '../../components/ui/CreatorSignature';
 import {
     availableContentTypes,
@@ -42,6 +43,7 @@ const createInitialFormData = () => ({
     region_id: null,
     city_id: null,
     manual_slots: [],
+    backlog_id: null,
     idempotency_key: null,
 });
 
@@ -576,6 +578,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                 content_type: content_type,
                 source_image: sourceImageRequired ? finalImageUrl : null,
                 source_mode: sourceMode,
+                backlog_id: formData.backlog_id || null,
             };
 
             const idempotencyKey = formData.idempotency_key || crypto.randomUUID();
@@ -873,6 +876,12 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                     >
                         Meu Histórico
                     </button>
+                    <button
+                        onClick={() => setActiveTab('backlog')}
+                        style={{ padding: '16px 20px', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: 600, color: activeTab === 'backlog' ? '#3b82f6' : '#64748b', borderBottom: activeTab === 'backlog' ? '2px solid #3b82f6' : '2px solid transparent', transition: 'all 0.2s' }}
+                    >
+                        Backlog
+                    </button>
                 </div>
 
                 {/* Scrollable Content */}
@@ -1025,6 +1034,28 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                 onDiscardSourcePreview={() => setSourcePreview(null)}
                             />
                         )
+                    )}
+
+                    {activeTab === 'backlog' && (
+                        <NewsBacklogPanel
+                            clienteId={clienteId}
+                            onStartProduction={(item) => {
+                                setFormData(previous => ({
+                                    ...previous,
+                                    source_mode: 'link',
+                                    url_original: item.url_original,
+                                    titulo: item.titulo || '',
+                                    conteudo: '',
+                                    image_url: '',
+                                    backlog_id: item.id,
+                                    idempotency_key: null,
+                                }));
+                                setSelectedFile(null);
+                                setSourcePreview(null);
+                                setErrorMsg('');
+                                setActiveTab('create');
+                            }}
+                        />
                     )}
 
                     {activeTab === 'history' && (

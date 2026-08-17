@@ -12,6 +12,7 @@ import EditorialEngine from '../../features/editorial/EditorialEngine'
 import { SkeletonCard, SkeletonTable } from '../../components/Skeleton'
 import { toast } from 'sonner'
 import ArticleForm from '../../components/editorial/ArticleForm'
+import NewsBacklogPanel from '../../components/editorial/NewsBacklogPanel'
 import Modal from '../../components/ui/Modal'
 import CreatorSignature from '../../components/ui/CreatorSignature'
 import {
@@ -96,6 +97,7 @@ export default function AutoPublisher() {
         region_id: null,
         city_id: null,
         manual_slots: [],
+        backlog_id: null,
         idempotency_key: null
     })
     const [visualTitleGroups, setVisualTitleGroups] = useState([])
@@ -151,6 +153,7 @@ export default function AutoPublisher() {
             region_id: null,
             city_id: null,
             manual_slots: [],
+            backlog_id: null,
             idempotency_key: null
         })
         setSelectedFile(null)
@@ -653,6 +656,7 @@ export default function AutoPublisher() {
             context_tag: formData.context_tag.toUpperCase(),
             content_type: formData.content_type || 'feed',
             source_image: sourceImageRequired ? finalImageUrl : null,
+            backlog_id: formData.backlog_id || null,
         }
 
         const idempotencyKey = formData.idempotency_key || crypto.randomUUID()
@@ -799,6 +803,13 @@ export default function AutoPublisher() {
                             </button>
 
                             <button
+                                className={`ap-aux-tab${tab === 'backlog' ? ' active' : ''}`}
+                                onClick={() => setTab('backlog')}
+                            >
+                                Backlog
+                            </button>
+
+                            <button
                                 className={`ap-aux-tab${tab === 'templates' ? ' active' : ''}`}
                                 onClick={() => setTab('templates')}
                             >
@@ -817,6 +828,21 @@ export default function AutoPublisher() {
 
                 {/* Content */}
                 {tab === 'editorial' && <EditorialEngine clienteId={clienteId} />}
+                {tab === 'backlog' && <NewsBacklogPanel
+                    clienteId={clienteId}
+                    onStartProduction={(item) => {
+                        setFormData(previous => ({
+                            ...previous,
+                            url_original: item.url_original,
+                            titulo: item.titulo || '',
+                            conteudo: '',
+                            backlog_id: item.id,
+                            idempotency_key: null,
+                        }))
+                        setSelectedFlow(1)
+                        setManualModalOpen(true)
+                    }}
+                />}
                 {tab === 'templates' && <AutoPublisherTemplates clienteId={clienteId} />}
                 {tab === 'settings' && <AutoPublisherSettings clienteId={clienteId} clienteError={clienteError} />}
 
