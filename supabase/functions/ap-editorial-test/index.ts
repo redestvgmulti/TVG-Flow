@@ -8,6 +8,9 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildEditorialPrompt, getEditorialContext } from "../_shared/editorialPromptBuilder.ts";
 import { callLLM } from "../_shared/llmClient.ts";
+import { EditorialAdminAuthorizationError, requireEditorialAdmin } from "../_shared/editorialAdminAuth.ts";
+
+const FIXED_CLIENT_ID = "cd287e6e-f273-4d0f-a72d-2a8c391e40e9";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -19,33 +22,11 @@ Deno.serve(async (req: Request) => {
     if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
     try {
-        const authHeader = req.headers.get("Authorization");
-        if (!authHeader) throw new Error("Missing Authorization header");
-
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-        const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
         const supabaseServiceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-        const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-            global: { headers: { Authorization: authHeader } },
-        });
-
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
-        if (authError || !user) throw new Error("Unauthorized");
-
-        let clienteId = null;
-        const { data: profData } = await supabase
-            .from("cliente_profissionais")
-            .select("cliente_id")
-            .eq("profissional_id", user.id)
-            .eq("ativo", true)
-            .limit(1)
-            .maybeSingle();
-
-        if (!profData) throw new Error("User has no active tenant");
-        clienteId = profData.cliente_id;
-
         const sbAdmin = createClient(supabaseUrl, supabaseServiceRole);
+        const authorization = await requireEditorialAdmin(req, sbAdmin, FIXED_CLIENT_ID);
+        const clienteId = authorization.clienteId;
 
         // 1. Resolve Secret (API Key) from Vault ONLY
         // Load Settings to find vault secret ID
@@ -184,8 +165,8 @@ Deno.serve(async (req: Request) => {
 
     } catch (err: any) {
         console.error("Test Endpoint Err:", err);
-        return new Response(JSON.stringify({ error: err.message }), {
-            status: 400,
+        return new Response(JSON.stringify({ error: err instanceof EditorialAdminAuthorizationError ? "EDITORIAL_ADMIN_REQUIRED" : err.message }), {
+            status: err instanceof EditorialAdminAuthorizationError ? err.status : 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
     }

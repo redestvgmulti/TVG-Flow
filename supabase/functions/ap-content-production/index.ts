@@ -7,6 +7,12 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { runEditorialWorkflow } from "../_shared/editorialWorkflow.ts";
 import { Telemetry } from "../_shared/telemetry.ts";
+import { createAdminClient, requireActiveOperator } from "../_shared/operatorAuth.ts";
+import { isTrustedInternalRequest } from "../_shared/internalWorkerAuth.ts";
+import {
+    authorizeOperationalTenant,
+    TenantAuthorizationError,
+} from "../ap-employee-generator/tenantAuthorization.ts";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -21,6 +27,9 @@ const LLM_COST_ESTIMATE = 0.00015; // GPT-4o-mini rough avg cost
 
 Deno.serve(async (req: Request) => {
     if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+    if (req.method !== "POST") {
+        return new Response(JSON.stringify({ error: "METHOD_NOT_ALLOWED" }), { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
     const supabase = createClient(
         Deno.env.get("SUPABASE_URL")!,
@@ -36,10 +45,41 @@ Deno.serve(async (req: Request) => {
         if (req.method === "POST") body = await req.json().catch(() => ({}));
     } catch (_) { /* silent */ }
 
+    const internalRequest = isTrustedInternalRequest(req);
     const actionType = body.action || "cron";
     const userHeadline = body.userHeadline || null;
     const userTag = body.userTag || null;
     const userText = body.userText || null;
+
+    let authorizedClienteId: string | null = null;
+    if (!internalRequest) {
+        try {
+            // AutoPublisher exposes these operations to tenant administrators.
+            // SERVICE_ROLE below is used only after this user and tenant gate.
+            await requireActiveOperator(req, createAdminClient(), ["admin"]);
+            if (!["process_studio", "approve_for_ig", "process_selected"].includes(actionType)) {
+                return new Response(JSON.stringify({ error: "ACTION_FORBIDDEN" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+            }
+            if (!body.newsId) {
+                const authorization = await authorizeOperationalTenant({
+                    authorization: req.headers.get("Authorization"),
+                    requestedClienteId: null,
+                    requestedAuthUserId: null,
+                    createUserClient: (token) => createClient(
+                        Deno.env.get("SUPABASE_URL")!,
+                        Deno.env.get("SUPABASE_ANON_KEY")!,
+                        { global: { headers: { Authorization: `Bearer ${token}` } } },
+                    ),
+                });
+                authorizedClienteId = authorization.clienteId;
+            }
+        } catch (error) {
+            const status = error instanceof TenantAuthorizationError
+                ? error.status
+                : error instanceof Error && error.message.startsWith("UNAUTHORIZED") ? 401 : 403;
+            return new Response(JSON.stringify({ error: "AUTHORIZATION_FAILED" }), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+    }
 
     let query = supabase.schema("ap").from("candidate_news").select("*");
 
@@ -51,9 +91,33 @@ Deno.serve(async (req: Request) => {
           .in("status", ["selected", "pending_production"])
           .order("created_at", { ascending: true })
           .limit(BATCH_LIMIT);
+        if (!internalRequest && authorizedClienteId) {
+            query = query.eq("cliente_id", authorizedClienteId);
+        }
     }
 
     const { data: items } = await query;
+    if (body.newsId && !items?.length) {
+        return new Response(JSON.stringify({ error: "NEWS_NOT_FOUND" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (!internalRequest && body.newsId) {
+        try {
+            await authorizeOperationalTenant({
+                authorization: req.headers.get("Authorization"),
+                requestedClienteId: items?.[0]?.cliente_id,
+                requestedAuthUserId: null,
+                createUserClient: (token) => createClient(
+                    Deno.env.get("SUPABASE_URL")!,
+                    Deno.env.get("SUPABASE_ANON_KEY")!,
+                    { global: { headers: { Authorization: `Bearer ${token}` } } },
+                ),
+            });
+        } catch (error) {
+            const status = error instanceof TenantAuthorizationError ? error.status : 403;
+            return new Response(JSON.stringify({ error: "TENANT_FORBIDDEN" }), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+    }
     const results = [];
 
     for (const item of items ?? []) {

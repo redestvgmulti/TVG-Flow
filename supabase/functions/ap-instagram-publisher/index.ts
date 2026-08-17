@@ -6,10 +6,18 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { Telemetry } from "../_shared/telemetry.ts";
+import { isTrustedInternalRequest } from "../_shared/internalWorkerAuth.ts";
 
 const LOCK_EXPIRY_MINUTES = 10;
 
-Deno.serve(async (_req: Request) => {
+Deno.serve(async (req: Request) => {
+    if (!isTrustedInternalRequest(req)) {
+        return new Response(JSON.stringify({ error: "INTERNAL_WORKER_AUTH_REQUIRED" }), {
+            status: 401,
+            headers: { "Content-Type": "application/json" },
+        });
+    }
+
     const supabase = createClient(
         Deno.env.get("SUPABASE_URL")!,
         Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -30,6 +38,12 @@ Deno.serve(async (_req: Request) => {
         .limit(1).single();
 
     if (!item) return new Response(JSON.stringify({ ok: true, published: 0 }));
+    if (!item.cliente_id) {
+        return new Response(JSON.stringify({ error: "INVALID_NEWS_TENANT" }), {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+        });
+    }
 
     const telemetry = new Telemetry(supabase);
     await telemetry.logStart({ worker_name: "ap-instagram-publisher", worker_id: workerId, news_id: item.id, cliente_id: item.cliente_id });

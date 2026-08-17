@@ -12,6 +12,21 @@ max_rows = 1000
 [functions.ap-employee-generator]
 verify_jwt = true
 
+[functions.ap-link-scraper]
+verify_jwt = true
+
+[functions.ap-editorial-settings]
+verify_jwt = true
+
+[functions.ap-editorial-prompt]
+verify_jwt = true
+
+[functions.ap-editorial-rag-upload]
+verify_jwt = true
+
+[functions.ap-editorial-test]
+verify_jwt = true
+
 [functions.create-professional]
 verify_jwt = true
 

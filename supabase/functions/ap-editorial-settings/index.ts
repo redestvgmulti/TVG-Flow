@@ -7,6 +7,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { EditorialAdminAuthorizationError, requireEditorialAdmin } from "../_shared/editorialAdminAuth.ts";
 
 const FIXED_CLIENT_ID = "cd287e6e-f273-4d0f-a72d-2a8c391e40e9";
 
@@ -27,6 +28,7 @@ Deno.serve(async (req: Request) => {
         const clienteId = FIXED_CLIENT_ID;
 
         const sbAdmin = createClient(supabaseUrl, supabaseServiceRole);
+        await requireEditorialAdmin(req, sbAdmin, clienteId);
 
         // ============================================================
         // GET
@@ -163,8 +165,8 @@ Deno.serve(async (req: Request) => {
     } catch (err: any) {
         console.error("Settings Error:", err);
         return new Response(
-            JSON.stringify({ error: err.message }),
-            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            JSON.stringify({ error: err instanceof EditorialAdminAuthorizationError ? "EDITORIAL_ADMIN_REQUIRED" : err.message }),
+            { status: err instanceof EditorialAdminAuthorizationError ? err.status : 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
     }
 });

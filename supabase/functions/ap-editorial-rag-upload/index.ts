@@ -6,6 +6,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { encode, decode } from "npm:gpt-tokenizer";
+import { EditorialAdminAuthorizationError, requireEditorialAdmin } from "../_shared/editorialAdminAuth.ts";
 
 const FIXED_CLIENT_ID = "cd287e6e-f273-4d0f-a72d-2a8c391e40e9";
 
@@ -27,6 +28,7 @@ Deno.serve(async (req: Request) => {
         const clienteId = FIXED_CLIENT_ID;
 
         const sbAdmin = createClient(supabaseUrl, supabaseServiceRole);
+        await requireEditorialAdmin(req, sbAdmin, clienteId);
 
         // ================= GET: Listar documentos =================
         if (req.method === "GET") {
@@ -171,8 +173,8 @@ Deno.serve(async (req: Request) => {
         return new Response("Method not allowed", { status: 405, headers: corsHeaders });
     } catch (err: any) {
         console.error("RAG Err:", err);
-        return new Response(JSON.stringify({ error: err.message }), {
-            status: 400,
+        return new Response(JSON.stringify({ error: err instanceof EditorialAdminAuthorizationError ? "EDITORIAL_ADMIN_REQUIRED" : err.message }), {
+            status: err instanceof EditorialAdminAuthorizationError ? err.status : 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
     }
