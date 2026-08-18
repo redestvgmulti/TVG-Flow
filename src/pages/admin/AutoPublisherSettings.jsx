@@ -13,8 +13,8 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
     const [newSource, setNewSource] = useState({ nome: '', url: '', tipo: 'rss' })
     const [saving, setSaving] = useState(false)
 
-    async function apConfig(resource, action, payload = null) {
-        const body = { resource, action }
+    const apConfig = useCallback(async (resource, action, payload = null) => {
+        const body = { resource, action, cliente_id: clienteId }
         if (payload) body.payload = payload
 
         const { data, error } = await supabase.functions.invoke('ap-config', {
@@ -30,12 +30,12 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
             throw new Error(`Edge Function Error: ${data.error} | Type: ${data.type}`);
         }
         return data
-    }
+    }, [clienteId])
 
     const fetchData = useCallback(async () => {
         const s = await apConfig('sources', 'list')
         setSources(s ?? [])
-    }, [])
+    }, [apConfig])
 
     useEffect(() => { fetchData() }, [fetchData])
 

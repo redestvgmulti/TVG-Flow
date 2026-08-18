@@ -12,6 +12,9 @@ max_rows = 1000
 [functions.ap-employee-generator]
 verify_jwt = true
 
+[functions.ap-config]
+verify_jwt = true
+
 [functions.ap-link-scraper]
 verify_jwt = true
 
