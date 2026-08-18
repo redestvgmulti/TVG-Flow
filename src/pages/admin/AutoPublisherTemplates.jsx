@@ -6,7 +6,7 @@ import * as Icons from 'lucide-react'
 // AutoPublisherTemplates — TVG Hub V2 Design System
 // ──────────────────────────────────────────────────────────
 
-export default function AutoPublisherTemplates() {
+export default function AutoPublisherTemplates({ clienteId }) {
     const [templates, setTemplates] = useState([])
     const [campaigns, setCampaigns] = useState([])
     const [newTemplate, setNewTemplate] = useState({ nome: '', placid_template_uuid: '', ordem: 1, tipo: 'feed', template_set: 'default' })
@@ -17,8 +17,8 @@ export default function AutoPublisherTemplates() {
     const [newCampaign, setNewCampaign] = useState({ label: '', slug: '', icon: 'Plus', color: '#3b82f6', descricao: '' })
     const [saving, setSaving] = useState(false)
 
-    async function apConfig(resource, action, payload = null) {
-        const body = { resource, action }
+    const apConfig = useCallback(async (resource, action, payload = null) => {
+        const body = { resource, action, cliente_id: clienteId }
         if (payload) body.payload = payload
 
         const { data, error } = await supabase.functions.invoke('ap-config', {
@@ -34,7 +34,7 @@ export default function AutoPublisherTemplates() {
             throw new Error(`Edge Function Error: ${data.error} | Type: ${data.type}`);
         }
         return data
-    }
+    }, [clienteId])
 
     const fetchData = useCallback(async () => {
         const [t, c] = await Promise.all([
@@ -43,7 +43,7 @@ export default function AutoPublisherTemplates() {
         ])
         setTemplates(t ?? [])
         setCampaigns(c ?? [])
-    }, [])
+    }, [apConfig])
 
     useEffect(() => { fetchData() }, [fetchData])
 

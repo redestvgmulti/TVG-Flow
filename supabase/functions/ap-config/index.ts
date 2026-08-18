@@ -1,128 +1,161 @@
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// AutoPublisher — Config Manager: Sources & Sponsors
-// MODE: SINGLE-TENANT (TVG only)
-// Usa fetch direto ao PostgREST com Accept-Profile: ap (bypassa SDK + RLS)
-// verify_jwt: false
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-
-const FIXED_CLIENT_ID = "cd287e6e-f273-4d0f-a72d-2a8c391e40e9";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  authorizeConfigRequest,
+  ConfigAuthorizationError,
+} from "./authorization.ts";
 
 const corsHeaders = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-    "Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE",
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+const RESOURCES = {
+  sources: { ownerColumn: "cliente_id", order: "created_at.asc" },
+  patrocinadores: { ownerColumn: "cliente_id", order: "created_at.asc" },
+  templates: { ownerColumn: "empresa_id", order: "ordem.asc,criado_em.asc" },
+  // Legacy debt: this column contains cliente_id values in existing rows.
+  template_sets: { ownerColumn: "empresa_id", order: "created_at.asc" },
+} as const;
+
+type Resource = keyof typeof RESOURCES;
+type Action = "list" | "insert" | "update" | "delete";
+
+class ConfigRequestError extends Error {
+  status: number;
+
+  constructor(message: string, status = 400) {
+    super(message);
+    this.name = "ConfigRequestError";
+    this.status = status;
+  }
+}
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+function configError(error: unknown) {
+  if (error instanceof ConfigAuthorizationError) return json({ error: error.code }, error.status);
+  if (error instanceof ConfigRequestError) return json({ error: error.message }, error.status);
+  console.error("[ap-config] request failed", {
+    name: error instanceof Error ? error.name : "UnknownError",
+  });
+  return json({ error: "CONFIG_OPERATION_FAILED" }, 500);
+}
+
+function isResource(value: unknown): value is Resource {
+  return typeof value === "string" && value in RESOURCES;
+}
+
+function isAction(value: unknown): value is Action {
+  return value === "list" || value === "insert" || value === "update" || value === "delete";
+}
+
+function payloadObject(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new ConfigRequestError("PAYLOAD_REQUIRED");
+  }
+  return { ...(value as Record<string, unknown>) };
+}
+
+function sanitizedFields(payload: Record<string, unknown>, ownerColumn: string) {
+  const fields = { ...payload };
+  delete fields.id;
+  if (ownerColumn in fields || "cliente_id" in fields || "empresa_id" in fields) {
+    throw new ConfigRequestError("OWNER_SCOPE_MANAGED_BY_SERVER", 403);
+  }
+  return fields;
+}
+
 Deno.serve(async (req: Request) => {
-    if (req.method === "OPTIONS") {
-        return new Response("ok", { headers: corsHeaders });
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method !== "POST") return json({ error: "METHOD_NOT_ALLOWED" }, 405);
+
+  try {
+    const body = await req.json();
+    const { resource, action, payload, cliente_id: requestedClienteId } = body ?? {};
+    if (!isResource(resource)) throw new ConfigRequestError("RESOURCE_INVALID");
+    if (!isAction(action)) throw new ConfigRequestError("ACTION_INVALID");
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    if (!supabaseUrl || !anonKey) throw new ConfigRequestError("SERVER_CONFIGURATION_ERROR", 500);
+
+    // No service-role client exists until this JWT, profile, role and client scope pass.
+    const authorization = await authorizeConfigRequest({
+      authorization: req.headers.get("Authorization"),
+      requestedClienteId,
+      createUserClient: (token) => createClient(supabaseUrl, anonKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+        global: { headers: { Authorization: `Bearer ${token}` } },
+      }),
+    });
+
+    const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!serviceRole) throw new ConfigRequestError("SERVER_CONFIGURATION_ERROR", 500);
+    const supabase = createClient(supabaseUrl, serviceRole, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    }).schema("ap");
+
+    const { ownerColumn, order } = RESOURCES[resource];
+    const base = supabase.from(resource);
+
+    if (action === "list") {
+      let query = base
+        .select("*")
+        .eq(ownerColumn, authorization.clienteId);
+      for (const orderColumn of order.split(",")) {
+        const [column, direction] = orderColumn.split(".");
+        query = query.order(column, { ascending: direction !== "desc" });
+      }
+      const { data, error } = await query;
+      if (error) throw error;
+      return json(data ?? []);
     }
 
-    const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-    const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const rawPayload = payloadObject(payload);
 
-    // Headers para PostgREST com schema ap + service role (bypassa RLS)
-    const pgHeaders = {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${SERVICE_ROLE}`,
-        "apikey": SERVICE_ROLE,
-        "Accept-Profile": "ap",
-        "Content-Profile": "ap",
-    };
-
-    try {
-        const body = await req.json();
-        const { resource, action, payload } = body;
-
-        console.log("[ap-config] resource:", resource, "action:", action);
-
-        if (!resource || !["sources", "patrocinadores", "templates", "template_sets"].includes(resource)) {
-            throw new Error(`resource inválido: '${resource}'. Use 'sources', 'patrocinadores', 'templates' ou 'template_sets'`);
-        }
-
-        const base = `${SUPABASE_URL}/rest/v1/${resource}`;
-
-        // Handle tenant column name differences
-        const tenantCol = ['templates', 'template_sets'].includes(resource) ? 'empresa_id' : 'cliente_id';
-
-        if (action === "list") {
-            const orderCol = resource === 'templates' ? 'ordem.asc,criado_em.asc' : 'created_at.asc';
-            const res = await fetch(
-                `${base}?${tenantCol}=eq.${FIXED_CLIENT_ID}&order=${orderCol}`,
-                { method: "GET", headers: pgHeaders }
-            );
-            if (!res.ok) throw new Error(`PostgREST list error: ${await res.text()}`);
-            const data = await res.json();
-            return new Response(JSON.stringify(data), {
-                headers: { ...corsHeaders, "Content-Type": "application/json" }
-            });
-        }
-
-        // ── INSERT ─────────────────────────────────────────────────
-        if (action === "insert") {
-            if (!payload) throw new Error("payload required for insert");
-            const row = { ...payload, [tenantCol]: FIXED_CLIENT_ID };
-
-            const res = await fetch(base, {
-                method: "POST",
-                headers: { ...pgHeaders, "Prefer": "return=representation" },
-                body: JSON.stringify(row)
-            });
-            if (!res.ok) throw new Error(`PostgREST insert error: ${await res.text()}`);
-            const data = await res.json();
-            return new Response(JSON.stringify(Array.isArray(data) ? data[0] : data), {
-                headers: { ...corsHeaders, "Content-Type": "application/json" }
-            });
-        }
-
-        // ── UPDATE ─────────────────────────────────────────────────
-        if (action === "update") {
-            if (!payload?.id) throw new Error("payload.id required for update");
-            const { id, ...fields } = payload;
-
-            const res = await fetch(
-                `${base}?id=eq.${id}&${tenantCol}=eq.${FIXED_CLIENT_ID}`,
-                {
-                    method: "PATCH",
-                    headers: { ...pgHeaders, "Prefer": "return=representation" },
-                    body: JSON.stringify(fields)
-                }
-            );
-            if (!res.ok) throw new Error(`PostgREST update error: ${await res.text()}`);
-            const data = await res.json();
-            return new Response(JSON.stringify(Array.isArray(data) ? data[0] : data), {
-                headers: { ...corsHeaders, "Content-Type": "application/json" }
-            });
-        }
-
-        // ── DELETE ─────────────────────────────────────────────────
-        if (action === "delete") {
-            if (!payload?.id) throw new Error("payload.id required for delete");
-
-            const res = await fetch(
-                `${base}?id=eq.${payload.id}&${tenantCol}=eq.${FIXED_CLIENT_ID}`,
-                { method: "DELETE", headers: pgHeaders }
-            );
-            if (!res.ok) throw new Error(`PostgREST delete error: ${await res.text()}`);
-            return new Response(JSON.stringify({ success: true }), {
-                headers: { ...corsHeaders, "Content-Type": "application/json" }
-            });
-        }
-
-        throw new Error(`action inválida: '${action}'. Use: list, insert, update, delete`);
-
-    } catch (err: any) {
-        console.error("[ap-config] ERROR:", err);
-        return new Response(JSON.stringify({
-            has_error: true,
-            error: err.message,
-            stack: err.stack,
-            type: err.name
-        }), {
-            status: 200, // Retornando 200 para forçar o SDK a expor o BODY JSON no `data`
-            headers: { ...corsHeaders, "Content-Type": "application/json" }
-        });
+    if (action === "insert") {
+      const fields = sanitizedFields(rawPayload, ownerColumn);
+      const { data, error } = await base
+        .insert({ ...fields, [ownerColumn]: authorization.clienteId })
+        .select()
+        .single();
+      if (error) throw error;
+      return json(data);
     }
+
+    const id = typeof rawPayload.id === "string" ? rawPayload.id : null;
+    if (!id) throw new ConfigRequestError("CONFIG_RECORD_ID_REQUIRED");
+    const fields = sanitizedFields(rawPayload, ownerColumn);
+
+    if (action === "update") {
+      const { data, error } = await base
+        .update(fields)
+        .eq("id", id)
+        .eq(ownerColumn, authorization.clienteId)
+        .select()
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) throw new ConfigRequestError("CONFIG_RECORD_NOT_FOUND", 404);
+      return json(data);
+    }
+
+    const { data, error } = await base
+      .delete()
+      .eq("id", id)
+      .eq(ownerColumn, authorization.clienteId)
+      .select("id")
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) throw new ConfigRequestError("CONFIG_RECORD_NOT_FOUND", 404);
+    return json({ success: true });
+  } catch (error) {
+    return configError(error);
+  }
 });
