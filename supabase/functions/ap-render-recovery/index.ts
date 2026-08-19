@@ -5,11 +5,21 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { requireTrustedInternalRequest } from "../_shared/internalWorkerAuth.ts";
 import { Telemetry } from "../_shared/telemetry.ts";
 
 const LOCK_EXPIRY_MINUTES = 15;
 
-Deno.serve(async (_req: Request) => {
+Deno.serve(async (req: Request) => {
+    if (req.method !== "POST") {
+        return new Response(JSON.stringify({ error: "METHOD_NOT_ALLOWED" }), { status: 405 });
+    }
+    try {
+        requireTrustedInternalRequest(req);
+    } catch {
+        return new Response(JSON.stringify({ error: "INTERNAL_WORKER_AUTH_REQUIRED" }), { status: 401 });
+    }
+
     const supabase = createClient(
         Deno.env.get("SUPABASE_URL")!,
         Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -18,7 +28,12 @@ Deno.serve(async (_req: Request) => {
 
     const workerId = crypto.randomUUID();
     const telemetry = new Telemetry(supabase);
-    await telemetry.logStart({ worker_name: "ap-render-recovery", worker_id: workerId });
+    await telemetry.logStart({
+        worker_name: "ap-render-recovery",
+        worker_id: workerId,
+        action: "internal_batch",
+        metadata: { mode: "internal_batch" },
+    });
 
     try {
         const expiryCutoff = new Date(Date.now() - LOCK_EXPIRY_MINUTES * 60 * 1000).toISOString();
@@ -92,6 +107,8 @@ Deno.serve(async (_req: Request) => {
         }
 
         await telemetry.logSuccess(0, {
+            mode: "internal_batch",
+            result: "success",
             released_generations: releasedGenerationCount,
             recovered: recoveredCount,
             retried: retriedCount,
@@ -103,7 +120,7 @@ Deno.serve(async (_req: Request) => {
             retried: retriedCount,
         }));
     } catch (err: any) {
-        await telemetry.logError(err.message);
-        return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+        await telemetry.logError("RECOVERY_FAILED", 0, { mode: "internal_batch", result: "error" });
+        return new Response(JSON.stringify({ error: "RECOVERY_FAILED" }), { status: 500 });
     }
 });

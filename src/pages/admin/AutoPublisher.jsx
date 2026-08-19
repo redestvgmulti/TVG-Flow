@@ -493,27 +493,6 @@ export default function AutoPublisher() {
         fetchItems(tab); fetchCounts()
     }
 
-    async function handleForceProcess() {
-        if (isProcessing) return
-        setIsProcessing(true)
-        toast.info("Iniciando pipeline... (Pode levar alguns segundos)");
-        try {
-            await supabase.functions.invoke('ap-image-fetcher');
-            await supabase.functions.invoke('ap-scoring-engine');
-            await supabase.functions.invoke('ap-daily-feed-builder');
-            await supabase.functions.invoke('ap-content-production', { body: { action: 'process_selected' } });
-            // NOTE: ap-render-engine is NOT called here.
-            // It runs on its own cron schedule and will automatically pick up
-            // items in 'pending_render' with idempotency guarantees.
-            toast.success("Pipeline iniciado. A renderização ocorrerá automaticamente.");
-            fetchCounts(); fetchItems(tab);
-        } catch {
-            toast.error("Erro ao processar.");
-        } finally {
-            setIsProcessing(false);
-        }
-    }
-
     // ── Manual submission (Hybrid Editorial Engine)
     async function submitManualNews(e) {
         e.preventDefault()
@@ -735,18 +714,6 @@ export default function AutoPublisher() {
                             >
                                 <RefreshCcw size={14} />
                                 Atualizar
-                            </button>
-
-                            <button
-                                className="ap-btn-refresh"
-                                onClick={handleForceProcess}
-                                disabled={isProcessing}
-                            >
-                                <Zap
-                                    size={14}
-                                    className={isProcessing ? 'ap-spin-icon' : ''}
-                                />
-                                {isProcessing ? 'Processando...' : 'Processar Tudo'}
                             </button>
 
                             <button

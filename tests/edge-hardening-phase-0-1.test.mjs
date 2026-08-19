@@ -69,12 +69,14 @@ test('scraper source requires authenticated user and avoids sensitive URL loggin
   assert.equal(sanitizeUrlForLog('https://news.example/a?token=secret#fragment'), 'news.example/a')
 })
 
-test('content production enforces admin JWT tenant authorization and separates the internal worker', async () => {
+test('content production enforces targeted admin JWT tenant authorization and separates the internal worker', async () => {
   const content = await source('supabase/functions/ap-content-production/index.ts')
   assert.match(content, /isTrustedInternalRequest\(req\)/)
   assert.match(content, /requireActiveOperator\(req, createAdminClient\(\), \["admin"\]\)/)
   assert.match(content, /authorizeOperationalTenant\(/)
-  assert.match(content, /query = query\.eq\("cliente_id", authorizedClienteId\)/)
+  assert.match(content, /if \(!body\.newsId\)/)
+  assert.match(content, /RESOURCE_TARGET_REQUIRED/)
+  assert.match(content, /query = query\.eq\("id", body\.newsId\)/)
   assert.match(content, /TENANT_FORBIDDEN/)
   assert.match(content, /NEWS_NOT_FOUND/)
 })

@@ -1,5 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
 import {
   buildLegacyLayers,
   buildProfileMasterLayers,
@@ -11,6 +11,8 @@ import {
 } from "./renderContract.ts";
 import { prepareTerritorialComposerRender } from "./territorialRenderContract.ts";
 import { buildPlacidErrorTelemetry } from "./placidErrorTelemetry.ts";
+import { requireTrustedInternalRequest } from "../_shared/internalWorkerAuth.ts";
+import { Telemetry } from "../_shared/telemetry.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -292,6 +294,20 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "METHOD_NOT_ALLOWED" }), {
+      status: 405,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  try {
+    requireTrustedInternalRequest(req);
+  } catch {
+    return new Response(JSON.stringify({ error: "INTERNAL_WORKER_AUTH_REQUIRED" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -317,6 +333,13 @@ Deno.serve(async (req) => {
     ? requestedCorrelationId
     : crypto.randomUUID();
   const targetId = reqBody.newsId || reqBody.news_id;
+  const runTelemetry = new Telemetry(supabase);
+  await runTelemetry.logStart({
+    worker_name: "ap-render-engine",
+    worker_id: correlationId,
+    action: targetId ? "internal_target" : "internal_batch",
+    metadata: { mode: targetId ? "internal_target" : "internal_batch" },
+  });
   const lockExpiry = new Date(Date.now() - 10 * 60 * 1000).toISOString();
   let query = supabase
     .schema("ap")
@@ -329,6 +352,10 @@ Deno.serve(async (req) => {
 
   const { data: items, error: selectionError } = await query;
   if (selectionError) {
+    await runTelemetry.logError("RENDER_SELECTION_FAILED", 0, {
+      mode: targetId ? "internal_target" : "internal_batch",
+      result: "error",
+    });
     return new Response(
       JSON.stringify({ ok: false, error: "RENDER_SELECTION_FAILED" }),
       {
@@ -338,6 +365,11 @@ Deno.serve(async (req) => {
     );
   }
   if (!items?.length) {
+    await runTelemetry.logSuccess(0, {
+      mode: targetId ? "internal_target" : "internal_batch",
+      result: "no_items",
+      processed: 0,
+    });
     return new Response(JSON.stringify({ ok: true, message: "No items" }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
@@ -347,6 +379,15 @@ Deno.serve(async (req) => {
   for (const item of items) {
     const claimedAt = new Date().toISOString();
     if (!await claimPendingRender(supabase, item, claimedAt)) continue;
+    const telemetry = new Telemetry(supabase);
+    await telemetry.logStart({
+      worker_name: "ap-render-engine",
+      worker_id: correlationId,
+      news_id: item.id,
+      cliente_id: item.cliente_id,
+      action: targetId ? "internal_target" : "internal_batch",
+      metadata: { mode: targetId ? "internal_target" : "internal_batch" },
+    });
 
     try {
       const plan = await buildRenderPlan(supabase, item, supabaseUrl);
@@ -411,6 +452,11 @@ Deno.serve(async (req) => {
       if (persistError) {
         throw new RenderContractError("RENDER_PERSIST_FAILED");
       }
+      await telemetry.logSuccess(0, {
+        mode: targetId ? "internal_target" : "internal_batch",
+        result: "pending_review",
+        render_path: plan.path,
+      });
       results.push({ id: item.id, status: "success", url: renderUrl });
     } catch (unknownError) {
       const error = stableError(unknownError);
@@ -445,10 +491,21 @@ Deno.serve(async (req) => {
           error_code: "RENDER_FAILURE_PERSIST_FAILED",
         });
       }
+      await telemetry.logError(error.code, 0, {
+        mode: targetId ? "internal_target" : "internal_batch",
+        result: "error",
+        render_contract_version: item.render_contract_version || "legacy",
+      });
       results.push({ id: item.id, status: "error", error: error.code });
     }
   }
 
+  await runTelemetry.logSuccess(0, {
+    mode: targetId ? "internal_target" : "internal_batch",
+    result: "completed",
+    processed: results.length,
+    failures: results.filter((result) => result.status === "error").length,
+  });
   return new Response(JSON.stringify({ ok: true, results }), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });

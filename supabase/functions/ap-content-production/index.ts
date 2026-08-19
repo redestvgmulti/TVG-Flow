@@ -45,7 +45,6 @@ Deno.serve(async (req: Request) => {
     const internalRequest = isTrustedInternalRequest(req);
     const actionType = body.action || "cron";
 
-    let authorizedClienteId: string | null = null;
     let operator: { id: string; email: string } | null = null;
     if (internalRequest && actionType === "approve_for_ig") {
         return new Response(JSON.stringify({ error: "HUMAN_APPROVAL_REQUIRED" }), {
@@ -62,17 +61,7 @@ Deno.serve(async (req: Request) => {
                 return new Response(JSON.stringify({ error: "ACTION_FORBIDDEN" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
             }
             if (!body.newsId) {
-                const authorization = await authorizeOperationalTenant({
-                    authorization: req.headers.get("Authorization"),
-                    requestedClienteId: null,
-                    requestedAuthUserId: null,
-                    createUserClient: (token) => createClient(
-                        Deno.env.get("SUPABASE_URL")!,
-                        Deno.env.get("SUPABASE_ANON_KEY")!,
-                        { global: { headers: { Authorization: `Bearer ${token}` } } },
-                    ),
-                });
-                authorizedClienteId = authorization.clienteId;
+                return new Response(JSON.stringify({ error: "RESOURCE_TARGET_REQUIRED" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
             }
         } catch (error) {
             const status = error instanceof TenantAuthorizationError
@@ -81,6 +70,14 @@ Deno.serve(async (req: Request) => {
             return new Response(JSON.stringify({ error: "AUTHORIZATION_FAILED" }), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
     }
+
+    const runTelemetry = new Telemetry(supabase);
+    await runTelemetry.logStart({
+        worker_name: "ap-content-production",
+        worker_id: workerId,
+        action: actionType,
+        metadata: { mode: internalRequest ? "internal_batch" : "operator_target" },
+    });
 
     let query = supabase.schema("ap").from("candidate_news").select("*");
 
@@ -92,13 +89,21 @@ Deno.serve(async (req: Request) => {
           .eq("status", "selected")
           .order("created_at", { ascending: true })
           .limit(BATCH_LIMIT);
-        if (!internalRequest && authorizedClienteId) {
-            query = query.eq("cliente_id", authorizedClienteId);
-        }
     }
 
-    const { data: items } = await query;
+    const { data: items, error: selectionError } = await query;
+    if (selectionError) {
+        await runTelemetry.logError("CONTENT_SELECTION_FAILED", 0, {
+            mode: internalRequest ? "internal_batch" : "operator_target",
+            result: "error",
+        });
+        return new Response(JSON.stringify({ error: "CONTENT_SELECTION_FAILED" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
     if (body.newsId && !items?.length) {
+        await runTelemetry.logError("NEWS_NOT_FOUND", 0, {
+            mode: internalRequest ? "internal_target" : "operator_target",
+            result: "not_found",
+        });
         return new Response(JSON.stringify({ error: "NEWS_NOT_FOUND" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -116,6 +121,7 @@ Deno.serve(async (req: Request) => {
             });
         } catch (error) {
             const status = error instanceof TenantAuthorizationError ? error.status : 403;
+            await runTelemetry.logError("TENANT_FORBIDDEN", 0, { mode: "operator_target", result: "forbidden" });
             return new Response(JSON.stringify({ error: "TENANT_FORBIDDEN" }), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
     }
@@ -123,6 +129,7 @@ Deno.serve(async (req: Request) => {
     if (actionType === "approve_for_ig") {
         const item = items?.[0];
         if (!item || !operator) {
+            await runTelemetry.logError("HUMAN_APPROVAL_REQUIRED", 0, { mode: "operator_target", result: "forbidden" });
             return new Response(JSON.stringify({ error: "HUMAN_APPROVAL_REQUIRED" }), {
                 status: 403,
                 headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -146,12 +153,14 @@ Deno.serve(async (req: Request) => {
             .maybeSingle();
 
         if (error) {
+            await runTelemetry.logError("APPROVAL_FAILED", 0, { mode: "operator_target", result: "error" });
             return new Response(JSON.stringify({ error: "APPROVAL_FAILED" }), {
                 status: 500,
                 headers: { ...corsHeaders, "Content-Type": "application/json" },
             });
         }
         if (!data) {
+            await runTelemetry.logError("APPROVAL_INVALID_STATE", 0, { mode: "operator_target", result: "invalid_state" });
             return new Response(JSON.stringify({ error: "APPROVAL_INVALID_STATE" }), {
                 status: 409,
                 headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -167,6 +176,11 @@ Deno.serve(async (req: Request) => {
             action: "human_approval",
         });
         await telemetry.logSuccess(0, { next_status: "approved", approved_by: operator.id });
+        await runTelemetry.logSuccess(0, {
+            mode: "operator_target",
+            result: "approved",
+            processed: 1,
+        });
         return new Response(JSON.stringify({ ok: true, results: [{ id: item.id, status: "approved" }] }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -201,7 +215,7 @@ Deno.serve(async (req: Request) => {
             continue;
         }
 
-        const lockTime = lockData.processing_started_at;
+        const lockTime = (lockData as any).processing_started_at;
         try {
             const canonical = canonicalEditorialFields(item);
             const isStudio = actionType === "process_studio";
@@ -234,19 +248,29 @@ Deno.serve(async (req: Request) => {
             await telemetry.logSuccess(0, { next_status: nextStatus, editorial_source: "persisted_input" });
             results.push({ id: item.id, status: "success" });
 
-        } catch (err: any) {
+        } catch (_err: any) {
             const finalStatus = item.status;
 
             await supabase.schema("ap").from("candidate_news").update({
                 status: finalStatus,
                 processing_started_at: null,
-                error_log: String(err.message).substring(0, 500)
+                error_log: "CONTENT_PRODUCTION_FAILED"
             }).eq("id", item.id).eq("processing_started_at", lockTime);
 
-            await telemetry.logError(err.message, 0, { finalStatus });
-            results.push({ id: item.id, status: "error", error: err.message });
+            await telemetry.logError("CONTENT_PRODUCTION_FAILED", 0, {
+                mode: internalRequest ? "internal_batch" : "operator_target",
+                result: "error",
+                finalStatus,
+            });
+            results.push({ id: item.id, status: "error", error: "CONTENT_PRODUCTION_FAILED" });
         }
     }
 
+    await runTelemetry.logSuccess(0, {
+        mode: internalRequest ? "internal_batch" : "operator_target",
+        result: "completed",
+        processed: results.length,
+        failures: results.filter((result) => result.status === "error").length,
+    });
     return new Response(JSON.stringify({ ok: true, results }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 });

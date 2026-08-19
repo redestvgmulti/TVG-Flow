@@ -18,6 +18,27 @@ verify_jwt = true
 [functions.ap-link-scraper]
 verify_jwt = true
 
+[functions.ap-image-fetcher]
+verify_jwt = true
+
+[functions.ap-data-ingestion]
+verify_jwt = true
+
+[functions.ap-scoring-engine]
+verify_jwt = true
+
+[functions.ap-daily-feed-builder]
+verify_jwt = true
+
+[functions.ap-content-production]
+verify_jwt = true
+
+[functions.ap-render-engine]
+verify_jwt = true
+
+[functions.ap-render-recovery]
+verify_jwt = true
+
 [functions.ap-editorial-settings]
 verify_jwt = true
 

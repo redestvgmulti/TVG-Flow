@@ -13,6 +13,7 @@ export class Telemetry {
     private supabase: SupabaseClient;
     private logId: string | null = null;
     private startTime: number;
+    private baseMetadata: Record<string, unknown> = {};
 
     constructor(supabase: SupabaseClient) {
         this.supabase = supabase;
@@ -20,19 +21,28 @@ export class Telemetry {
     }
 
     async logStart(params: TelemetryLog) {
+        const startedAt = new Date().toISOString();
+        this.baseMetadata = {
+            ...(params.metadata || {}),
+            correlation_id: params.worker_id,
+            started_at: startedAt,
+        };
         const { data, error } = await this.supabase
             .schema("ap")
             .from("worker_telemetry")
             .insert({
                 ...params,
                 status: "start",
-                created_at: new Date().toISOString()
+                created_at: startedAt,
+                metadata: this.baseMetadata,
             })
             .select("id")
             .single();
 
         if (!error && data) {
             this.logId = data.id;
+        } else if (error) {
+            console.error(`[worker-telemetry] insert failed: ${error.code || "UNKNOWN"}`);
         }
         return this.logId;
     }
@@ -41,23 +51,24 @@ export class Telemetry {
         if (!this.logId) return;
         const duration = Math.round(performance.now() - this.startTime);
 
-        await this.supabase
+        const { error } = await this.supabase
             .schema("ap")
             .from("worker_telemetry")
             .update({
                 status: "success",
                 duration_ms: duration,
                 cost_usd: costUsd,
-                metadata: metadata
+                metadata: { ...this.baseMetadata, ...metadata, finished_at: new Date().toISOString() }
             })
             .eq("id", this.logId);
+        if (error) console.error(`[worker-telemetry] success update failed: ${error.code || "UNKNOWN"}`);
     }
 
     async logError(errorMsg: string, costUsd: number = 0, metadata: any = {}) {
         if (!this.logId) return;
         const duration = Math.round(performance.now() - this.startTime);
 
-        await this.supabase
+        const { error } = await this.supabase
             .schema("ap")
             .from("worker_telemetry")
             .update({
@@ -65,8 +76,9 @@ export class Telemetry {
                 duration_ms: duration,
                 cost_usd: costUsd,
                 error_message: errorMsg,
-                metadata: metadata
+                metadata: { ...this.baseMetadata, ...metadata, finished_at: new Date().toISOString() }
             })
             .eq("id", this.logId);
+        if (error) console.error(`[worker-telemetry] error update failed: ${error.code || "UNKNOWN"}`);
     }
 }

@@ -23,6 +23,41 @@ function parseIpv4(value) {
   return numbers.some((part) => part > 255) ? null : numbers
 }
 
+function parseIpv6(value) {
+  let input = value.toLowerCase().replace(/^\[|\]$/g, '').split('%', 1)[0]
+  if (!input.includes(':')) return null
+  if (input.includes('.')) return null
+  const halves = input.split('::')
+  if (halves.length > 2) return null
+  const left = halves[0] ? halves[0].split(':') : []
+  const right = halves.length === 2 && halves[1] ? halves[1].split(':') : []
+  if ([...left, ...right].some((part) => !/^[0-9a-f]{1,4}$/.test(part))) return null
+  const missing = 8 - left.length - right.length
+  if ((halves.length === 1 && missing !== 0) || (halves.length === 2 && missing < 1)) return null
+  const parts = [...left, ...Array(Math.max(0, missing)).fill('0'), ...right]
+  if (parts.length !== 8) return null
+  return parts.reduce((result, part) => (result << 16n) | BigInt(`0x${part}`), 0n)
+}
+
+function ipv6InCidr(value, base, prefix) {
+  const shift = 128n - BigInt(prefix)
+  return (value >> shift) === (base >> shift)
+}
+
+const IPV6_BLOCKS = [
+  [0x0n, 96], // IPv4-compatible and other reserved low addresses
+  [0x00000000000000000000ffff00000000n, 96], // IPv4-mapped
+  [0x0064ff9b000000000000000000000000n, 96], // NAT64 well-known prefix
+  [0x0064ff9b000100000000000000000000n, 48], // NAT64 local-use prefix
+  [0x01000000000000000000000000000000n, 64], // discard-only
+  [0x20010000000000000000000000000000n, 23], // IETF special-purpose assignments
+  [0x20010db8000000000000000000000000n, 32], // documentation
+  [0x20020000000000000000000000000000n, 16], // 6to4
+  [0xfc000000000000000000000000000000n, 7], // unique-local
+  [0xfe800000000000000000000000000000n, 10], // link-local
+  [0xff000000000000000000000000000000n, 8], // multicast
+]
+
 export function isBlockedIpAddress(value) {
   const host = value.toLowerCase().replace(/^\[|\]$/g, '')
   const ipv4 = parseIpv4(host)
@@ -39,15 +74,12 @@ export function isBlockedIpAddress(value) {
   }
 
   if (!host.includes(':')) return false
-  // IPv4-mapped IPv6 addresses are not needed for this use case; rejecting
-  // them closes an alternate spelling of a private IPv4 address.
+  // Reject mixed IPv4/IPv6 spellings and every relevant IANA special-purpose
+  // range. Public literal IPv6 remains allowed.
   if (host.includes('.')) return true
-  return host === '::' || host === '::1' ||
-    host.startsWith('::ffff:') ||
-    /^(fc|fd)/.test(host) ||
-    /^fe[89ab]/.test(host) ||
-    host.startsWith('ff') ||
-    host.startsWith('2001:db8:')
+  const ipv6 = parseIpv6(host)
+  if (ipv6 === null) return true
+  return IPV6_BLOCKS.some(([base, prefix]) => ipv6InCidr(ipv6, base, prefix))
 }
 
 export function sanitizeUrlForLog(value) {

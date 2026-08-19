@@ -7,12 +7,26 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { classifyCategory } from "../_shared/categoryHeuristics.ts";
+import { requireTrustedInternalRequest } from "../_shared/internalWorkerAuth.ts";
+import { fetchPublicText, SafeEgressFetchError } from "../_shared/safeEgressFetcher.mjs";
+import { Telemetry } from "../_shared/telemetry.ts";
 
 const BATCH_LIMIT = 50;
 const MAX_AGE_HOURS = 24;
+const FEED_MAX_BYTES = 4 * 1024 * 1024;
+const PAGE_MAX_BYTES = 3 * 1024 * 1024;
+const FETCH_TIMEOUT_MS = 12_000;
 
-Deno.serve(async (_req: Request) => {
+Deno.serve(async (req: Request) => {
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "METHOD_NOT_ALLOWED" }), { status: 405 });
+  }
+  try {
+    requireTrustedInternalRequest(req);
+  } catch {
+    return new Response(JSON.stringify({ error: "INTERNAL_WORKER_AUTH_REQUIRED" }), { status: 401 });
+  }
+
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
@@ -25,6 +39,14 @@ Deno.serve(async (_req: Request) => {
   });
 
   const cutoffMs = Date.now() - MAX_AGE_HOURS * 60 * 60 * 1000;
+  const workerId = crypto.randomUUID();
+  const runTelemetry = new Telemetry(supabase);
+  await runTelemetry.logStart({
+    worker_name: "ap-data-ingestion",
+    worker_id: workerId,
+    action: "internal_batch",
+    metadata: { mode: "internal_batch" },
+  });
 
   // 1. Identificar locatários que PAUSARAM o motor de ingestão globalmente
   const { data: disabledConfigs } = await supabase
@@ -48,6 +70,7 @@ Deno.serve(async (_req: Request) => {
 
   if (sourcesError) {
     console.error("[ap-data-ingestion] fetch sources error:", sourcesError.message);
+    await runTelemetry.logError("FETCH_SOURCES_FAILED", 0, { mode: "internal_batch", result: "error" });
     return new Response(JSON.stringify({ error: "fetch_sources_failed" }), { status: 500 });
   }
 
@@ -57,9 +80,17 @@ Deno.serve(async (_req: Request) => {
     let inserted = 0;
     let skipped_old = 0;
     let errors = 0;
+    const telemetry = new Telemetry(supabase);
+    await telemetry.logStart({
+      worker_name: "ap-data-ingestion",
+      worker_id: workerId,
+      cliente_id: source.cliente_id,
+      action: "internal_batch",
+      metadata: { mode: "internal_batch", source_id: source.id },
+    });
 
     try {
-      console.log(`[ap-data-ingestion] processing source ${source.id}: ${source.url}`);
+      console.log(`[ap-data-ingestion] processing source ${source.id}`);
       let fetchUrl = source.url;
 
       if (fetchUrl.includes("instagram.com")) {
@@ -67,21 +98,25 @@ Deno.serve(async (_req: Request) => {
         if (match?.[1]) fetchUrl = `https://rsshub.anyat.icu/instagram/user/${match[1]}`;
       }
 
-      // Add 10s timeout to source fetch
-      const abSource = new AbortController();
-      const timerSource = setTimeout(() => abSource.abort(), 10000);
-      const res = await fetch(fetchUrl, {
-        signal: abSource.signal,
+      const feed = await fetchPublicText(fetchUrl, {
+        maxBytes: FEED_MAX_BYTES,
+        timeoutMs: FETCH_TIMEOUT_MS,
+        maxRedirects: 3,
+        allowedContentTypes: [
+          "application/rss+xml",
+          "application/atom+xml",
+          "application/xml",
+          "text/xml",
+          "text/plain",
+        ],
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
-          "Accept": "application/rss+xml, application/xml, text/xml, */*",
+          "Accept": "application/rss+xml, application/atom+xml, application/xml, text/xml, text/plain",
           "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7"
         }
-      }).finally(() => clearTimeout(timerSource));
-      
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      });
 
-      const xml = await res.text();
+      const xml = feed.text;
       const rawItems = parseRssItems(xml);
 
       // Keep only items published in the last 24h
@@ -106,19 +141,19 @@ Deno.serve(async (_req: Request) => {
           let studio_media_image_url = item.imageUrl ?? null;
 
           try {
-            console.log(`[ap-data-ingestion] fetching item: ${item.link}`);
-            const ab = new AbortController();
-            const timer = setTimeout(() => ab.abort(), 10000);
-            const r = await fetch(item.link, {
-              signal: ab.signal,
+            console.log(`[ap-data-ingestion] fetching item for source ${source.id}`);
+            const page = await fetchPublicText(item.link, {
+              maxBytes: PAGE_MAX_BYTES,
+              timeoutMs: FETCH_TIMEOUT_MS,
+              maxRedirects: 3,
+              allowedContentTypes: ["text/html", "application/xhtml+xml"],
               headers: {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
-                "Accept": "text/html,*/*"
+                "Accept": "text/html,application/xhtml+xml"
               }
-            }).finally(() => clearTimeout(timer));
-
-            if (r?.ok) {
-              const html = await r.text();
+            });
+            {
+              const html = page.text;
               
               // Simple regex instead of Cheerio to save memory and CPU
               const ogImage = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i)?.[1] ||
@@ -165,7 +200,6 @@ Deno.serve(async (_req: Request) => {
           studio_media_image_url: item.studio_media_image_url,
           studio_media_video_url: item.studio_media_video_url,
           published_at: item.pubDate ? new Date(item.pubDate).toISOString() : null,
-          categoria: classifyCategory(item.title, item.description || ""),
           status: "raw",
           source: "rss"
         });
@@ -179,14 +213,38 @@ Deno.serve(async (_req: Request) => {
           inserted++;
         }
       }
+      await telemetry.logSuccess(0, {
+        mode: "internal_batch",
+        result: errors ? "completed_with_errors" : "success",
+        source_id: source.id,
+        inserted,
+        skipped_old,
+        errors,
+      });
     } catch (err) {
-      console.error(`[ap-data-ingestion] source ${source.id} error:`, err);
+      const errorCode = err instanceof SafeEgressFetchError ? err.code : "INGESTION_FAILED";
+      console.error(`[ap-data-ingestion] source ${source.id} error: ${errorCode}`);
       errors++;
+      await telemetry.logError(errorCode, 0, {
+        mode: "internal_batch",
+        result: "error",
+        source_id: source.id,
+        inserted,
+        skipped_old,
+        errors,
+      });
     }
 
     results.push({ source_id: source.id, inserted, skipped_old, errors });
   }
 
+  await runTelemetry.logSuccess(0, {
+    mode: "internal_batch",
+    result: "completed",
+    sources: results.length,
+    inserted: results.reduce((sum, result) => sum + result.inserted, 0),
+    errors: results.reduce((sum, result) => sum + result.errors, 0),
+  });
   return new Response(JSON.stringify({ ok: true, max_age_hours: MAX_AGE_HOURS, results }), {
     headers: { "Content-Type": "application/json" },
   });
