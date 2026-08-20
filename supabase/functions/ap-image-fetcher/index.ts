@@ -136,15 +136,32 @@ Deno.serve(async (req: Request) => {
       metadata: { mode: access.mode },
     });
 
+    const observedLock = typeof item.processing_started_at === "string"
+      ? item.processing_started_at
+      : null;
+    const observedLockMs = observedLock ? Date.parse(observedLock) : null;
+    if (
+      observedLock !== null &&
+      (!Number.isFinite(observedLockMs) || observedLockMs! >= Date.parse(expiryCutoff))
+    ) {
+      await telemetry.logError("LOCK_NOT_ACQUIRED", 0, {
+        mode: access.mode,
+        result: "lock_contention",
+      });
+      continue;
+    }
+
     const lockTime = new Date().toISOString();
-    const { data: locked, error: lockError } = await supabase
+    let lockQuery = supabase
       .schema("ap")
       .from("candidate_news")
       .update({ processing_started_at: lockTime })
       .eq("id", item.id)
-      .eq("status", "raw")
-      .or(`processing_started_at.is.null,processing_started_at.lt.${expiryCutoff}`)
-      .select("id");
+      .eq("status", "raw");
+    lockQuery = observedLock === null
+      ? lockQuery.is("processing_started_at", null)
+      : lockQuery.eq("processing_started_at", observedLock);
+    const { data: locked, error: lockError } = await lockQuery.select("id");
     if (lockError || !locked?.length) {
       await telemetry.logError("LOCK_NOT_ACQUIRED", 0, { mode: access.mode, result: "lock_contention" });
       continue;
