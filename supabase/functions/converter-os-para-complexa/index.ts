@@ -94,7 +94,7 @@ serve(async (req) => {
         // Buscar staff original (assigned_to)
         const { data: osData, error: osError } = await supabaseAdmin
             .from('tarefas')
-            .select('id, assigned_to')
+            .select('id, assigned_to, empresa_id')
             .eq('id', os_id)
             .single()
 
@@ -102,6 +102,24 @@ serve(async (req) => {
             return new Response(
                 JSON.stringify({ error: 'OS não encontrada' }),
                 { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+        }
+
+        const targetProfessionalIds = [...new Set(micro_tasks.map(mt => mt.profissional_id))]
+        const { data: targetMemberships, error: targetMembershipError } = await supabaseAdmin
+            .from('empresa_profissionais')
+            .select('profissional_id')
+            .eq('empresa_id', osData.empresa_id)
+            .eq('ativo', true)
+            .in('profissional_id', targetProfessionalIds)
+
+        if (
+            targetMembershipError ||
+            (targetMemberships?.length ?? 0) !== targetProfessionalIds.length
+        ) {
+            return new Response(
+                JSON.stringify({ error: 'Todos os profissionais devem ter vínculo ativo com o tenant da OS' }),
+                { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             )
         }
 

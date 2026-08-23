@@ -68,3 +68,36 @@ verify_jwt = true
 
 [functions.bootstrap-admin-tenant]
 verify_jwt = true
+
+[functions.alterar-prazo-os]
+verify_jwt = true
+
+[functions.complete-micro-task]
+verify_jwt = true
+
+[functions.converter-os-para-complexa]
+verify_jwt = true
+
+[functions.delete-task-attachment]
+verify_jwt = true
+
+[functions.excluir-os]
+verify_jwt = true
+
+[functions.return-micro-task]
+verify_jwt = true
+
+[functions.system-check]
+verify_jwt = true
+
+[functions.ap-instagram-publisher]
+verify_jwt = false
+
+[functions.meeting-reminders]
+verify_jwt = false
+
+[functions.notify-overdue-tasks]
+verify_jwt = false
+
+[functions.send-push-notification]
+verify_jwt = false

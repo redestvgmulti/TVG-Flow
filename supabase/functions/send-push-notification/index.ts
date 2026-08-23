@@ -1,10 +1,11 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from '@supabase/supabase-js'
 import webpush from 'web-push'
+import { isTrustedInternalRequest } from '../_shared/internalWorkerAuth.ts'
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-ap-internal-secret',
 }
 
 interface NotificationPayload {
@@ -22,6 +23,13 @@ serve(async (req: Request) => {
     // Handle CORS preflight
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
+    }
+
+    if (!isTrustedInternalRequest(req)) {
+        return new Response(
+            JSON.stringify({ error: 'INTERNAL_WORKER_AUTH_REQUIRED' }),
+            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
     }
 
     try {

@@ -30,6 +30,7 @@ supabase/CREATE_CRON_JOB.sql
 FIX_USER_ROLE.sql
 .vercel
 .env*.local
+.env.local.bak
 
 # Supabase local
 supabase/.temp/
