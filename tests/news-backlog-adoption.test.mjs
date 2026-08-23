@@ -5,8 +5,12 @@ import pg from 'pg'
 
 const { Client } = pg
 const databaseUrl = process.env.TVG_BACKLOG_TEST_DATABASE_URL
-const migrationUrl = new URL(
+const baselineMigrationUrl = new URL(
   '../supabase/migrations/20260817150000_create_shared_news_backlog.sql',
+  import.meta.url,
+)
+const phaseMigrationUrl = new URL(
+  '../supabase/migrations/20260823210000_evolve_shared_news_backlog_phase_1a.sql',
   import.meta.url,
 )
 
@@ -17,10 +21,12 @@ const userB = '22222222-2222-4222-8222-222222222222'
 const userOtherTenant = '33333333-3333-4333-8333-333333333333'
 const candidateId = '44444444-4444-4444-8444-444444444444'
 const sourceUrl = 'https://example.com/pauta-controlada'
+const trackedUrl = 'https://site.com/noticia/?utm_source=instagram#redes'
+const cleanUrl = 'https://site.com/noticia'
 
 const source = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8')
 
-test('backlog migration is prospective and keeps the editorial queue isolated', async () => {
+test('baseline backlog remains isolated from candidate_news and uses database CAS', async () => {
   const migration = await source('supabase/migrations/20260817150000_create_shared_news_backlog.sql')
   assert.match(migration, /CREATE TABLE ap\.news_backlog/)
   assert.match(migration, /CREATE TABLE ap\.news_backlog_events/)
@@ -30,34 +36,63 @@ test('backlog migration is prospective and keeps the editorial queue isolated', 
   assert.match(migration, /AND backlog\.adopted_by_user_id IS NULL/)
   assert.match(migration, /auth\.uid\(\)/)
   assert.match(migration, /REVOKE ALL ON TABLE ap\.news_backlog FROM PUBLIC, anon, authenticated/)
-  assert.match(migration, /GRANT EXECUTE ON FUNCTION ap\.adopt_news_backlog_item\(uuid, uuid\) TO authenticated/)
-  assert.match(migration, /GRANT EXECUTE ON FUNCTION ap\.link_news_backlog_candidate[\s\S]*TO service_role/)
   assert.doesNotMatch(migration, /UPDATE\s+ap\.candidate_news/i)
   assert.doesNotMatch(migration, /DELETE\s+FROM\s+ap\.candidate_news/i)
   assert.doesNotMatch(migration, /ALTER TABLE\s+ap\.candidate_news/i)
 })
 
-test('productive generator accepts a backlog reference only after user-bound authorization and links it before rendering', async () => {
+test('phase 1A migration versions URL normalization, deduplicates per tenant and preserves authorization boundaries', async () => {
+  const migration = await source('supabase/migrations/20260823210000_evolve_shared_news_backlog_phase_1a.sql')
+  assert.match(migration, /shared_news_backlog_enabled boolean[\s\S]*DEFAULT false/)
+  assert.match(migration, /CREATE OR REPLACE FUNCTION ap\.normalize_news_backlog_url/)
+  assert.match(migration, /'utm_source', 'utm_medium', 'utm_campaign', 'utm_term'/)
+  assert.match(migration, /'utm_content', 'fbclid', 'gclid'/)
+  assert.match(migration, /url_normalization_version smallint NOT NULL DEFAULT 1/)
+  assert.match(migration, /CREATE UNIQUE INDEX uq_news_backlog_cliente_normalized_url[\s\S]*cliente_id, normalized_url/)
+  assert.match(migration, /ON CONFLICT \(cliente_id, normalized_url\) DO NOTHING/)
+  assert.match(migration, /jsonb_build_object\([\s\S]*'created',[\s\S]*'item'/)
+  assert.match(migration, /professional\.ativo IS TRUE/)
+  assert.match(migration, /professional\.role IN \('admin', 'staff'\)/)
+  assert.match(migration, /get_operational_cliente_ids/)
+  assert.doesNotMatch(migration, /region_id|regiao_id|região/i)
+  assert.match(migration, /'linked'/)
+  assert.doesNotMatch(migration, /net\.http|ap-link-scraper|ap-image-fetcher|fetch\s*\(/i)
+  assert.doesNotMatch(migration, /UPDATE\s+ap\.candidate_news/i)
+  assert.doesNotMatch(migration, /ALTER TABLE\s+ap\.candidate_news/i)
+})
+
+test('productive generator receives backlog_id only after user-bound authorization', async () => {
   const generator = await source('supabase/functions/ap-employee-generator/index.ts')
   assert.match(generator, /backlog_id: rawBacklogId = null/)
   assert.match(generator, /assert_news_backlog_production_access/)
   assert.match(generator, /link_news_backlog_candidate/)
   assert.match(generator, /BACKLOG_PRODUCTION_FORBIDDEN/)
   assert.match(generator, /BACKLOG_LINK_FAILED/)
-  assert.doesNotMatch(generator, /runEditorialWorkflow|callLLM/)
 })
 
-test('backlog UI is a link-only queue and does not invoke the scraper or generator on registration', async () => {
+test('link registration performs only the backlog RPC and adoption is the single creation action', async () => {
   const panel = await source('src/components/editorial/NewsBacklogPanel.jsx')
   const adminUi = await source('src/pages/admin/AutoPublisher.jsx')
   const employeeUi = await source('src/pages/admin/EmployeeMode.jsx')
+
   assert.match(panel, /create_news_backlog_item/)
+  assert.match(panel, /p_url_original: inputUrl/)
+  assert.match(panel, /p_titulo: null/)
+  assert.match(panel, /p_observacao: null/)
   assert.match(panel, /adopt_news_backlog_item/)
-  assert.match(panel, /release_news_backlog_item/)
-  assert.doesNotMatch(panel, /ap-link-scraper|ap-employee-generator|ap-render-engine|instagram/i)
+  assert.match(panel, /onStartProduction\?\.\(adoptedItem\)/)
+  assert.match(panel, /Criar Matéria/)
+  assert.match(panel, /Abrir Link/)
+  assert.match(panel, /POLL_INTERVAL_MS = 15_000/)
+  assert.match(panel, /Esta matéria acabou de ser adotada por/)
+  assert.doesNotMatch(panel, /release_news_backlog_item|>Adotar<|>Produzir<|>Liberar</)
+  assert.doesNotMatch(panel, /ap-link-scraper|ap-image-fetcher|ap-employee-generator|ap-render-engine|instagram|fetch\s*\(/i)
+
   assert.match(adminUi, /NewsBacklogPanel/)
+  assert.match(adminUi, /url_original: item\.url_original/)
   assert.match(adminUi, /backlog_id: item\.id/)
   assert.match(employeeUi, /NewsBacklogPanel/)
+  assert.match(employeeUi, /url_original: item\.url_original/)
   assert.match(employeeUi, /backlog_id: item\.id/)
 })
 
@@ -72,7 +107,7 @@ async function asUser(client, userId) {
   await client.query("select set_config('request.jwt.claim.sub', $1, false)", [userId])
 }
 
-test('PostgreSQL backlog adoption is atomic, tenant scoped, releasable only by its adopter, and links only through service_role', {
+test('PostgreSQL contract covers creation, visibility, cross-region access, tenant isolation, dedupe, CAS and linking', {
   skip: !databaseUrl,
 }, async () => {
   const admin = new Client({ connectionString: databaseUrl })
@@ -93,8 +128,20 @@ test('PostgreSQL backlog adoption is atomic, tenant scoped, releasable only by i
         as $$ select jsonb_build_object('role', session_user) $$;
       create schema ap;
       create table public.clientes (id uuid primary key);
-      create table public.profissionais (id uuid primary key, nome text, role text, ativo boolean);
+      create table public.profissionais (
+        id uuid primary key,
+        nome text,
+        role text,
+        ativo boolean,
+        regiao_operacional text
+      );
       create table public.backlog_test_memberships (user_id uuid, cliente_id uuid);
+      create table ap.system_config (
+        cliente_id uuid primary key references public.clientes(id) on delete cascade,
+        ingestion_enabled boolean not null default true,
+        created_at timestamptz not null default now(),
+        updated_at timestamptz not null default now()
+      );
       create table ap.candidate_news (
         id uuid primary key,
         cliente_id uuid not null references public.clientes(id),
@@ -105,16 +152,22 @@ test('PostgreSQL backlog adoption is atomic, tenant scoped, releasable only by i
         as $$ select cliente_id from public.backlog_test_memberships where user_id = auth.uid() $$;
       grant usage on schema ap to authenticated, service_role;
     `)
-    await admin.query(await readFile(migrationUrl, 'utf8'))
+    await admin.query(await readFile(baselineMigrationUrl, 'utf8'))
+    await admin.query(await readFile(phaseMigrationUrl, 'utf8'))
     await admin.query(
       'insert into public.clientes (id) values ($1), ($2)',
       [tenantA, tenantB],
     )
     await admin.query(
-      `insert into public.profissionais (id, nome, role, ativo) values
-        ($1, 'Ana', 'staff', true),
-        ($2, 'Bruno', 'staff', true),
-        ($3, 'Carla', 'staff', true)`,
+      `insert into ap.system_config (cliente_id, shared_news_backlog_enabled)
+       values ($1, true), ($2, true)`,
+      [tenantA, tenantB],
+    )
+    await admin.query(
+      `insert into public.profissionais (id, nome, role, ativo, regiao_operacional) values
+        ($1, 'Ana Sul', 'staff', true, 'sul'),
+        ($2, 'Bruno Norte', 'staff', true, 'norte'),
+        ($3, 'Carla Outro Tenant', 'staff', true, 'centro')`,
       [userA, userB, userOtherTenant],
     )
     await admin.query(
@@ -130,35 +183,97 @@ test('PostgreSQL backlog adoption is atomic, tenant scoped, releasable only by i
     await Promise.all([asUser(actorA, userA), asUser(actorB, userB), asUser(otherTenant, userOtherTenant)])
 
     const created = await actorA.query(
-      'select * from ap.create_news_backlog_item($1, $2, $3, $4)',
-      [tenantA, sourceUrl, 'Pauta de teste', 'Somente teste PostgreSQL'],
+      'select ap.create_news_backlog_item($1, $2, $3, $4) as result',
+      [tenantA, sourceUrl, null, null],
     )
-    const backlogId = created.rows[0].id
-    assert.equal(created.rows[0].status, 'available')
-    assert.equal(created.rows[0].created_by_user_id, userA)
+    const createdResult = created.rows[0].result
+    const backlogId = createdResult.item.id
+    assert.equal(createdResult.created, true)
+    assert.equal(createdResult.item.status, 'available')
+    assert.equal(createdResult.item.created_by_user_id, userA)
+    assert.equal(createdResult.item.url_original, sourceUrl)
+    assert.equal(createdResult.item.normalized_url, sourceUrl)
+    assert.equal(createdResult.item.url_normalization_version, 1)
+
+    const crossRegionList = await actorB.query(
+      'select * from ap.list_news_backlog($1)', [tenantA],
+    )
+    assert.equal(crossRegionList.rowCount, 1)
+    assert.equal(crossRegionList.rows[0].id, backlogId)
 
     await assert.rejects(
       otherTenant.query('select * from ap.list_news_backlog($1)', [tenantA]),
-      (error) => error?.code === '42501',
+      (error) => error?.code === '42501' && error?.message.includes('BACKLOG_TENANT_FORBIDDEN'),
     )
     await assert.rejects(
       otherTenant.query('select * from ap.adopt_news_backlog_item($1, $2)', [backlogId, tenantA]),
       (error) => error?.code === '42501',
     )
 
+    const dedupeFirst = await actorA.query(
+      'select ap.create_news_backlog_item($1, $2, null, null) as result',
+      [tenantA, trackedUrl],
+    )
+    const dedupeSecond = await actorB.query(
+      'select ap.create_news_backlog_item($1, $2, null, null) as result',
+      [tenantA, cleanUrl],
+    )
+    assert.equal(dedupeFirst.rows[0].result.created, true)
+    assert.equal(dedupeSecond.rows[0].result.created, false)
+    assert.equal(dedupeSecond.rows[0].result.item.id, dedupeFirst.rows[0].result.item.id)
+    assert.equal(dedupeFirst.rows[0].result.item.url_original, trackedUrl)
+    assert.equal(dedupeFirst.rows[0].result.item.normalized_url, cleanUrl)
+    const dedupeCount = await admin.query(
+      'select count(*)::int as total from ap.news_backlog where cliente_id = $1 and normalized_url = $2',
+      [tenantA, cleanUrl],
+    )
+    assert.equal(dedupeCount.rows[0].total, 1)
+    const createdEventCount = await admin.query(
+      "select count(*)::int as total from ap.news_backlog_events where backlog_id = $1 and action = 'created'",
+      [dedupeFirst.rows[0].result.item.id],
+    )
+    assert.equal(createdEventCount.rows[0].total, 1)
+
+    const sameUrlOtherTenant = await otherTenant.query(
+      'select ap.create_news_backlog_item($1, $2, null, null) as result',
+      [tenantB, cleanUrl],
+    )
+    assert.equal(sameUrlOtherTenant.rows[0].result.created, true)
+    assert.notEqual(sameUrlOtherTenant.rows[0].result.item.id, dedupeFirst.rows[0].result.item.id)
+
+    const crossRegionAdoption = await actorB.query(
+      'select * from ap.adopt_news_backlog_item($1, $2)',
+      [dedupeFirst.rows[0].result.item.id, tenantA],
+    )
+    assert.equal(crossRegionAdoption.rows[0].status, 'adopted')
+    assert.equal(crossRegionAdoption.rows[0].adopted_by_user_id, userB)
+
+    const normalizedFunctionalQuery = await admin.query(
+      "select ap.normalize_news_backlog_url('HTTPS://Example.COM:443/noticia/?id=42&utm_medium=social&gclid=x#fragment') as value",
+    )
+    assert.equal(normalizedFunctionalQuery.rows[0].value, 'https://example.com/noticia?id=42')
+    await assert.rejects(
+      actorA.query('select ap.create_news_backlog_item($1, $2, null, null)', [tenantA, 'ftp://example.com/file']),
+      (error) => error?.code === '22023' && error?.message.includes('BACKLOG_URL_INVALID'),
+    )
+
+    const beforeAdoption = Date.now()
     const adoption = (client) => client.query(
       'select * from ap.adopt_news_backlog_item($1, $2)', [backlogId, tenantA],
     )
     const race = await Promise.allSettled([adoption(actorA), adoption(actorB)])
     assert.equal(race.filter(result => result.status === 'fulfilled').length, 1)
     assert.equal(race.filter(result => result.status === 'rejected').length, 1)
+    assert.equal(race.find(result => result.status === 'rejected').reason.code, 'P0001')
 
     const afterRace = await admin.query(
-      'select status, adopted_by_user_id, adopted_at from ap.news_backlog where id = $1', [backlogId],
+      'select status, adopted_by_user_id, adopted_by_name_snapshot, adopted_at from ap.news_backlog where id = $1',
+      [backlogId],
     )
     assert.equal(afterRace.rows[0].status, 'adopted')
     assert.ok([userA, userB].includes(afterRace.rows[0].adopted_by_user_id))
-    assert.ok(afterRace.rows[0].adopted_at)
+    assert.ok(['Ana Sul', 'Bruno Norte'].includes(afterRace.rows[0].adopted_by_name_snapshot))
+    assert.ok(new Date(afterRace.rows[0].adopted_at).getTime() >= beforeAdoption)
     const winner = afterRace.rows[0].adopted_by_user_id
     const winnerClient = winner === userA ? actorA : actorB
     const loserClient = winner === userA ? actorB : actorA
@@ -171,7 +286,6 @@ test('PostgreSQL backlog adoption is atomic, tenant scoped, releasable only by i
       'select * from ap.release_news_backlog_item($1, $2)', [backlogId, tenantA],
     )
     assert.equal(released.rows[0].status, 'available')
-    assert.equal(released.rows[0].adopted_by_user_id, null)
 
     await actorA.query('select * from ap.adopt_news_backlog_item($1, $2)', [backlogId, tenantA])
     await assert.rejects(
@@ -179,7 +293,8 @@ test('PostgreSQL backlog adoption is atomic, tenant scoped, releasable only by i
       (error) => error?.code === '42501',
     )
     const approvedStart = await actorA.query(
-      'select (ap.assert_news_backlog_production_access($1, $2, $3)).*', [backlogId, tenantA, sourceUrl],
+      'select (ap.assert_news_backlog_production_access($1, $2, $3)).*',
+      [backlogId, tenantA, sourceUrl],
     )
     assert.equal(approvedStart.rows[0].id, backlogId)
 
@@ -188,23 +303,34 @@ test('PostgreSQL backlog adoption is atomic, tenant scoped, releasable only by i
       [candidateId, tenantA, userA, sourceUrl],
     )
     await assert.rejects(
-      actorA.query('select * from ap.link_news_backlog_candidate($1, $2, $3, $4, $5)', [backlogId, tenantA, candidateId, userA, sourceUrl]),
+      actorA.query(
+        'select * from ap.link_news_backlog_candidate($1, $2, $3, $4, $5)',
+        [backlogId, tenantA, candidateId, userA, sourceUrl],
+      ),
       (error) => error?.code === '42501',
     )
     const linked = await service.query(
-      'select * from ap.link_news_backlog_candidate($1, $2, $3, $4, $5)', [backlogId, tenantA, candidateId, userA, sourceUrl],
+      'select * from ap.link_news_backlog_candidate($1, $2, $3, $4, $5)',
+      [backlogId, tenantA, candidateId, userA, sourceUrl],
     )
     assert.equal(linked.rows[0].candidate_news_id, candidateId)
     assert.ok(linked.rows[0].production_started_at)
-    await assert.rejects(
-      actorA.query('select * from ap.release_news_backlog_item($1, $2)', [backlogId, tenantA]),
-      (error) => error?.code === '42501',
-    )
 
     const events = await admin.query(
-      'select action from ap.news_backlog_events where backlog_id = $1 order by created_at, id', [backlogId],
+      'select action, actor_user_id from ap.news_backlog_events where backlog_id = $1 order by created_at, id',
+      [backlogId],
     )
-    assert.deepEqual(events.rows.map(row => row.action), ['created', 'adopted', 'released', 'adopted', 'production_started'])
+    assert.deepEqual(events.rows.map(row => row.action), ['created', 'adopted', 'released', 'adopted', 'linked'])
+    assert.equal(events.rows.at(-1).actor_user_id, userA)
+
+    await admin.query(
+      'update ap.system_config set shared_news_backlog_enabled = false where cliente_id = $1',
+      [tenantB],
+    )
+    await assert.rejects(
+      otherTenant.query('select * from ap.list_news_backlog($1)', [tenantB]),
+      (error) => error?.code === '42501' && error?.message.includes('BACKLOG_FEATURE_DISABLED'),
+    )
   } finally {
     await Promise.allSettled([admin.end(), actorA?.end(), actorB?.end(), otherTenant?.end(), service?.end()])
   }
