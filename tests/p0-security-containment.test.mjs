@@ -93,6 +93,19 @@ test('migration contains default-deny table and routine controls', () => {
   assert.match(migration, /x-ap-internal-secret/)
 })
 
+test('follow-up migration closes anonymous defaults and owner-executed views', () => {
+  const migration = read('supabase/migrations/20260823143000_contain_exposed_anon_defaults_and_views.sql')
+  assert.match(migration, /REVOKE ALL PRIVILEGES ON TABLE %I\.%I FROM anon/)
+  assert.match(migration, /REVOKE ALL PRIVILEGES ON FUNCTION %s FROM PUBLIC, anon/)
+  assert.match(migration, /d\.deptype = 'e'/)
+  assert.match(migration, /ALTER VIEW %I\.%I SET \(security_invoker = true\)/)
+  assert.match(migration, /ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public/)
+  assert.match(migration, /acl\.grantee = 0 -- PUBLIC/)
+  assert.match(migration, /public\.vw_slow_queries/)
+  assert.match(migration, /REVOKE ALL PRIVILEGES ON TABLE %s FROM PUBLIC, anon, authenticated/)
+  assert.match(migration, /P0_POSTCONDITION_FAILED: % exposed relations retain anon grants/)
+})
+
 test('tracked credential backup is removed and ignored', () => {
   assert.equal(existsSync(join(root, '.env.local.bak')), false)
   assert.match(read('.gitignore'), /^\.env\.local\.bak$/m)
