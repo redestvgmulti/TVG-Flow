@@ -48,16 +48,23 @@ serve(async (req) => {
         // Check if user is admin
         const { data: professional } = await supabaseClient
             .from('profissionais')
-            .select('role')
+            .select('role, ativo')
             .eq('id', user.id)
             .single()
 
-        const isAdmin = professional?.role === 'admin'
+        if (!professional?.ativo) {
+            return new Response(
+                JSON.stringify({ error: 'Inactive professional' }),
+                { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+        }
+
+        const isAdmin = professional.role === 'admin'
 
         // Fetch micro task and validate ownership
         let query = supabaseClient
             .from('tarefas_micro')
-            .select('*, tarefas(titulo)')
+            .select('*, tarefas(titulo, empresa_id)')
             .eq('id', micro_task_id)
 
         // Only enforce ownership if not admin
@@ -70,6 +77,22 @@ serve(async (req) => {
         if (fetchError || !microTask) {
             return new Response(
                 JSON.stringify({ error: 'Micro task not found or not assigned to you' }),
+                { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+        }
+
+        const taskCompanyId = microTask.tarefas?.empresa_id
+        const { data: membership } = await supabaseClient
+            .from('empresa_profissionais')
+            .select('empresa_id')
+            .eq('empresa_id', taskCompanyId)
+            .eq('profissional_id', user.id)
+            .eq('ativo', true)
+            .maybeSingle()
+
+        if (!taskCompanyId || !membership) {
+            return new Response(
+                JSON.stringify({ error: 'Micro task not found or not assigned to your tenant' }),
                 { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             )
         }

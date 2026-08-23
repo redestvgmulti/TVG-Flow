@@ -61,22 +61,20 @@ serve(async (req) => {
             )
         }
 
-        // 2. VALIDATE DELETE permission
-        // Check if user is owner OR admin of the company
-        let canDelete = attachment.uploaded_by === user.id
+        // 2. VALIDATE DELETE permission and active tenant membership.
+        const { data: callerAccess } = await supabaseClient
+            .from('empresa_profissionais')
+            .select('profissionais!inner(role, ativo)')
+            .eq('profissional_id', user.id)
+            .eq('empresa_id', attachment.empresa_id)
+            .eq('ativo', true)
+            .eq('profissionais.ativo', true)
+            .maybeSingle()
 
-        if (!canDelete) {
-            // Check if user is admin of this company
-            const { data: adminCheck } = await supabaseClient
-                .from('empresa_profissionais')
-                .select('profissionais!inner(role)')
-                .eq('profissional_id', user.id)
-                .eq('empresa_id', attachment.empresa_id)
-                .eq('ativo', true)
-                .single()
-
-            canDelete = adminCheck?.profissionais?.role === 'admin' || adminCheck?.profissionais?.role === 'super_admin'
-        }
+        const canDelete = Boolean(callerAccess) && (
+            attachment.uploaded_by === user.id ||
+            callerAccess?.profissionais?.role === 'admin'
+        )
 
         if (!canDelete) {
             return new Response(

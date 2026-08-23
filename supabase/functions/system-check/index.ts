@@ -24,6 +24,40 @@ serve(async (req) => {
             }
         )
 
+        const authHeader = req.headers.get('Authorization')
+        if (!authHeader?.startsWith('Bearer ')) {
+            return new Response(
+                JSON.stringify({ error: 'Unauthorized' }),
+                { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+        }
+
+        const token = authHeader.slice('Bearer '.length)
+        const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token)
+        if (authError || !user) {
+            return new Response(
+                JSON.stringify({ error: 'Unauthorized' }),
+                { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+        }
+
+        const { data: professional, error: professionalError } = await supabaseClient
+            .from('profissionais')
+            .select('role, ativo')
+            .eq('id', user.id)
+            .single()
+
+        if (
+            professionalError ||
+            !professional?.ativo ||
+            professional.role !== 'super_admin'
+        ) {
+            return new Response(
+                JSON.stringify({ error: 'Forbidden' }),
+                { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+        }
+
         // Check system integrity
         const { data: integrityData, error: integrityError } = await supabaseClient
             .rpc('check_system_integrity')
