@@ -4,6 +4,7 @@ import test from 'node:test'
 import {
   composerFormErrors,
   loadTerritorialComposer,
+  matchesTerritorialSearch,
   territorialComposerIntent,
   territorialVisualTitleId,
 } from '../../src/services/territorialComposer.js'
@@ -241,13 +242,30 @@ test('city selector supports partial local search, region labels and thumbnails'
   assert.match(component, /footer_slot_\$\{index \+ 1\}/)
 })
 
-test('editorial and individual seal selectors support accent-insensitive local search', async () => {
-  const component = await source('src/components/editorial/TerritorialComposerFields.jsx')
-  assert.match(component, /editorialTitleQuery/)
-  assert.match(component, /individualTitleQuery/)
-  assert.match(component, /Buscar selo editorial/)
-  assert.match(component, /Buscar selo/)
-  assert.match(component, /normalize\('NFD'\)/)
-  assert.match(component, /visibleEditorialTitles\.map/)
-  assert.match(component, /matchesTitleQuery\(title, normalizedSearch\(individualTitleQuery\)/)
+test('editorial and individual modes use one connected searchable seal selector', async () => {
+  const [component, combobox] = await Promise.all([
+    source('src/components/editorial/TerritorialComposerFields.jsx'),
+    source('src/components/editorial/VisualTitleCombobox.jsx'),
+  ])
+  assert.match(component, /<VisualTitleCombobox/)
+  assert.match(component, /label="Selo editorial"/)
+  assert.match(component, /label="Selo"/)
+  assert.doesNotMatch(component, /editorialTitleQuery|individualTitleQuery/)
+  assert.match(combobox, /role="combobox"/)
+  assert.match(combobox, /searchPlaceholder/)
+})
+
+test('seal search matches words across accents and visual punctuation', () => {
+  assert.equal(
+    matchesTerritorialSearch('urgente editorial', 'URGENTE — EDITORIAL', 'Notícias'),
+    true,
+  )
+  assert.equal(
+    matchesTerritorialSearch('goias', 'Últimas notícias', 'Goiás'),
+    true,
+  )
+  assert.equal(
+    matchesTerritorialSearch('esporte', 'URGENTE — EDITORIAL', 'Notícias'),
+    false,
+  )
 })

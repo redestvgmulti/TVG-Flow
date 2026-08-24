@@ -10,6 +10,23 @@ function normalizedName(value) {
   return String(value || '').trim().toLocaleLowerCase('pt-BR')
 }
 
+export function normalizeVisualTitleSearch(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('pt-BR')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim()
+}
+
+export function matchesVisualTitleSearch(query, ...values) {
+  const terms = normalizeVisualTitleSearch(query).split(/\s+/).filter(Boolean)
+  if (!terms.length) return true
+
+  const candidate = values.map(normalizeVisualTitleSearch).join(' ')
+  return terms.every(term => candidate.includes(term))
+}
+
 export function isVisualTitleCompatible(title, contentType) {
   return Array.isArray(title?.formatos) && title.formatos.includes(contentType)
 }
@@ -42,10 +59,11 @@ export function prepareVisualTitleCatalog(groups, titles, previewForTitle = () =
 }
 
 export function filterVisualTitleGroups(groups, contentType, query = '') {
-  const needle = normalizedName(query)
   return (groups || []).reduce((result, group) => {
-    const groupMatches = normalizedName(group.nome).includes(needle)
-    const titles = group.titles.filter(title => isVisualTitleCompatible(title, contentType) && (groupMatches || normalizedName(title.nome).includes(needle)))
+    const titles = group.titles.filter(title =>
+      (!contentType || isVisualTitleCompatible(title, contentType)) &&
+      matchesVisualTitleSearch(query, title.nome, group.nome),
+    )
     if (titles.length) result.push({ ...group, titles })
     return result
   }, [])
