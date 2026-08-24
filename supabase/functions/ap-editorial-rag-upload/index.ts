@@ -32,23 +32,31 @@ Deno.serve(async (req: Request) => {
 
         // ================= GET: Listar documentos =================
         if (req.method === "GET") {
-            const { data: docs } = await sbAdmin
+            const { data: docs, error: listErr } = await sbAdmin
                 .schema("ap")
                 .from("editorial_rag_documents")
-                .select("source_document_id, file_name, created_at, chunk_count")
+                .select("source_document_id, file_name, created_at")
                 .eq("cliente_id", clienteId)
                 .order("created_at", { ascending: false });
 
+            if (listErr) throw listErr;
+
+            // One row per chunk — group by source_document_id and count chunks
+            // in JS instead of a `chunk_count` column (that column never
+            // existed on this table, which silently made every GET here
+            // return an empty list before this fix).
             const unique = docs ? Object.values(
-                docs.reduce((acc: Record<string, unknown>, d: Record<string, unknown>) => {
-                    if (!acc[d.source_document_id as string]) {
-                        acc[d.source_document_id as string] = {
+                docs.reduce((acc: Record<string, any>, d: Record<string, unknown>) => {
+                    const key = d.source_document_id as string;
+                    if (!acc[key]) {
+                        acc[key] = {
                             source_document_id: d.source_document_id,
                             file_name: d.file_name,
                             created_at: d.created_at,
-                            chunk_count: d.chunk_count
+                            chunk_count: 0
                         };
                     }
+                    acc[key].chunk_count += 1;
                     return acc;
                 }, {})
             ) : [];

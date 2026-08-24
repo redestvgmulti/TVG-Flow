@@ -96,6 +96,14 @@ test('editorial administration and publisher require the intended authority boun
   assert.match(publisher, /INVALID_NEWS_TENANT/)
 })
 
+test('editorial administration shares the canonical ap-config tenant authorization', async () => {
+  const authorization = await source('supabase/functions/_shared/editorialAdminAuth.ts')
+  assert.match(authorization, /authorizeConfigRequest/)
+  assert.match(authorization, /requestedClienteId: clienteId/)
+  assert.match(authorization, /authorization\.role !== "admin"/)
+  assert.doesNotMatch(authorization, /requireActiveOperator|authorizeOperationalTenant/)
+})
+
 test('cron migration requires a Vault secret and changes no candidate_news data', async () => {
   const migration = await source('supabase/migrations/20260817003000_harden_internal_autopublisher_workers.sql')
   assert.match(migration, /ap_internal_worker_secret/)

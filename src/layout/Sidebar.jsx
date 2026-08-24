@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { usePermission } from '../hooks/usePermission' // NEW: Use permission hook
 import { supabase } from '../services/supabase'
@@ -14,6 +14,7 @@ const AUTOPUBLISHER_PIPELINE_TABS = ['coletadas', 'pendentes', 'aprovadas', 'pub
 function Sidebar({ mobileMenuOpen, onClose }) {
     const { user, role, professionalName, signOut } = useAuth()
     const location = useLocation()
+    const navigate = useNavigate()
     const { isSuperAdmin, isAdmin, isStaff } = usePermission() // NEW: Centralized permissions
 
     // Derived roles just for rendering logic (simplifies JSX conditions)
@@ -116,6 +117,17 @@ function Sidebar({ mobileMenuOpen, onClose }) {
     // Close mobile menu when clicking nav link
     const handleNavClick = () => {
         onClose?.()
+    }
+
+    function goToProfile() {
+        const path = role === 'super_admin'
+            ? '/platform/profile'
+            : role === 'admin'
+                ? '/admin/profile'
+                : '/staff/profile'
+        setProfileOpen(false)
+        handleNavClick()
+        navigate(path)
     }
 
     return (
@@ -295,7 +307,7 @@ function Sidebar({ mobileMenuOpen, onClose }) {
                         <>
                             <div className="backdrop-invisible" onClick={() => setProfileOpen(false)} />
                             <div className="profile-popup">
-                                <div className="popup-header">
+                                <button type="button" className="popup-header popup-profile-link" onClick={goToProfile}>
                                     <div className="popup-avatar">
                                         {getInitials(professionalName)}
                                     </div>
@@ -303,7 +315,7 @@ function Sidebar({ mobileMenuOpen, onClose }) {
                                         <p className="popup-name">{professionalName}</p>
                                         <p className="popup-email">{user?.email}</p>
                                     </div>
-                                </div>
+                                </button>
                                 <div className="popup-divider" />
                                 <div className="popup-item" onClick={signOut}>
                                     <LogOut size={16} className="text-danger" />

@@ -3147,6 +3147,20 @@
   background: var(--color-bg-surface, #fff);
 }
 
+.ap-backlog-title-field {
+  display: grid;
+  gap: 5px;
+}
+
+.ap-backlog-title-field span {
+  font-size: 11.5px;
+  color: var(--color-text-tertiary, #94A0AF);
+}
+
+.ap-backlog-form-details input.has-error {
+  border-color: var(--color-danger, #DC2626);
+}
+
 .ap-backlog-error {
   margin: 10px 0 0;
   font-size: 12.5px;
@@ -3258,6 +3272,60 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.ap-backlog-title-edit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-tertiary, #94A0AF);
+  cursor: pointer;
+}
+
+.ap-backlog-title-edit:hover {
+  background: var(--color-bg-subtle, #F1F5F9);
+  color: var(--color-primary, #2563EB);
+}
+
+.ap-backlog-inline-title-edit {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+}
+
+.ap-backlog-inline-title-edit input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--color-primary, #2563EB);
+  border-radius: 7px;
+  padding: 5px 8px;
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.ap-backlog-inline-title-edit button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--color-border, #E5E7EB);
+  border-radius: 7px;
+  background: var(--color-bg-surface, #fff);
+  color: var(--color-text-secondary, #64748B);
+  cursor: pointer;
+}
+
+.ap-backlog-inline-title-edit button:first-of-type {
+  color: var(--color-primary, #2563EB);
 }
 
 .ap-backlog-item-meta {

@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  editorialTagFromVisualTitleId,
   filterVisualTitleGroups,
   isVisualTitleCompatible,
   loadVisualTitleCatalog,
@@ -59,6 +60,11 @@ test('format changes retain compatible ids and clear incompatible ids without ch
   assert.deepEqual(payload, { visual_title_id: 'morrinhos' })
   assert.equal('group_id' in payload, false)
   assert.equal('asset_path' in payload, false)
+})
+
+test('the render tag comes from the selected seal name, with a legacy fallback', () => {
+  assert.equal(editorialTagFromVisualTitleId(titles, 'morrinhos'), 'MORRINHOS')
+  assert.equal(editorialTagFromVisualTitleId(titles, 'missing'), 'DESTAQUE')
 })
 
 test('keyboard navigation only traverses selectable seals, never group headers', () => {

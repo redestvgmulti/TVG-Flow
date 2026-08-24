@@ -79,13 +79,13 @@ export function validateEmployeeSourceQuality(
     };
   }
 
-  const minimumTextLength = sourceMode === "image" ? 40 : 120;
+  const minimumTextLength = sourceMode === "image" ? 40 : 5;
   if (trimmedLength(input.text) < minimumTextLength) {
     return {
       code: "SOURCE_TEXT_TOO_SHORT",
       message: sourceMode === "image"
         ? "Inclua um briefing factual com pelo menos 40 caracteres para orientar a leitura da imagem."
-        : "A fonte precisa ter pelo menos 120 caracteres de conteudo verificavel.",
+        : "A fonte precisa ter pelo menos 5 caracteres de conteudo verificavel.",
     };
   }
 

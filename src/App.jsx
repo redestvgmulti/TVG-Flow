@@ -104,6 +104,7 @@ function App() {
                     <Route path="calendar" element={<Calendar />} />
                     <Route path="meetings" element={<Meetings />} />
                     <Route path="content" element={<AdminContent />} />
+                    <Route path="profile" element={<StaffProfile />} />
                     <Route path="reports" element={<Reports />} />
                     <Route path="autopublisher/:tab?" element={<AutoPublisher />} />
                   </Route>
@@ -147,6 +148,7 @@ function App() {
                     <Route path="companies" element={<TenantListPage />} />
                     <Route path="companies/:id" element={<TenantDetail />} />
                     <Route path="reports" element={<ReportsPage />} />
+                    <Route path="profile" element={<StaffProfile />} />
                     <Route path="system" element={<SystemStatusPage />} />
                   </Route>
 

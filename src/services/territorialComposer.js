@@ -166,3 +166,13 @@ export function territorialComposerIntent(formData) {
     manual_slots: formData.composer_mode === 'individual' ? manualSlots : [],
   }
 }
+
+// Cities carry their own visual title. Resolve its id here so all creation
+// modes can derive the legacy render tag from the seal actually used.
+export function territorialVisualTitleId(formData, catalog) {
+  if (formData.composer_mode === 'cities') {
+    return (catalog?.cities || []).find(city => city.id === formData.city_id)?.visual_title_id || null
+  }
+  if (formData.composer_mode === 'individual' && formData.content_type === 'story') return null
+  return formData.visual_title_id || null
+}

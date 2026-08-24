@@ -1,4 +1,4 @@
-import { LayoutGrid, CheckSquare, Calendar, Bot, PlusSquare, User, BarChart, Users, Building, Rss, Brain, Inbox, LayoutTemplate, Settings } from 'lucide-react'
+import { LayoutGrid, CheckSquare, Calendar, Bot, PlusSquare, User, BarChart, Users, Building, Rss, Inbox, LayoutTemplate, Settings } from 'lucide-react'
 
 // Single source of truth for every role-aware navigation surface.
 export const NAV_ITEMS = [
@@ -13,6 +13,7 @@ export const NAV_ITEMS = [
 
     { key: 'admin-dashboard', label: 'Dashboard', path: '/admin', icon: LayoutGrid, roles: ['admin', 'super_admin'], section: 'main', showOnMobileBottom: true },
     { key: 'admin-tasks', label: 'Tarefas', path: '/admin/tasks', icon: CheckSquare, roles: ['admin', 'super_admin'], section: 'main', showOnMobileBottom: true },
+    { key: 'ap-backlog', label: 'Banco de Matérias', path: '/admin/autopublisher/backlog', icon: Inbox, roles: ['admin', 'super_admin'], section: 'main', showOnMobileBottom: false },
     { key: 'admin-content', label: 'Assistentes', path: '/admin/content', icon: Bot, roles: ['admin', 'super_admin'], section: 'main', showOnMobileBottom: false },
     { key: 'admin-calendar', label: 'Agenda', path: '/admin/calendar', icon: Calendar, roles: ['admin', 'super_admin'], section: 'main', showOnMobileBottom: false },
     { key: 'admin-meetings', label: 'Reuniões', path: '/admin/meetings', icon: Users, roles: ['admin', 'super_admin'], section: 'main', showOnMobileBottom: true },
@@ -20,8 +21,6 @@ export const NAV_ITEMS = [
         key: 'admin-autopublisher', label: 'AutoPublisher', path: '/admin/autopublisher', icon: Rss, roles: ['admin', 'super_admin'], section: 'main', showOnMobileBottom: false,
         children: [
             { key: 'ap-pipeline', label: 'Pipeline', path: '/admin/autopublisher', icon: Rss },
-            { key: 'ap-editorial', label: 'Motor Editorial', path: '/admin/autopublisher/editorial', icon: Brain },
-            { key: 'ap-backlog', label: 'Banco de Matérias', path: '/admin/autopublisher/backlog', icon: Inbox },
             { key: 'ap-templates', label: 'Templates', path: '/admin/autopublisher/templates', icon: LayoutTemplate },
             { key: 'ap-settings', label: 'Configurações', path: '/admin/autopublisher/settings', icon: Settings },
         ],
