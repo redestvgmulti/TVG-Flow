@@ -235,18 +235,6 @@ export default function ArticleForm({
                 />
             )}
 
-            {/* Editoria (Tag) */}
-            <div className="ap-af-field">
-                <FieldLabel required>Editoria (Tag)</FieldLabel>
-                <input
-                    className={`ap-af-input${typeof errors.context_tag === 'string' ? ' ap-af-input--error' : ''}`}
-                    value={formData.context_tag || ''}
-                    onChange={e => setFormData({ ...formData, context_tag: e.target.value.toUpperCase() })}
-                    placeholder="Ex: URGENTE"
-                />
-                <FieldError message={typeof errors.context_tag === 'string' ? errors.context_tag : ''} />
-            </div>
-
             {/* Selo da matéria: o combobox preserva apenas visual_title_id. */}
             {!territorialComposerEnabled && <>
             <VisualTitleCombobox
@@ -346,7 +334,7 @@ export default function ArticleForm({
                             : 'Escreva os fatos confirmados. A IA revisará e criará a legenda.'}
                     />
                     <small className="ap-af-hint">
-                        Mínimo de {sourceMode === 'image' ? '40' : '120'} caracteres verificáveis.
+                        Mínimo de {sourceMode === 'image' ? '40' : '5'} caracteres verificáveis.
                     </small>
                     <FieldError message={typeof errors.conteudo === 'string' ? errors.conteudo : ''} />
                 </div>

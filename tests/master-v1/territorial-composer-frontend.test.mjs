@@ -5,6 +5,7 @@ import {
   composerFormErrors,
   loadTerritorialComposer,
   territorialComposerIntent,
+  territorialVisualTitleId,
 } from '../../src/services/territorialComposer.js'
 import {
   normalizeComposerMode,
@@ -155,6 +156,20 @@ test('Stories Individual hides and rejects a visually ineffective seal', () => {
   assert.equal(backendError.code, 'STORY_VISUAL_TITLE_FORBIDDEN')
 })
 
+test('city composition resolves the seal attached to the chosen city', () => {
+  const cityTitle = id(21)
+  assert.equal(
+    territorialVisualTitleId({ composer_mode: 'cities', city_id: id(20), content_type: 'feed' }, {
+      cities: [{ id: id(20), visual_title_id: cityTitle }],
+    }),
+    cityTitle,
+  )
+  assert.equal(
+    territorialVisualTitleId({ composer_mode: 'individual', content_type: 'story', visual_title_id: id(22) }, {}),
+    null,
+  )
+})
+
 test('conditional validation covers Editorial, Cities and one-to-three manual slots', () => {
   const catalog = { available_formats: [{ content_type: 'feed' }] }
   assert.deepEqual(
@@ -202,6 +217,21 @@ test('both form owners preserve the legacy branch and use composer intent only w
   }
 })
 
+test('creation derives the legacy render tag from the selected seal instead of exposing an editorial-tag field', async () => {
+  const [form, wizard, admin, employee] = await Promise.all([
+    source('src/components/editorial/ArticleForm.jsx'),
+    source('src/components/editorial/ArticleWizard.jsx'),
+    source('src/pages/admin/AutoPublisher.jsx'),
+    source('src/pages/admin/EmployeeMode.jsx'),
+  ])
+  assert.doesNotMatch(form, /Editoria \(Tag\)/)
+  assert.doesNotMatch(wizard, /Editoria \(Tag\)|TAG_SUGGESTIONS/)
+  for (const owner of [admin, employee]) {
+    assert.match(owner, /editorialTagFromVisualTitleId\(visualTitles, selectedVisualTitleId\)/)
+    assert.doesNotMatch(owner, /Tag de editoria é obrigatória/)
+  }
+})
+
 test('city selector supports partial local search, region labels and thumbnails', async () => {
   const component = await source('src/components/editorial/TerritorialComposerFields.jsx')
   assert.match(component, /includes\(query\)/)
@@ -209,4 +239,15 @@ test('city selector supports partial local search, region labels and thumbnails'
   assert.match(component, /Miniatura de/)
   assert.match(component, /overflowX: 'hidden'/)
   assert.match(component, /footer_slot_\$\{index \+ 1\}/)
+})
+
+test('editorial and individual seal selectors support accent-insensitive local search', async () => {
+  const component = await source('src/components/editorial/TerritorialComposerFields.jsx')
+  assert.match(component, /editorialTitleQuery/)
+  assert.match(component, /individualTitleQuery/)
+  assert.match(component, /Buscar selo editorial/)
+  assert.match(component, /Buscar selo/)
+  assert.match(component, /normalize\('NFD'\)/)
+  assert.match(component, /visibleEditorialTitles\.map/)
+  assert.match(component, /matchesTitleQuery\(title, normalizedSearch\(individualTitleQuery\)/)
 })

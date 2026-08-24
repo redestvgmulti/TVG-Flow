@@ -1,31 +1,41 @@
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { requireActiveOperator } from "./operatorAuth.ts";
 import {
-  authorizeOperationalTenant,
-  TenantAuthorizationError,
-} from "../ap-employee-generator/tenantAuthorization.ts";
+  authorizeConfigRequest,
+  ConfigAuthorizationError,
+} from "../ap-config/authorization.ts";
 
 export async function requireEditorialAdmin(
   req: Request,
-  supabaseAdmin: SupabaseClient,
+  _supabaseAdmin: SupabaseClient,
   clienteId: string,
 ) {
   try {
-    await requireActiveOperator(req, supabaseAdmin, ["admin"]);
-    return await authorizeOperationalTenant({
+    // Keep editorial administration on the same identity and operational-client
+    // policy as ap-config. The older operatorAuth tenant-membership check could
+    // reject an active administrator that was already allowed to operate the
+    // very same client everywhere else in AutoPublisher.
+    const authorization = await authorizeConfigRequest({
       authorization: req.headers.get("Authorization"),
       requestedClienteId: clienteId,
-      requestedAuthUserId: null,
       createUserClient: (token) => createClient(
         Deno.env.get("SUPABASE_URL")!,
         Deno.env.get("SUPABASE_ANON_KEY")!,
-        { global: { headers: { Authorization: `Bearer ${token}` } } },
+        {
+          auth: { autoRefreshToken: false, persistSession: false },
+          global: { headers: { Authorization: `Bearer ${token}` } },
+        },
       ),
     });
+    if (authorization.role !== "admin") {
+      throw new EditorialAdminAuthorizationError(403);
+    }
+    return authorization;
   } catch (error) {
-    const status = error instanceof TenantAuthorizationError
+    const status = error instanceof ConfigAuthorizationError
       ? error.status
-      : error instanceof Error && error.message.startsWith("UNAUTHORIZED") ? 401 : 403;
+      : error instanceof EditorialAdminAuthorizationError
+        ? error.status
+        : 403;
     throw new EditorialAdminAuthorizationError(status);
   }
 }

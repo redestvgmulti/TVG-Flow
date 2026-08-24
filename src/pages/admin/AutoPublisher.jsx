@@ -9,7 +9,6 @@ import {
 } from 'lucide-react'
 import AutoPublisherSettings from './AutoPublisherSettings'
 import AutoPublisherTemplates from './AutoPublisherTemplates'
-import EditorialEngine from '../../features/editorial/EditorialEngine'
 import { SkeletonCard, SkeletonTable } from '../../components/Skeleton'
 import { toast } from 'sonner'
 import ArticleWizard from '../../components/editorial/ArticleWizard'
@@ -22,7 +21,7 @@ import {
     visualModelOptionsForFormat,
 } from '../../services/visualModels'
 import { resolveOperationalClienteId } from '../../services/visualTitleGroups'
-import { loadVisualTitleCatalog } from '../../services/visualTitleCatalog'
+import { editorialTagFromVisualTitleId, flattenVisualTitleGroups, loadVisualTitleCatalog } from '../../services/visualTitleCatalog'
 import {
     loadMasterRuntime,
     MASTER_RUNTIME_STATUS,
@@ -36,6 +35,7 @@ import {
     loadTerritorialComposer,
     TERRITORIAL_COMPOSER_STATUS,
     territorialComposerIntent,
+    territorialVisualTitleId,
 } from '../../services/territorialComposer'
 
 // ──────────────────────────────────────────────────────────
@@ -73,12 +73,17 @@ export default function AutoPublisher() {
     const [clienteError, setClienteError] = useState('')
 
     // Tab lives in the URL (/admin/autopublisher/:tab) so the sidebar's
-    // AutoPublisher dropdown can deep-link into Motor Editorial, Banco de
-    // Matérias, Templates and Configurações.
+    // AutoPublisher dropdown can deep-link into Banco de Matérias, Templates
+    // and Configurações. Motor Editorial was absorbed into Configurações —
+    // old bookmarks/links to the "editorial" tab redirect there.
     const { tab: tabParam } = useParams()
     const navigate = useNavigate()
-    const tab = tabParam || 'pendentes'
+    const tab = tabParam === 'editorial' ? 'settings' : (tabParam || 'pendentes')
     const setTab = useCallback((nextTab) => navigate(`/admin/autopublisher/${nextTab}`), [navigate])
+
+    useEffect(() => {
+        if (tabParam === 'editorial') navigate('/admin/autopublisher/settings', { replace: true })
+    }, [tabParam, navigate])
     const [tabCounts, setTabCounts] = useState({})
     const [items, setItems] = useState([])
     const [loading, setLoading] = useState(false)
@@ -92,7 +97,6 @@ export default function AutoPublisher() {
         url_original: '',
         titulo: '',
         conteudo: '',
-        context_tag: '',
         image_url: '',
         content_type: 'feed',
         source_mode: 'link',
@@ -127,7 +131,7 @@ export default function AutoPublisher() {
     // Edit Item State
     const [editingItem, setEditingItem] = useState(null)
     const [editModalOpen, setEditModalOpen] = useState(false)
-    const [editForm, setEditForm] = useState({ context_tag: '', headline: '', caption: '', imagem_url: '' })
+    const [editForm, setEditForm] = useState({ headline: '', caption: '', imagem_url: '' })
     const [isSavingEdit, setIsSavingEdit] = useState(false)
     const [editSelectedFile, setEditSelectedFile] = useState(null)
     useEffect(() => {
@@ -149,7 +153,6 @@ export default function AutoPublisher() {
             url_original: '',
             titulo: '',
             conteudo: '',
-            context_tag: '',
             image_url: '',
             content_type: 'feed',
             source_mode: 'link',
@@ -452,7 +455,6 @@ export default function AutoPublisher() {
     function handleEditOpen(item) {
         setEditingItem(item)
         setEditForm({
-            context_tag: item.context_tag || '',
             headline: item.headline || item.titulo || '',
             caption: item.caption || '',
             imagem_url: item.imagem_url || item.render_url || ''
@@ -466,8 +468,6 @@ export default function AutoPublisher() {
         if (!editingItem) return
         setIsSavingEdit(true)
         try {
-            const normalizedTag = (editForm.context_tag || '').trim().toUpperCase().slice(0, 20)
-
             let finalImageUrl = editForm.imagem_url.trim()
             if (editSelectedFile) {
                 const ext = editSelectedFile.name.split('.').pop()
@@ -479,7 +479,6 @@ export default function AutoPublisher() {
             }
 
             const payload = {
-                context_tag: normalizedTag,
                 headline: editForm.headline.trim(),
                 caption: editForm.caption.trim(),
                 imagem_url: editingItem.content_type === 'reels' ? null : finalImageUrl
@@ -548,10 +547,6 @@ export default function AutoPublisher() {
         // 1. Validation Logic
         const newErrors = {}
         const isLinkMode = !!formData.url_original
-
-        if (!formData.context_tag) {
-            newErrors.context_tag = 'Tag é obrigatória.'
-        }
 
         if (territorialComposer.enabled) {
             Object.assign(newErrors, composerFormErrors(formData, territorialComposer.catalog))
@@ -659,13 +654,19 @@ export default function AutoPublisher() {
         let finalAuthUserId = user?.id || null
         if (finalAuthUserId === 'null') finalAuthUserId = null
 
+        const selectedVisualTitleId = territorialComposer.enabled
+            ? territorialVisualTitleId(formData, territorialComposer.catalog)
+            : formData.visual_title_id
+        const visualTitles = territorialComposer.enabled
+            ? territorialComposer.catalog.visual_titles
+            : flattenVisualTitleGroups(visualTitleGroups)
         const basePayload = {
             cliente_id: clienteId,
             auth_user_id: finalAuthUserId,
             url_original: formData.url_original || null,
             headline: formData.titulo || scrapedTitle || 'Pauta OMNI',
             text: formData.conteudo || scrapedConteudo || '',
-            context_tag: formData.context_tag.toUpperCase(),
+            context_tag: editorialTagFromVisualTitleId(visualTitles, selectedVisualTitleId),
             content_type: formData.content_type || 'feed',
             source_image: sourceImageRequired ? finalImageUrl : null,
             backlog_id: formData.backlog_id || null,
@@ -809,7 +810,6 @@ export default function AutoPublisher() {
                 </div>
 
                 {/* Content */}
-                {tab === 'editorial' && <EditorialEngine clienteId={clienteId} />}
                 {tab === 'backlog' && <NewsBacklogPanel
                     clienteId={clienteId}
                     onStartProduction={(item) => {
@@ -1026,11 +1026,6 @@ export default function AutoPublisher() {
             >
                 {editingItem && (
                             <form onSubmit={handleSaveEdit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', boxSizing: 'border-box' }}>
-                                    <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Tag de Editoria</label>
-                                    <input value={editForm.context_tag} onChange={e => setEditForm({ ...editForm, context_tag: e.target.value.toUpperCase() })} maxLength={20} required style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '15px', outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' }} />
-                                </div>
 
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', boxSizing: 'border-box' }}>
                                     <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Headline (Texto do Card)</label>

@@ -19,11 +19,22 @@ test('premium employee source modes reject placeholder-quality material', () => 
     validateEmployeeSourceQuality({
       sourceMode: 'text',
       headline: 'Pauta OMNI',
-      text: 'teste',
+      text: 'abc',
       sourceUrl: null,
       imageUrl: null,
     })?.code,
     'SOURCE_TEXT_TOO_SHORT',
+  )
+
+  assert.equal(
+    validateEmployeeSourceQuality({
+      sourceMode: 'text',
+      headline: 'Pauta OMNI',
+      text: 'teste',
+      sourceUrl: null,
+      imageUrl: null,
+    }),
+    null,
   )
 
   assert.equal(

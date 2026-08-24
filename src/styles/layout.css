@@ -360,6 +360,19 @@
   animation: popUp 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
+.popup-profile-link {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.popup-profile-link:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
 @keyframes popUp {
   from {
     opacity: 0;

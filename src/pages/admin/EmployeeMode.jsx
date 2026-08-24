@@ -11,7 +11,7 @@ import {
     availableVisualModelsForFormat,
     visualModelOptionsForFormat,
 } from '../../services/visualModels';
-import { loadVisualTitleCatalog } from '../../services/visualTitleCatalog';
+import { editorialTagFromVisualTitleId, flattenVisualTitleGroups, loadVisualTitleCatalog } from '../../services/visualTitleCatalog';
 import {
     loadMasterRuntime,
     MASTER_RUNTIME_STATUS,
@@ -25,6 +25,7 @@ import {
     loadTerritorialComposer,
     TERRITORIAL_COMPOSER_STATUS,
     territorialComposerIntent,
+    territorialVisualTitleId,
 } from '../../services/territorialComposer';
 
 // Fallback provider client removed - enforce session ID
@@ -33,7 +34,6 @@ const createInitialFormData = () => ({
     url_original: '',
     titulo: '',
     conteudo: '',
-    context_tag: '',
     content_type: 'feed',
     image_url: '',
     visual_title_id: null,
@@ -75,11 +75,11 @@ function validateSource(mode, { url, title, text, hasImage }) {
     }
     if (title.trim().length < 8) return 'A fonte precisa ter um título claro com pelo menos 8 caracteres.';
     if (mode === 'image' && !hasImage) return 'Envie uma imagem para usar o modo Imagem.';
-    const minimum = mode === 'image' ? 40 : 120;
+    const minimum = mode === 'image' ? 40 : 5;
     if (text.trim().length < minimum) {
         return mode === 'image'
             ? 'Inclua um briefing factual com pelo menos 40 caracteres.'
-            : 'A fonte precisa ter pelo menos 120 caracteres de conteúdo verificável.';
+            : 'A fonte precisa ter pelo menos 5 caracteres de conteúdo verificável.';
     }
     return '';
 }
@@ -422,7 +422,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
         if (e) e.preventDefault();
         if (isSubmitting) return;
 
-        const { url_original, context_tag, titulo, conteudo, image_url, content_type, visual_model, visual_title_id } = formData;
+        const { url_original, titulo, conteudo, image_url, content_type, visual_model, visual_title_id } = formData;
         const sourceMode = formData.source_mode || 'link';
 
         // Validation based on unified behavior
@@ -434,7 +434,6 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
             setErrorMsg(visualModelsBlockMessage(visualModelsState) || 'Aguarde o carregamento dos modelos visuais.');
             return;
         }
-        if (!context_tag) { setErrorMsg('Tag de editoria é obrigatória.'); return; }
         if (territorialComposer.enabled) {
             const errors = composerFormErrors(formData, territorialComposer.catalog);
             const firstError = Object.values(errors)[0];
@@ -568,13 +567,19 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
             let finalAuthUserId = professionalId || user?.id;
             if (finalAuthUserId === 'null') finalAuthUserId = null;
 
+            const selectedVisualTitleId = territorialComposer.enabled
+                ? territorialVisualTitleId(formData, territorialComposer.catalog)
+                : visual_title_id;
+            const visualTitles = territorialComposer.enabled
+                ? territorialComposer.catalog.visual_titles
+                : flattenVisualTitleGroups(visualTitleGroups);
             const basePayload = {
                 cliente_id: currentClienteId,
                 auth_user_id: finalAuthUserId,
                 url_original: sourceMode === 'link' ? url_original : null,
                 headline: resolvedTitle,
                 text: resolvedText,
-                context_tag: context_tag.toUpperCase(),
+                context_tag: editorialTagFromVisualTitleId(visualTitles, selectedVisualTitleId),
                 content_type: content_type,
                 source_image: sourceImageRequired ? finalImageUrl : null,
                 source_mode: sourceMode,

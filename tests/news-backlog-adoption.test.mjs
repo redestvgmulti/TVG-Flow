@@ -13,6 +13,10 @@ const discardMigrationUrl = new URL(
   '../supabase/migrations/20260823190000_add_discard_news_backlog_item.sql',
   import.meta.url,
 )
+const titleEditingMigrationUrl = new URL(
+  '../supabase/migrations/20260824110000_add_news_backlog_title_editing.sql',
+  import.meta.url,
+)
 
 const tenantA = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const tenantB = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
@@ -62,7 +66,7 @@ test('productive generator accepts a backlog reference only after user-bound aut
   assert.doesNotMatch(generator, /runEditorialWorkflow|callLLM/)
 })
 
-test('backlog UI is a link-only queue and does not invoke the scraper or generator on registration', async () => {
+test('backlog UI resolves non-Instagram metadata internally and requires a manual Instagram title', async () => {
   const panel = await source('src/components/editorial/NewsBacklogPanel.jsx')
   const adminUi = await source('src/pages/admin/AutoPublisher.jsx')
   const employeeUi = await source('src/pages/admin/EmployeeMode.jsx')
@@ -70,11 +74,24 @@ test('backlog UI is a link-only queue and does not invoke the scraper or generat
   assert.match(panel, /adopt_news_backlog_item/)
   assert.match(panel, /release_news_backlog_item/)
   assert.match(panel, /discard_news_backlog_item/)
-  assert.doesNotMatch(panel, /ap-link-scraper|ap-employee-generator|ap-render-engine|instagram/i)
+  assert.match(panel, /ap-link-scraper/)
+  assert.match(panel, /isInstagramUrl/)
+  assert.match(panel, /manual_instagram/)
+  assert.match(panel, /update_news_backlog_title/)
+  assert.doesNotMatch(panel, /ap-employee-generator|ap-render-engine/)
   assert.match(adminUi, /NewsBacklogPanel/)
   assert.match(adminUi, /backlog_id: item\.id/)
   assert.match(employeeUi, /NewsBacklogPanel/)
   assert.match(employeeUi, /backlog_id: item\.id/)
+})
+
+test('title editing migration preserves backlog access boundaries', async () => {
+  const migration = await readFile(titleEditingMigrationUrl, 'utf8')
+  assert.match(migration, /CREATE OR REPLACE FUNCTION ap\.update_news_backlog_title/)
+  assert.match(migration, /require_news_backlog_access/)
+  assert.match(migration, /length\(v_title\) < 3/)
+  assert.match(migration, /backlog\.status = 'available' OR backlog\.adopted_by_user_id = v_actor\.user_id/)
+  assert.match(migration, /GRANT EXECUTE ON FUNCTION ap\.update_news_backlog_title\(uuid, uuid, text\) TO authenticated/)
 })
 
 function connectionForRole(role, password) {

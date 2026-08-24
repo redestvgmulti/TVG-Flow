@@ -13,6 +13,20 @@ function FieldError({ children }) {
   return children ? <small role="alert" style={{ color: '#dc2626', fontWeight: 600 }}>{children}</small> : null
 }
 
+function normalizedSearch(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('pt-BR')
+    .trim()
+}
+
+function matchesTitleQuery(title, query, selectedId) {
+  if (title.id === selectedId) return true
+  if (!query) return true
+  return normalizedSearch(title.nome).includes(query) || normalizedSearch(title.group_name).includes(query)
+}
+
 function AssetThumbnail({ asset, alt }) {
   const src = territorialAssetPublicUrl(supabase, asset)
   if (!src) return <div aria-hidden="true" style={{ width: 40, height: 40, borderRadius: 10, background: '#e2e8f0' }} />
@@ -26,6 +40,8 @@ export default function TerritorialComposerFields({
   errors = {},
 }) {
   const [cityQuery, setCityQuery] = useState('')
+  const [editorialTitleQuery, setEditorialTitleQuery] = useState('')
+  const [individualTitleQuery, setIndividualTitleQuery] = useState('')
   const isStory = formData.content_type === 'story'
   const mode = formData.composer_mode
   const editorialTitles = useMemo(
@@ -34,6 +50,10 @@ export default function TerritorialComposerFields({
       (isStory || (title.formatos || []).includes(formData.content_type))),
     [catalog.visual_titles, formData.content_type, isStory],
   )
+  const visibleEditorialTitles = useMemo(() => {
+    const query = normalizedSearch(editorialTitleQuery)
+    return editorialTitles.filter(title => matchesTitleQuery(title, query, formData.visual_title_id))
+  }, [editorialTitleQuery, editorialTitles, formData.visual_title_id])
   const individualTitles = useMemo(
     () => (catalog.visual_titles || []).filter(title =>
       (title.formatos || []).includes(formData.content_type)),
@@ -43,9 +63,11 @@ export default function TerritorialComposerFields({
   // but a flat list makes the two indistinguishable — group them so it's clear
   // which bucket (and, for editorial, which group — Regiões, Eventos...) each is.
   const individualTitlesByType = useMemo(() => ({
-    editorial: individualTitles.filter(title => title.tipo === 'editorial'),
-    cidade: individualTitles.filter(title => title.tipo === 'cidade'),
-  }), [individualTitles])
+    editorial: individualTitles.filter(title =>
+      title.tipo === 'editorial' && matchesTitleQuery(title, normalizedSearch(individualTitleQuery), formData.visual_title_id)),
+    cidade: individualTitles.filter(title =>
+      title.tipo === 'cidade' && matchesTitleQuery(title, normalizedSearch(individualTitleQuery), formData.visual_title_id)),
+  }), [formData.visual_title_id, individualTitleQuery, individualTitles])
   const visibleCities = useMemo(() => {
     const query = cityQuery.trim().toLocaleLowerCase('pt-BR')
     return (catalog.cities || []).filter(city =>
@@ -135,6 +157,16 @@ export default function TerritorialComposerFields({
       {mode === 'editorial' && (
         <>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 7, fontSize: 13, fontWeight: 700, color: '#334155' }}>
+            Buscar selo editorial
+            <input
+              type="search"
+              value={editorialTitleQuery}
+              onChange={event => setEditorialTitleQuery(event.target.value)}
+              placeholder="Digite o nome ou grupo do selo"
+              style={{ width: '100%', padding: 12, borderRadius: 10, border: '1px solid #cbd5e1', boxSizing: 'border-box' }}
+            />
+          </label>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 7, fontSize: 13, fontWeight: 700, color: '#334155' }}>
             Selo editorial <span style={{ color: '#ef4444' }}>*</span>
             <select
               value={formData.visual_title_id || ''}
@@ -142,7 +174,7 @@ export default function TerritorialComposerFields({
               style={{ width: '100%', padding: 12, borderRadius: 10, border: errors.visual_title_id ? '1px solid #ef4444' : '1px solid #cbd5e1', background: '#fff' }}
             >
               <option value="">Selecione o selo editorial</option>
-              {editorialTitles.map(title => <option key={title.id} value={title.id}>{title.nome}{title.group_name ? ` — ${title.group_name}` : ''}</option>)}
+              {visibleEditorialTitles.map(title => <option key={title.id} value={title.id}>{title.nome}{title.group_name ? ` — ${title.group_name}` : ''}</option>)}
             </select>
             <FieldError>{errors.visual_title_id}</FieldError>
           </label>
@@ -215,31 +247,43 @@ export default function TerritorialComposerFields({
       {mode === 'individual' && (
         <>
           {!isStory && (
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 7, fontSize: 13, fontWeight: 700, color: '#334155' }}>
-              Selo <span style={{ color: '#ef4444' }}>*</span>
-              <select
-                value={formData.visual_title_id || ''}
-                onChange={event => setFormData(previous => ({ ...previous, visual_title_id: event.target.value || null, idempotency_key: null }))}
-                style={{ width: '100%', padding: 12, borderRadius: 10, border: errors.visual_title_id ? '1px solid #ef4444' : '1px solid #cbd5e1', background: '#fff' }}
-              >
-                <option value="">Selecione qualquer selo ativo</option>
-                {individualTitlesByType.editorial.length > 0 && (
-                  <optgroup label="Editorial">
-                    {individualTitlesByType.editorial.map(title => (
-                      <option key={title.id} value={title.id}>{title.nome}{title.group_name ? ` — ${title.group_name}` : ''}</option>
-                    ))}
-                  </optgroup>
-                )}
-                {individualTitlesByType.cidade.length > 0 && (
-                  <optgroup label="Cidade">
-                    {individualTitlesByType.cidade.map(title => (
-                      <option key={title.id} value={title.id}>{title.nome}</option>
-                    ))}
-                  </optgroup>
-                )}
-              </select>
-              <FieldError>{errors.visual_title_id}</FieldError>
-            </label>
+            <>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 7, fontSize: 13, fontWeight: 700, color: '#334155' }}>
+                Buscar selo
+                <input
+                  type="search"
+                  value={individualTitleQuery}
+                  onChange={event => setIndividualTitleQuery(event.target.value)}
+                  placeholder="Digite o nome ou grupo do selo"
+                  style={{ width: '100%', padding: 12, borderRadius: 10, border: '1px solid #cbd5e1', boxSizing: 'border-box' }}
+                />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 7, fontSize: 13, fontWeight: 700, color: '#334155' }}>
+                Selo <span style={{ color: '#ef4444' }}>*</span>
+                <select
+                  value={formData.visual_title_id || ''}
+                  onChange={event => setFormData(previous => ({ ...previous, visual_title_id: event.target.value || null, idempotency_key: null }))}
+                  style={{ width: '100%', padding: 12, borderRadius: 10, border: errors.visual_title_id ? '1px solid #ef4444' : '1px solid #cbd5e1', background: '#fff' }}
+                >
+                  <option value="">Selecione qualquer selo ativo</option>
+                  {individualTitlesByType.editorial.length > 0 && (
+                    <optgroup label="Editorial">
+                      {individualTitlesByType.editorial.map(title => (
+                        <option key={title.id} value={title.id}>{title.nome}{title.group_name ? ` — ${title.group_name}` : ''}</option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {individualTitlesByType.cidade.length > 0 && (
+                    <optgroup label="Cidade">
+                      {individualTitlesByType.cidade.map(title => (
+                        <option key={title.id} value={title.id}>{title.nome}</option>
+                      ))}
+                    </optgroup>
+                  )}
+                </select>
+                <FieldError>{errors.visual_title_id}</FieldError>
+              </label>
+            </>
           )}
           {isStory && (
             <div role="note" style={{ padding: 12, borderRadius: 10, background: '#f8fafc', color: '#475569', fontSize: 13 }}>

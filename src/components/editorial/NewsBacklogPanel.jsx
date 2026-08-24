@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ChevronDown, Inbox, Link2, Loader2, Lock, Plus, RefreshCcw, Trash2, Undo2, Zap } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Check, ChevronDown, Inbox, Link2, Loader2, Lock, Pencil, Plus, RefreshCcw, Trash2, Undo2, X, Zap } from 'lucide-react'
 import { supabase } from '../../services/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 
@@ -25,6 +25,19 @@ const EMPTY_COPY = {
 function domainOf(url) {
     try { return new URL(url).hostname.replace(/^www\./, '') }
     catch { return (url || '').replace(/^https?:\/\/(www\.)?/, '').split('/')[0] || '—' }
+}
+
+function isInstagramUrl(url) {
+    try { return /(^|\.)instagram\.com$/i.test(new URL(url).hostname) }
+    catch { return /(^|\.)instagram\.com([/:]|$)/i.test(url || '') }
+}
+
+function titleFromMetadata(value, url) {
+    const title = String(value || '').replace(/\s+/g, ' ').trim()
+    const domain = domainOf(url).toLocaleLowerCase('pt-BR')
+    const normalized = title.toLocaleLowerCase('pt-BR')
+    if (title.length < 3 || title.length > 240 || normalized === domain || normalized === 'instagram') return ''
+    return title
 }
 
 function initialsOf(name) {
@@ -59,10 +72,15 @@ export default function NewsBacklogPanel({ clienteId, onStartProduction }) {
     const [url, setUrl] = useState('')
     const [title, setTitle] = useState('')
     const [note, setNote] = useState('')
+    const [titleLookupState, setTitleLookupState] = useState('idle')
+    const [titleFieldError, setTitleFieldError] = useState(false)
+    const [editingItemId, setEditingItemId] = useState(null)
+    const [editingTitle, setEditingTitle] = useState('')
     const [loading, setLoading] = useState(false)
     const [submitting, setSubmitting] = useState(false)
     const [error, setError] = useState('')
     const [urlFieldError, setUrlFieldError] = useState(false)
+    const titleLookupRequest = useRef(0)
 
     const load = useCallback(async () => {
         if (!clienteId) return
@@ -92,6 +110,41 @@ export default function NewsBacklogPanel({ clienteId, onStartProduction }) {
     const hasUrlPreview = trimmedUrl.length > 3
     const previewDomain = hasUrlPreview ? domainOf(/^https?:\/\//i.test(trimmedUrl) ? trimmedUrl : `https://${trimmedUrl}`) : ''
 
+    async function suggestTitle(rawValue) {
+        const raw = String(rawValue || '').trim()
+        if (!raw) return
+        const finalUrl = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`
+        if (isInstagramUrl(finalUrl)) {
+            setDetailsOpen(true)
+            setTitleLookupState('manual_instagram')
+            return
+        }
+
+        const requestId = titleLookupRequest.current + 1
+        titleLookupRequest.current = requestId
+        setTitleLookupState('loading')
+        try {
+            const { data, error: scrapeError } = await supabase.functions.invoke('ap-link-scraper', {
+                body: { url: finalUrl },
+            })
+            if (requestId !== titleLookupRequest.current) return
+            const suggested = scrapeError ? '' : titleFromMetadata(data?.title, finalUrl)
+            if (suggested) {
+                setTitle(suggested)
+                setDetailsOpen(true)
+                setTitleLookupState('found')
+            } else {
+                setDetailsOpen(true)
+                setTitleLookupState('manual')
+            }
+        } catch {
+            if (requestId === titleLookupRequest.current) {
+                setDetailsOpen(true)
+                setTitleLookupState('manual')
+            }
+        }
+    }
+
     async function add(e) {
         e.preventDefault()
         if (submitting || !clienteId) return
@@ -101,6 +154,15 @@ export default function NewsBacklogPanel({ clienteId, onStartProduction }) {
         if (items.some(item => item.url_original === finalUrl)) {
             setError('Esse link já está no banco de matérias.')
             setUrlFieldError(true)
+            return
+        }
+
+        if (title.trim().length < 3) {
+            setDetailsOpen(true)
+            setTitleFieldError(true)
+            setError(isInstagramUrl(finalUrl)
+                ? 'Para links do Instagram, informe um título curto para a pauta.'
+                : 'Informe um título para a pauta antes de adicionar.')
             return
         }
 
@@ -119,6 +181,8 @@ export default function NewsBacklogPanel({ clienteId, onStartProduction }) {
             setUrl('')
             setTitle('')
             setNote('')
+            setTitleLookupState('idle')
+            setTitleFieldError(false)
             setDetailsOpen(false)
             setUrlFieldError(false)
             setTab('available')
@@ -161,6 +225,33 @@ export default function NewsBacklogPanel({ clienteId, onStartProduction }) {
         await load()
     }
 
+    function beginTitleEdit(item) {
+        setEditingItemId(item.id)
+        setEditingTitle(item.titulo || '')
+        setError('')
+    }
+
+    async function saveTitle(item) {
+        const nextTitle = editingTitle.trim()
+        if (nextTitle.length < 3) {
+            setError('O título precisa ter pelo menos 3 caracteres.')
+            return
+        }
+        setError('')
+        const { error: updateError } = await supabase.schema('ap').rpc('update_news_backlog_title', {
+            p_backlog_id: item.id,
+            p_cliente_id: clienteId,
+            p_titulo: nextTitle,
+        })
+        if (updateError) {
+            setError(messageFor(updateError, 'Não foi possível atualizar o título da pauta.'))
+            return
+        }
+        setEditingItemId(null)
+        setEditingTitle('')
+        await load()
+    }
+
     function begin(item) {
         setError('')
         onStartProduction?.(item)
@@ -190,7 +281,18 @@ export default function NewsBacklogPanel({ clienteId, onStartProduction }) {
 
                 <div className="ap-backlog-item-main">
                     <div className="ap-backlog-item-title-row">
-                        <span className="ap-backlog-item-title">{item.titulo || domainOf(item.url_original)}</span>
+                        {editingItemId === item.id ? (
+                            <div className="ap-backlog-inline-title-edit">
+                                <input value={editingTitle} onChange={event => setEditingTitle(event.target.value)} aria-label="Novo título da pauta" autoFocus />
+                                <button type="button" onClick={() => saveTitle(item)} aria-label="Salvar título"><Check size={14} /></button>
+                                <button type="button" onClick={() => setEditingItemId(null)} aria-label="Cancelar edição"><X size={14} /></button>
+                            </div>
+                        ) : (
+                            <>
+                                <span className="ap-backlog-item-title">{item.titulo || 'Título pendente'}</span>
+                                {canDiscard && <button type="button" className="ap-backlog-title-edit" onClick={() => beginTitleEdit(item)} title="Editar título" aria-label="Editar título"><Pencil size={13} /></button>}
+                            </>
+                        )}
                     </div>
                     <div className="ap-backlog-item-meta">
                         <span className="ap-backlog-item-domain">{domainOf(item.url_original)}</span>
@@ -257,7 +359,20 @@ export default function NewsBacklogPanel({ clienteId, onStartProduction }) {
                         <input
                             type="text"
                             value={url}
-                            onChange={e => { setUrl(e.target.value); setError(''); setUrlFieldError(false) }}
+                            onChange={e => {
+                                titleLookupRequest.current += 1
+                                setUrl(e.target.value)
+                                setTitle('')
+                                setTitleLookupState('idle')
+                                setError('')
+                                setUrlFieldError(false)
+                                setTitleFieldError(false)
+                            }}
+                            onBlur={event => { void suggestTitle(event.target.value) }}
+                            onPaste={event => {
+                                const pastedUrl = event.clipboardData.getData('text')
+                                window.setTimeout(() => { void suggestTitle(pastedUrl) }, 0)
+                            }}
                             placeholder="Cole o link da pauta e pressione Enter"
                             aria-label="Link da pauta"
                         />
@@ -277,7 +392,13 @@ export default function NewsBacklogPanel({ clienteId, onStartProduction }) {
 
                 {detailsOpen && (
                     <div className="ap-backlog-form-details">
-                        <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Título sugerido (opcional)" aria-label="Título da pauta" />
+                        <div className="ap-backlog-title-field">
+                            <input value={title} onChange={e => { setTitle(e.target.value); setTitleFieldError(false) }} placeholder="Título da pauta" aria-label="Título da pauta" className={titleFieldError ? 'has-error' : ''} />
+                            {titleLookupState === 'loading' && <span>Buscando título...</span>}
+                            {titleLookupState === 'found' && <span>Título encontrado. Você pode ajustar.</span>}
+                            {titleLookupState === 'manual_instagram' && <span>Instagram: informe o título manualmente.</span>}
+                            {titleLookupState === 'manual' && <span>Não foi possível obter um título. Informe-o manualmente.</span>}
+                        </div>
                         <input value={note} onChange={e => setNote(e.target.value)} placeholder="Observação para quem adotar (opcional)" aria-label="Observação da pauta" />
                     </div>
                 )}

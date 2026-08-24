@@ -13,10 +13,6 @@ const FORMAT_ICONS = {
     story: BookOpen,
 };
 
-// Common editorial categories — a starting point the operator can still
-// override by typing; clicking an active chip again clears the tag.
-const TAG_SUGGESTIONS = ['URGENTE', 'POLÍCIA', 'POLÍTICA', 'CIDADE', 'ESPORTE', 'ECONOMIA'];
-
 const STEP_COPY = {
     formato: {
         title: 'Como essa matéria vai ser publicada?',
@@ -44,7 +40,6 @@ const FIELD_TO_STEP = {
     content_type: 'formato',
     visual_model: 'formato',
     composer_mode: 'detalhes',
-    context_tag: 'detalhes',
     visual_title_id: 'detalhes',
     region_id: 'detalhes',
     city_id: 'detalhes',
@@ -141,7 +136,6 @@ export default function ArticleWizard({
                 if (!(formData.conteudo || '').trim()) return 'Preencha o texto base da matéria.';
                 return '';
             case 'detalhes':
-                if (!(formData.context_tag || '').trim()) return 'Informe a editoria (ex: URGENTE).';
                 if (territorialComposerEnabled) {
                     return Object.keys(composerFormErrors(formData, territorialCatalog)).length === 0
                         ? ''
@@ -163,8 +157,8 @@ export default function ArticleWizard({
         ? {
             title: 'Classificação editorial',
             subtitle: territorialComposerEnabled
-                ? 'A editoria aparece como tag no card. O modo de composição resolve automaticamente o selo e os patrocinadores.'
-                : 'A editoria aparece como tag no card. O selo define a identidade visual aplicada.',
+                ? 'O modo de composição resolve automaticamente o selo e os patrocinadores.'
+                : 'O selo define a identidade visual aplicada e a categoria exibida na arte.',
         }
         : STEP_COPY[currentStep.key];
     const footerHint = blocker
@@ -280,7 +274,6 @@ export default function ArticleWizard({
                 : `Manual: ${formData.titulo || '—'}`,
             stepKey: 'origem',
         });
-        rows.push({ label: 'Editoria', value: formData.context_tag || '—', stepKey: 'detalhes' });
         if (sourceImageRequired) {
             rows.push({ label: 'Imagem', value: selectedFile?.name || formData.image_url || '—', stepKey: 'imagem' });
         }
@@ -498,32 +491,6 @@ export default function ArticleWizard({
 
                 {currentStep.key === 'detalhes' && (
                     <div className="ap-wizard-panel">
-                        <div className="ap-af-field">
-                            <FieldLabel required>Editoria (Tag)</FieldLabel>
-                            <input
-                                className={`ap-af-input${typeof errors.context_tag === 'string' ? ' ap-af-input--error' : ''}`}
-                                value={formData.context_tag || ''}
-                                onChange={e => setFormData({ ...formData, context_tag: e.target.value.toUpperCase() })}
-                                placeholder="Ex: URGENTE"
-                            />
-                            <FieldError message={typeof errors.context_tag === 'string' ? errors.context_tag : ''} />
-                            <div className="ap-wizard-tag-chips">
-                                {TAG_SUGGESTIONS.map(tag => {
-                                    const active = formData.context_tag === tag;
-                                    return (
-                                        <button
-                                            key={tag}
-                                            type="button"
-                                            className={`ap-wizard-tag-chip${active ? ' is-active' : ''}`}
-                                            onClick={() => setFormData({ ...formData, context_tag: active ? '' : tag })}
-                                        >
-                                            {tag}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
-
                         {territorialComposerEnabled ? (
                             <TerritorialComposerFields
                                 formData={formData}

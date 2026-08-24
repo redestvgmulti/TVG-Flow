@@ -55,6 +55,16 @@ export function flattenVisualTitleGroups(groups) {
   return (groups || []).flatMap(group => group.titles)
 }
 
+// The visual title is the operator-facing editorial classification. The
+// renderer still stores it in the legacy context_tag field, so derive that
+// implementation detail from the selected seal instead of asking for a
+// second, competing manual value.
+export function editorialTagFromVisualTitleId(titles, selectedId, fallback = 'DESTAQUE') {
+  const selected = (titles || []).find(title => title.id === selectedId)
+  const name = String(selected?.nome || '').trim()
+  return name ? name.toLocaleUpperCase('pt-BR') : fallback
+}
+
 export function retainCompatibleVisualTitleId(groups, selectedId, contentType) {
   if (!selectedId) return null
   const selected = flattenVisualTitleGroups(groups).find(title => title.id === selectedId)

@@ -248,5 +248,79 @@ Deno.serve(async (req: Request) => {
         }
     }
 
+    // Auto-approve sweep — only on the internal/cron batch pass (never on a
+    // single-item admin call), so this can't be triggered by an external
+    // request. Tenants opt in via ap.system_config.auto_approve; everyone
+    // else is unaffected because the config query below returns nothing.
+    if (internalRequest && !body.newsId) {
+        await runAutoApproveSweep(supabase, workerId);
+    }
+
     return new Response(JSON.stringify({ ok: true, results }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 });
+
+async function runAutoApproveSweep(supabase: ReturnType<typeof createClient>, workerId: string) {
+    const { data: configs } = await supabase
+        .schema("ap")
+        .from("system_config")
+        .select("cliente_id, auto_approve_threshold")
+        .eq("auto_approve", true);
+
+    if (!configs?.length) return;
+
+    const clienteIds = configs.map((c: any) => c.cliente_id);
+
+    const { data: pending } = await supabase
+        .schema("ap")
+        .from("candidate_news")
+        .select("id, cliente_id")
+        .eq("status", "pending_review")
+        .is("processing_started_at", null)
+        .in("cliente_id", clienteIds);
+
+    if (!pending?.length) return;
+
+    const newsIds = pending.map((p: any) => p.id);
+    const { data: scores } = await supabase
+        .schema("ap")
+        .from("candidate_scores")
+        .select("news_id, score_total")
+        .in("news_id", newsIds);
+
+    const scoreByNewsId = new Map((scores ?? []).map((s: any) => [s.news_id, s.score_total]));
+    const thresholdByCliente = new Map(configs.map((c: any) => [c.cliente_id, c.auto_approve_threshold]));
+
+    for (const item of pending) {
+        const scoreTotal = scoreByNewsId.get(item.id);
+        const threshold = thresholdByCliente.get(item.cliente_id);
+        if (scoreTotal == null || threshold == null || scoreTotal < threshold) continue;
+
+        const telemetry = new Telemetry(supabase);
+        await telemetry.logStart({
+            worker_name: "ap-content-production",
+            worker_id: workerId,
+            news_id: item.id,
+            cliente_id: item.cliente_id,
+            action: "auto_approval",
+        });
+
+        const { data, error } = await supabase
+            .schema("ap").from("candidate_news")
+            .update({
+                status: "approved",
+                approved_by_name: `Automação (score ${Number(scoreTotal).toFixed(1)} ≥ ${Number(threshold).toFixed(1)})`,
+                approved_at: new Date().toISOString(),
+            })
+            .eq("id", item.id)
+            .eq("status", "pending_review")
+            .is("processing_started_at", null)
+            .select("id")
+            .maybeSingle();
+
+        if (error || !data) {
+            await telemetry.logError(error?.message || "auto_approve_race_lost");
+            continue;
+        }
+        await telemetry.logSuccess(0, { next_status: "approved", score_total: scoreTotal, threshold });
+    }
+}
