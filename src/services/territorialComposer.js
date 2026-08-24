@@ -1,3 +1,8 @@
+import {
+  matchesVisualTitleSearch,
+  normalizeVisualTitleSearch,
+} from './visualTitleCatalog.js'
+
 const FORMAT_LABELS = Object.freeze({
   feed: 'Feed',
   reels: 'Reels',
@@ -19,6 +24,9 @@ export const EMPTY_TERRITORIAL_CATALOG = Object.freeze({
   visual_titles: [],
   manual_assets: [],
 })
+
+export const normalizeTerritorialSearch = normalizeVisualTitleSearch
+export const matchesTerritorialSearch = matchesVisualTitleSearch
 
 function isMissingComposerSchema(error) {
   const raw = `${error?.code || ''} ${error?.message || ''}`

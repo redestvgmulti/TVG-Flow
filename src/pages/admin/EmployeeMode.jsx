@@ -127,6 +127,15 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
     const [isDownloading, setIsDownloading] = useState(false);
     const [isSharing, setIsSharing] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
+    // Validation errors used to remain visible after the operator selected the
+    // missing seal. The select was correct, but the stale message made the
+    // screen look as if the selection had not been accepted.
+    const updateFormData = useCallback((nextValue) => {
+        setFormData(previous => (
+            typeof nextValue === 'function' ? nextValue(previous) : nextValue
+        ));
+        setErrorMsg('');
+    }, []);
     // Publication tracking per generated article
     const [actionBaixou, setActionBaixou] = useState(false);
     const [actionCopiou, setActionCopiou] = useState(false);
@@ -1017,7 +1026,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                             <ArticleForm
                                 mode="employee"
                                 formData={formData}
-                                setFormData={setFormData}
+                                setFormData={updateFormData}
                                 onSubmit={handleGenerate}
                                 isSubmitting={isSubmitting || isUploading}
                                 availableVisualModels={availableVisualModels}
