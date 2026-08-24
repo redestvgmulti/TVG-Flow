@@ -880,7 +880,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                         onClick={() => setActiveTab('backlog')}
                         style={{ padding: '16px 20px', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: 600, color: activeTab === 'backlog' ? '#3b82f6' : '#64748b', borderBottom: activeTab === 'backlog' ? '2px solid #3b82f6' : '2px solid transparent', transition: 'all 0.2s' }}
                     >
-                        Backlog
+                        Banco de Matérias
                     </button>
                 </div>
 

@@ -1,13 +1,19 @@
 import { useState, useEffect } from 'react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { usePermission } from '../hooks/usePermission' // NEW: Use permission hook
 import { supabase } from '../services/supabase'
 import { Settings, ChevronRight, LogOut } from 'lucide-react'
 import { getNavigationItemsForRole } from '../config/navigation'
 
+// AutoPublisher's pipeline stage tabs (coletadas/pendentes/aprovadas/publicadas)
+// all collapse onto the single "Pipeline" sidebar link, so its active state
+// needs to match any of them, not just the bare /admin/autopublisher path.
+const AUTOPUBLISHER_PIPELINE_TABS = ['coletadas', 'pendentes', 'aprovadas', 'publicadas']
+
 function Sidebar({ mobileMenuOpen, onClose }) {
     const { user, role, professionalName, signOut } = useAuth()
+    const location = useLocation()
     const { isSuperAdmin, isAdmin, isStaff } = usePermission() // NEW: Centralized permissions
 
     // Derived roles just for rendering logic (simplifies JSX conditions)
@@ -20,6 +26,8 @@ function Sidebar({ mobileMenuOpen, onClose }) {
     const toolItems = roleItems.filter((item) => item.section === 'tools')
 
     const [adminPanelOpen, setAdminPanelOpen] = useState(true)
+    const [openNavGroups, setOpenNavGroups] = useState({})
+    const toggleNavGroup = (key) => setOpenNavGroups(previous => ({ ...previous, [key]: !(previous[key] ?? true) }))
     const [profileOpen, setProfileOpen] = useState(false)
     const [incompleteTaskCount, setIncompleteTaskCount] = useState(0)
     const [upcomingMeetingsCount, setUpcomingMeetingsCount] = useState(0)
@@ -137,16 +145,52 @@ function Sidebar({ mobileMenuOpen, onClose }) {
                             <div className="nav-section">
                                 <p className="nav-label">MENU PRINCIPAL</p>
                                 {adminMainItems.filter((item) => !item.isCTA).map(item => (
-                                    <NavLink
-                                        key={item.key}
-                                        to={item.path}
-                                        end={item.path === '/admin'} // Exact match for dashboard
-                                        className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-                                        onClick={handleNavClick}
-                                    >
-                                        <item.icon size={20} className="nav-icon" />
-                                        <span className="nav-text">{item.label}</span>
-                                    </NavLink>
+                                    item.children ? (
+                                        <div key={item.key} className={`nav-group ${openNavGroups[item.key] ?? true ? 'open' : ''}`}>
+                                            <button
+                                                className="nav-group-trigger"
+                                                onClick={() => toggleNavGroup(item.key)}
+                                            >
+                                                <item.icon size={20} className="nav-icon" />
+                                                <span className="nav-text">{item.label}</span>
+                                                <ChevronRight size={16} className="nav-arrow" />
+                                            </button>
+
+                                            {(openNavGroups[item.key] ?? true) && (
+                                                <div className="nav-sub">
+                                                    {item.children.map(child => {
+                                                        const isPipelineRoot = child.path === item.path
+                                                        const isActive = isPipelineRoot
+                                                            ? location.pathname === child.path
+                                                                || AUTOPUBLISHER_PIPELINE_TABS.some(t => location.pathname === `${child.path}/${t}`)
+                                                            : location.pathname === child.path || location.pathname.startsWith(`${child.path}/`)
+                                                        return (
+                                                            <NavLink
+                                                                key={child.key}
+                                                                to={child.path}
+                                                                className={`nav-sub-item ${isActive ? 'active' : ''}`}
+                                                                onClick={handleNavClick}
+                                                            >
+                                                                <child.icon size={16} />
+                                                                <span>{child.label}</span>
+                                                            </NavLink>
+                                                        )
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <NavLink
+                                            key={item.key}
+                                            to={item.path}
+                                            end={item.path === '/admin'} // Exact match for dashboard
+                                            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+                                            onClick={handleNavClick}
+                                        >
+                                            <item.icon size={20} className="nav-icon" />
+                                            <span className="nav-text">{item.label}</span>
+                                        </NavLink>
+                                    )
                                 ))}
                             </div>
 

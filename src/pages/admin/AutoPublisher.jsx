@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
 import '../../styles/AutoPublisher.css'
 import {
@@ -11,7 +12,7 @@ import AutoPublisherTemplates from './AutoPublisherTemplates'
 import EditorialEngine from '../../features/editorial/EditorialEngine'
 import { SkeletonCard, SkeletonTable } from '../../components/Skeleton'
 import { toast } from 'sonner'
-import ArticleForm from '../../components/editorial/ArticleForm'
+import ArticleWizard from '../../components/editorial/ArticleWizard'
 import NewsBacklogPanel from '../../components/editorial/NewsBacklogPanel'
 import Modal from '../../components/ui/Modal'
 import CreatorSignature from '../../components/ui/CreatorSignature'
@@ -44,9 +45,6 @@ const TABS = [
     { key: 'pendentes', label: 'Pendentes' },
     { key: 'aprovadas', label: 'Aprovadas' },
     { key: 'publicadas', label: 'Publicadas' },
-    { key: 'editorial', label: 'Motor Editorial' },
-    { key: 'templates', label: 'Templates' },
-    { key: 'settings', label: 'Configurações' },
 ]
 
 // Status DB → tab mapping
@@ -74,7 +72,13 @@ export default function AutoPublisher() {
     const [clienteId, setClienteId] = useState(null)
     const [clienteError, setClienteError] = useState('')
 
-    const [tab, setTab] = useState('pendentes')
+    // Tab lives in the URL (/admin/autopublisher/:tab) so the sidebar's
+    // AutoPublisher dropdown can deep-link into Motor Editorial, Banco de
+    // Matérias, Templates and Configurações.
+    const { tab: tabParam } = useParams()
+    const navigate = useNavigate()
+    const tab = tabParam || 'pendentes'
+    const setTab = useCallback((nextTab) => navigate(`/admin/autopublisher/${nextTab}`), [navigate])
     const [tabCounts, setTabCounts] = useState({})
     const [items, setItems] = useState([])
     const [loading, setLoading] = useState(false)
@@ -83,7 +87,7 @@ export default function AutoPublisher() {
 
     // Manual Input State
     const [isManualModalOpen, setManualModalOpen] = useState(false)
-    const [selectedFlow, setSelectedFlow] = useState(1) // 1 | 2 | 3
+    const [manualSubmitSucceeded, setManualSubmitSucceeded] = useState(false)
     const [formData, setFormData] = useState({
         url_original: '',
         titulo: '',
@@ -91,6 +95,7 @@ export default function AutoPublisher() {
         context_tag: '',
         image_url: '',
         content_type: 'feed',
+        source_mode: 'link',
         visual_title_id: null,
         visual_model: '',
         composer_mode: '',
@@ -137,9 +142,9 @@ export default function AutoPublisher() {
 
 
 
-    function resetManualModal() {
-        setManualModalOpen(false)
-        setSelectedFlow(1)
+    // Shared by "Fechar" (closes the modal) and "Criar outra matéria" (keeps
+    // it open so the wizard restarts at step 1 for a new submission).
+    function resetManualForm() {
         setFormData({
             url_original: '',
             titulo: '',
@@ -147,6 +152,7 @@ export default function AutoPublisher() {
             context_tag: '',
             image_url: '',
             content_type: 'feed',
+            source_mode: 'link',
             visual_title_id: null,
             visual_model: '',
             composer_mode: '',
@@ -158,6 +164,16 @@ export default function AutoPublisher() {
         })
         setSelectedFile(null)
         setManualFormErrors({})
+        setManualSubmitSucceeded(false)
+    }
+
+    function resetManualModal() {
+        setManualModalOpen(false)
+        resetManualForm()
+    }
+
+    function handleCreateAnother() {
+        resetManualForm()
     }
 
     // ── Fetch system config
@@ -556,13 +572,9 @@ export default function AutoPublisher() {
             if (sourceImageRequired && !formData.image_url && !selectedFile) {
                 newErrors.image_url = 'Imagem obrigatória para esta finalidade.'
             }
-        } else {
-            // Link Mode Requirements
-            if (selectedFlow === 2 && !formData.titulo) newErrors.titulo = 'Título obrigatório no Fluxo 2.'
-            if (selectedFlow === 3 && (!formData.titulo || !formData.conteudo)) {
-                newErrors.titulo = 'Título e Conteúdo obrigatórios no Fluxo 3.'
-            }
         }
+        // Link mode: título/conteúdo are resolved by the scraper below, no
+        // client-side requirement.
 
         if (Object.keys(newErrors).length > 0) {
             setManualFormErrors(newErrors)
@@ -605,7 +617,7 @@ export default function AutoPublisher() {
         let scrapedImage = ''
 
         // 3. Scraping (only if link provided and needed)
-        if (isLinkMode && selectedFlow !== 3) {
+        if (isLinkMode) {
             try {
                 const { data, error } = await supabase.functions.invoke('ap-link-scraper', { body: { url: formData.url_original } })
                 if (error) throw error
@@ -690,7 +702,7 @@ export default function AutoPublisher() {
             }
 
             toast.success("Matéria enviada para processamento!")
-            resetManualModal()
+            setManualSubmitSucceeded(true)
             fetchItems(tab)
         } catch (err) {
             toast.error(err.message || "Erro ao gerar matéria.")
@@ -793,36 +805,6 @@ export default function AutoPublisher() {
                                 </button>
                             ))}
                         </div>
-
-                        <div className="ap-aux-tabs">
-                            <button
-                                className={`ap-aux-tab${tab === 'editorial' ? ' active' : ''}`}
-                                onClick={() => setTab('editorial')}
-                            >
-                                Motor Editorial
-                            </button>
-
-                            <button
-                                className={`ap-aux-tab${tab === 'backlog' ? ' active' : ''}`}
-                                onClick={() => setTab('backlog')}
-                            >
-                                Backlog
-                            </button>
-
-                            <button
-                                className={`ap-aux-tab${tab === 'templates' ? ' active' : ''}`}
-                                onClick={() => setTab('templates')}
-                            >
-                                Templates
-                            </button>
-
-                            <button
-                                className={`ap-aux-tab${tab === 'settings' ? ' active' : ''}`}
-                                onClick={() => setTab('settings')}
-                            >
-                                Configurações
-                            </button>
-                        </div>
                     </div>
                 </div>
 
@@ -836,10 +818,10 @@ export default function AutoPublisher() {
                             url_original: item.url_original,
                             titulo: item.titulo || '',
                             conteudo: '',
+                            source_mode: 'link',
                             backlog_id: item.id,
                             idempotency_key: null,
                         }))
-                        setSelectedFlow(1)
                         setManualModalOpen(true)
                     }}
                 />}
@@ -1000,9 +982,7 @@ export default function AutoPublisher() {
                 size="lg"
                 className="ap-new-article-modal"
             >
-                <div className="ap-new-article-modal-content">
-                    <ArticleForm
-                    mode="admin"
+                <ArticleWizard
                     formData={formData}
                     setFormData={data => {
                         setFormData(data);
@@ -1029,8 +1009,9 @@ export default function AutoPublisher() {
                     onRetryTerritorialComposer={loadAvailableTerritorialComposer}
                     selectedFile={selectedFile}
                     setSelectedFile={setSelectedFile}
+                    submitSucceeded={manualSubmitSucceeded}
+                    onCreateAnother={handleCreateAnother}
                 />
-                </div>
             </Modal>
 
             {/* ── Modal Edição de Matéria */}

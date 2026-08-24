@@ -9,6 +9,10 @@ const migrationUrl = new URL(
   '../supabase/migrations/20260817150000_create_shared_news_backlog.sql',
   import.meta.url,
 )
+const discardMigrationUrl = new URL(
+  '../supabase/migrations/20260823190000_add_discard_news_backlog_item.sql',
+  import.meta.url,
+)
 
 const tenantA = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const tenantB = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
@@ -37,6 +41,17 @@ test('backlog migration is prospective and keeps the editorial queue isolated', 
   assert.doesNotMatch(migration, /ALTER TABLE\s+ap\.candidate_news/i)
 })
 
+test('discard migration archives without weakening tenant/adopter isolation', async () => {
+  const migration = await source('supabase/migrations/20260823190000_add_discard_news_backlog_item.sql')
+  assert.match(migration, /CREATE OR REPLACE FUNCTION ap\.discard_news_backlog_item/)
+  assert.match(migration, /require_news_backlog_access/)
+  assert.match(migration, /backlog\.status = 'available'/)
+  assert.match(migration, /backlog\.adopted_by_user_id = v_actor\.user_id/)
+  assert.match(migration, /candidate_news_id IS NULL/)
+  assert.match(migration, /GRANT EXECUTE ON FUNCTION ap\.discard_news_backlog_item\(uuid, uuid\) TO authenticated/)
+  assert.match(migration, /status <> 'archived'/)
+})
+
 test('productive generator accepts a backlog reference only after user-bound authorization and links it before rendering', async () => {
   const generator = await source('supabase/functions/ap-employee-generator/index.ts')
   assert.match(generator, /backlog_id: rawBacklogId = null/)
@@ -54,6 +69,7 @@ test('backlog UI is a link-only queue and does not invoke the scraper or generat
   assert.match(panel, /create_news_backlog_item/)
   assert.match(panel, /adopt_news_backlog_item/)
   assert.match(panel, /release_news_backlog_item/)
+  assert.match(panel, /discard_news_backlog_item/)
   assert.doesNotMatch(panel, /ap-link-scraper|ap-employee-generator|ap-render-engine|instagram/i)
   assert.match(adminUi, /NewsBacklogPanel/)
   assert.match(adminUi, /backlog_id: item\.id/)
@@ -106,6 +122,7 @@ test('PostgreSQL backlog adoption is atomic, tenant scoped, releasable only by i
       grant usage on schema ap to authenticated, service_role;
     `)
     await admin.query(await readFile(migrationUrl, 'utf8'))
+    await admin.query(await readFile(discardMigrationUrl, 'utf8'))
     await admin.query(
       'insert into public.clientes (id) values ($1), ($2)',
       [tenantA, tenantB],
@@ -198,6 +215,46 @@ test('PostgreSQL backlog adoption is atomic, tenant scoped, releasable only by i
     assert.ok(linked.rows[0].production_started_at)
     await assert.rejects(
       actorA.query('select * from ap.release_news_backlog_item($1, $2)', [backlogId, tenantA]),
+      (error) => error?.code === '42501',
+    )
+
+    // Discard: anyone with backlog access can prune an unclaimed link, and it
+    // disappears from the shared board once archived.
+    const discardable = await actorB.query(
+      'select * from ap.create_news_backlog_item($1, $2)',
+      [tenantA, 'https://example.com/discardable'],
+    )
+    const discardableId = discardable.rows[0].id
+    await assert.rejects(
+      otherTenant.query('select * from ap.discard_news_backlog_item($1, $2)', [discardableId, tenantA]),
+      (error) => error?.code === '42501',
+    )
+    const discardedAvailable = await actorA.query(
+      'select * from ap.discard_news_backlog_item($1, $2)', [discardableId, tenantA],
+    )
+    assert.equal(discardedAvailable.rows[0].status, 'archived')
+    const afterDiscardList = await actorA.query('select id from ap.list_news_backlog($1)', [tenantA])
+    assert.ok(!afterDiscardList.rows.some((row) => row.id === discardableId))
+
+    // Discard: only the adopter can discard an item they claimed.
+    const claimed = await actorA.query(
+      'select * from ap.create_news_backlog_item($1, $2)',
+      [tenantA, 'https://example.com/claimed-then-discarded'],
+    )
+    const claimedId = claimed.rows[0].id
+    await actorA.query('select * from ap.adopt_news_backlog_item($1, $2)', [claimedId, tenantA])
+    await assert.rejects(
+      actorB.query('select * from ap.discard_news_backlog_item($1, $2)', [claimedId, tenantA]),
+      (error) => error?.code === '42501',
+    )
+    const discardedMine = await actorA.query(
+      'select * from ap.discard_news_backlog_item($1, $2)', [claimedId, tenantA],
+    )
+    assert.equal(discardedMine.rows[0].status, 'archived')
+
+    // Discard: an item already linked to production is locked, same as release.
+    await assert.rejects(
+      actorA.query('select * from ap.discard_news_backlog_item($1, $2)', [backlogId, tenantA]),
       (error) => error?.code === '42501',
     )
 
