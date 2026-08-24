@@ -22,10 +22,11 @@ export default function OperationalFeed() {
     async function fetchInitialEvents() {
         try {
             setLoading(true)
-            // Calculate 48h ago
-            const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()
+            // Recent activity window: 7 days (48h was too narrow given low task volume,
+            // it left the feed permanently empty in practice)
+            const windowStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
 
-            // Fetch recent micro-task activities (last 48h)
+            // Fetch recent micro-task activities — only meaningful state transitions
             const microPromise = supabase
                 .from('tarefas_micro')
                 .select(`
@@ -36,8 +37,8 @@ export default function OperationalFeed() {
                     profissionais!profissional_id(nome),
                     tarefas!tarefa_id(titulo)
                 `)
-                .neq('status', 'pendente') // Only show active/completed/returned
-                .gt('updated_at', twoDaysAgo)
+                .in('status', ['em_execucao', 'concluida', 'devolvida'])
+                .gt('updated_at', windowStart)
                 .order('updated_at', { ascending: false })
                 .limit(50)
 
@@ -51,9 +52,9 @@ export default function OperationalFeed() {
                     profissionais!assigned_to(nome),
                     titulo
                 `)
-                .neq('status', 'pendente')
+                .in('status', ['em_execucao', 'concluida'])
                 .eq('has_micro_tasks', false) // Only OS Simples
-                .gt('updated_at', twoDaysAgo)
+                .gt('updated_at', windowStart)
                 .order('updated_at', { ascending: false })
                 .limit(50)
 
@@ -151,8 +152,11 @@ export default function OperationalFeed() {
     function handleNewEvent(rawEvent, isMicroTask) {
         const newEvent = transformEvent(rawEvent, isMicroTask)
 
-        // Ignore if status is pending (reset)
-        if (rawEvent.status === 'pendente') return
+        // Only meaningful state transitions belong in the feed (matches the initial fetch filter)
+        const relevantStatuses = isMicroTask
+            ? ['em_execucao', 'concluida', 'devolvida']
+            : ['em_execucao', 'concluida']
+        if (!relevantStatuses.includes(rawEvent.status)) return
 
         setEvents(prev => {
             // I1: Deduplicate by ID (prevent realtime + refresh race)
@@ -172,8 +176,8 @@ export default function OperationalFeed() {
 
     function transformEvent(item, isMicroTask) {
         let type = 'unknown'
-        if (item.status === 'em_progresso' || item.status === 'em_execucao' || item.status === 'fazendo') type = 'start'
-        if (item.status === 'concluida' || item.status === 'feito') type = 'complete'
+        if (item.status === 'em_execucao') type = 'start'
+        if (item.status === 'concluida') type = 'complete'
         if (item.status === 'devolvida') type = 'adjustment'
 
         const userName = item.profissionais?.nome || 'Alguém'
@@ -212,56 +216,53 @@ export default function OperationalFeed() {
         }
     }
 
-    if (loading) {
-        return (
-            <div className="op-feed-empty">
-                <div className="spinner-border text-primary" role="status"></div>
-            </div>
-        )
-    }
-
-    if (events.length === 0) {
-        return (
-            <div className="op-feed-empty">
-                <Activity size={32} className="op-feed-empty-icon" />
-                <p>Nenhuma atividade recente.</p>
-            </div>
-        )
-    }
-
     return (
         <div className="card h-full flex flex-col">
             <div className="card-header flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                    <Activity size={20} className="text-secondary" />
+                    <Activity size={18} className="text-secondary" />
                     <h3 className="card-title">Feed Operacional</h3>
                 </div>
             </div>
 
-            <div className="op-feed-container flex-1" ref={listRef}>
-                {events.map(event => (
-                    <div key={event.id} className="op-event-item">
-                        <div className={`op-event-icon ${event.type}`}>
-                            {getIcon(event.type)}
+            {loading ? (
+                <div className="op-feed-empty">
+                    <div className="spinner-border text-primary" role="status"></div>
+                </div>
+            ) : events.length === 0 ? (
+                <div className="op-feed-empty">
+                    <Activity size={32} className="op-feed-empty-icon" />
+                    <p>Nenhuma atividade recente.</p>
+                </div>
+            ) : (
+                <div className="op-feed-container flex-1" ref={listRef}>
+                    {events.map((event, index) => (
+                        <div key={event.id} className="op-event-item">
+                            <div className="op-event-icon-wrap">
+                                <div className={`op-event-icon ${event.type}`}>
+                                    {getIcon(event.type)}
+                                </div>
+                                {index < events.length - 1 && <div className="op-event-connector" />}
+                            </div>
+                            <div className="op-event-content">
+                                <div className="op-event-header">
+                                    <span className="op-event-user">{event.user}</span>
+                                    <span className="op-event-time">
+                                        {formatDistanceToNow(event.timestamp, { addSuffix: true, locale: ptBR })
+                                            .replace('cerca de ', '')}
+                                    </span>
+                                </div>
+                                <div className="op-event-action">
+                                    {event.action}
+                                </div>
+                                <div className="op-event-task">
+                                    {event.task}
+                                </div>
+                            </div>
                         </div>
-                        <div className="op-event-content">
-                            <div className="op-event-header">
-                                <span className="op-event-user">{event.user}</span>
-                                <span className="op-event-time">
-                                    {formatDistanceToNow(event.timestamp, { addSuffix: true, locale: ptBR })
-                                        .replace('cerca de ', '')}
-                                </span>
-                            </div>
-                            <div className="op-event-action">
-                                {event.action}
-                            </div>
-                            <div className="op-event-task">
-                                {event.task}
-                            </div>
-                        </div>
-                    </div>
-                ))}
-            </div>
+                    ))}
+                </div>
+            )}
         </div>
     )
 }

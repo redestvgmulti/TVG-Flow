@@ -105,7 +105,7 @@ function App() {
                     <Route path="meetings" element={<Meetings />} />
                     <Route path="content" element={<AdminContent />} />
                     <Route path="reports" element={<Reports />} />
-                    <Route path="autopublisher" element={<AutoPublisher />} />
+                    <Route path="autopublisher/:tab?" element={<AutoPublisher />} />
                   </Route>
 
                   {/* Staff Routes */}

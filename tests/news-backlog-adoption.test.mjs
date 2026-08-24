@@ -13,6 +13,10 @@ const phaseMigrationUrl = new URL(
   '../supabase/migrations/20260823210000_evolve_shared_news_backlog_phase_1a.sql',
   import.meta.url,
 )
+const discardMigrationUrl = new URL(
+  '../supabase/migrations/20260824000000_add_discard_news_backlog_item.sql',
+  import.meta.url,
+)
 
 const tenantA = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const tenantB = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
@@ -61,6 +65,21 @@ test('phase 1A migration versions URL normalization, deduplicates per tenant and
   assert.doesNotMatch(migration, /ALTER TABLE\s+ap\.candidate_news/i)
 })
 
+test('discard migration archives safely and preserves the complete phase 1A list contract', async () => {
+  const migration = await source('supabase/migrations/20260824000000_add_discard_news_backlog_item.sql')
+  assert.match(migration, /CREATE OR REPLACE FUNCTION ap\.discard_news_backlog_item/)
+  assert.match(migration, /require_news_backlog_access/)
+  assert.match(migration, /backlog\.status = 'available'/)
+  assert.match(migration, /backlog\.adopted_by_user_id = v_actor\.user_id/)
+  assert.match(migration, /candidate_news_id IS NULL/)
+  assert.match(migration, /GRANT EXECUTE ON FUNCTION ap\.discard_news_backlog_item\(uuid, uuid\) TO authenticated/)
+  assert.match(migration, /'linked', 'discarded'/)
+  assert.match(migration, /normalized_url text/)
+  assert.match(migration, /url_normalization_version smallint/)
+  assert.match(migration, /updated_at timestamptz/)
+  assert.match(migration, /status <> 'archived'/)
+})
+
 test('productive generator receives backlog_id only after user-bound authorization', async () => {
   const generator = await source('supabase/functions/ap-employee-generator/index.ts')
   assert.match(generator, /backlog_id: rawBacklogId = null/)
@@ -77,15 +96,17 @@ test('link registration performs only the backlog RPC and adoption is the single
 
   assert.match(panel, /create_news_backlog_item/)
   assert.match(panel, /p_url_original: inputUrl/)
-  assert.match(panel, /p_titulo: null/)
-  assert.match(panel, /p_observacao: null/)
+  assert.match(panel, /p_titulo: title \|\| null/)
+  assert.match(panel, /p_observacao: note \|\| null/)
   assert.match(panel, /adopt_news_backlog_item/)
   assert.match(panel, /onStartProduction\?\.\(adoptedItem\)/)
   assert.match(panel, /Criar Matéria/)
   assert.match(panel, /Abrir Link/)
   assert.match(panel, /POLL_INTERVAL_MS = 15_000/)
   assert.match(panel, /Esta matéria acabou de ser adotada por/)
-  assert.doesNotMatch(panel, /release_news_backlog_item|>Adotar<|>Produzir<|>Liberar</)
+  assert.match(panel, /release_news_backlog_item/)
+  assert.match(panel, /discard_news_backlog_item/)
+  assert.doesNotMatch(panel, /Adotar pauta|>Produzir<|>Liberar</)
   assert.doesNotMatch(panel, /ap-link-scraper|ap-image-fetcher|ap-employee-generator|ap-render-engine|instagram|fetch\s*\(/i)
 
   assert.match(adminUi, /NewsBacklogPanel/)
@@ -154,6 +175,7 @@ test('PostgreSQL contract covers creation, visibility, cross-region access, tena
     `)
     await admin.query(await readFile(baselineMigrationUrl, 'utf8'))
     await admin.query(await readFile(phaseMigrationUrl, 'utf8'))
+    await admin.query(await readFile(discardMigrationUrl, 'utf8'))
     await admin.query(
       'insert into public.clientes (id) values ($1), ($2)',
       [tenantA, tenantB],
@@ -315,6 +337,47 @@ test('PostgreSQL contract covers creation, visibility, cross-region access, tena
     )
     assert.equal(linked.rows[0].candidate_news_id, candidateId)
     assert.ok(linked.rows[0].production_started_at)
+
+    const discardable = await actorB.query(
+      'select ap.create_news_backlog_item($1, $2, null, null) as result',
+      [tenantA, 'https://example.com/discardable'],
+    )
+    const discardableId = discardable.rows[0].result.item.id
+    await assert.rejects(
+      otherTenant.query('select * from ap.discard_news_backlog_item($1, $2)', [discardableId, tenantA]),
+      (error) => error?.code === '42501',
+    )
+    const discardedAvailable = await actorA.query(
+      'select * from ap.discard_news_backlog_item($1, $2)', [discardableId, tenantA],
+    )
+    assert.equal(discardedAvailable.rows[0].status, 'archived')
+    const afterDiscardList = await actorA.query('select id from ap.list_news_backlog($1)', [tenantA])
+    assert.ok(!afterDiscardList.rows.some(row => row.id === discardableId))
+
+    const claimed = await actorA.query(
+      'select ap.create_news_backlog_item($1, $2, null, null) as result',
+      [tenantA, 'https://example.com/claimed-then-discarded'],
+    )
+    const claimedId = claimed.rows[0].result.item.id
+    await actorA.query('select * from ap.adopt_news_backlog_item($1, $2)', [claimedId, tenantA])
+    await assert.rejects(
+      actorB.query('select * from ap.discard_news_backlog_item($1, $2)', [claimedId, tenantA]),
+      (error) => error?.code === '42501',
+    )
+    const discardedMine = await actorA.query(
+      'select * from ap.discard_news_backlog_item($1, $2)', [claimedId, tenantA],
+    )
+    assert.equal(discardedMine.rows[0].status, 'archived')
+
+    await assert.rejects(
+      actorA.query('select * from ap.discard_news_backlog_item($1, $2)', [backlogId, tenantA]),
+      (error) => error?.code === '42501',
+    )
+    const discardEvents = await admin.query(
+      'select action from ap.news_backlog_events where backlog_id = $1 order by created_at, id',
+      [discardableId],
+    )
+    assert.deepEqual(discardEvents.rows.map(row => row.action), ['created', 'discarded'])
 
     const events = await admin.query(
       'select action, actor_user_id from ap.news_backlog_events where backlog_id = $1 order by created_at, id',

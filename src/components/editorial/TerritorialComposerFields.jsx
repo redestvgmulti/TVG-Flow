@@ -39,6 +39,13 @@ export default function TerritorialComposerFields({
       (title.formatos || []).includes(formData.content_type)),
     [catalog.visual_titles, formData.content_type],
   )
+  // Individual mode intentionally allows any active selo (editorial or cidade),
+  // but a flat list makes the two indistinguishable — group them so it's clear
+  // which bucket (and, for editorial, which group — Regiões, Eventos...) each is.
+  const individualTitlesByType = useMemo(() => ({
+    editorial: individualTitles.filter(title => title.tipo === 'editorial'),
+    cidade: individualTitles.filter(title => title.tipo === 'cidade'),
+  }), [individualTitles])
   const visibleCities = useMemo(() => {
     const query = cityQuery.trim().toLocaleLowerCase('pt-BR')
     return (catalog.cities || []).filter(city =>
@@ -47,6 +54,12 @@ export default function TerritorialComposerFields({
       city.region_name.toLocaleLowerCase('pt-BR').includes(query))
   }, [catalog.cities, cityQuery])
   const selectedCity = (catalog.cities || []).find(city => city.id === formData.city_id)
+  // Footer slots are sponsor placements only — catalog.manual_assets also carries
+  // 'region' entries (used elsewhere for region artwork), which don't belong here.
+  const sponsorAssets = useMemo(
+    () => (catalog.manual_assets || []).filter(asset => asset.source_type === 'sponsor'),
+    [catalog.manual_assets],
+  )
 
   function selectMode(nextMode) {
     setFormData(previous => ({
@@ -70,7 +83,7 @@ export default function TerritorialComposerFields({
         source_id: '',
       }
     })
-    const asset = (catalog.manual_assets || []).find(item =>
+    const asset = sponsorAssets.find(item =>
       `${item.source_type}:${item.source_id}` === value)
     slots[index] = asset
       ? {
@@ -210,7 +223,20 @@ export default function TerritorialComposerFields({
                 style={{ width: '100%', padding: 12, borderRadius: 10, border: errors.visual_title_id ? '1px solid #ef4444' : '1px solid #cbd5e1', background: '#fff' }}
               >
                 <option value="">Selecione qualquer selo ativo</option>
-                {individualTitles.map(title => <option key={title.id} value={title.id}>{title.nome} — {title.tipo === 'cidade' ? 'Cidade' : 'Editorial'}</option>)}
+                {individualTitlesByType.editorial.length > 0 && (
+                  <optgroup label="Editorial">
+                    {individualTitlesByType.editorial.map(title => (
+                      <option key={title.id} value={title.id}>{title.nome}{title.group_name ? ` — ${title.group_name}` : ''}</option>
+                    ))}
+                  </optgroup>
+                )}
+                {individualTitlesByType.cidade.length > 0 && (
+                  <optgroup label="Cidade">
+                    {individualTitlesByType.cidade.map(title => (
+                      <option key={title.id} value={title.id}>{title.nome}</option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
               <FieldError>{errors.visual_title_id}</FieldError>
             </label>
@@ -238,9 +264,9 @@ export default function TerritorialComposerFields({
                     style={{ flex: 1, minWidth: 0, padding: 11, borderRadius: 10, border: '1px solid #cbd5e1', background: '#fff' }}
                   >
                     <option value="">Deixar vazio</option>
-                    {(catalog.manual_assets || []).map(asset => (
+                    {sponsorAssets.map(asset => (
                       <option key={`${asset.source_type}:${asset.source_id}`} value={`${asset.source_type}:${asset.source_id}`}>
-                        {asset.source_type === 'region' ? 'Região' : 'Patrocinador'} — {asset.name}
+                        {asset.name}
                       </option>
                     ))}
                   </select>

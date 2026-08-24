@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { AnimatePresence } from 'framer-motion'
+import { motion as Motion, AnimatePresence } from 'framer-motion'
 import { RefreshCw } from 'lucide-react'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'
 import LoadingScreen from './LoadingScreen'
@@ -38,7 +38,7 @@ export function UpdateBanner() {
 
     return (
         <AnimatePresence>
-            <motion.div
+            <Motion.div
                 initial={{ y: -80, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 exit={{ y: -80, opacity: 0 }}
@@ -64,7 +64,7 @@ export function UpdateBanner() {
                         Atualizar e recarregar
                     </button>
                 </div>
-            </motion.div>
+            </Motion.div>
         </AnimatePresence>
     )
 }

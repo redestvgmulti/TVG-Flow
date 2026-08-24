@@ -13,7 +13,7 @@ const FORMAT_ICONS = {
     story: BookOpen,
 };
 
-function FieldLabel({ children, required, optional }) {
+export function FieldLabel({ children, required, optional }) {
     return (
         <label className="ap-af-label">
             <span>{children}</span>
@@ -23,7 +23,7 @@ function FieldLabel({ children, required, optional }) {
     );
 }
 
-function FieldError({ message }) {
+export function FieldError({ message }) {
     if (!message) return null;
     return <span className="ap-field-error">{message}</span>;
 }
