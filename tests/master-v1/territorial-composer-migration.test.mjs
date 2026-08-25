@@ -10,6 +10,7 @@ const files = {
   rotation: 'supabase/migrations/20260804201000_autopublisher_territorial_rotation_reservations.sql',
   rls: 'supabase/migrations/20260804202000_autopublisher_territorial_composer_rls.sql',
   rpc: 'supabase/migrations/20260804203000_autopublisher_territorial_composer_rpcs.sql',
+  sponsorPairFix: 'supabase/migrations/20260825190146_fix_territorial_sponsor_pair_rotation.sql',
 }
 
 test('composer feature is independently tenant-scoped and disabled by default', async () => {
@@ -43,6 +44,14 @@ test('new rotation is isolated from legacy state and locked by region plus forma
   assert.match(rpc, /reservation\.status IN \('reserved', 'committed'\)/)
   assert.match(rpc, /ORDER BY link\.created_at, link\.id/)
   assert.doesNotMatch(rotation, /ALTER TABLE ap\.render_sponsor_rotation_state/)
+})
+
+test('automatic rotation carries a lone remainder across the cycle and always freezes a sponsor pair', async () => {
+  const migration = await read(files.sponsorPairFix)
+  assert.match(migration, /cardinality\(v_available_sponsor_ids\) < 2[\s\S]*TERRITORIAL_SPONSOR_POOL_INSUFFICIENT/)
+  assert.match(migration, /cardinality\(v_unused_sponsor_ids\) = 1[\s\S]*v_selected_sponsor_ids := v_unused_sponsor_ids/)
+  assert.match(migration, /v_cycle := v_cycle \+ 1[\s\S]*v_selected_sponsor_ids \|\| v_cycle_fill_sponsor_ids/)
+  assert.match(migration, /cardinality\(v_selected_sponsor_ids\) <> 2[\s\S]*TERRITORIAL_SPONSOR_PAIR_INCOMPLETE/)
 })
 
 test('RPC resolves all trusted data again and snapshots only immutable server values', async () => {

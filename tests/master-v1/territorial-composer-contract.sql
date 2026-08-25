@@ -385,7 +385,8 @@ SELECT pg_temp.assert_true(
     'catalog did not expose only active same-tenant composer data'
 );
 
--- Certify the exact cycle shape for pools with zero through four sponsors.
+-- Automatic composition fails closed below two sponsors and certifies the
+-- exact cycle shape for pools with two through four sponsors.
 INSERT INTO ap.territorial_regions (
     id,
     cliente_id,
@@ -439,6 +440,50 @@ JOIN LATERAL (
     LIMIT pool.pool_size
 ) AS sponsor ON true;
 
+SELECT pg_temp.assert_raises(
+    $sql$
+        SELECT ap.create_territorial_composer_candidate(
+            'c1000000-0000-4000-8000-000000000001',
+            gen_random_uuid(),
+            'feed',
+            'editorial',
+            'Pool zero headline',
+            'Pool body text',
+            NULL,
+            'https://local.test/source.png',
+            'DESTAQUE',
+            'c5000003-0000-4000-8000-000000000003',
+            NULL,
+            'c4000000-0000-4000-8000-000000000001',
+            '[]'::jsonb
+        )
+    $sql$,
+    '23514',
+    'zero-sponsor automatic pool did not fail closed'
+);
+
+SELECT pg_temp.assert_raises(
+    $sql$
+        SELECT ap.create_territorial_composer_candidate(
+            'c1000000-0000-4000-8000-000000000001',
+            gen_random_uuid(),
+            'feed',
+            'editorial',
+            'Pool one headline',
+            'Pool body text',
+            NULL,
+            'https://local.test/source.png',
+            'DESTAQUE',
+            'c5000004-0000-4000-8000-000000000004',
+            NULL,
+            'c4000000-0000-4000-8000-000000000001',
+            '[]'::jsonb
+        )
+    $sql$,
+    '23514',
+    'one-sponsor automatic pool did not fail closed'
+);
+
 INSERT INTO composer_results (key, value)
 SELECT
     'pool_' || pool.pool_size || '_' || attempt.attempt,
@@ -461,7 +506,7 @@ SELECT
         'c4000000-0000-4000-8000-000000000001',
         '[]'::jsonb
     )
-FROM generate_series(0, 4) AS pool(pool_size)
+FROM generate_series(2, 4) AS pool(pool_size)
 CROSS JOIN LATERAL generate_series(
     1,
     CASE
@@ -479,35 +524,11 @@ SELECT pg_temp.assert_true(
             AND value #>> '{candidate_news,render_snapshot,layer_map,footer_slot_3}'
                 = 'patrocinador-2'
         FROM composer_results
-        WHERE key = 'pool_0_1'
+        WHERE key = 'pool_2_1'
     ),
     'tenant A snapshot selected a foreign-tenant template or layer map'
 );
 
-SELECT pg_temp.assert_true(
-    (
-        SELECT array_agg(
-            jsonb_array_length(
-                value #> '{candidate_news,render_snapshot,sponsor_selection,items}'
-            )
-            ORDER BY key
-        ) = ARRAY[0]
-        FROM composer_results
-        WHERE key LIKE 'pool_0_%'
-    ),
-    'zero-sponsor pool did not continue with empty automatic slots'
-);
-SELECT pg_temp.assert_true(
-    (
-        SELECT array_agg(
-            jsonb_array_length(value #> '{candidate_news,render_snapshot,sponsor_selection,items}')
-            ORDER BY key
-        ) = ARRAY[1, 1]
-        FROM composer_results
-        WHERE key LIKE 'pool_1_%'
-    ),
-    'one-sponsor pool did not reserve one sponsor per cycle'
-);
 SELECT pg_temp.assert_true(
     (
         SELECT array_agg(
@@ -524,11 +545,11 @@ SELECT pg_temp.assert_true(
         SELECT array_agg(
             jsonb_array_length(value #> '{candidate_news,render_snapshot,sponsor_selection,items}')
             ORDER BY key
-        ) = ARRAY[2, 1, 2]
+        ) = ARRAY[2, 2, 2]
         FROM composer_results
         WHERE key LIKE 'pool_3_%'
     ),
-    'three-sponsor pool did not reserve 2,1,2'
+    'three-sponsor pool emitted an incomplete automatic pair'
 );
 SELECT pg_temp.assert_true(
     (
@@ -542,8 +563,7 @@ SELECT pg_temp.assert_true(
     'four-sponsor pool did not reserve 2,2,2'
 );
 
--- A newly associated sponsor joins the tail without resetting the current
--- cycle. Pool 3 is already on cycle 2 with sponsors 1 and 2 consumed.
+-- A newly associated sponsor joins the remaining current-cycle sponsor.
 INSERT INTO ap.territorial_region_sponsors (
     cliente_id,
     region_id,
@@ -585,7 +605,7 @@ SELECT pg_temp.assert_true(
                 value #> '{candidate_news,render_snapshot,sponsor_selection,items}'
             ) AS item
         ) = ARRAY[
-            'c7000003-0000-4000-8000-000000000003',
+            'c7000001-0000-4000-8000-000000000001',
             'c7000004-0000-4000-8000-000000000004'
         ]
         FROM composer_results
@@ -594,41 +614,30 @@ SELECT pg_temp.assert_true(
     'new sponsor did not join the end of the current cycle'
 );
 
--- General deactivation removes a sponsor immediately from future selections.
+-- General deactivation fails closed when fewer than two sponsors remain.
 UPDATE ap.render_sponsors
 SET ativo = false
 WHERE id = 'c7000002-0000-4000-8000-000000000002';
-INSERT INTO composer_results (key, value)
-VALUES (
-    'pool_2_after_deactivation',
-    ap.create_territorial_composer_candidate(
-        'c1000000-0000-4000-8000-000000000001',
-        gen_random_uuid(),
-        'feed',
-        'editorial',
-        'Sponsor deactivated',
-        'Pool body text',
-        NULL,
-        'https://local.test/source.png',
-        'DESTAQUE',
-        'c5000005-0000-4000-8000-000000000005',
-        NULL,
-        'c4000000-0000-4000-8000-000000000001',
-        '[]'::jsonb
-    )
-);
-SELECT pg_temp.assert_true(
-    (
-        SELECT
-            jsonb_array_length(
-                value #> '{candidate_news,render_snapshot,sponsor_selection,items}'
-            ) = 1
-            AND value #>> '{candidate_news,render_snapshot,sponsor_selection,items,0,sponsor_id}'
-                = 'c7000001-0000-4000-8000-000000000001'
-        FROM composer_results
-        WHERE key = 'pool_2_after_deactivation'
-    ),
-    'inactive sponsor remained eligible for a future selection'
+SELECT pg_temp.assert_raises(
+    $sql$
+        SELECT ap.create_territorial_composer_candidate(
+            'c1000000-0000-4000-8000-000000000001',
+            gen_random_uuid(),
+            'feed',
+            'editorial',
+            'Sponsor deactivated',
+            'Pool body text',
+            NULL,
+            'https://local.test/source.png',
+            'DESTAQUE',
+            'c5000005-0000-4000-8000-000000000005',
+            NULL,
+            'c4000000-0000-4000-8000-000000000001',
+            '[]'::jsonb
+        )
+    $sql$,
+    '23514',
+    'one remaining active sponsor did not fail closed'
 );
 UPDATE ap.render_sponsors
 SET ativo = true
@@ -664,9 +673,16 @@ SELECT pg_temp.assert_true(
         SELECT
             jsonb_array_length(
                 value #> '{candidate_news,render_snapshot,sponsor_selection,items}'
-            ) = 1
-            AND value #>> '{candidate_news,render_snapshot,sponsor_selection,items,0,sponsor_id}'
-                = 'c7000004-0000-4000-8000-000000000004'
+            ) = 2
+            AND ARRAY(
+                SELECT item ->> 'sponsor_id'
+                FROM jsonb_array_elements(
+                    value #> '{candidate_news,render_snapshot,sponsor_selection,items}'
+                ) AS item
+            ) = ARRAY[
+                'c7000004-0000-4000-8000-000000000004',
+                'c7000001-0000-4000-8000-000000000001'
+            ]
         FROM composer_results
         WHERE key = 'pool_4_after_removal'
     )
@@ -680,7 +696,7 @@ SELECT pg_temp.assert_true(
     'regional removal affected another region or retained the removed sponsor'
 );
 
--- With five sponsors, the cycle is A+B, C+D, E, then A+B.
+-- With five sponsors, the lone remainder crosses the boundary as a pair.
 INSERT INTO composer_results (key, value)
 SELECT
     'feed_' || sequence,
@@ -722,11 +738,11 @@ SELECT pg_temp.assert_true(
                 value #> '{candidate_news,render_snapshot,sponsor_selection,items}'
             )
             ORDER BY key
-        ) = ARRAY[2, 2, 1, 2]
+        ) = ARRAY[2, 2, 2, 2]
         FROM composer_results
         WHERE key LIKE 'feed_%'
     ),
-    'five-sponsor cycle did not reserve 2,2,1,2'
+    'five-sponsor cycle emitted an incomplete automatic pair'
 );
 
 SELECT pg_temp.assert_true(

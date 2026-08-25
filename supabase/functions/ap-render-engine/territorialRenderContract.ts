@@ -231,15 +231,18 @@ export function prepareTerritorialComposerRender(
   }
 
   const composer = snapshot.composer;
+  const composerMode = isRecord(composer)
+    ? stringValue(composer.mode)
+    : null;
   if (
     !isRecord(composer) ||
     stringValue(composer.content_type) !== contentType ||
-    !["editorial", "cities", "individual"].includes(
-      stringValue(composer.mode) || "",
-    )
+    !["editorial", "cities", "individual"].includes(composerMode || "")
   ) {
     throw new RenderContractError("COMPOSER_SNAPSHOT_INVALID", "composer");
   }
+  const automaticComposition = composerMode === "editorial" ||
+    composerMode === "cities";
 
   const template = snapshot.template;
   if (!isRecord(template)) {
@@ -288,14 +291,18 @@ export function prepareTerritorialComposerRender(
   if (!Array.isArray(snapshot.footer_slots)) {
     throw new RenderContractError("FOOTER_SLOTS_INVALID", "not_array");
   }
+  if (automaticComposition && snapshot.footer_slots.length !== 3) {
+    throw new RenderContractError("AUTOMATIC_FOOTER_INCOMPLETE", "count");
+  }
   if (
-    snapshot.footer_slots.length < 1 ||
-    snapshot.footer_slots.length > 3
+    !automaticComposition &&
+    (snapshot.footer_slots.length < 1 || snapshot.footer_slots.length > 3)
   ) {
     throw new RenderContractError("FOOTER_SLOTS_INVALID", "count");
   }
 
   const seenSlots = new Set<string>();
+  const footerSources = new Map<string, { type: string; id: string }>();
   for (const rawSlot of snapshot.footer_slots) {
     if (!isRecord(rawSlot)) {
       throw new RenderContractError("FOOTER_SLOT_INVALID", "item");
@@ -311,12 +318,15 @@ export function prepareTerritorialComposerRender(
     if (seenSlots.has(slot)) {
       throw new RenderContractError("FOOTER_SLOT_DUPLICATE");
     }
-    if (
-      !["region", "sponsor"].includes(stringValue(rawSlot.source_type) || "")
-    ) {
+    const sourceType = stringValue(rawSlot.source_type);
+    if (!sourceType || !["region", "sponsor"].includes(sourceType)) {
       throw new RenderContractError("FOOTER_SLOT_INVALID", "source_type");
     }
-    requireUuid(rawSlot.source_id, "FOOTER_SLOT_INVALID", "source_id");
+    const sourceId = requireUuid(
+      rawSlot.source_id,
+      "FOOTER_SLOT_INVALID",
+      "source_id",
+    );
     const asset = validateAsset(rawSlot, "FOOTER_ASSET_INVALID");
     addImage(
       layers,
@@ -324,6 +334,73 @@ export function prepareTerritorialComposerRender(
       storageAssetUrl(supabaseUrl, asset),
     );
     seenSlots.add(slot);
+    footerSources.set(slot, { type: sourceType, id: sourceId });
+  }
+
+  if (automaticComposition) {
+    const regionSlot = footerSources.get("footer_slot_1");
+    const sponsorSlotOne = footerSources.get("footer_slot_2");
+    const sponsorSlotTwo = footerSources.get("footer_slot_3");
+    if (
+      regionSlot?.type !== "region" ||
+      sponsorSlotOne?.type !== "sponsor" ||
+      sponsorSlotTwo?.type !== "sponsor"
+    ) {
+      throw new RenderContractError(
+        "AUTOMATIC_FOOTER_INCOMPLETE",
+        "slot_sources",
+      );
+    }
+
+    const selection = snapshot.sponsor_selection;
+    if (
+      !isRecord(selection) ||
+      stringValue(selection.rotation_version) !==
+        "territorial_region_rotation_v1" ||
+      Number(selection.requested_count) !== 2 ||
+      Number(selection.selected_count) !== 2 ||
+      !Array.isArray(selection.items) ||
+      selection.items.length !== 2
+    ) {
+      throw new RenderContractError(
+        "AUTOMATIC_SPONSOR_SELECTION_INVALID",
+        "count",
+      );
+    }
+
+    const sponsorIds = new Set<string>();
+    const sponsorSlots = new Set<string>();
+    for (const rawSponsor of selection.items) {
+      if (!isRecord(rawSponsor)) {
+        throw new RenderContractError(
+          "AUTOMATIC_SPONSOR_SELECTION_INVALID",
+          "item",
+        );
+      }
+      const slot = stringValue(rawSponsor.slot);
+      if (slot !== "footer_slot_2" && slot !== "footer_slot_3") {
+        throw new RenderContractError(
+          "AUTOMATIC_SPONSOR_SELECTION_INVALID",
+          "slot",
+        );
+      }
+      const sponsorId = requireUuid(
+        rawSponsor.sponsor_id,
+        "AUTOMATIC_SPONSOR_SELECTION_INVALID",
+        "sponsor_id",
+      );
+      if (
+        sponsorSlots.has(slot) || sponsorIds.has(sponsorId) ||
+        footerSources.get(slot)?.id !== sponsorId
+      ) {
+        throw new RenderContractError(
+          "AUTOMATIC_SPONSOR_SELECTION_INVALID",
+          "mismatch",
+        );
+      }
+      sponsorSlots.add(slot);
+      sponsorIds.add(sponsorId);
+    }
   }
 
   if (

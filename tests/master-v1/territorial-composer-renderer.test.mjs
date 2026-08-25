@@ -60,6 +60,22 @@ function item(contentType, mode, slotCount = 3) {
         { slot: 'footer_slot_2', source_type: 'sponsor', ...asset(3, 'sponsors/a.png') },
         { slot: 'footer_slot_3', source_type: 'sponsor', ...asset(4, 'sponsors/b.png') },
       ].slice(0, slotCount),
+      sponsor_selection: mode === 'individual'
+        ? {
+          rotation_version: 'manual_slots_v1',
+          requested_count: 0,
+          selected_count: 0,
+          items: [],
+        }
+        : {
+          rotation_version: 'territorial_region_rotation_v1',
+          requested_count: 2,
+          selected_count: 2,
+          items: [
+            { slot: 'footer_slot_2', sponsor_id: uuid(3) },
+            { slot: 'footer_slot_3', sponsor_id: uuid(4) },
+          ],
+        },
     },
   }
 }
@@ -148,6 +164,29 @@ test('missing footer slot 3 and duplicate physical footer layers fail before pro
     error => error instanceof RenderContractError &&
       error.code === 'COMPOSER_LAYER_MAP_INVALID' &&
       error.message.endsWith(': duplicate_layer'),
+  )
+})
+
+test('automatic composition rejects a single sponsor before provider dispatch', () => {
+  const candidate = item('reels', 'editorial', 2)
+  candidate.render_snapshot.sponsor_selection.selected_count = 1
+  candidate.render_snapshot.sponsor_selection.items.pop()
+
+  assert.throws(
+    () => prepareTerritorialComposerRender(candidate, SUPABASE_URL),
+    error => error instanceof RenderContractError &&
+      error.code === 'AUTOMATIC_FOOTER_INCOMPLETE',
+  )
+})
+
+test('automatic composition rejects sponsor selection that diverges from footer slots', () => {
+  const candidate = item('feed', 'cities')
+  candidate.render_snapshot.sponsor_selection.items[1].sponsor_id = uuid(5)
+
+  assert.throws(
+    () => prepareTerritorialComposerRender(candidate, SUPABASE_URL),
+    error => error instanceof RenderContractError &&
+      error.code === 'AUTOMATIC_SPONSOR_SELECTION_INVALID',
   )
 })
 
