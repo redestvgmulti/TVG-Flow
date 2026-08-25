@@ -508,7 +508,7 @@
 
 /* Mobile Responsiveness for Modal */
 @media (max-width: 640px) {
-    .modal {
+    .company-edit-modal {
         width: 90%;
         /* Use 90% width instead of 100% to keep margins */
         height: auto;
@@ -531,19 +531,19 @@
         padding-top: 12px !important;
     }
 
-    .modal-header {
+    .company-edit-modal .modal-header {
         padding: 12px 16px;
         /* Reduced padding */
     }
 
-    .modal-body {
+    .company-edit-modal .modal-body {
         padding: 12px 16px;
         /* Reduced padding */
         flex: 1;
         overflow-y: auto;
     }
 
-    .modal-footer {
+    .company-edit-modal .modal-footer {
         padding: 12px 16px;
         /* Reduced padding */
     }

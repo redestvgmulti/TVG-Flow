@@ -344,7 +344,7 @@ function Meetings() {
                         setSelectedMeeting(null)
                     }
                 }}>
-                    <div className="modal" onClick={(e) => e.stopPropagation()}>
+                    <div className="modal meeting-modal" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <h3>{selectedMeeting ? 'Editar Reunião' : 'Nova Reunião'}</h3>
                             <button
@@ -508,7 +508,7 @@ function Meetings() {
             {/* ✅ CONFIRMATION MODAL */}
             {showCancelConfirmation && (
                 <div className="modal-backdrop" style={{ zIndex: 1100 }}>
-                    <div className="modal" style={{ maxWidth: '400px', height: 'auto' }} onClick={(e) => e.stopPropagation()}>
+                    <div className="modal meeting-modal meeting-confirm-modal" style={{ maxWidth: '400px', height: 'auto' }} onClick={(e) => e.stopPropagation()}>
                         <div className="modal-body" style={{ textAlign: 'center', padding: '24px' }}>
                             <div className="confirm-modal-icon">
                                 <AlertTriangle size={24} />

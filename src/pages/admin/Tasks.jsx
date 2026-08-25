@@ -1200,7 +1200,7 @@ function Tasks() {
             {/* Create Modal */}
             {showCreateModal && (
                 <div className="modal-backdrop" onClick={() => setShowCreateModal(false)}>
-                    <div className="modal" onClick={(e) => e.stopPropagation()}>
+                    <div className="modal admin-task-modal" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <h3>Nova Tarefa</h3>
                             <button className="modal-close" onClick={() => setShowCreateModal(false)}>×</button>
@@ -1343,12 +1343,12 @@ function Tasks() {
 
             {/* Detail Modal - Using MacroTaskDetail Component */}
             {showDetailModal && selectedTask && (
-                <div className="modal-backdrop" onClick={() => {
+                <div className="modal-backdrop task-detail-modal-backdrop" onClick={() => {
                     setShowDetailModal(false)
                     setSelectedTask(null)
                     fetchData()
                 }}>
-                    <div className="modal modal-large" onClick={(e) => e.stopPropagation()}>
+                    <div className="modal modal-large task-detail-admin-modal" onClick={(e) => e.stopPropagation()}>
                         <MacroTaskDetail
                             taskId={selectedTask.id}
                             isModal={true}
@@ -1386,7 +1386,7 @@ function Tasks() {
             {/* Delete Confirmation Modal */}
             {showDeleteModal && selectedTask && (
                 <div className="modal-backdrop" onClick={() => setShowDeleteModal(false)}>
-                    <div className="modal" onClick={(e) => e.stopPropagation()}>
+                    <div className="modal admin-task-modal" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-body">
                             <div className="confirm-modal-icon">
                                 <AlertTriangle size={24} />
@@ -1423,7 +1423,7 @@ function Tasks() {
             {/* Cancel OS Confirmation Modal */}
             {showCancelModal && selectedTask && (
                 <div className="modal-backdrop" onClick={() => setShowCancelModal(false)}>
-                    <div className="modal" onClick={(e) => e.stopPropagation()}>
+                    <div className="modal admin-task-modal" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-body">
                             <div className="confirm-modal-icon">
                                 <AlertTriangle size={24} />
@@ -1460,7 +1460,7 @@ function Tasks() {
             {/* Bulk Delete Confirmation Modal */}
             {showBulkDeleteModal && (
                 <div className="modal-backdrop" onClick={() => setShowBulkDeleteModal(false)}>
-                    <div className="modal" onClick={(e) => e.stopPropagation()}>
+                    <div className="modal admin-task-modal" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-body">
                             <div className="confirm-modal-icon">
                                 <AlertTriangle size={24} />

@@ -207,6 +207,11 @@ export default function TaskSummaryModal({ task, onClose, onUpdate, onEdit, onDe
                 .task-summary-modal {
                     width: 100%;
                     max-width: 480px;
+                    max-height: calc(100dvh - 32px);
+                    overflow-y: auto;
+                    overscroll-behavior: contain;
+                    -webkit-overflow-scrolling: touch;
+                    box-sizing: border-box;
                     background: white;
                     border-radius: 16px;
                     padding: 24px;
@@ -214,6 +219,13 @@ export default function TaskSummaryModal({ task, onClose, onUpdate, onEdit, onDe
                         0 10px 40px -10px rgba(0,0,0,0.1),
                         0 0 0 1px rgba(0,0,0,0.05);
                     transform: scale(0.98);
+                }
+                @media (max-width: 640px) {
+                    .task-summary-modal {
+                        max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+                        padding: 18px;
+                        border-radius: 20px;
+                    }
                 }
                 @keyframes modalSlideIn {
                     to { opacity: 1; transform: scale(1); }

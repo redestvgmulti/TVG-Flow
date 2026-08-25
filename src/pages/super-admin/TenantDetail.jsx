@@ -287,6 +287,7 @@ export default function TenantDetail() {
                 }}>
                     <div className="modal-content" style={{
                         background: 'white', padding: '24px', borderRadius: '12px', width: '100%', maxWidth: '400px',
+                        maxHeight: 'calc(100dvh - 32px)', overflowY: 'auto', boxSizing: 'border-box',
                         boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
                     }}>
                         <h3 className="text-lg font-bold mb-4">Adicionar Novo Admin</h3>

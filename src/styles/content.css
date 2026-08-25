@@ -342,11 +342,11 @@
 }
 
 /* Modal Body Spacing Fix */
-.modal-body {
+.assistant-modal .modal-body {
     padding: var(--space-6);
 }
 
-.modal-footer {
+.assistant-modal .modal-footer {
     padding: var(--space-4) var(--space-6);
     background: var(--color-bg-subtle);
     border-top: 1px solid var(--color-border);

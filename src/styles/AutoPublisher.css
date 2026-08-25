@@ -899,6 +899,8 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  max-height: calc(100dvh - 40px);
+  min-height: 0;
   box-sizing: border-box;
 }
 
@@ -957,7 +959,10 @@
   padding: 20px;
   gap: 20px;
   overflow-y: auto;
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   max-height: 75vh;
   box-sizing: border-box;
 }

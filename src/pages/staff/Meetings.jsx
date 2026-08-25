@@ -152,7 +152,7 @@ export default function StaffMeetings() {
             {/* Details Modal */}
             {showDetailsModal && selectedMeeting && (
                 <div className="modal-overlay">
-                    <div className="modal">
+                    <div className="modal meeting-modal">
                         <div className="modal-header">
                             <h2 className="modal-title">Detalhes da Reunião</h2>
                             <button

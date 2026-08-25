@@ -186,6 +186,7 @@ function AdminContent() {
             title={editingAssistant ? 'Editar assistente' : 'Novo assistente'}
             icon={Bot}
             size="md"
+            className="assistant-modal"
             footer={<><button type="button" onClick={closeModal} className="btn btn-secondary">Cancelar</button><button form="assistant-form" type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Salvando...' : 'Salvar assistente'}</button></>}
         >
             <form id="assistant-form" className="assistant-modal-form" onSubmit={handleSave}>
@@ -208,6 +209,7 @@ function AdminContent() {
             closeOnBackdrop={!deletingAssistant}
             title="Excluir assistente"
             subtitle="Esta ação não pode ser desfeita."
+            className="assistant-modal"
             icon={AlertTriangle}
             iconColor="var(--color-danger, #DC2626)"
             iconBg="var(--color-danger-bg, #FEE2E2)"

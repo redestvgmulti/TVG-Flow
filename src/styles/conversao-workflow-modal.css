@@ -3,6 +3,10 @@
    vem do <Modal> compartilhado / .modal-backdrop em components.css).
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
+.workflow-conversion-modal .modal-body {
+    scrollbar-gutter: stable;
+}
+
 .conversao-etapas-section {
     margin-bottom: var(--space-6);
 }

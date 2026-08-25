@@ -766,6 +766,10 @@ textarea:focus {
     align-items: center;
     justify-content: center;
     padding: var(--space-4);
+    box-sizing: border-box;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
     background-color: rgba(15, 23, 42, 0.4);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
@@ -777,6 +781,8 @@ textarea:focus {
     width: 100%;
     max-width: 540px;
     max-height: 90vh;
+    max-height: calc(100dvh - 32px);
+    min-height: 0;
     display: flex;
     flex-direction: column;
     background: #ffffff;
@@ -802,6 +808,7 @@ textarea:focus {
     position: sticky;
     top: 0;
     z-index: 20;
+    flex: 0 0 auto;
 }
 
 .modal-premium-title h3 {
@@ -842,7 +849,11 @@ textarea:focus {
 
 .modal-premium-content {
     padding: 24px;
+    flex: 1 1 auto;
+    min-height: 0;
     overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
     /* Custom Scrollbar for Content */
     scrollbar-width: thin;
     scrollbar-color: var(--color-border) transparent;
@@ -1258,6 +1269,11 @@ textarea:focus {
     left: 0;
     right: 0;
     bottom: 0;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    box-sizing: border-box;
+    padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
     background-color: rgba(23, 28, 38, 0.4);
     /* Darker, richer overlay */
     backdrop-filter: blur(8px);
@@ -1266,6 +1282,7 @@ textarea:focus {
     justify-content: center;
     align-items: center;
     z-index: 1000;
+    overflow: hidden;
     animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -1279,10 +1296,14 @@ textarea:focus {
         0 0 0 1px rgba(0, 0, 0, 0.05);
 
     /* Subtle border ring */
-    width: 90%;
+    width: min(100%, 600px);
     max-width: 600px;
     max-height: 90vh;
-    overflow-y: auto;
+    max-height: calc(100dvh - 32px);
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
     animation: modalSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
     position: relative;
     border: 1px solid rgba(255, 255, 255, 0.8);
@@ -1315,6 +1336,12 @@ textarea:focus {
     position: sticky;
     top: 0;
     z-index: 10;
+    flex: 0 0 auto;
+    min-width: 0;
+}
+
+.modal-header > div {
+    min-width: 0;
 }
 
 .modal-header h3 {
@@ -1349,6 +1376,22 @@ textarea:focus {
 
 .modal-body {
     padding: var(--space-8);
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Hand-written modals often put body and footer inside a direct form. */
+.modal > form {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+    flex-direction: column;
+    overflow: hidden;
 }
 
 /* EmployeeMode has a tab row between the header and its scrollable content. */
@@ -1382,7 +1425,58 @@ textarea:focus {
     justify-content: flex-end;
     gap: var(--space-3);
     background: rgba(250, 250, 250, 0.5);
+    flex: 0 0 auto;
+    flex-wrap: wrap;
     /* Very subtle footer bg */
+}
+
+@media (max-width: 640px) {
+    .modal-overlay,
+    .modal-backdrop {
+        align-items: flex-end;
+        padding-top: max(12px, env(safe-area-inset-top));
+        padding-right: max(12px, env(safe-area-inset-right));
+        padding-bottom: max(12px, env(safe-area-inset-bottom));
+        padding-left: max(12px, env(safe-area-inset-left));
+    }
+
+    .modal,
+    .modal-premium {
+        width: 100%;
+        max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+        border-radius: 20px;
+    }
+
+    .modal-header,
+    .modal-body,
+    .modal-footer {
+        padding-left: 16px;
+        padding-right: 16px;
+    }
+
+    .modal-header {
+        padding-top: 14px;
+        padding-bottom: 14px;
+    }
+
+    .modal-body {
+        padding-top: 16px;
+        padding-bottom: 16px;
+    }
+
+    .modal-footer {
+        padding-top: 12px;
+        padding-bottom: max(12px, env(safe-area-inset-bottom));
+    }
+
+    .modal input,
+    .modal select,
+    .modal textarea,
+    .modal-premium input,
+    .modal-premium select,
+    .modal-premium textarea {
+        font-size: 16px;
+    }
 }
 
 /* Form Styling in Modals */

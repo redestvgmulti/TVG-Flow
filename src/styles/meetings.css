@@ -64,7 +64,7 @@
 }
 
 /* Modal Polish - Institutional Premium */
-.modal {
+.meeting-modal {
     border-radius: 12px;
     box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.05);
     max-width: 480px;
@@ -72,12 +72,17 @@
     overflow: hidden;
 }
 
-.modal-content {
+.meeting-modal .modal-content {
     padding: 24px;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
 }
 
 /* Header Refinement */
-.modal-header {
+.meeting-modal .modal-header {
     border-bottom: 1px solid var(--color-border-subtle, #e5e7eb);
     padding: 20px 24px;
     margin: 0;
@@ -88,7 +93,7 @@
     background-color: #ffffff;
 }
 
-.modal-title {
+.meeting-modal .modal-title {
     font-size: 16px;
     font-weight: 600;
     letter-spacing: -0.01em;
@@ -96,26 +101,26 @@
     line-height: 1.4;
 }
 
-.modal-header .btn-icon {
+.meeting-modal .modal-header .btn-icon {
     margin-right: -8px;
     color: var(--color-text-tertiary, #9ca3af);
 }
 
-.modal-header .btn-icon:hover {
+.meeting-modal .modal-header .btn-icon:hover {
     color: var(--color-text-primary);
     background: transparent;
 }
 
 /* Form Groups & Typography */
-.form-group {
+.meeting-modal .form-group {
     margin-bottom: 24px;
 }
 
-.form-group:last-child {
+.meeting-modal .form-group:last-child {
     margin-bottom: 0;
 }
 
-.form-group label {
+.meeting-modal .form-group label {
     display: block;
     font-size: 11px;
     text-transform: uppercase;
@@ -126,7 +131,7 @@
 }
 
 /* Override utility classes on values for clean look */
-.form-group>div[class*="bg-base-200"] {
+.meeting-modal .form-group>div[class*="bg-base-200"] {
     background-color: transparent !important;
     padding: 0 !important;
     border: none !important;
@@ -137,7 +142,7 @@
 }
 
 /* Grid Layout for Date/Time */
-.form-row-group {
+.meeting-modal .form-row-group {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     column-gap: 24px;
@@ -148,11 +153,11 @@
     border-top: 1px solid var(--color-border-subtle, #f3f4f6);
 }
 
-.form-row-group .form-group {
+.meeting-modal .form-row-group .form-group {
     margin-bottom: 0;
 }
 
-.form-row-group>div>div[class*="bg-base-200"] {
+.meeting-modal .form-row-group>div>div[class*="bg-base-200"] {
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum";
     font-size: 16px;
@@ -161,7 +166,7 @@
 }
 
 /* Status Badge - Refined Pill */
-.modal .badge {
+.meeting-modal .badge {
     padding: 4px 10px;
     font-size: 11px;
     font-weight: 600;
@@ -194,7 +199,7 @@
 }
 
 /* Actions Footer */
-.modal-footer {
+.meeting-modal .modal-footer {
     display: flex;
     justify-content: flex-end;
     padding: 24px;
@@ -203,7 +208,7 @@
     gap: 12px;
 }
 
-.modal-footer .btn {
+.meeting-modal .modal-footer .btn {
     font-size: 13px;
     font-weight: 500;
     height: 36px;
@@ -211,21 +216,21 @@
     padding: 0 16px;
 }
 
-.modal-footer .btn-secondary {
+.meeting-modal .modal-footer .btn-secondary {
     background-color: #ffffff;
     border: 1px solid var(--color-border, #e5e7eb);
     color: var(--color-text-secondary, #374151);
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
-.modal-footer .btn-secondary:hover {
+.meeting-modal .modal-footer .btn-secondary:hover {
     background-color: #f9fafb;
     border-color: #d1d5db;
     color: #111827;
 }
 
 @media (max-width: 640px) {
-    .form-row-group {
+    .meeting-modal .form-row-group {
         grid-template-columns: 1fr;
         gap: 16px;
     }

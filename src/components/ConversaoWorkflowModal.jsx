@@ -162,6 +162,7 @@ export default function ConversaoWorkflowModal({
             title="Converter em Workflow"
             icon={Workflow}
             size="lg"
+            className="workflow-conversion-modal"
             closeOnBackdrop={!loading}
             footer={(
                 <>

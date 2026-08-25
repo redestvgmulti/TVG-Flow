@@ -30,9 +30,10 @@ test('new article modal owns an internal scroll container without changing the s
   const page = await source('src/pages/admin/AutoPublisher.jsx')
   const styles = await source('src/styles/AutoPublisher.css')
   assert.match(page, /className="ap-new-article-modal"/)
-  assert.match(page, /ap-new-article-modal-content/)
   assert.match(styles, /\.modal\.ap-new-article-modal\s*\{[^}]*overflow:\s*hidden/)
-  assert.match(styles, /\.modal\.ap-new-article-modal \.modal-body\s*\{[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto/)
+  assert.match(styles, /\.modal\.ap-new-article-modal \.modal-body\s*\{[^}]*min-height:\s*0;[^}]*overflow:\s*hidden/)
+  assert.match(styles, /\.ap-wizard\s*\{[^}]*min-height:\s*0;[^}]*flex:\s*1 1 auto/)
+  assert.match(styles, /\.ap-wizard-content\s*\{[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto/)
 })
 
 test('employee article modal constrains the shell and scrolls only its content', async () => {

@@ -739,7 +739,7 @@
 }
 
 /* Modal Actions Spacing */
-.modal-footer {
+.admin-task-modal .modal-footer {
     display: flex;
     justify-content: flex-end;
     gap: var(--space-3);
@@ -779,11 +779,11 @@
 }
 
 /* Large Modal for MacroTaskDetail - FORCE Override */
-.modal.modal-large {
+.modal.modal-large.task-detail-admin-modal {
     max-width: 720px !important;
     width: 90vw !important;
-    max-height: 85vh !important;
-    height: 85vh !important;
+    max-height: calc(100dvh - 32px) !important;
+    height: min(85vh, calc(100dvh - 32px)) !important;
     overflow: hidden !important;
     padding: 0 !important;
     display: flex !important;
@@ -806,7 +806,7 @@
     overscroll-behavior: contain;
 }
 /* Remove padding from MacroTaskDetail when inside modal */
-.modal-large .macro-task-container {
+.task-detail-admin-modal .macro-task-container {
     padding: 24px !important;
     width: 100% !important;
     height: 100% !important;
@@ -820,18 +820,18 @@
 /* Mobile Responsiveness for Modal */
 /* Fix for mobile specific alignment */
 @media (max-width: 768px) {
-    .modal-backdrop {
+    .task-detail-modal-backdrop {
         align-items: flex-end !important;
         padding-bottom: 24px !important;
         /* Lift from bottom */
     }
 
-    .modal.modal-large {
+    .modal.modal-large.task-detail-admin-modal {
         width: calc(100% - 32px) !important;
         /* 16px margin on each side */
         max-width: 100% !important;
-        height: auto !important;
-        max-height: 85vh !important;
+        height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) !important;
+        max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) !important;
         /* Don't cover full height */
         border-radius: 24px !important;
         /* Premium rounded corners */
@@ -840,7 +840,7 @@
         box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.15) !important;
     }
 
-    .modal-large .macro-task-container {
+    .task-detail-admin-modal .macro-task-container {
         border-radius: 24px !important;
         padding: 20px !important;
         /* Restore internal padding so content isn't stuck to edges */
