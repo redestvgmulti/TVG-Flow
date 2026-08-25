@@ -14,6 +14,26 @@ import './styles/reload-prompt.css'
 import './styles/mobile-fixes.css'
 import './styles/mobile-layout-fixes.css' // ÚLTIMO - sobrescreve tudo
 
+async function clearStaleDevelopmentServiceWorker() {
+  if (!import.meta.env.DEV || !('serviceWorker' in navigator)) return
+
+  const registrations = await navigator.serviceWorker.getRegistrations()
+  if (!registrations.length) return
+
+  await Promise.all(registrations.map((registration) => registration.unregister()))
+
+  if ('caches' in window) {
+    const cacheNames = await caches.keys()
+    await Promise.all(cacheNames.map((cacheName) => caches.delete(cacheName)))
+  }
+
+  // A prior PWA session can control localhost and serve an obsolete bundle.
+  // Reload once after releasing it so the Vite modules are used from now on.
+  window.location.reload()
+}
+
+void clearStaleDevelopmentServiceWorker()
+
 // Apply security hardening BEFORE React renders
 hardenConsole()
 
