@@ -877,22 +877,31 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                 </div>
 
                 {/* Tabs */}
-                <div className="employee-mode-modal-tabs" style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', background: '#fff', padding: '0 20px' }}>
+                <div className="employee-mode-modal-tabs" role="tablist" aria-label="Etapas da nova matéria">
                     <button
                         onClick={() => setActiveTab('create')}
-                        style={{ padding: '16px 20px', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: 600, color: activeTab === 'create' ? '#3b82f6' : '#64748b', borderBottom: activeTab === 'create' ? '2px solid #3b82f6' : '2px solid transparent', transition: 'all 0.2s' }}
+                        className={`employee-mode-modal-tab${activeTab === 'create' ? ' employee-mode-modal-tab--active' : ''}`}
+                        type="button"
+                        role="tab"
+                        aria-selected={activeTab === 'create'}
                     >
                         Criar Conteúdo
                     </button>
                     <button
                         onClick={() => setActiveTab('history')}
-                        style={{ padding: '16px 20px', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: 600, color: activeTab === 'history' ? '#3b82f6' : '#64748b', borderBottom: activeTab === 'history' ? '2px solid #3b82f6' : '2px solid transparent', transition: 'all 0.2s' }}
+                        className={`employee-mode-modal-tab${activeTab === 'history' ? ' employee-mode-modal-tab--active' : ''}`}
+                        type="button"
+                        role="tab"
+                        aria-selected={activeTab === 'history'}
                     >
                         Meu Histórico
                     </button>
                     <button
                         onClick={() => setActiveTab('backlog')}
-                        style={{ padding: '16px 20px', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: 600, color: activeTab === 'backlog' ? '#3b82f6' : '#64748b', borderBottom: activeTab === 'backlog' ? '2px solid #3b82f6' : '2px solid transparent', transition: 'all 0.2s' }}
+                        className={`employee-mode-modal-tab${activeTab === 'backlog' ? ' employee-mode-modal-tab--active' : ''}`}
+                        type="button"
+                        role="tab"
+                        aria-selected={activeTab === 'backlog'}
                     >
                         Banco de Matérias
                     </button>
@@ -904,7 +913,6 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                     role="region"
                     aria-label="Conteúdo da nova matéria"
                     tabIndex={0}
-                    style={{ display: 'flex', flexDirection: 'column', padding: '20px', gap: '20px', width: '100%', boxSizing: 'border-box' }}
                 >
 
                     {errorMsg && (

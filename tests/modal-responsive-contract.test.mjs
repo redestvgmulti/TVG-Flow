@@ -64,3 +64,21 @@ test('custom modal implementations also cap their height to the dynamic viewport
   assert.match(autoPublisher, /\.ap-modal-body\s*\{[^}]*overflow-y:\s*auto;[^}]*flex:\s*1 1 auto;[^}]*min-height:\s*0;/s)
   assert.match(tenant, /maxHeight:\s*'calc\(100dvh - 32px\)'[^\n]*overflowY:\s*'auto'/)
 })
+
+test('employee article modal adapts to mobile browsers, PWAs and reduced viewport height', async () => {
+  const [page, components, autoPublisher, html] = await Promise.all([
+    source('src/pages/admin/EmployeeMode.jsx'),
+    source('src/styles/components.css'),
+    source('src/styles/AutoPublisher.css'),
+    source('index.html'),
+  ])
+
+  assert.match(html, /viewport-fit=cover/)
+  assert.doesNotMatch(page, /className="employee-mode-modal-tabs" style=/)
+  assert.doesNotMatch(page, /className=\{`employee-mode-modal-body[^\n]+style=/)
+  assert.match(components, /\.employee-mode-modal-body\s*\{[^}]*width:\s*100%;[^}]*padding:\s*20px;[^}]*box-sizing:\s*border-box;/s)
+  assert.match(components, /@media \(max-width:\s*640px\)[\s\S]*\.employee-mode-modal-tab\s*\{[^}]*min-height:\s*52px;[^}]*white-space:\s*normal;/s)
+  assert.match(components, /@media \(max-height:\s*560px\)[\s\S]*\.employee-mode-modal-body--backlog \.ap-backlog-list\s*\{[^}]*overflow:\s*visible;/s)
+  assert.match(autoPublisher, /@media \(max-width:\s*560px\)[\s\S]*\.ap-af-source-grid\s*\{[^}]*minmax\(132px, 1fr\)/s)
+  assert.match(autoPublisher, /@media \(max-width:\s*640px\)[\s\S]*\.ap-backlog-url-field\s*\{[^}]*min-width:\s*0;/s)
+})

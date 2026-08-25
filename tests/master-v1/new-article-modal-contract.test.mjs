@@ -41,6 +41,8 @@ test('employee article modal constrains the shell and scrolls only its content',
   const styles = await source('src/styles/components.css')
   assert.match(page, /className="modal employee-mode-modal"/)
   assert.match(page, /className="employee-mode-modal-tabs"/)
+  assert.match(page, /className=\{`employee-mode-modal-tab\$\{activeTab === 'backlog' \? ' employee-mode-modal-tab--active' : ''\}`\}/)
+  assert.match(page, /role="tablist" aria-label="Etapas da nova matéria"/)
   assert.match(page, /className=\{`employee-mode-modal-body\$\{activeTab === 'backlog' \? ' employee-mode-modal-body--backlog' : ''\}`\}/)
   assert.match(page, /aria-label="Conteúdo da nova matéria"/)
   assert.match(page, /tabIndex=\{0\}/)
@@ -48,6 +50,9 @@ test('employee article modal constrains the shell and scrolls only its content',
   assert.match(styles, /\.employee-mode-modal-body\s*\{[^}]*flex:\s*1 1 0%;[^}]*height:\s*0;[^}]*min-height:\s*0;[^}]*overflow-y:\s*scroll;[^}]*touch-action:\s*pan-y/)
   assert.match(styles, /\.employee-mode-modal-body--backlog\s*>\s*\.ap-backlog-panel\s*\{[^}]*display:\s*flex;[^}]*flex:\s*1 1 0%;[^}]*min-height:\s*0/)
   assert.match(styles, /\.employee-mode-modal-body--backlog \.ap-backlog-list\s*\{[^}]*flex:\s*1 1 0%;[^}]*min-height:\s*0;[^}]*overflow-y:\s*scroll;[^}]*touch-action:\s*pan-y/)
+  assert.match(styles, /@media \(max-width:\s*640px\)[\s\S]*\.modal\.employee-mode-modal\s*\{[^}]*height:\s*calc\(100dvh[^;]+safe-area-inset-bottom[^;]*;/)
+  assert.match(styles, /@media \(max-width:\s*640px\)[\s\S]*\.employee-mode-modal-tabs\s*\{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/)
+  assert.match(styles, /@media \(max-height:\s*560px\)[\s\S]*\.employee-mode-modal-body--backlog\s*\{[^}]*overflow-y:\s*auto/)
 })
 
 test('manual Feed keeps the image dropzone visible before choosing between image-based purposes', async () => {

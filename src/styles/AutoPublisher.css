@@ -1666,7 +1666,7 @@
 
 @media (max-width: 560px) {
   .ap-af-source-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
   }
 }
 
@@ -3581,6 +3581,10 @@
   .ap-backlog-form-row {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .ap-backlog-url-field {
+    min-width: 0;
   }
 
   .ap-backlog-form-details {
