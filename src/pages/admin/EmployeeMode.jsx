@@ -899,7 +899,13 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                 </div>
 
                 {/* Scrollable Content */}
-                <div className="employee-mode-modal-body" style={{ display: 'flex', flexDirection: 'column', padding: '20px', gap: '20px', width: '100%', boxSizing: 'border-box' }}>
+                <div
+                    className={`employee-mode-modal-body${activeTab === 'backlog' ? ' employee-mode-modal-body--backlog' : ''}`}
+                    role="region"
+                    aria-label="Conteúdo da nova matéria"
+                    tabIndex={0}
+                    style={{ display: 'flex', flexDirection: 'column', padding: '20px', gap: '20px', width: '100%', boxSizing: 'border-box' }}
+                >
 
                     {errorMsg && (
                         <div style={{ background: '#fef2f2', border: '1px solid #fecaca', padding: '16px', borderRadius: '12px', marginBottom: '10px', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
