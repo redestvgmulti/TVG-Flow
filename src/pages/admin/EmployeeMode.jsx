@@ -585,7 +585,10 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
             const basePayload = {
                 cliente_id: currentClienteId,
                 auth_user_id: finalAuthUserId,
-                url_original: sourceMode === 'link' ? url_original : null,
+                // A backlog item keeps its source URL as part of the adoption
+                // contract, even when the employee uses the URL only as
+                // provenance and writes the article from text or an image.
+                url_original: formData.backlog_id || sourceMode === 'link' ? url_original : null,
                 headline: resolvedTitle,
                 text: resolvedText,
                 context_tag: editorialTagFromVisualTitleId(visualTitles, selectedVisualTitleId),

@@ -115,6 +115,10 @@ test('link registration performs only the backlog RPC and adoption is the single
   assert.match(employeeUi, /NewsBacklogPanel/)
   assert.match(employeeUi, /url_original: item\.url_original/)
   assert.match(employeeUi, /backlog_id: item\.id/)
+  assert.match(
+    employeeUi,
+    /url_original:\s*formData\.backlog_id\s*\|\|\s*sourceMode\s*===\s*'link'\s*\?\s*url_original\s*:\s*null/,
+  )
 })
 
 function connectionForRole(role, password) {
