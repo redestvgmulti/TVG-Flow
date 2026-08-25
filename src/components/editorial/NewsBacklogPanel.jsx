@@ -16,9 +16,9 @@ const AVATAR_PALETTES = [
 ]
 
 const TABS = [
-    { key: 'available', label: 'Disponíveis' },
-    { key: 'mine', label: 'Minhas pautas' },
-    { key: 'others', label: 'Adotadas por outros' },
+    { key: 'available', label: 'Disponíveis', mobileLabel: 'Disponíveis' },
+    { key: 'mine', label: 'Minhas pautas', mobileLabel: 'Minhas' },
+    { key: 'others', label: 'Adotadas por outros', mobileLabel: 'Outros' },
 ]
 
 const EMPTY_COPY = {
@@ -349,7 +349,12 @@ export default function NewsBacklogPanel({ clienteId, onStartProduction }) {
                 <div className="ap-backlog-head-actions">
                     <span className="ap-backlog-total">
                         <span className="ap-backlog-total-dot" />
-                        {items.length} {items.length === 1 ? 'pauta no banco de matérias' : 'pautas no banco de matérias'}
+                        <span className="ap-backlog-total-label">
+                            {items.length} {items.length === 1 ? 'pauta no banco de matérias' : 'pautas no banco de matérias'}
+                        </span>
+                        <span className="ap-backlog-total-label-mobile">
+                            {items.length} {items.length === 1 ? 'pauta' : 'pautas'}
+                        </span>
                     </span>
                     <button type="button" className="ap-btn-refresh" onClick={() => load()} disabled={loading || !clienteId}>
                         <RefreshCcw size={13} className={loading ? 'ap-spin-icon' : ''} /> Atualizar
@@ -404,7 +409,8 @@ export default function NewsBacklogPanel({ clienteId, onStartProduction }) {
                         className={`ap-backlog-tab${tab === currentTab.key ? ' active' : ''}`}
                         onClick={() => setTab(currentTab.key)}
                     >
-                        {currentTab.label}
+                        <span className="ap-backlog-tab-label">{currentTab.label}</span>
+                        <span className="ap-backlog-tab-label-mobile">{currentTab.mobileLabel}</span>
                         <span className="ap-backlog-tab-count">{groups[currentTab.key].length}</span>
                     </button>
                 ))}

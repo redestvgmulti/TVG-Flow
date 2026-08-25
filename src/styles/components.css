@@ -1580,6 +1580,17 @@ textarea:focus {
     .employee-mode-modal-body--backlog .ap-backlog-list {
         scrollbar-gutter: auto;
     }
+
+    .employee-mode-modal-body--backlog {
+        gap: 0;
+        padding: 0;
+    }
+
+    .employee-mode-modal-body--backlog > .ap-backlog-panel {
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+    }
 }
 
 /* Landscape phones and virtual keyboards need the whole backlog panel to scroll. */
