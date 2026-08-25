@@ -4,7 +4,7 @@
 
 ALTER TABLE ap.news_backlog_events DROP CONSTRAINT news_backlog_event_action_check;
 ALTER TABLE ap.news_backlog_events ADD CONSTRAINT news_backlog_event_action_check
-    CHECK (action IN ('created', 'adopted', 'released', 'production_started', 'discarded', 'title_updated'));
+    CHECK (action IN ('created', 'adopted', 'released', 'production_started', 'linked', 'discarded', 'title_updated'));
 
 CREATE OR REPLACE FUNCTION ap.update_news_backlog_title(
     p_backlog_id uuid,
