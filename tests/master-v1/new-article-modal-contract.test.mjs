@@ -40,9 +40,13 @@ test('employee article modal constrains the shell and scrolls only its content',
   const styles = await source('src/styles/components.css')
   assert.match(page, /className="modal employee-mode-modal"/)
   assert.match(page, /className="employee-mode-modal-tabs"/)
-  assert.match(page, /className="employee-mode-modal-body"/)
+  assert.match(page, /className=\{`employee-mode-modal-body\$\{activeTab === 'backlog' \? ' employee-mode-modal-body--backlog' : ''\}`\}/)
+  assert.match(page, /aria-label="Conteúdo da nova matéria"/)
+  assert.match(page, /tabIndex=\{0\}/)
   assert.match(styles, /\.modal\.employee-mode-modal\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*height:[^;]+;[^}]*overflow:\s*hidden/)
-  assert.match(styles, /\.employee-mode-modal-body\s*\{[^}]*flex:\s*1 1 auto;[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto/)
+  assert.match(styles, /\.employee-mode-modal-body\s*\{[^}]*flex:\s*1 1 0%;[^}]*height:\s*0;[^}]*min-height:\s*0;[^}]*overflow-y:\s*scroll;[^}]*touch-action:\s*pan-y/)
+  assert.match(styles, /\.employee-mode-modal-body--backlog\s*>\s*\.ap-backlog-panel\s*\{[^}]*display:\s*flex;[^}]*flex:\s*1 1 0%;[^}]*min-height:\s*0/)
+  assert.match(styles, /\.employee-mode-modal-body--backlog \.ap-backlog-list\s*\{[^}]*flex:\s*1 1 0%;[^}]*min-height:\s*0;[^}]*overflow-y:\s*scroll;[^}]*touch-action:\s*pan-y/)
 })
 
 test('manual Feed keeps the image dropzone visible before choosing between image-based purposes', async () => {
