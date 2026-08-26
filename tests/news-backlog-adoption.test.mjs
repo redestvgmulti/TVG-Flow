@@ -80,6 +80,15 @@ test('discard migration archives safely and preserves the complete phase 1A list
   assert.match(migration, /status <> 'archived'/)
 })
 
+test('news backlog lists inserted links from oldest to newest across statuses', async () => {
+  const migration = await source('supabase/migrations/20260825220000_order_news_backlog_oldest_first.sql')
+
+  assert.match(migration, /CREATE OR REPLACE FUNCTION ap\.list_news_backlog\(p_cliente_id uuid\)/)
+  assert.match(migration, /status <> 'archived'/)
+  assert.match(migration, /ORDER BY backlog\.created_at ASC, backlog\.id ASC/)
+  assert.doesNotMatch(migration, /CASE backlog\.status/)
+})
+
 test('productive generator receives backlog_id only after user-bound authorization', async () => {
   const generator = await source('supabase/functions/ap-employee-generator/index.ts')
   assert.match(generator, /backlog_id: rawBacklogId = null/)

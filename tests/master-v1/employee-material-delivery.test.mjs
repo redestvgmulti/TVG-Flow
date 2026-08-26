@@ -103,9 +103,3 @@ test('employee UI records real actions and never promotes an invented status', a
   assert.match(articleForm, /Confirmar e gerar material/)
   assert.match(vite, /urlPattern:[^\n]+rest[^\n]+\n\s*handler: 'NetworkOnly'/)
 })
-
-test('employee material bank lists the oldest generated materials first', async () => {
-  const employeeMode = await read('src/pages/admin/EmployeeMode.jsx')
-
-  assert.match(employeeMode, /\.from\('ap_candidate_news_complete'\)[\s\S]*?\.order\('gerado_em', \{ ascending: true \}\)/)
-})

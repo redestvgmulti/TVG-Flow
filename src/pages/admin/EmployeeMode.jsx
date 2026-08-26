@@ -825,7 +825,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                 .from('ap_candidate_news_complete')
                 .select('id, titulo, headline, caption, render_url, render_completed_at, gerado_em, created_at, status, content_type, acao_baixou, acao_copiou, template_nome_snapshot, context_tag, fonte_id, criado_por_user_id, creator_name_snapshot')
                 .eq('criado_por_user_id', user?.id)
-                .order('gerado_em', { ascending: true })
+                .order('gerado_em', { ascending: false })
                 .range(page * ITEMS_PER_PAGE, (page + 1) * ITEMS_PER_PAGE - 1);
 
             if (error) throw error;
