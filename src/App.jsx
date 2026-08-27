@@ -28,6 +28,7 @@ import StaffToday from './pages/staff/Today'
 import StaffCalendar from './pages/staff/Calendar'
 import StaffProfile from './pages/staff/Profile'
 import StaffRequestCreate from './pages/staff/RequestCreate'
+import MyNewsWork from './pages/staff/MyNewsWork'
 import ProtectedRoute from './routes/ProtectedRoute'
 import RoleProtectedRoute from './routes/RoleProtectedRoute'
 import StrictSuperAdminRoute from './routes/StrictSuperAdminRoute'
@@ -107,6 +108,7 @@ function App() {
                     <Route path="profile" element={<StaffProfile />} />
                     <Route path="reports" element={<Reports />} />
                     <Route path="autopublisher/:tab?" element={<AutoPublisher />} />
+                    <Route path="materias" element={<MyNewsWork />} />
                   </Route>
 
                   {/* Staff Routes */}
@@ -130,6 +132,7 @@ function App() {
                     <Route path="content" element={<StaffContent />} />
                     <Route path="profile" element={<StaffProfile />} />
                     <Route path="today" element={<StaffToday />} />
+                    <Route path="materias" element={<MyNewsWork />} />
                   </Route>
 
 

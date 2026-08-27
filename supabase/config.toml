@@ -24,6 +24,9 @@ verify_jwt = true
 [functions.ap-data-ingestion]
 verify_jwt = true
 
+[functions.ap-source-probe]
+verify_jwt = true
+
 [functions.ap-scoring-engine]
 verify_jwt = true
 

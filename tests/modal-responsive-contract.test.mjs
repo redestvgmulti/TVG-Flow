@@ -83,20 +83,20 @@ test('employee article modal adapts to mobile browsers, PWAs and reduced viewpor
   assert.match(autoPublisher, /@media \(max-width:\s*640px\)[\s\S]*\.ap-backlog-url-field\s*\{[^}]*min-width:\s*0;/s)
 })
 
-test('employee backlog uses a compact mobile hierarchy without clipped controls or tabs', async () => {
-  const [panel, components, autoPublisher] = await Promise.all([
+test('employee backlog and ownership page use a compact mobile hierarchy without clipped controls', async () => {
+  const [panel, myWork, components, autoPublisher] = await Promise.all([
     source('src/components/editorial/NewsBacklogPanel.jsx'),
+    source('src/pages/staff/MyNewsWork.jsx'),
     source('src/styles/components.css'),
     source('src/styles/AutoPublisher.css'),
   ])
 
-  assert.match(panel, /mobileLabel: 'Minhas'/)
-  assert.match(panel, /mobileLabel: 'Outros'/)
-  assert.match(panel, /className="ap-backlog-total-label-mobile"/)
-  assert.match(panel, /className="ap-backlog-tab-label-mobile"/)
+  assert.doesNotMatch(panel, /mobileLabel: 'Minhas'|mobileLabel: 'Outros'/)
+  assert.match(panel, /list_available_news_backlog/)
+  assert.match(myWork, /className="ap-my-work-grid"/)
   assert.match(components, /@media \(max-width:\s*640px\)[\s\S]*\.employee-mode-modal-body--backlog\s*\{[^}]*padding:\s*0;/s)
   assert.match(components, /\.employee-mode-modal-body--backlog\s*>\s*\.ap-backlog-panel\s*\{[^}]*border:\s*0;[^}]*box-shadow:\s*none;/s)
   assert.match(autoPublisher, /@media \(max-width:\s*640px\)[\s\S]*\.ap-backlog-form-row\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/s)
-  assert.match(autoPublisher, /@media \(max-width:\s*640px\)[\s\S]*\.ap-backlog-tabs\s*\{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/s)
   assert.match(autoPublisher, /@media \(max-width:\s*640px\)[\s\S]*\.ap-backlog-item\s*\{[^}]*grid-template-columns:\s*38px minmax\(0, 1fr\)/s)
+  assert.match(autoPublisher, /@media \(max-width:\s*760px\)[\s\S]*\.ap-my-work-grid\s*\{\s*grid-template-columns:\s*1fr;/s)
 })

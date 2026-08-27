@@ -3,7 +3,7 @@ import { supabase } from '../../services/supabase'
 import { toast } from 'sonner'
 import {
     Plus, Trash2, Globe, Cpu, Shield, Brain, Zap, RefreshCw, Award,
-    Save, UploadCloud, FileText, CheckCircle2, AlertCircle,
+    Save, UploadCloud, FileText, CheckCircle2, AlertCircle, Loader2,
 } from 'lucide-react'
 import AutoPublisherMasterV1Settings from './AutoPublisherMasterV1Settings'
 import { formatRelativeTime } from '../../utils/dateUtils'
@@ -85,9 +85,10 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
 
     // ── Fontes ──────────────────────────────────────────────
     const [sources, setSources] = useState([])
-    const [newSource, setNewSource] = useState({ nome: '', url: '', tipo: 'rss' })
+    const [newSource, setNewSource] = useState({ nome: '', url: '', tipo: 'auto' })
     const [sourceError, setSourceError] = useState('')
     const [sourceSaving, setSourceSaving] = useState(false)
+    const [sourceProbe, setSourceProbe] = useState(null)
 
     // ── Motor de IA (editorial_settings) ───────────────────
     const [editorialLoaded, setEditorialLoaded] = useState(DEFAULT_EDITORIAL)
@@ -201,17 +202,34 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
     // ── Fontes actions ───────────────────────────────────────
     async function addSource() {
         const { nome, url } = newSource
-        if (!nome.trim() || !url.trim()) { setSourceError('Informe nome e URL do feed.'); return }
+        if (!nome.trim() || !url.trim()) { setSourceError('Informe o nome e a URL do site ou feed.'); return }
         setSourceSaving(true)
         setSourceError('')
+        setSourceProbe(null)
         try {
+            const { data: probe, error: probeError } = await supabase.functions.invoke('ap-source-probe', {
+                method: 'POST',
+                body: { cliente_id: clienteId, ...newSource },
+            })
+            if (probeError || !probe?.ok) {
+                throw new Error(probe?.error || probeError?.message || 'SOURCE_PROBE_FAILED')
+            }
             await apConfig('sources', 'insert', newSource)
-            setNewSource({ nome: '', url: '', tipo: 'rss' })
+            setSourceProbe(probe)
+            setNewSource({ nome: '', url: '', tipo: 'auto' })
             const s = await apConfig('sources', 'list')
             setSources(s ?? [])
         } catch (err) {
             console.error('[Sources]', err)
-            setSourceError('Não foi possível adicionar a fonte.')
+            const code = String(err?.message || '')
+            const message = code.includes('NO_ARTICLES_DISCOVERED') || code.includes('NO_VALID_ARTICLES')
+                ? 'O endereço respondeu, mas nenhuma matéria válida foi encontrada.'
+                : code.includes('UNSUPPORTED_SOURCE_DOCUMENT') || code.includes('UNSUPPORTED_CONTENT_TYPE')
+                    ? 'A URL não retornou um site, RSS, Atom ou sitemap compatível.'
+                    : code.includes('PRIVATE_DESTINATION')
+                        ? 'A URL informada não é um endereço público permitido.'
+                        : 'Não foi possível validar e adicionar a fonte.'
+            setSourceError(message)
         } finally {
             setSourceSaving(false)
         }
@@ -463,7 +481,7 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
                         <div className="aps-card-head bordered">
                             <div>
                                 <h2 className="aps-card-title"><Globe size={17} color="#2563EB" /> Fontes de conteúdo</h2>
-                                <p className="aps-card-desc">Feeds varridos a cada ciclo de ingestão. Desative uma fonte para pausá-la sem perder o histórico.</p>
+                                <p className="aps-card-desc">Sites, feeds RSS/Atom e sitemaps validados antes do cadastro. As matérias encontradas aguardam curadoria do administrador.</p>
                             </div>
                         </div>
 
@@ -474,21 +492,29 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
                                     <input className="aps-input" placeholder="ex: Folha Regional" value={newSource.nome} onChange={e => setNewSource(p => ({ ...p, nome: e.target.value }))} />
                                 </div>
                                 <div className="aps-field" style={{ flex: '2 1 240px' }}>
-                                    <label>URL do feed</label>
-                                    <input className="aps-input" placeholder="https://exemplo.com/rss" value={newSource.url} onChange={e => setNewSource(p => ({ ...p, url: e.target.value }))} />
+                                    <label>URL do site ou feed</label>
+                                    <input className="aps-input" placeholder="https://exemplo.com/noticias" value={newSource.url} onChange={e => setNewSource(p => ({ ...p, url: e.target.value }))} />
                                 </div>
                                 <div className="aps-field" style={{ flex: '1 1 160px' }}>
                                     <label>Tipo</label>
                                     <select className="aps-select" value={newSource.tipo} onChange={e => setNewSource(p => ({ ...p, tipo: e.target.value }))}>
-                                        <option value="rss">Padrão XML / RSS</option>
+                                        <option value="auto">Detectar automaticamente</option>
+                                        <option value="website">Site de notícias</option>
+                                        <option value="rss">RSS</option>
+                                        <option value="atom">Atom</option>
                                         <option value="google_news_rss">Google News RSS</option>
                                         <option value="sitemap">Sitemap</option>
                                     </select>
                                 </div>
                                 <button type="button" className="aps-btn aps-btn-dark" onClick={addSource} disabled={sourceSaving}>
-                                    <Plus size={14} /> Adicionar fonte
+                                    {sourceSaving ? <Loader2 size={14} className="ap-spin-icon" /> : <Plus size={14} />} {sourceSaving ? 'Validando…' : 'Validar e adicionar'}
                                 </button>
                                 {sourceError && <p className="aps-error-text">{sourceError}</p>}
+                                {sourceProbe?.ok && (
+                                    <p className="aps-success-text">
+                                        Fonte validada como {sourceProbe.detected_type}. {sourceProbe.discovered_count} matérias conferidas.
+                                    </p>
+                                )}
                             </div>
                         </div>
 
@@ -504,9 +530,16 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
                                         <div className="aps-list-row-main">
                                             <div className="aps-list-row-title">
                                                 {s.nome}
-                                                <span className="aps-list-row-tag">{{ rss: 'RSS', google_news_rss: 'Google News', sitemap: 'Sitemap' }[s.tipo] || s.tipo}</span>
+                                                <span className="aps-list-row-tag">{{ auto: 'Automático', website: 'Site', rss: 'RSS', atom: 'Atom', google_news_rss: 'Google News', sitemap: 'Sitemap' }[s.detected_type || s.tipo] || s.tipo}</span>
                                             </div>
                                             <span className="aps-list-row-sub">{s.url}</span>
+                                            <span className="aps-list-row-sub">
+                                                {s.last_success_at
+                                                    ? `Última coleta ${formatRelativeTime(s.last_success_at)} · ${s.last_collected_count || 0} novas`
+                                                    : s.last_error_code
+                                                        ? `Falha: ${s.last_error_code}`
+                                                        : 'Aguardando primeira coleta'}
+                                            </span>
                                         </div>
                                         <div className="aps-list-row-actions">
                                             <span style={{ fontSize: 11.5, color: 'var(--color-text-tertiary)' }}>

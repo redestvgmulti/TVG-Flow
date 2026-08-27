@@ -396,3 +396,43 @@
         grid-template-columns: 1fr;
     }
 }
+
+.reports-attribution-warning {
+    margin-bottom: var(--space-4);
+    padding: 12px 14px;
+    border: 1px solid #fde68a;
+    border-radius: var(--radius-md);
+    color: #92400e;
+    background: #fffbeb;
+    font-size: 13px;
+}
+
+.reports-staff-work {
+    display: block;
+    margin-top: 4px;
+    color: var(--color-text-tertiary);
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.reports-daily-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    min-width: 150px;
+}
+
+.reports-daily-list span {
+    padding: 3px 6px;
+    border-radius: 6px;
+    color: #475569;
+    background: #f1f5f9;
+    font-size: 10.5px;
+    white-space: nowrap;
+}
+
+.reports-staff-table td:last-child {
+    min-width: 150px;
+    color: var(--color-text-secondary);
+    font-size: 12px;
+}

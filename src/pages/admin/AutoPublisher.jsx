@@ -13,6 +13,7 @@ import { SkeletonCard, SkeletonTable } from '../../components/Skeleton'
 import { toast } from 'sonner'
 import ArticleWizard from '../../components/editorial/ArticleWizard'
 import NewsBacklogPanel from '../../components/editorial/NewsBacklogPanel'
+import CollectedNewsPanel from '../../components/editorial/CollectedNewsPanel'
 import Modal from '../../components/ui/Modal'
 import CreatorSignature from '../../components/ui/CreatorSignature'
 import {
@@ -49,9 +50,9 @@ const TABS = [
 
 // Status DB → tab mapping
 const STATUS_TAB = {
-    raw: 'coletadas',
-    ready_for_scoring: 'coletadas',
-    scored: 'coletadas',
+    raw: 'pendentes',
+    ready_for_scoring: 'pendentes',
+    scored: 'pendentes',
     selected: 'pendentes',
     pending_render: 'aprovadas',
     processing: 'aprovadas',
@@ -63,8 +64,8 @@ const STATUS_TAB = {
     studio_selected: 'pendentes',
     studio_ready: 'pendentes',
     posted: 'publicadas',
-    failed: 'coletadas',
-    rejected: 'coletadas',
+    failed: 'pendentes',
+    rejected: 'pendentes',
 }
 
 // ──────────────────────────────────────────────────────────
@@ -195,12 +196,16 @@ export default function AutoPublisher() {
     // ── Fetch counts per tab
     const fetchCounts = useCallback(async () => {
         if (!clienteId) return
-        const { data } = await supabase.schema('ap').from('candidate_news').select('status').eq('cliente_id', clienteId)
+        const [{ data }, { data: collectedCounts }] = await Promise.all([
+            supabase.schema('ap').from('candidate_news').select('status').eq('cliente_id', clienteId),
+            supabase.schema('ap').rpc('get_collected_news_counts', { p_cliente_id: clienteId }),
+        ])
         const counts = { coletadas: 0, pendentes: 0, aprovadas: 0, publicadas: 0 }
         for (const row of data ?? []) {
             const mapped = STATUS_TAB[row.status] || 'coletadas'
             counts[mapped] = (counts[mapped] ?? 0) + 1
         }
+        counts.coletadas = Number(collectedCounts?.pending_review || 0)
         setTabCounts(counts)
     }, [clienteId])
 
@@ -210,8 +215,7 @@ export default function AutoPublisher() {
         setLoading(true)
 
         let statuses = []
-        if (currentTab === 'coletadas') statuses = ['raw', 'ready_for_scoring', 'scored', 'failed', 'rejected']
-        if (currentTab === 'pendentes') statuses = ['selected', 'studio_selected', 'studio_ready', 'pending_review']
+        if (currentTab === 'pendentes') statuses = ['raw', 'ready_for_scoring', 'scored', 'selected', 'studio_selected', 'studio_ready', 'pending_review', 'failed', 'rejected']
         if (currentTab === 'aprovadas') statuses = ['pending_render', 'processing', 'render_complete', 'ready_to_publish', 'approved', 'queued_for_posting']
         if (currentTab === 'publicadas') statuses = ['posted']
 
@@ -508,27 +512,6 @@ export default function AutoPublisher() {
         fetchItems(tab); fetchCounts()
     }
 
-    async function handleForceProcess() {
-        if (isProcessing) return
-        setIsProcessing(true)
-        toast.info("Iniciando pipeline... (Pode levar alguns segundos)");
-        try {
-            await supabase.functions.invoke('ap-image-fetcher');
-            await supabase.functions.invoke('ap-scoring-engine');
-            await supabase.functions.invoke('ap-daily-feed-builder');
-            await supabase.functions.invoke('ap-content-production', { body: { action: 'process_selected' } });
-            // NOTE: ap-render-engine is NOT called here.
-            // It runs on its own cron schedule and will automatically pick up
-            // items in 'pending_render' with idempotency guarantees.
-            toast.success("Pipeline iniciado. A renderização ocorrerá automaticamente.");
-            fetchCounts(); fetchItems(tab);
-        } catch {
-            toast.error("Erro ao processar.");
-        } finally {
-            setIsProcessing(false);
-        }
-    }
-
     // ── Manual submission (Hybrid Editorial Engine)
     async function submitManualNews(e) {
         e.preventDefault()
@@ -751,18 +734,6 @@ export default function AutoPublisher() {
                             </button>
 
                             <button
-                                className="ap-btn-refresh"
-                                onClick={handleForceProcess}
-                                disabled={isProcessing}
-                            >
-                                <Zap
-                                    size={14}
-                                    className={isProcessing ? 'ap-spin-icon' : ''}
-                                />
-                                {isProcessing ? 'Processando...' : 'Processar Tudo'}
-                            </button>
-
-                            <button
                                 className="ap-btn-refresh primary"
                                 onClick={() => setManualModalOpen(true)}
                             >
@@ -828,40 +799,14 @@ export default function AutoPublisher() {
                 {tab === 'templates' && <AutoPublisherTemplates clienteId={clienteId} />}
                 {tab === 'settings' && <AutoPublisherSettings clienteId={clienteId} clienteError={clienteError} />}
 
-                {/* ── Coletadas (leitura-only, tabela simples) */}
                 {tab === 'coletadas' && (
-                    loading ? <SkeletonTable rows={5} cols={4} /> :
-                        items.length === 0 ? <EmptyStatePremium /> : (
-                            <div className="ap-table-container">
-                                <table className="ap-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Matéria</th>
-                                            <th style={{ width: 130 }}>Status</th>
-                                            <th style={{ width: 100 }}>Formato</th>
-                                            <th style={{ width: 210 }}>Criada por</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {items.map(item => (
-                                            <tr key={item.id}>
-                                                <td style={{ fontWeight: 500, color: '#0f172a' }}>{item.titulo}</td>
-                                                <td><StatusBadge status={item.status} errorLog={item.error_log} /></td>
-                                                <td><FormatBadge type={item.content_type} /></td>
-                                                <td>
-                                                    <CreatorSignature
-                                                        name={item.creator_name_snapshot}
-                                                        createdAt={item.created_at}
-                                                        automated={Boolean(item.fonte_id)}
-                                                        compact
-                                                    />
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )
+                    <CollectedNewsPanel
+                        clienteId={clienteId}
+                        onCountsChange={counts => setTabCounts(previous => ({
+                            ...previous,
+                            coletadas: Number(counts?.pending_review || 0),
+                        }))}
+                    />
                 )}
 
                 {/* ── Pendentes (cards com Studio + Aprovar p/IG) */}

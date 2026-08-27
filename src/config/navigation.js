@@ -1,4 +1,4 @@
-import { LayoutGrid, CheckSquare, Calendar, Bot, PlusSquare, User, BarChart, Users, Building, Rss, Inbox, LayoutTemplate, Settings } from 'lucide-react'
+import { LayoutGrid, CheckSquare, Calendar, Bot, PlusSquare, User, BarChart, Users, Building, Rss, Inbox, LayoutTemplate, Settings, Newspaper } from 'lucide-react'
 
 // Single source of truth for every role-aware navigation surface.
 export const NAV_ITEMS = [
@@ -8,12 +8,14 @@ export const NAV_ITEMS = [
     { key: 'staff-meetings', label: 'Reuniões', path: '/staff/meetings', icon: Calendar, roles: ['staff'], section: 'staff', showOnMobileBottom: false },
     { key: 'request', label: 'Solicitar', path: '/staff/requests/new', icon: PlusSquare, roles: ['staff', 'profissional'], section: 'staff', isCTA: true, showOnMobileBottom: false },
     { key: 'content', label: 'Assistentes', path: '/staff/content', icon: Bot, roles: ['staff', 'profissional'], section: 'staff', showOnMobileBottom: true },
-    { key: 'staff-autopublisher', label: 'Criar Matérias', path: '?modal=employee-mode', icon: Rss, roles: ['staff', 'profissional', 'employee'], section: 'tools', showOnMobileBottom: false },
+    { key: 'staff-matters', label: 'Minhas Matérias', path: '/staff/materias', icon: Newspaper, roles: ['staff', 'profissional', 'employee'], section: 'tools', showOnMobileBottom: false },
+    { key: 'staff-autopublisher', label: 'Criar Matéria Avulsa', path: '?modal=employee-mode', icon: Rss, roles: ['staff', 'profissional', 'employee'], section: 'tools', showOnMobileBottom: false },
     { key: 'profile', label: 'Perfil', path: '/staff/profile', icon: User, roles: ['staff', 'profissional'], section: 'staff', showOnMobileBottom: true },
 
     { key: 'admin-dashboard', label: 'Dashboard', path: '/admin', icon: LayoutGrid, roles: ['admin', 'super_admin'], section: 'main', showOnMobileBottom: true },
     { key: 'admin-tasks', label: 'Tarefas', path: '/admin/tasks', icon: CheckSquare, roles: ['admin', 'super_admin'], section: 'main', showOnMobileBottom: true },
     { key: 'ap-backlog', label: 'Banco de Matérias', path: '/admin/autopublisher/backlog', icon: Inbox, roles: ['admin', 'super_admin'], section: 'main', showOnMobileBottom: false },
+    { key: 'admin-matters', label: 'Minhas Matérias', path: '/admin/materias', icon: Newspaper, roles: ['admin', 'super_admin'], section: 'main', showOnMobileBottom: false },
     { key: 'admin-content', label: 'Assistentes', path: '/admin/content', icon: Bot, roles: ['admin', 'super_admin'], section: 'main', showOnMobileBottom: false },
     { key: 'admin-calendar', label: 'Agenda', path: '/admin/calendar', icon: Calendar, roles: ['admin', 'super_admin'], section: 'main', showOnMobileBottom: false },
     { key: 'admin-meetings', label: 'Reuniões', path: '/admin/meetings', icon: Users, roles: ['admin', 'super_admin'], section: 'main', showOnMobileBottom: true },

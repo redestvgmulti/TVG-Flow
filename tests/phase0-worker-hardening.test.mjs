@@ -75,7 +75,7 @@ test('render cannot transition directly to approved', () => {
   assert.doesNotMatch(source, /status:\s*["']approved["']/)
 })
 
-test('production scoring, quota and ingestion semantics are preserved', () => {
+test('production scoring, quota and curated-ingestion semantics are preserved', () => {
   const scoring = read('supabase/functions/ap-scoring-engine/index.ts')
   assert.match(scoring, /freshnessScore/)
   assert.match(scoring, /priorityBoost/)
@@ -88,5 +88,7 @@ test('production scoring, quota and ingestion semantics are preserved', () => {
 
   const ingestion = read('supabase/functions/ap-data-ingestion/index.ts')
   assert.doesNotMatch(ingestion, /classifyCategory/)
-  assert.match(ingestion, /status:\s*"raw"/)
+  assert.doesNotMatch(ingestion, /from\(["']candidate_news["']\)\.insert/)
+  assert.match(ingestion, /rpc\(["']ingest_collected_news["']/)
+  assert.match(ingestion, /destination:\s*"ap\.collected_news"/)
 })

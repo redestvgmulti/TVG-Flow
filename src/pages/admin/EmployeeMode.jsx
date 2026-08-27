@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../../services/supabase';
 import { Check, CheckCircle2, Copy, Download, X, AlertCircle, RefreshCcw, ImageIcon, Brain, Search, SearchCode, Video, Image as ImageIconLucide, Loader2, Share2 } from 'lucide-react';
@@ -95,7 +95,7 @@ function materialFileName(type, headline, extension) {
     return `${type === 'reels' ? 'frame' : 'arte'}-${slug}.${extension}`;
 }
 
-export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaId }) {
+export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaId, backlogId, initialTab }) {
     const { user: ctxUser, professionalId, professionalName } = useAuth();
     const user = propUser || ctxUser;
 
@@ -362,6 +362,58 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
 
     // Tab state: 'create' | 'history'
     const [activeTab, setActiveTab] = useState('create');
+    const loadedBacklogId = useRef(null);
+
+    useEffect(() => {
+        if (!isOpen) {
+            loadedBacklogId.current = null;
+            return;
+        }
+        if (['create', 'history', 'backlog'].includes(initialTab)) setActiveTab(initialTab);
+    }, [initialTab, isOpen]);
+
+    useEffect(() => {
+        if (!isOpen || !clienteId || !backlogId || loadedBacklogId.current === backlogId) return;
+        let cancelled = false;
+        loadedBacklogId.current = backlogId;
+
+        async function loadAdoptedMatter() {
+            const { data, error } = await supabase.schema('ap').rpc('list_my_news_work', {
+                p_cliente_id: clienteId,
+            });
+            if (cancelled) return;
+            if (error) {
+                setErrorMsg('Não foi possível carregar a matéria adotada.');
+                return;
+            }
+            const item = (data || []).find(current => current.id === backlogId);
+            if (!item) {
+                setErrorMsg('Esta matéria não está mais vinculada a você.');
+                return;
+            }
+            if (item.candidate_news_id || item.status !== 'adopted') {
+                setActiveTab('history');
+                return;
+            }
+            setFormData(previous => ({
+                ...previous,
+                source_mode: 'link',
+                url_original: item.url_original,
+                titulo: item.titulo || '',
+                conteudo: '',
+                image_url: '',
+                backlog_id: item.id,
+                idempotency_key: null,
+            }));
+            setSelectedFile(null);
+            setSourcePreview(null);
+            setErrorMsg('');
+            setActiveTab('create');
+        }
+
+        void loadAdoptedMatter();
+        return () => { cancelled = true; };
+    }, [backlogId, clienteId, isOpen]);
 
     // History state
     const [historyItems, setHistoryItems] = useState([]);

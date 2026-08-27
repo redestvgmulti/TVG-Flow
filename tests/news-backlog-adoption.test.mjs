@@ -80,15 +80,14 @@ test('discard migration archives safely and preserves the complete phase 1A list
   assert.match(migration, /status <> 'archived'/)
 })
 
-test('news backlog lists only available links from oldest to newest', async () => {
-  const migration = await source('supabase/migrations/20260825221000_order_available_news_backlog_oldest_first.sql')
+test('news backlog compatibility endpoint now lists only available links from oldest to newest', async () => {
+  const migration = await source('supabase/migrations/20260827172413_editorial_collection_work_and_productivity.sql')
 
   assert.match(migration, /CREATE OR REPLACE FUNCTION ap\.list_news_backlog\(p_cliente_id uuid\)/)
-  assert.match(migration, /status <> 'archived'/)
-  assert.match(migration, /CASE backlog\.status WHEN 'available' THEN 0 WHEN 'adopted' THEN 1 ELSE 2 END/)
-  assert.match(migration, /CASE WHEN backlog\.status = 'available' THEN backlog\.created_at END ASC/)
-  assert.match(migration, /CASE WHEN backlog\.status = 'available' THEN backlog\.id END ASC/)
-  assert.match(migration, /CASE WHEN backlog\.status <> 'available' THEN backlog\.created_at END DESC/)
+  assert.match(migration, /backlog\.status = 'available'/)
+  assert.match(migration, /ORDER BY backlog\.created_at ASC, backlog\.id ASC/)
+  assert.match(migration, /CREATE OR REPLACE FUNCTION ap\.list_my_news_work/)
+  assert.match(migration, /backlog\.adopted_by_user_id = v_actor\.user_id/)
 })
 
 test('productive generator receives backlog_id only after user-bound authorization', async () => {
@@ -104,20 +103,23 @@ test('link registration performs only the backlog RPC and adoption is the single
   const panel = await source('src/components/editorial/NewsBacklogPanel.jsx')
   const adminUi = await source('src/pages/admin/AutoPublisher.jsx')
   const employeeUi = await source('src/pages/admin/EmployeeMode.jsx')
+  const myWork = await source('src/pages/staff/MyNewsWork.jsx')
 
   assert.match(panel, /create_news_backlog_item/)
   assert.match(panel, /p_url_original: inputUrl/)
   assert.match(panel, /p_titulo: title \|\| null/)
   assert.match(panel, /p_observacao: note \|\| null/)
   assert.match(panel, /adopt_news_backlog_item/)
-  assert.match(panel, /onStartProduction\?\.\(adoptedItem\)/)
-  assert.match(panel, /Criar Matéria/)
-  assert.match(panel, /Abrir Link/)
+  assert.match(panel, /onStartProduction\?\.\(adopted\)/)
+  assert.match(panel, /Adotar e produzir/)
+  assert.match(panel, /Abrir link/)
   assert.match(panel, /POLL_INTERVAL_MS = 15_000/)
   assert.match(panel, /Esta matéria acabou de ser adotada por/)
-  assert.match(panel, /release_news_backlog_item/)
   assert.match(panel, /discard_news_backlog_item/)
-  assert.doesNotMatch(panel, /Adotar pauta|>Produzir<|>Liberar</)
+  assert.match(panel, /const canManage = role === 'admin'/)
+  assert.match(myWork, /list_my_news_work/)
+  assert.match(myWork, /release_news_backlog_item/)
+  assert.doesNotMatch(panel, /Minhas pautas|Adotadas por outros|release_news_backlog_item/)
   assert.doesNotMatch(panel, /ap-link-scraper|ap-image-fetcher|ap-employee-generator|ap-render-engine|instagram|fetch\s*\(/i)
 
   assert.match(adminUi, /NewsBacklogPanel/)
