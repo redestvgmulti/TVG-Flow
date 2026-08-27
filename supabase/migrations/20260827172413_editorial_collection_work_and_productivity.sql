@@ -803,6 +803,11 @@ SET search_path = ''
 AS $function$
 BEGIN
     IF NEW.criado_por_user_id IS NOT NULL
+       AND EXISTS (
+           SELECT 1
+           FROM public.profissionais AS professional
+           WHERE professional.id = NEW.criado_por_user_id
+       )
        AND NULLIF(btrim(COALESCE(NEW.render_url, '')), '') IS NOT NULL
        AND NEW.completed_at IS NOT NULL THEN
         INSERT INTO ap.material_production_events (
@@ -850,6 +855,8 @@ INSERT INTO ap.material_production_events (
 SELECT candidate.id, candidate.cliente_id, candidate.criado_por_user_id,
        candidate.creator_name_snapshot, candidate.completed_at, candidate.content_type
 FROM ap.candidate_news AS candidate
+JOIN public.profissionais AS creator
+  ON creator.id = candidate.criado_por_user_id
 WHERE candidate.criado_por_user_id IS NOT NULL
   AND NULLIF(btrim(COALESCE(candidate.render_url, '')), '') IS NOT NULL
   AND candidate.completed_at IS NOT NULL
