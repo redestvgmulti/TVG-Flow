@@ -34,6 +34,7 @@ export default function CollectedNewsPanel({ clienteId, onCountsChange }) {
     const load = useCallback(async ({ silent = false } = {}) => {
         if (!clienteId) return
         if (!silent) setLoading(true)
+        try {
         const [listResult, countResult] = await Promise.all([
             supabase.schema('ap').rpc('list_collected_news', {
                 p_cliente_id: clienteId,
@@ -52,7 +53,13 @@ export default function CollectedNewsPanel({ clienteId, onCountsChange }) {
             setCounts(countResult.data ?? {})
             onCountsChange?.(countResult.data ?? {})
         }
-        if (!silent) setLoading(false)
+        } catch (error) {
+            console.error('[CollectedNewsPanel] load failed', error)
+            toast.error('Não foi possível carregar as matérias coletadas.')
+            setItems([])
+        } finally {
+            if (!silent) setLoading(false)
+        }
     }, [clienteId, onCountsChange, status])
 
     useEffect(() => {
@@ -145,17 +152,18 @@ export default function CollectedNewsPanel({ clienteId, onCountsChange }) {
                                 <div className="ap-collected-meta">
                                     <span>{domainOf(item.canonical_url)}</span>
                                     <span>Publicada: {formatDate(item.published_at)}</span>
+                                    {item.status === 'duplicate' && <span>Duplicidade identificada</span>}
                                     {item.discard_reason && <span>Motivo: {item.discard_reason}</span>}
                                 </div>
                             </div>
                             <div className="ap-collected-actions">
                                 <a href={item.canonical_url} target="_blank" rel="noreferrer" className="ap-btn-refresh">
-                                    <ExternalLink size={13} /> Abrir original
+                                    <ExternalLink size={13} /> Abrir fonte
                                 </a>
                                 {item.status === 'pending_review' && (
                                     <>
                                         <button type="button" className="ap-backlog-action-solid" onClick={() => approve(item)} disabled={Boolean(actingId)}>
-                                            {actingId === item.id ? <Loader2 size={13} className="ap-spin-icon" /> : <Check size={13} />} Aprovar
+                                            {actingId === item.id ? <Loader2 size={13} className="ap-spin-icon" /> : <Check size={13} />} Aprovar pauta
                                         </button>
                                         <button type="button" className="ap-backlog-action-icon danger" onClick={() => discard(item)} disabled={Boolean(actingId)} title="Descartar" aria-label="Descartar matéria">
                                             <Trash2 size={14} />

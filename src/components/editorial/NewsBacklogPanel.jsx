@@ -45,7 +45,7 @@ function validHttpUrl(value) {
 
 export default function NewsBacklogPanel({ clienteId, onStartProduction }) {
     const { role } = useAuth()
-    const canManage = role === 'admin'
+    const canManage = role === 'admin' || role === 'super_admin'
     const [items, setItems] = useState([])
     const [detailsOpen, setDetailsOpen] = useState(false)
     const [url, setUrl] = useState('')

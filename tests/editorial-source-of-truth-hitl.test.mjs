@@ -47,7 +47,7 @@ test('content production preserves persisted text and reserves approval for an a
   assert.match(content, /canonicalEditorialFields/)
   assert.doesNotMatch(content, /runEditorialWorkflow|callLLM/)
   assert.match(content, /HUMAN_APPROVAL_REQUIRED/)
-  assert.match(content, /requireActiveOperator\(req, createAdminClient\(\), \["admin"\]\)/)
+  assert.match(content, /requireActiveOperator\(req, createAdminClient\(\), \["admin", "super_admin"\]\)/)
   assert.match(content, /authorizeOperationalTenant\(/)
   assert.match(content, /\.eq\("status", "pending_review"\)/)
   assert.match(content, /\.is\("processing_started_at", null\)/)

@@ -11,9 +11,11 @@ import AutoPublisherSettings from './AutoPublisherSettings'
 import AutoPublisherTemplates from './AutoPublisherTemplates'
 import { SkeletonCard, SkeletonTable } from '../../components/Skeleton'
 import { toast } from 'sonner'
+import { useAuth } from '../../contexts/AuthContext'
 import ArticleWizard from '../../components/editorial/ArticleWizard'
 import NewsBacklogPanel from '../../components/editorial/NewsBacklogPanel'
 import CollectedNewsPanel from '../../components/editorial/CollectedNewsPanel'
+import TeamNewsWorkPanel from '../../components/editorial/TeamNewsWorkPanel'
 import Modal from '../../components/ui/Modal'
 import CreatorSignature from '../../components/ui/CreatorSignature'
 import {
@@ -44,8 +46,11 @@ import {
 const TABS = [
     { key: 'coletadas', label: 'Coletadas' },
     { key: 'pendentes', label: 'Pendentes' },
+    { key: 'em_producao', label: 'Em produção' },
+    { key: 'revisao', label: 'Aguardando revisão' },
     { key: 'aprovadas', label: 'Aprovadas' },
     { key: 'publicadas', label: 'Publicadas' },
+    { key: 'operacao', label: 'Operação' },
 ]
 
 // Status DB → tab mapping
@@ -54,13 +59,13 @@ const STATUS_TAB = {
     ready_for_scoring: 'pendentes',
     scored: 'pendentes',
     selected: 'pendentes',
-    pending_render: 'aprovadas',
-    processing: 'aprovadas',
-    pending_review: 'pendentes',
-    ready_to_publish: 'aprovadas',
-    render_complete: 'aprovadas',
+    pending_render: 'em_producao',
+    processing: 'em_producao',
+    pending_review: 'revisao',
+    ready_to_publish: 'em_producao',
+    render_complete: 'em_producao',
     approved: 'aprovadas',
-    queued_for_posting: 'aprovadas',
+    queued_for_posting: 'em_producao',
     studio_selected: 'pendentes',
     studio_ready: 'pendentes',
     posted: 'publicadas',
@@ -70,8 +75,10 @@ const STATUS_TAB = {
 
 // ──────────────────────────────────────────────────────────
 export default function AutoPublisher() {
+    const { role } = useAuth()
     const [clienteId, setClienteId] = useState(null)
     const [clienteError, setClienteError] = useState('')
+    const [superAdminClients, setSuperAdminClients] = useState([])
 
     // Tab lives in the URL (/admin/autopublisher/:tab) so the sidebar's
     // AutoPublisher dropdown can deep-link into Banco de Matérias, Templates
@@ -136,12 +143,22 @@ export default function AutoPublisher() {
     const [isSavingEdit, setIsSavingEdit] = useState(false)
     const [editSelectedFile, setEditSelectedFile] = useState(null)
     useEffect(() => {
+        if (role === 'super_admin') {
+            let active = true
+            supabase.from('clientes').select('id,nome').eq('ativo', true).order('nome')
+                .then(({ data, error }) => {
+                    if (!active) return
+                    if (error) setClienteError('Não foi possível carregar os clientes ativos.')
+                    else setSuperAdminClients(data ?? [])
+                })
+            return () => { active = false }
+        }
         let active = true
         resolveOperationalClienteId(supabase)
             .then(id => { if (active) setClienteId(id) })
             .catch(error => { if (active) setClienteError(error.message) })
         return () => { active = false }
-    }, [])
+    }, [role])
 
     const [isEditDragging, setIsEditDragging] = useState(false)
 
@@ -200,7 +217,7 @@ export default function AutoPublisher() {
             supabase.schema('ap').from('candidate_news').select('status').eq('cliente_id', clienteId),
             supabase.schema('ap').rpc('get_collected_news_counts', { p_cliente_id: clienteId }),
         ])
-        const counts = { coletadas: 0, pendentes: 0, aprovadas: 0, publicadas: 0 }
+        const counts = { coletadas: 0, pendentes: 0, em_producao: 0, revisao: 0, aprovadas: 0, publicadas: 0, operacao: 0 }
         for (const row of data ?? []) {
             const mapped = STATUS_TAB[row.status] || 'coletadas'
             counts[mapped] = (counts[mapped] ?? 0) + 1
@@ -209,14 +226,23 @@ export default function AutoPublisher() {
         setTabCounts(counts)
     }, [clienteId])
 
+    const handleCollectedCountsChange = useCallback((counts) => {
+        setTabCounts(previous => ({
+            ...previous,
+            coletadas: Number(counts?.pending_review || 0),
+        }))
+    }, [])
+
     // ── Fetch items for current tab
     const fetchItems = useCallback(async (currentTab) => {
         if (!clienteId) return
         setLoading(true)
 
         let statuses = []
-        if (currentTab === 'pendentes') statuses = ['raw', 'ready_for_scoring', 'scored', 'selected', 'studio_selected', 'studio_ready', 'pending_review', 'failed', 'rejected']
-        if (currentTab === 'aprovadas') statuses = ['pending_render', 'processing', 'render_complete', 'ready_to_publish', 'approved', 'queued_for_posting']
+        if (currentTab === 'pendentes') statuses = ['raw', 'ready_for_scoring', 'scored', 'selected', 'studio_selected', 'studio_ready', 'failed', 'rejected']
+        if (currentTab === 'em_producao') statuses = ['pending_render', 'processing', 'render_complete', 'ready_to_publish', 'queued_for_posting']
+        if (currentTab === 'revisao') statuses = ['pending_review']
+        if (currentTab === 'aprovadas') statuses = ['approved']
         if (currentTab === 'publicadas') statuses = ['posted']
 
         if (statuses.length === 0) {
@@ -507,8 +533,13 @@ export default function AutoPublisher() {
     }
 
     async function handlePublish(item) {
-        await supabase.schema('ap').from('candidate_news').update({ status: 'posted' }).eq('id', item.id)
-        toast.success("Matéria marcada como publicada!")
+        if (item.status !== 'approved') return
+        const { error } = await supabase.schema('ap').rpc('mark_candidate_news_posted', {
+            p_candidate_news_id: item.id,
+            p_cliente_id: clienteId,
+        })
+        if (error) toast.error('Esta matéria não está mais disponível para publicação. Atualize a lista.')
+        else toast.success("Matéria marcada como publicada!")
         fetchItems(tab); fetchCounts()
     }
 
@@ -708,6 +739,16 @@ export default function AutoPublisher() {
                             </span>
                         </div>
 
+                        {role === 'super_admin' && (
+                            <label className="ap-btn-refresh" style={{ display: 'inline-flex', gap: 8 }}>
+                                Cliente
+                                <select value={clienteId || ''} onChange={event => { setClienteId(event.target.value || null); setClienteError('') }} aria-label="Cliente operacional">
+                                    <option value="">Selecione um cliente</option>
+                                    {superAdminClients.map(client => <option key={client.id} value={client.id}>{client.nome}</option>)}
+                                </select>
+                            </label>
+                        )}
+
                         <div className="ap-header-actions">
                             <label
                                 className="ap-ingest"
@@ -754,15 +795,15 @@ export default function AutoPublisher() {
                                 style={{
                                     left: `calc(3px + ${Math.max(
                                         0,
-                                        ['coletadas', 'pendentes', 'aprovadas', 'publicadas'].indexOf(tab)
-                                    )} * (100% - 6px) / 4)`,
-                                    opacity: ['coletadas', 'pendentes', 'aprovadas', 'publicadas'].includes(tab)
+                                        TABS.findIndex(item => item.key === tab)
+                                    )} * (100% - 6px) / ${TABS.length})`,
+                                    opacity: TABS.some(item => item.key === tab)
                                         ? 1
                                         : 0
                                 }}
                             />
 
-                            {['coletadas', 'pendentes', 'aprovadas', 'publicadas'].map(key => (
+                            {TABS.map(({ key, label }) => (
                                 <button
                                     key={key}
                                     role="tab"
@@ -770,7 +811,7 @@ export default function AutoPublisher() {
                                     className={`ap-seg-btn${tab === key ? ' active' : ''}`}
                                     onClick={() => setTab(key)}
                                 >
-                                    {TABS.find(item => item.key === key)?.label}
+                                    {label}
                                     <span className="ap-seg-count">
                                         {tabCounts[key] ?? 0}
                                     </span>
@@ -798,14 +839,12 @@ export default function AutoPublisher() {
                 />}
                 {tab === 'templates' && <AutoPublisherTemplates clienteId={clienteId} />}
                 {tab === 'settings' && <AutoPublisherSettings clienteId={clienteId} clienteError={clienteError} />}
+                {tab === 'operacao' && <TeamNewsWorkPanel clienteId={clienteId} />}
 
                 {tab === 'coletadas' && (
                     <CollectedNewsPanel
                         clienteId={clienteId}
-                        onCountsChange={counts => setTabCounts(previous => ({
-                            ...previous,
-                            coletadas: Number(counts?.pending_review || 0),
-                        }))}
+                        onCountsChange={handleCollectedCountsChange}
                     />
                 )}
 
@@ -833,6 +872,34 @@ export default function AutoPublisher() {
                 )}
 
                 {/* ── Aprovadas (cards com Baixar Arte, Copiar Legenda, Publicar) */}
+                {tab === 'em_producao' && (
+                    loading ? (
+                        <div className="ap-cards-grid">
+                            {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
+                        </div>
+                    ) : items.length === 0 ? <EmptyStatePremium /> : (
+                        <div className="ap-cards-grid">
+                            {items.map(item => (
+                                <AprovadaCard key={item.id} item={item} onPublish={handlePublish} onReject={handleReject} isProcessing={isProcessing} showPublish={false} />
+                            ))}
+                        </div>
+                    )
+                )}
+
+                {tab === 'revisao' && (
+                    loading ? (
+                        <div className="ap-cards-grid">
+                            {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
+                        </div>
+                    ) : items.length === 0 ? <EmptyStatePremium /> : (
+                        <div className="ap-cards-grid">
+                            {items.map(item => (
+                                <PendenteCard key={item.id} item={item} onReject={handleReject} onStudio={handleStudio} onApproveSelected={handleApproveSelected} onEdit={handleEditOpen} isProcessing={isProcessing} />
+                            ))}
+                        </div>
+                    )
+                )}
+
                 {tab === 'aprovadas' && (
                     loading ? (
                         <div className="ap-cards-grid">
@@ -1039,6 +1106,7 @@ function PendenteCard({ item, onReject, onStudio, onApproveSelected, onEdit, isP
     const [isApprovingLocal, setIsApprovingLocal] = useState(false)
 
     const isStudio = item.status === 'studio_selected' || item.status === 'studio_ready'
+    const canStartStudio = item.status === 'selected' || isStudio
 
     const handleApprove = async () => {
         setIsApprovingLocal(true)
@@ -1163,12 +1231,12 @@ function PendenteCard({ item, onReject, onStudio, onApproveSelected, onEdit, isP
                     <button onClick={() => onEdit(item)} disabled={isProcessing} title="Editar Matéria" style={{ padding: '0 12px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '8px', color: '#475569', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '13px' }}>
                         <Pencil size={14} /> Editar
                     </button>
-                    <button className="ap-card-btn-black" onClick={() => onStudio(item)} disabled={isProcessing}>
+                    {canStartStudio && <button className="ap-card-btn-black" onClick={() => onStudio(item)} disabled={isProcessing}>
                         <Video size={14} /> Studio
-                    </button>
+                    </button>}
                     <button className="ap-card-btn-primary" onClick={handleApprove} disabled={isProcessing || isApprovingLocal}>
                         {isApprovingLocal ? <Loader2 size={14} className="ap-spin-icon" /> : null}
-                        {isApprovingLocal ? (item.status === 'selected' ? 'Preparando...' : 'Aprovando...') : (item.status === 'selected' ? 'Gerar arte' : 'Aprovar')}
+                        {isApprovingLocal ? (item.status === 'selected' ? 'Preparando...' : 'Aprovando...') : (item.status === 'selected' ? 'Gerar arte' : 'Aprovar para publicação')}
                     </button>
                 </div>
             </div>
@@ -1179,7 +1247,7 @@ function PendenteCard({ item, onReject, onStudio, onApproveSelected, onEdit, isP
 // ──────────────────────────────────────────────────────────
 // AprovadaCard — Matérias prontas, aguardam publicação manual
 // ──────────────────────────────────────────────────────────
-function AprovadaCard({ item, onPublish, onReject, isProcessing }) {
+function AprovadaCard({ item, onPublish, onReject, isProcessing, showPublish = true }) {
     const [copied, setCopied] = useState(false)
     const [isExpanded, setIsExpanded] = useState(false)
 
@@ -1253,7 +1321,7 @@ function AprovadaCard({ item, onPublish, onReject, isProcessing }) {
                         <span style={{ fontSize: '13px', fontWeight: 600, color: '#262626' }}>tvgmulti</span>
                         <div style={{ fontSize: '11px', color: '#8e8e8e', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                             {item.context_tag && <span style={{ color: 'var(--color-primary)', fontWeight: 600 }}>{item.context_tag} •</span>}
-                            <span style={{ padding: '1px 6px', borderRadius: '4px', background: '#dcfce7', color: '#166534', fontSize: '10px', fontWeight: 700 }}>PRONTA</span>
+                            <StatusBadge status={item.status} small errorLog={item.error_log} />
                             {item.content_type === 'reels' && <span style={{ padding: '1px 5px', background: '#ede9fe', color: '#6d28d9', borderRadius: '4px', fontSize: '10px', fontWeight: 700, border: '1px solid #ddd6fe', display: 'inline-flex', alignItems: 'center', gap: '3px' }}><Video size={9} />REELS</span>}
                         </div>
                     </div>
@@ -1322,7 +1390,7 @@ function AprovadaCard({ item, onPublish, onReject, isProcessing }) {
             </div>
 
             {/* Alerta de Renderização / Revisão */}
-            {isAwaitingReview && (
+            {showPublish && isAwaitingReview && (
                 <div style={{ margin: '12px 16px', padding: '10px', background: '#fff7ed', borderRadius: '8px', fontSize: '12px', color: '#c2410c', fontWeight: 600, textAlign: 'center', border: '1px solid #fdba74' }}>
                     ⚠️ Aguardando Revisão — clique em Aprovar para renderizar
                 </div>
@@ -1360,15 +1428,15 @@ function AprovadaCard({ item, onPublish, onReject, isProcessing }) {
             </div>
 
             {/* Botão Publicar */}
-            <div className="ap-card-actions-wrap" style={{ paddingTop: 0 }}>
+            {showPublish && item.status === 'approved' && <div className="ap-card-actions-wrap" style={{ paddingTop: 0 }}>
                 <button
                     onClick={() => onPublish(item)}
-                    disabled={isRendering}
+                    disabled={isRendering || isProcessing}
                     style={{ width: '100%', margin: '0 16px', boxSizing: 'border-box', padding: '12px', borderRadius: '10px', border: 'none', background: '#111827', color: '#fff', fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: isRendering ? 'not-allowed' : 'pointer', opacity: isRendering ? 0.5 : 1, transition: 'opacity 0.2s' }}
                 >
                     <Check size={16} /> Publicar
                 </button>
-            </div>
+            </div>}
         </div>
     )
 }
@@ -1384,8 +1452,8 @@ function StatusBadge({ status, small, errorLog }) {
         selected: { label: 'Selecionada', bg: '#ede9fe', color: '#6d28d9' },
         pending_render: { label: 'Renderizando', bg: '#fef9c3', color: '#854d0e' },
         processing: { label: 'IA Gerando', bg: '#f5f3ff', color: '#6d28d9' },
-        pending_review: { label: 'Pronta', bg: '#dcfce7', color: '#166534' },
-        ready_to_publish: { label: 'Pronta', bg: '#dcfce7', color: '#166534' },
+        pending_review: { label: 'Aguardando revisão', bg: '#fff7ed', color: '#c2410c' },
+        ready_to_publish: { label: 'Pronta para validação', bg: '#fff7ed', color: '#c2410c' },
         approved: { label: 'Aprovada', bg: '#dcfce7', color: '#166534' },
         queued_for_posting: { label: 'Na Fila', bg: '#e0f2fe', color: '#0369a1' },
         posted: { label: 'Publicada', bg: '#dcfce7', color: '#166534' },

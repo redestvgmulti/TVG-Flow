@@ -9,7 +9,7 @@ import { getNavigationItemsForRole } from '../config/navigation'
 // AutoPublisher's pipeline stage tabs (coletadas/pendentes/aprovadas/publicadas)
 // all collapse onto the single "Pipeline" sidebar link, so its active state
 // needs to match any of them, not just the bare /admin/autopublisher path.
-const AUTOPUBLISHER_PIPELINE_TABS = ['coletadas', 'pendentes', 'aprovadas', 'publicadas']
+const AUTOPUBLISHER_PIPELINE_TABS = ['coletadas', 'pendentes', 'em_producao', 'revisao', 'aprovadas', 'publicadas', 'operacao']
 
 function Sidebar({ mobileMenuOpen, onClose }) {
     const { user, role, professionalName, signOut } = useAuth()

@@ -116,7 +116,7 @@ test('link registration performs only the backlog RPC and adoption is the single
   assert.match(panel, /POLL_INTERVAL_MS = 15_000/)
   assert.match(panel, /Esta matéria acabou de ser adotada por/)
   assert.match(panel, /discard_news_backlog_item/)
-  assert.match(panel, /const canManage = role === 'admin'/)
+  assert.match(panel, /const canManage = role === 'admin' \|\| role === 'super_admin'/)
   assert.match(myWork, /list_my_news_work/)
   assert.match(myWork, /release_news_backlog_item/)
   assert.doesNotMatch(panel, /Minhas pautas|Adotadas por outros|release_news_backlog_item/)

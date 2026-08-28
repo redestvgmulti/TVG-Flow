@@ -56,7 +56,7 @@ Deno.serve(async (req: Request) => {
         try {
             // AutoPublisher exposes these operations to tenant administrators.
             // SERVICE_ROLE below is used only after this user and tenant gate.
-            operator = await requireActiveOperator(req, createAdminClient(), ["admin"]);
+            operator = await requireActiveOperator(req, createAdminClient(), ["admin", "super_admin"]);
             if (!["process_studio", "approve_for_ig", "process_selected"].includes(actionType)) {
                 return new Response(JSON.stringify({ error: "ACTION_FORBIDDEN" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
             }

@@ -86,12 +86,15 @@ export default function MyNewsWork() {
         setReleasingId(null)
     }
 
+    const adoptedItems = items.filter(item => item.status === 'adopted' && !item.candidate_news_id)
+    const productionItems = items.filter(item => item.status !== 'adopted' || item.candidate_news_id)
+
     return (
         <div className="ap-page ap-my-work-page">
             <div className="ap-header">
                 <div className="ap-header-left">
-                    <h1>Minhas Matérias</h1>
-                    <p>Acompanhe as matérias que você adotou e continue cada produção.</p>
+                    <h1>Minhas Pautas e Produções</h1>
+                    <p>Pautas adotadas ainda não são produções. Inicie a produção para criar a matéria editorial.</p>
                 </div>
                 <button type="button" className="ap-btn-refresh" onClick={load} disabled={loading || !clienteId}>
                     <RefreshCcw size={14} className={loading ? 'ap-spin-icon' : ''} /> Atualizar
@@ -107,33 +110,50 @@ export default function MyNewsWork() {
                     <p className="hint">Adote uma pauta no Banco de Matérias para ela aparecer aqui.</p>
                 </div>
             ) : (
-                <div className="ap-my-work-grid">
-                    {items.map(item => (
-                        <article key={item.id} className="ap-my-work-card">
-                            <div className={`ap-my-work-status is-${item.status}`}>{STATUS_LABELS[item.status] || item.status}</div>
-                            <h2>{item.titulo || domainOf(item.url_original)}</h2>
-                            <p className="ap-my-work-domain">{domainOf(item.url_original)}</p>
-                            {item.observacao && <p className="ap-my-work-note">{item.observacao}</p>}
-                            <dl>
-                                <div><dt>Adotada em</dt><dd>{formatDate(item.adopted_at)}</dd></div>
-                                <div><dt>Produção iniciada</dt><dd>{formatDate(item.production_started_at)}</dd></div>
-                                <div><dt>Concluída em</dt><dd>{formatDate(item.production_completed_at)}</dd></div>
-                            </dl>
-                            <div className="ap-my-work-actions">
-                                <a href={item.url_original} target="_blank" rel="noreferrer" className="ap-btn-refresh"><ExternalLink size={13} /> Original</a>
-                                <button type="button" className="ap-backlog-action-solid" onClick={() => openProduction(item)}>
-                                    <Zap size={13} /> {item.status === 'adopted' ? 'Continuar produção' : 'Ver produção'}
-                                </button>
-                                {item.status === 'adopted' && !item.candidate_news_id && (
-                                    <button type="button" className="ap-backlog-action-icon" onClick={() => release(item)} disabled={Boolean(releasingId)} title="Devolver ao Banco de Matérias" aria-label="Devolver ao Banco de Matérias">
-                                        {releasingId === item.id ? <Loader2 size={14} className="ap-spin-icon" /> : <Undo2 size={14} />}
-                                    </button>
-                                )}
-                            </div>
-                        </article>
-                    ))}
+                <div className="ap-my-work-sections">
+                    <section aria-label="Minhas pautas">
+                        <h2 className="ap-my-work-section-title">Minhas Pautas</h2>
+                        <p className="ap-my-work-section-hint">Adotadas e ainda sem produção criada.</p>
+                        {adoptedItems.length === 0 ? <p className="ap-my-work-section-empty">Nenhuma pauta aguardando início.</p> : (
+                            <div className="ap-my-work-grid">{adoptedItems.map(item => <NewsWorkCard key={item.id} item={item} onOpen={openProduction} onRelease={release} releasingId={releasingId} />)}</div>
+                        )}
+                    </section>
+                    <section aria-label="Minhas produções">
+                        <h2 className="ap-my-work-section-title">Minhas Produções</h2>
+                        <p className="ap-my-work-section-hint">Matérias cuja produção já foi iniciada.</p>
+                        {productionItems.length === 0 ? <p className="ap-my-work-section-empty">Nenhuma produção em andamento ou concluída.</p> : (
+                            <div className="ap-my-work-grid">{productionItems.map(item => <NewsWorkCard key={item.id} item={item} onOpen={openProduction} onRelease={release} releasingId={releasingId} />)}</div>
+                        )}
+                    </section>
                 </div>
             )}
         </div>
+    )
+}
+
+function NewsWorkCard({ item, onOpen, onRelease, releasingId }) {
+    return (
+        <article className="ap-my-work-card">
+            <div className={`ap-my-work-status is-${item.status}`}>{STATUS_LABELS[item.status] || item.status}</div>
+            <h2>{item.titulo || domainOf(item.url_original)}</h2>
+            <p className="ap-my-work-domain">{domainOf(item.url_original)}</p>
+            {item.observacao && <p className="ap-my-work-note">{item.observacao}</p>}
+            <dl>
+                <div><dt>Adotada em</dt><dd>{formatDate(item.adopted_at)}</dd></div>
+                <div><dt>Produção iniciada</dt><dd>{formatDate(item.production_started_at)}</dd></div>
+                <div><dt>Concluída em</dt><dd>{formatDate(item.production_completed_at)}</dd></div>
+            </dl>
+            <div className="ap-my-work-actions">
+                <a href={item.url_original} target="_blank" rel="noreferrer" className="ap-btn-refresh"><ExternalLink size={13} /> Original</a>
+                <button type="button" className="ap-backlog-action-solid" onClick={() => onOpen(item)}>
+                    <Zap size={13} /> {item.status === 'adopted' ? 'Começar produção' : 'Ver produção'}
+                </button>
+                {item.status === 'adopted' && !item.candidate_news_id && (
+                    <button type="button" className="ap-backlog-action-icon" onClick={() => onRelease(item)} disabled={Boolean(releasingId)} title="Devolver ao Banco de Matérias" aria-label="Devolver ao Banco de Matérias">
+                        {releasingId === item.id ? <Loader2 size={14} className="ap-spin-icon" /> : <Undo2 size={14} />}
+                    </button>
+                )}
+            </div>
+        </article>
     )
 }

@@ -84,6 +84,33 @@ export async function authorizeOperationalTenant({
     throw new TenantAuthorizationError("AUTH_USER_MISMATCH", 403);
   }
 
+  // A super administrator has no operational membership by design.  It may
+  // operate only on an explicit, active client; this is the same fail-closed
+  // tenant selection rule used by curated-ingestion administration.
+  const { data: profile, error: profileError } = await userSupabase
+    .from("profissionais")
+    .select("role, ativo")
+    .eq("id", userId)
+    .maybeSingle();
+  if (profileError || !profile || profile.ativo !== true) {
+    throw new TenantAuthorizationError("TENANT_NOT_FOUND", 403);
+  }
+  if (profile.role === "super_admin") {
+    if (typeof requestedClienteId !== "string" || !UUID_PATTERN.test(requestedClienteId)) {
+      throw new TenantAuthorizationError("TENANT_NOT_FOUND", 403);
+    }
+    const { data: client, error: clientError } = await userSupabase
+      .from("clientes")
+      .select("id")
+      .eq("id", requestedClienteId)
+      .eq("ativo", true)
+      .maybeSingle();
+    if (clientError || !client?.id) {
+      throw new TenantAuthorizationError("TENANT_FORBIDDEN", 403);
+    }
+    return { clienteId: requestedClienteId, userId };
+  }
+
   const { data: allowedRows, error: allowedError } = await userSupabase
     .schema("ap")
     .rpc("get_operational_cliente_ids");
