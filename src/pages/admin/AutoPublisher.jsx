@@ -44,14 +44,16 @@ import {
 // ──────────────────────────────────────────────────────────
 // Tab config
 const TABS = [
-    { key: 'coletadas', label: 'Coletadas' },
-    { key: 'pendentes', label: 'Pendentes' },
-    { key: 'em_producao', label: 'Em produção' },
-    { key: 'revisao', label: 'Aguardando revisão' },
-    { key: 'aprovadas', label: 'Aprovadas' },
+    { key: 'coletadas', label: 'Novas matérias' },
+    { key: 'pendentes', label: 'Para produzir' },
+    { key: 'em_producao', label: 'Produzindo' },
+    { key: 'revisao', label: 'Para revisar' },
+    { key: 'aprovadas', label: 'Prontas' },
     { key: 'publicadas', label: 'Publicadas' },
-    { key: 'operacao', label: 'Operação' },
 ]
+
+const PENDING_AVAILABLE_STATUSES = ['raw', 'ready_for_scoring', 'scored', 'selected', 'studio_selected', 'studio_ready']
+const PENDING_ERROR_STATUSES = ['failed']
 
 // Status DB → tab mapping
 const STATUS_TAB = {
@@ -69,8 +71,28 @@ const STATUS_TAB = {
     studio_selected: 'pendentes',
     studio_ready: 'pendentes',
     posted: 'publicadas',
-    failed: 'pendentes',
-    rejected: 'pendentes',
+}
+
+function statusesForTab(currentTab, pendingFilter = 'available') {
+    if (currentTab === 'pendentes') {
+        if (pendingFilter === 'errors') return PENDING_ERROR_STATUSES
+        if (pendingFilter === 'all') return [...PENDING_AVAILABLE_STATUSES, ...PENDING_ERROR_STATUSES]
+        return PENDING_AVAILABLE_STATUSES
+    }
+    if (currentTab === 'em_producao') return ['pending_render', 'processing', 'render_complete', 'ready_to_publish', 'queued_for_posting']
+    if (currentTab === 'revisao') return ['pending_review']
+    if (currentTab === 'aprovadas') return ['approved']
+    if (currentTab === 'publicadas') return ['posted']
+    return []
+}
+
+function formatOperationalDate(value) {
+    if (!value) return '—'
+    return new Intl.DateTimeFormat('pt-BR', {
+        timeZone: 'America/Sao_Paulo',
+        dateStyle: 'short',
+        timeStyle: 'short',
+    }).format(new Date(value))
 }
 
 // ──────────────────────────────────────────────────────────
@@ -95,6 +117,8 @@ export default function AutoPublisher() {
     const [tabCounts, setTabCounts] = useState({})
     const [items, setItems] = useState([])
     const [loading, setLoading] = useState(false)
+    const [pendingFilter, setPendingFilter] = useState('available')
+    const [reviewFormat, setReviewFormat] = useState('all')
     const [ingestionEnabled, setIngestionEnabled] = useState(true)
     const [isProcessing, setIsProcessing] = useState(false)
 
@@ -217,10 +241,14 @@ export default function AutoPublisher() {
             supabase.schema('ap').from('candidate_news').select('status').eq('cliente_id', clienteId),
             supabase.schema('ap').rpc('get_collected_news_counts', { p_cliente_id: clienteId }),
         ])
-        const counts = { coletadas: 0, pendentes: 0, em_producao: 0, revisao: 0, aprovadas: 0, publicadas: 0, operacao: 0 }
+        const counts = { coletadas: 0, pendentes: 0, erros: 0, em_producao: 0, revisao: 0, aprovadas: 0, publicadas: 0 }
         for (const row of data ?? []) {
-            const mapped = STATUS_TAB[row.status] || 'coletadas'
-            counts[mapped] = (counts[mapped] ?? 0) + 1
+            if (PENDING_ERROR_STATUSES.includes(row.status)) {
+                counts.erros += 1
+                continue
+            }
+            const mapped = STATUS_TAB[row.status]
+            if (mapped) counts[mapped] = (counts[mapped] ?? 0) + 1
         }
         counts.coletadas = Number(collectedCounts?.pending_review || 0)
         setTabCounts(counts)
@@ -238,12 +266,7 @@ export default function AutoPublisher() {
         if (!clienteId) return
         setLoading(true)
 
-        let statuses = []
-        if (currentTab === 'pendentes') statuses = ['raw', 'ready_for_scoring', 'scored', 'selected', 'studio_selected', 'studio_ready', 'failed', 'rejected']
-        if (currentTab === 'em_producao') statuses = ['pending_render', 'processing', 'render_complete', 'ready_to_publish', 'queued_for_posting']
-        if (currentTab === 'revisao') statuses = ['pending_review']
-        if (currentTab === 'aprovadas') statuses = ['approved']
-        if (currentTab === 'publicadas') statuses = ['posted']
+        const statuses = statusesForTab(currentTab, pendingFilter)
 
         if (statuses.length === 0) {
             setItems([])
@@ -255,19 +278,19 @@ export default function AutoPublisher() {
             .schema('ap')
             .from('candidate_news')
             .select(`id, titulo, headline, caption, render_url, imagem_url, imagem_storage,
-                     status, created_at, context_tag, content_type, fonte_id,
+                     status, created_at, updated_at, context_tag, content_type, fonte_id,
                      criado_por_user_id, creator_name_snapshot,
                      template_nome_snapshot, roteiro_studio, duracao_estimada, broll_sugestao,
                      studio_media_image_url, studio_media_video_url, enviado_para_studio,
                      instagram_post_id, horario_agendado`)
             .eq('cliente_id', clienteId)
             .in('status', statuses)
-            .order('updated_at', { ascending: false })
+            .order('updated_at', { ascending: currentTab === 'revisao' })
 
         if (error) { toast.error("Erro ao carregar itens.") }
         setItems(data ?? [])
         setLoading(false)
-    }, [clienteId])
+    }, [clienteId, pendingFilter])
 
     const loadAvailableVisualTitles = useCallback(async () => {
         if (!clienteId) return
@@ -726,6 +749,16 @@ export default function AutoPublisher() {
         }
     }
 
+    const reviewFormats = [...new Set(items.map(item => item.content_type).filter(Boolean))]
+    const visibleItems = tab === 'revisao' && reviewFormat !== 'all'
+        ? items.filter(item => item.content_type === reviewFormat)
+        : items
+    const currentPendingCount = pendingFilter === 'errors'
+        ? (tabCounts.erros ?? 0)
+        : pendingFilter === 'all'
+            ? (tabCounts.pendentes ?? 0) + (tabCounts.erros ?? 0)
+            : (tabCounts.pendentes ?? 0)
+
     return (
         <>
             <div className="ap-page">
@@ -788,7 +821,7 @@ export default function AutoPublisher() {
                         <div
                             className="ap-seg"
                             role="tablist"
-                            aria-label="Estágios do pipeline"
+                            aria-label="Status das matérias"
                         >
                             <span
                                 className="ap-seg-pill"
@@ -797,6 +830,7 @@ export default function AutoPublisher() {
                                         0,
                                         TABS.findIndex(item => item.key === tab)
                                     )} * (100% - 6px) / ${TABS.length})`,
+                                    '--ap-tab-count': TABS.length,
                                     opacity: TABS.some(item => item.key === tab)
                                         ? 1
                                         : 0
@@ -813,7 +847,7 @@ export default function AutoPublisher() {
                                 >
                                     {label}
                                     <span className="ap-seg-count">
-                                        {tabCounts[key] ?? 0}
+                                        {key === 'pendentes' ? currentPendingCount : (tabCounts[key] ?? 0)}
                                     </span>
                                 </button>
                             ))}
@@ -850,7 +884,21 @@ export default function AutoPublisher() {
 
                 {/* ── Pendentes (cards com Studio + Aprovar p/IG) */}
                 {tab === 'pendentes' && (
-                    loading ? (
+                    <>
+                        <div className="ap-secondary-filters" role="tablist" aria-label="Filtro de matérias para produzir">
+                            {[
+                                ['available', 'Disponíveis'],
+                                ['all', 'Todas'],
+                                ['errors', 'Com erro'],
+                            ].map(([key, label]) => (
+                                <button key={key} type="button" role="tab" aria-selected={pendingFilter === key}
+                                    className={`ap-backlog-tab${pendingFilter === key ? ' active' : ''}`}
+                                    onClick={() => setPendingFilter(key)}>
+                                    {label}{key === 'errors' && <span className="ap-backlog-tab-count">{tabCounts.erros ?? 0}</span>}
+                                </button>
+                            ))}
+                        </div>
+                    {loading ? (
                         <div className="ap-cards-grid">
                             {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
                         </div>
@@ -868,7 +916,8 @@ export default function AutoPublisher() {
                                 />
                             ))}
                         </div>
-                    )
+                    )}
+                    </>
                 )}
 
                 {/* ── Aprovadas (cards com Baixar Arte, Copiar Legenda, Publicar) */}
@@ -887,17 +936,23 @@ export default function AutoPublisher() {
                 )}
 
                 {tab === 'revisao' && (
-                    loading ? (
+                    <>
+                        {reviewFormats.length > 1 && <div className="ap-secondary-filters" role="tablist" aria-label="Filtrar matérias para revisar por formato">
+                            <button type="button" role="tab" aria-selected={reviewFormat === 'all'} className={`ap-backlog-tab${reviewFormat === 'all' ? ' active' : ''}`} onClick={() => setReviewFormat('all')}>Todos os formatos</button>
+                            {reviewFormats.map(format => <button key={format} type="button" role="tab" aria-selected={reviewFormat === format} className={`ap-backlog-tab${reviewFormat === format ? ' active' : ''}`} onClick={() => setReviewFormat(format)}>{format}</button>)}
+                        </div>}
+                    {loading ? (
                         <div className="ap-cards-grid">
                             {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
                         </div>
-                    ) : items.length === 0 ? <EmptyStatePremium /> : (
+                    ) : visibleItems.length === 0 ? <EmptyStatePremium title="Nenhuma matéria para revisar agora." /> : (
                         <div className="ap-cards-grid">
-                            {items.map(item => (
+                            {visibleItems.map(item => (
                                 <PendenteCard key={item.id} item={item} onReject={handleReject} onStudio={handleStudio} onApproveSelected={handleApproveSelected} onEdit={handleEditOpen} isProcessing={isProcessing} />
                             ))}
                         </div>
-                    )
+                    )}
+                    </>
                 )}
 
                 {tab === 'aprovadas' && (
@@ -1220,6 +1275,11 @@ function PendenteCard({ item, onReject, onStudio, onApproveSelected, onEdit, isP
                     automated={Boolean(item.fonte_id)}
                     compact
                 />
+                {item.status === 'pending_review' && (
+                    <div style={{ marginTop: '6px', color: '#64748b', fontSize: '11px' }}>
+                        Entrou para revisão: {formatOperationalDate(item.updated_at)}
+                    </div>
+                )}
             </div>
 
             {/* Botões de ação */}
@@ -1446,18 +1506,18 @@ function AprovadaCard({ item, onPublish, onReject, isProcessing, showPublish = t
 // ──────────────────────────────────────────────────────────
 function StatusBadge({ status, small, errorLog }) {
     const map = {
-        raw: { label: 'Ingerida', bg: '#f1f5f9', color: '#475569' },
-        ready_for_scoring: { label: 'Aguardando Score', bg: '#fef9c3', color: '#854d0e' },
-        scored: { label: 'Analisada', bg: '#dbeafe', color: '#1e40af' },
-        selected: { label: 'Selecionada', bg: '#ede9fe', color: '#6d28d9' },
-        pending_render: { label: 'Renderizando', bg: '#fef9c3', color: '#854d0e' },
-        processing: { label: 'IA Gerando', bg: '#f5f3ff', color: '#6d28d9' },
-        pending_review: { label: 'Aguardando revisão', bg: '#fff7ed', color: '#c2410c' },
-        ready_to_publish: { label: 'Pronta para validação', bg: '#fff7ed', color: '#c2410c' },
-        approved: { label: 'Aprovada', bg: '#dcfce7', color: '#166534' },
-        queued_for_posting: { label: 'Na Fila', bg: '#e0f2fe', color: '#0369a1' },
+        raw: { label: 'Para produzir', bg: '#f1f5f9', color: '#475569' },
+        ready_for_scoring: { label: 'Para produzir', bg: '#fef9c3', color: '#854d0e' },
+        scored: { label: 'Para produzir', bg: '#dbeafe', color: '#1e40af' },
+        selected: { label: 'Para produzir', bg: '#ede9fe', color: '#6d28d9' },
+        pending_render: { label: 'Preparando', bg: '#fef9c3', color: '#854d0e' },
+        processing: { label: 'Gerando arte', bg: '#f5f3ff', color: '#6d28d9' },
+        pending_review: { label: 'Para revisar', bg: '#fff7ed', color: '#c2410c' },
+        ready_to_publish: { label: 'Preparando', bg: '#fff7ed', color: '#c2410c' },
+        approved: { label: 'Pronta', bg: '#dcfce7', color: '#166534' },
+        queued_for_posting: { label: 'Preparando', bg: '#e0f2fe', color: '#0369a1' },
         posted: { label: 'Publicada', bg: '#dcfce7', color: '#166534' },
-        failed: { label: 'Falhou', bg: '#fee2e2', color: '#991b1b' },
+        failed: { label: 'Erro', bg: '#fee2e2', color: '#991b1b' },
         rejected: { label: 'Descartada', bg: '#f1f5f9', color: '#6b7280' },
     }
     const { label, bg, color } = map[status] || { label: status, bg: '#f1f5f9', color: '#475569' }
@@ -1490,12 +1550,12 @@ function FormatBadge({ type }) {
     )
 }
 
-function EmptyStatePremium() {
+function EmptyStatePremium({ title = 'Nenhuma matéria nesta fila.' }) {
     return (
         <div className="ap-empty">
             <div className="ap-empty-icon"><Info size={20} /></div>
-            <p className="ap-empty-title">Nenhum Registro</p>
-            <p className="ap-empty-sub">A fila se encontra vazia no momento.</p>
+            <p className="ap-empty-title">{title}</p>
+            <p className="ap-empty-sub">Quando houver uma nova etapa para você, ela aparecerá aqui.</p>
         </div>
     )
 }

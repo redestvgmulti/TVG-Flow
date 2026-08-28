@@ -23,10 +23,10 @@ function initialsOf(name) {
 
 function messageFor(error, fallback) {
     const text = String(error?.message || '')
-    if (text.includes('BACKLOG_UNAVAILABLE')) return 'Esta matéria acabou de ser adotada por outra pessoa.'
+    if (text.includes('BACKLOG_UNAVAILABLE')) return 'Esta matéria acabou de ser pega por outra pessoa.'
     if (text.includes('BACKLOG_DISCARD_FORBIDDEN')) return 'Somente o administrador pode descartar uma matéria disponível.'
-    if (text.includes('BACKLOG_TENANT_FORBIDDEN')) return 'Você não tem acesso a este banco de matérias.'
-    if (text.includes('BACKLOG_FEATURE_DISABLED')) return 'O Banco de Matérias ainda não está habilitado.'
+    if (text.includes('BACKLOG_TENANT_FORBIDDEN')) return 'Você não tem acesso a este banco de pautas.'
+    if (text.includes('BACKLOG_FEATURE_DISABLED')) return 'O Banco de pautas ainda não está habilitado.'
     if (text.includes('BACKLOG_URL_INVALID')) return 'Informe um link HTTP ou HTTPS válido.'
     return fallback
 }
@@ -64,7 +64,7 @@ export default function NewsBacklogPanel({ clienteId, onStartProduction }) {
             p_cliente_id: clienteId,
         })
         if (error) {
-            if (!silent) setFeedback({ type: 'error', text: messageFor(error, 'Não foi possível carregar o Banco de Matérias.') })
+            if (!silent) setFeedback({ type: 'error', text: messageFor(error, 'Não foi possível carregar o Banco de pautas.') })
             if (!silent) setLoading(false)
             return null
         }
@@ -163,13 +163,13 @@ export default function NewsBacklogPanel({ clienteId, onStartProduction }) {
     const previewDomain = validHttpUrl(trimmedUrl) ? domainOf(trimmedUrl) : ''
 
     return (
-        <section className="ap-backlog-panel" aria-label="Banco de Matérias compartilhado">
+        <section className="ap-backlog-panel" aria-label="Banco de pautas compartilhado">
             <div className="ap-backlog-head">
                 <div className="ap-backlog-head-title">
                     <div className="ap-backlog-head-icon"><Inbox size={18} /></div>
                     <div>
-                        <h2>Banco de Matérias</h2>
-                        <p>Somente pautas aprovadas e disponíveis. Ao adotar, a matéria sai daqui e passa para “Minhas Matérias”.</p>
+                        <h2>Banco de pautas</h2>
+                        <p>Matérias aprovadas que ainda estão disponíveis para alguém da equipe pegar.</p>
                     </div>
                 </div>
                 <div className="ap-backlog-head-actions">
@@ -225,7 +225,7 @@ export default function NewsBacklogPanel({ clienteId, onStartProduction }) {
                             <div className="ap-backlog-item-actions">
                                 <a href={item.url_original} target="_blank" rel="noreferrer" className="ap-btn-refresh"><ExternalLink size={13} /> Abrir link</a>
                                 <button type="button" className="ap-backlog-action-solid" onClick={() => adopt(item)} disabled={Boolean(adoptingId)}>
-                                    {adoptingId === item.id ? <Loader2 size={13} className="ap-spin-icon" /> : <Zap size={13} />} Adotar e produzir
+                                    {adoptingId === item.id ? <Loader2 size={13} className="ap-spin-icon" /> : <Zap size={13} />} Pegar matéria
                                 </button>
                                 {canManage && <button type="button" className="ap-backlog-action-icon danger" onClick={() => discard(item)} title="Descartar" aria-label="Descartar matéria"><Trash2 size={14} /></button>}
                             </div>

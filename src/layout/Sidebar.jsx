@@ -6,10 +6,10 @@ import { supabase } from '../services/supabase'
 import { Settings, ChevronRight, LogOut } from 'lucide-react'
 import { getNavigationItemsForRole } from '../config/navigation'
 
-// AutoPublisher's pipeline stage tabs (coletadas/pendentes/aprovadas/publicadas)
-// all collapse onto the single "Pipeline" sidebar link, so its active state
+// AutoPublisher's matter stage tabs all collapse onto the single "Matérias"
+// sidebar link, so its active state
 // needs to match any of them, not just the bare /admin/autopublisher path.
-const AUTOPUBLISHER_PIPELINE_TABS = ['coletadas', 'pendentes', 'em_producao', 'revisao', 'aprovadas', 'publicadas', 'operacao']
+const AUTOPUBLISHER_MATTER_TABS = ['coletadas', 'pendentes', 'em_producao', 'revisao', 'aprovadas', 'publicadas']
 
 function Sidebar({ mobileMenuOpen, onClose }) {
     const { user, role, professionalName, signOut } = useAuth()
@@ -26,9 +26,9 @@ function Sidebar({ mobileMenuOpen, onClose }) {
     const staffItems = roleItems.filter((item) => item.section === 'staff')
     const toolItems = roleItems.filter((item) => item.section === 'tools')
 
-    const [adminPanelOpen, setAdminPanelOpen] = useState(true)
+    const [adminPanelOpen, setAdminPanelOpen] = useState(false)
     const [openNavGroups, setOpenNavGroups] = useState({})
-    const toggleNavGroup = (key) => setOpenNavGroups(previous => ({ ...previous, [key]: !(previous[key] ?? true) }))
+    const toggleNavGroup = (key) => setOpenNavGroups(previous => ({ ...previous, [key]: !(previous[key] ?? false) }))
     const [profileOpen, setProfileOpen] = useState(false)
     const [incompleteTaskCount, setIncompleteTaskCount] = useState(0)
     const [upcomingMeetingsCount, setUpcomingMeetingsCount] = useState(0)
@@ -158,7 +158,7 @@ function Sidebar({ mobileMenuOpen, onClose }) {
                                 <p className="nav-label">MENU PRINCIPAL</p>
                                 {adminMainItems.filter((item) => !item.isCTA).map(item => (
                                     item.children ? (
-                                        <div key={item.key} className={`nav-group ${openNavGroups[item.key] ?? true ? 'open' : ''}`}>
+                                        <div key={item.key} className={`nav-group ${openNavGroups[item.key] ?? false ? 'open' : ''}`}>
                                             <button
                                                 className="nav-group-trigger"
                                                 onClick={() => toggleNavGroup(item.key)}
@@ -168,13 +168,13 @@ function Sidebar({ mobileMenuOpen, onClose }) {
                                                 <ChevronRight size={16} className="nav-arrow" />
                                             </button>
 
-                                            {(openNavGroups[item.key] ?? true) && (
+                                            {(openNavGroups[item.key] ?? false) && (
                                                 <div className="nav-sub">
                                                     {item.children.map(child => {
                                                         const isPipelineRoot = child.path === item.path
                                                         const isActive = isPipelineRoot
                                                             ? location.pathname === child.path
-                                                                || AUTOPUBLISHER_PIPELINE_TABS.some(t => location.pathname === `${child.path}/${t}`)
+                                                                || AUTOPUBLISHER_MATTER_TABS.some(t => location.pathname === `${child.path}/${t}`)
                                                             : location.pathname === child.path || location.pathname.startsWith(`${child.path}/`)
                                                         return (
                                                             <NavLink

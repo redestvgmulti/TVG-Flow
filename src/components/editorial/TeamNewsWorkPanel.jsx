@@ -4,13 +4,13 @@ import { toast } from 'sonner'
 import { supabase } from '../../services/supabase'
 
 const STATUS_LABELS = {
-    adopted: 'Adotada',
-    in_production: 'Em produção',
-    completed: 'Produção concluída',
-    pending_render: 'Renderizando',
-    processing: 'Em produção',
-    pending_review: 'Aguardando revisão',
-    approved: 'Aprovada',
+    adopted: 'Com pauta',
+    in_production: 'Produzindo',
+    completed: 'Concluída',
+    pending_render: 'Preparando',
+    processing: 'Gerando arte',
+    pending_review: 'Para revisar',
+    approved: 'Pronta',
     posted: 'Publicada',
 }
 
@@ -43,7 +43,7 @@ export default function TeamNewsWorkPanel({ clienteId }) {
         const { data, error } = await supabase.schema('ap').rpc('list_team_news_work_details', {
             p_cliente_id: clienteId,
         })
-        if (error) toast.error('Não foi possível carregar a operação editorial.')
+        if (error) toast.error('Não foi possível carregar a equipe.')
         else setItems(data ?? [])
         if (!silent) setLoading(false)
     }, [clienteId])
@@ -66,7 +66,7 @@ export default function TeamNewsWorkPanel({ clienteId }) {
         if (error) {
             toast.error('Não foi possível devolver esta pauta. Ela pode já ter iniciado produção.')
         } else {
-            toast.success('Pauta devolvida ao Banco de Matérias com registro de auditoria.')
+            toast.success('Pauta devolvida ao Banco de pautas com registro no histórico.')
             setItems(current => current.filter(currentItem => currentItem.backlog_id !== item.backlog_id))
             if (timelineFor === item.backlog_id) {
                 setTimelineFor(null)
@@ -103,13 +103,13 @@ export default function TeamNewsWorkPanel({ clienteId }) {
     })
 
     return (
-        <section className="ap-backlog-panel" aria-label="Operação editorial da equipe">
+        <section className="ap-backlog-panel ap-team-work-panel" aria-label="Equipe">
             <div className="ap-backlog-head">
                 <div className="ap-backlog-head-title">
                     <div className="ap-backlog-head-icon"><Users size={18} /></div>
                     <div>
-                        <h2>Operação editorial</h2>
-                        <p>Acompanhe pautas adotadas e produções da equipe. Devoluções administrativas só são permitidas antes da criação da produção.</p>
+                        <h2>Equipe</h2>
+                        <p>Acompanhe quem está trabalhando em cada matéria e o andamento das produções.</p>
                     </div>
                 </div>
                 <button type="button" className="ap-btn-refresh" onClick={() => load()} disabled={loading || !clienteId}>
@@ -117,11 +117,11 @@ export default function TeamNewsWorkPanel({ clienteId }) {
                 </button>
             </div>
 
-            <div className="ap-collected-filters" role="tablist" aria-label="Filtro da operação editorial">
+            <div className="ap-collected-filters" role="tablist" aria-label="Filtro da equipe">
                 {[
                     ['all', 'Todas'],
-                    ['adopted', 'Adotadas'],
-                    ['in_production', 'Em produção'],
+                    ['adopted', 'Com pauta'],
+                    ['in_production', 'Produzindo'],
                     ['completed', 'Concluídas'],
                 ].map(([key, label]) => (
                     <button key={key} type="button" role="tab" aria-selected={filter === key}
@@ -131,18 +131,17 @@ export default function TeamNewsWorkPanel({ clienteId }) {
                 ))}
             </div>
 
-            {loading ? <div className="ap-backlog-loading">Carregando operação editorial…</div>
-                : visibleItems.length === 0 ? <div className="ap-backlog-empty"><p className="title">Nenhuma pauta em andamento</p><p className="hint">As pautas adotadas pela equipe aparecerão aqui.</p></div>
-                : <div className="ap-collected-list">
+            {loading ? <div className="ap-backlog-loading">Carregando equipe…</div>
+                : visibleItems.length === 0 ? <div className="ap-backlog-empty"><p className="title">Ninguém está trabalhando em uma pauta agora.</p><p className="hint">As pautas pegas pela equipe aparecerão aqui.</p></div>
+                : <div className="ap-collected-list ap-team-work-list">
                     {visibleItems.map(item => (
                         <article key={item.backlog_id} className="ap-collected-item">
                             <div className="ap-collected-main">
-                                <div className="ap-collected-source">{item.adopted_by_name_snapshot || 'Responsável não informado'} · adotada em {formatDate(item.adopted_at)}</div>
+                                <div className="ap-collected-source">Responsável: {item.adopted_by_name_snapshot || 'Não informado'} · pega em {formatDate(item.adopted_at)}</div>
                                 <h3>{item.titulo || domainOf(item.url_original)}</h3>
                                 <div className="ap-collected-meta">
                                     <span>{domainOf(item.url_original)}</span>
-                                    <span>Pauta: {STATUS_LABELS[item.backlog_status] || item.backlog_status}</span>
-                                    {item.candidate_status && <span>Produção: {STATUS_LABELS[item.candidate_status] || item.candidate_status}</span>}
+                                    <span>Status: {STATUS_LABELS[item.candidate_status] || STATUS_LABELS[item.backlog_status] || item.candidate_status || item.backlog_status}</span>
                                     {item.candidate_content_type && <span>Formato: {item.candidate_content_type}</span>}
                                     <span>Início: {formatDate(item.production_started_at)}</span>
                                 </div>
@@ -153,7 +152,7 @@ export default function TeamNewsWorkPanel({ clienteId }) {
                                     {timelineLoading && timelineFor === item.backlog_id ? <Loader2 size={13} className="ap-spin-icon" /> : <History size={13} />} Histórico
                                 </button>
                                 {item.backlog_status === 'adopted' && !item.candidate_news_id && (
-                                    <button type="button" className="ap-backlog-action-icon" title="Devolver administrativamente ao Banco de Matérias" aria-label="Devolver administrativamente ao Banco de Matérias" onClick={() => returnToBank(item)} disabled={Boolean(actingId)}>
+                                    <button type="button" className="ap-backlog-action-icon" title="Liberar para o Banco de pautas" aria-label="Liberar para o Banco de pautas" onClick={() => returnToBank(item)} disabled={Boolean(actingId)}>
                                         {actingId === item.backlog_id ? <Loader2 size={14} className="ap-spin-icon" /> : <Undo2 size={14} />}
                                     </button>
                                 )}

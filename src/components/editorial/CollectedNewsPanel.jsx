@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { supabase } from '../../services/supabase'
 
 const FILTERS = [
-    { key: 'pending_review', label: 'Aguardando curadoria' },
+    { key: 'pending_review', label: 'Para analisar' },
     { key: 'approved', label: 'Aprovadas' },
     { key: 'discarded', label: 'Descartadas' },
     { key: 'duplicate', label: 'Duplicadas' },
@@ -69,10 +69,13 @@ export default function CollectedNewsPanel({ clienteId, onCountsChange }) {
 
     async function approve(item) {
         if (actingId) return
+        const observation = window.prompt('Observação para quem pegar esta pauta (opcional):', '')
+        if (observation === null) return
         setActingId(item.id)
         const { data, error } = await supabase.schema('ap').rpc('approve_collected_news', {
             p_cliente_id: clienteId,
             p_collected_news_id: item.id,
+            p_observacao: observation,
         })
         if (error) {
             toast.error('Não foi possível aprovar esta matéria.')
@@ -102,13 +105,13 @@ export default function CollectedNewsPanel({ clienteId, onCountsChange }) {
     }
 
     return (
-        <section className="ap-collected-panel" aria-label="Matérias coletadas para curadoria">
+        <section className="ap-collected-panel" aria-label="Novas matérias encontradas">
             <div className="ap-backlog-head">
                 <div className="ap-backlog-head-title">
                     <div className="ap-backlog-head-icon"><Inbox size={18} /></div>
                     <div>
-                        <h2>Matérias coletadas</h2>
-                        <p>Área exclusiva do administrador. Nenhum item entra no Banco de Matérias sem aprovação.</p>
+                        <h2>Novas matérias encontradas</h2>
+                        <p>Revise as matérias encontradas. Só as aprovadas entram no Banco de pautas.</p>
                     </div>
                 </div>
                 <button type="button" className="ap-btn-refresh" onClick={() => load()} disabled={loading}>
@@ -133,7 +136,7 @@ export default function CollectedNewsPanel({ clienteId, onCountsChange }) {
             </div>
 
             {loading ? (
-                <div className="ap-backlog-loading">Carregando matérias coletadas…</div>
+                <div className="ap-backlog-loading">Carregando novas matérias…</div>
             ) : items.length === 0 ? (
                 <div className="ap-backlog-empty">
                     <div className="ap-backlog-empty-icon"><Inbox size={22} /></div>
