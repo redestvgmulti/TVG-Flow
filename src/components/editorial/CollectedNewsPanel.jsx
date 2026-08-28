@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { Check, ExternalLink, Inbox, Loader2, RefreshCcw, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase } from '../../services/supabase'
+import ApproveCollectedNewsModal from './ApproveCollectedNewsModal'
+import EditorialReasonModal from './EditorialReasonModal'
 
 const FILTERS = [
     { key: 'pending_review', label: 'Para analisar' },
@@ -30,6 +32,8 @@ export default function CollectedNewsPanel({ clienteId, onCountsChange }) {
     const [counts, setCounts] = useState({})
     const [loading, setLoading] = useState(false)
     const [actingId, setActingId] = useState(null)
+    const [approvalItem, setApprovalItem] = useState(null)
+    const [discardItem, setDiscardItem] = useState(null)
 
     const load = useCallback(async ({ silent = false } = {}) => {
         if (!clienteId) return
@@ -67,10 +71,9 @@ export default function CollectedNewsPanel({ clienteId, onCountsChange }) {
         return () => window.clearTimeout(timer)
     }, [load])
 
-    async function approve(item) {
-        if (actingId) return
-        const observation = window.prompt('Observação para quem pegar esta pauta (opcional):', '')
-        if (observation === null) return
+    async function approve(observation) {
+        const item = approvalItem
+        if (!item || actingId) return
         setActingId(item.id)
         const { data, error } = await supabase.schema('ap').rpc('approve_collected_news', {
             p_cliente_id: clienteId,
@@ -80,18 +83,19 @@ export default function CollectedNewsPanel({ clienteId, onCountsChange }) {
         if (error) {
             toast.error('Não foi possível aprovar esta matéria.')
         } else if (data?.duplicate) {
-            toast.info('Esta matéria já estava no Banco de Matérias e foi marcada como duplicada.')
+            toast.info('Esta matéria já estava no Banco de pautas e foi marcada como duplicada.')
+            setApprovalItem(null)
         } else {
-            toast.success('Matéria aprovada e enviada ao Banco de Matérias.')
+            toast.success('Matéria aprovada e enviada ao Banco de pautas.')
+            setApprovalItem(null)
         }
         await load({ silent: true })
         setActingId(null)
     }
 
-    async function discard(item) {
-        if (actingId) return
-        const reason = window.prompt('Motivo do descarte (opcional):', '')
-        if (reason === null) return
+    async function discard(reason) {
+        const item = discardItem
+        if (!item || actingId) return
         setActingId(item.id)
         const { error } = await supabase.schema('ap').rpc('discard_collected_news', {
             p_cliente_id: clienteId,
@@ -165,10 +169,10 @@ export default function CollectedNewsPanel({ clienteId, onCountsChange }) {
                                 </a>
                                 {item.status === 'pending_review' && (
                                     <>
-                                        <button type="button" className="ap-backlog-action-solid" onClick={() => approve(item)} disabled={Boolean(actingId)}>
+                                        <button type="button" className="ap-backlog-action-solid" onClick={() => setApprovalItem(item)} disabled={Boolean(actingId)}>
                                             {actingId === item.id ? <Loader2 size={13} className="ap-spin-icon" /> : <Check size={13} />} Aprovar pauta
                                         </button>
-                                        <button type="button" className="ap-backlog-action-icon danger" onClick={() => discard(item)} disabled={Boolean(actingId)} title="Descartar" aria-label="Descartar matéria">
+                                        <button type="button" className="ap-backlog-action-icon danger" onClick={() => setDiscardItem(item)} disabled={Boolean(actingId)} title="Descartar" aria-label="Descartar matéria">
                                             <Trash2 size={14} />
                                         </button>
                                     </>
@@ -178,6 +182,31 @@ export default function CollectedNewsPanel({ clienteId, onCountsChange }) {
                     ))}
                 </div>
             )}
+            <ApproveCollectedNewsModal
+                key={approvalItem?.id ?? 'closed'}
+                item={approvalItem}
+                isOpen={Boolean(approvalItem)}
+                isSubmitting={actingId === approvalItem?.id}
+                onClose={() => setApprovalItem(null)}
+                onConfirm={approve}
+            />
+            <EditorialReasonModal
+                key={discardItem?.id ?? 'closed'}
+                isOpen={Boolean(discardItem)}
+                isSubmitting={actingId === discardItem?.id}
+                onClose={() => setDiscardItem(null)}
+                onConfirm={async (reason) => {
+                    await discard(reason)
+                    setDiscardItem(null)
+                }}
+                title="Descartar matéria"
+                subtitle="Ela continuará registrada no histórico, mas não irá para o Banco de pautas."
+                itemTitle={discardItem?.title}
+                label="Motivo do descarte"
+                placeholder="Ex.: assunto repetido, fora da linha editorial ou sem informação suficiente."
+                confirmLabel="Descartar matéria"
+                danger
+            />
         </section>
     )
 }

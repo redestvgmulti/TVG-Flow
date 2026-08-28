@@ -6,6 +6,7 @@ import { clientService } from '../../services/clientService'
 import { Building2, Users, Plus, Search, Edit2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { SkeletonCard } from '../../components/Skeleton'
+import Modal from '../../components/ui/Modal'
 import '../../styles/companies.css'
 
 function Companies() {
@@ -16,6 +17,7 @@ function Companies() {
     const [showModal, setShowModal] = useState(false)
     const [editingCompany, setEditingCompany] = useState(null)
     const [isDeactivating, setIsDeactivating] = useState(false)
+    const [showDeactivateConfirmation, setShowDeactivateConfirmation] = useState(false)
     const [formData, setFormData] = useState({
         nome: '',
         cnpj: '',
@@ -151,16 +153,16 @@ function Companies() {
 
     async function handleDeactivateCompany() {
         if (!editingCompany || isDeactivating) return
+        setShowDeactivateConfirmation(true)
+    }
 
-        const confirmed = window.confirm(
-            `Desativar ${editingCompany.nome}? Os dados serão preservados, mas os vínculos operacionais serão removidos.`
-        )
-        if (!confirmed) return
-
+    async function confirmDeactivateCompany() {
+        if (!editingCompany || isDeactivating) return
         try {
             setIsDeactivating(true)
             await clientService.delete(editingCompany.id)
             toast.success('Empresa desativada com sucesso')
+            setShowDeactivateConfirmation(false)
             handleCloseModal()
             await fetchCompanies(currentTenantId)
         } catch (error) {
@@ -189,12 +191,9 @@ function Companies() {
 
     function handleCloseModal() {
         setShowModal(false)
+        setShowDeactivateConfirmation(false)
         setEditingCompany(null)
         setFormData({ nome: '', cnpj: '', ativo: true })
-    }
-
-    function handleCompanyClick(company) {
-        navigate(`/ admin / companies / ${company.id} `)
     }
 
     const filteredCompanies = companies.filter(company =>
@@ -416,6 +415,29 @@ function Companies() {
                     </div>
                 </div>, document.body
             )}
+
+            <Modal
+                isOpen={showDeactivateConfirmation && Boolean(editingCompany)}
+                onClose={() => !isDeactivating && setShowDeactivateConfirmation(false)}
+                title="Desativar empresa"
+                subtitle="Os dados serão preservados. Os vínculos operacionais serão removidos."
+                icon={Building2}
+                iconColor="#b42318"
+                iconBg="#fee4e2"
+                closeOnBackdrop={!isDeactivating}
+                footer={(
+                    <>
+                        <button type="button" className="btn btn-secondary" onClick={() => setShowDeactivateConfirmation(false)} disabled={isDeactivating}>Cancelar</button>
+                        <button type="button" className="btn btn-danger" onClick={confirmDeactivateCompany} disabled={isDeactivating}>
+                            {isDeactivating ? 'Desativando...' : 'Desativar empresa'}
+                        </button>
+                    </>
+                )}
+            >
+                <div className="info-banner danger">
+                    <p>Você está desativando <strong>{editingCompany?.nome}</strong>. Esta ação pode ser revertida depois pela administração.</p>
+                </div>
+            </Modal>
         </>
     )
 }

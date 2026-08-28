@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { ExternalLink, History, Loader2, RefreshCcw, Undo2, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase } from '../../services/supabase'
+import EditorialReasonModal from './EditorialReasonModal'
 
 const STATUS_LABELS = {
     adopted: 'Com pauta',
@@ -12,6 +13,41 @@ const STATUS_LABELS = {
     pending_review: 'Para revisar',
     approved: 'Pronta',
     posted: 'Publicada',
+}
+
+const CONTENT_TYPE_LABELS = {
+    feed: 'Publicação no feed',
+    reels: 'Vídeo curto',
+    carousel: 'Carrossel',
+    sponsored: 'Conteúdo patrocinado',
+}
+
+const TIMELINE_EVENT_LABELS = {
+    collected: 'Matéria encontrada',
+    refreshed: 'Informações atualizadas pela fonte',
+    duplicate: 'Marcada como duplicada',
+    approved: 'Aprovada para o Banco de pautas',
+    approved_from_collection: 'Disponibilizada no Banco de pautas',
+    discarded: 'Descartada',
+    created: 'Adicionada ao Banco de pautas',
+    adopted: 'Matéria pega',
+    released: 'Devolvida ao Banco de pautas',
+    admin_released: 'Liberada para o Banco de pautas pela administração',
+    production_started: 'Produção iniciada',
+    linked: 'Produção vinculada',
+    candidate_created: 'Produção criada',
+    production_completed: 'Produção concluída',
+    render_completed: 'Arte gerada',
+    posted: 'Publicada',
+    title_updated: 'Título atualizado',
+}
+
+function timelineEventLabel(action) {
+    return TIMELINE_EVENT_LABELS[action] || 'Atualização registrada'
+}
+
+function contentTypeLabel(contentType) {
+    return CONTENT_TYPE_LABELS[contentType] || 'Outro formato'
 }
 
 function formatDate(value) {
@@ -36,6 +72,7 @@ export default function TeamNewsWorkPanel({ clienteId }) {
     const [timelineFor, setTimelineFor] = useState(null)
     const [timeline, setTimeline] = useState([])
     const [timelineLoading, setTimelineLoading] = useState(false)
+    const [releaseItem, setReleaseItem] = useState(null)
 
     const load = useCallback(async ({ silent = false } = {}) => {
         if (!clienteId) return
@@ -53,10 +90,9 @@ export default function TeamNewsWorkPanel({ clienteId }) {
         return () => window.clearTimeout(timer)
     }, [load])
 
-    async function returnToBank(item) {
-        if (actingId) return
-        const reason = window.prompt('Motivo da devolução administrativa (opcional):', '')
-        if (reason === null) return
+    async function returnToBank(reason) {
+        const item = releaseItem
+        if (!item || actingId) return
         setActingId(item.backlog_id)
         const { error } = await supabase.schema('ap').rpc('admin_release_news_backlog_item', {
             p_backlog_id: item.backlog_id,
@@ -137,12 +173,12 @@ export default function TeamNewsWorkPanel({ clienteId }) {
                     {visibleItems.map(item => (
                         <article key={item.backlog_id} className="ap-collected-item">
                             <div className="ap-collected-main">
-                                <div className="ap-collected-source">Responsável: {item.adopted_by_name_snapshot || 'Não informado'} · pega em {formatDate(item.adopted_at)}</div>
+                                <div className="ap-collected-source">Responsável: {item.adopted_by_name_snapshot || 'Não informado'} · assumida em {formatDate(item.adopted_at)}</div>
                                 <h3>{item.titulo || domainOf(item.url_original)}</h3>
                                 <div className="ap-collected-meta">
                                     <span>{domainOf(item.url_original)}</span>
                                     <span>Status: {STATUS_LABELS[item.candidate_status] || STATUS_LABELS[item.backlog_status] || item.candidate_status || item.backlog_status}</span>
-                                    {item.candidate_content_type && <span>Formato: {item.candidate_content_type}</span>}
+                                    {item.candidate_content_type && <span>Formato: {contentTypeLabel(item.candidate_content_type)}</span>}
                                     <span>Início: {formatDate(item.production_started_at)}</span>
                                 </div>
                             </div>
@@ -152,7 +188,7 @@ export default function TeamNewsWorkPanel({ clienteId }) {
                                     {timelineLoading && timelineFor === item.backlog_id ? <Loader2 size={13} className="ap-spin-icon" /> : <History size={13} />} Histórico
                                 </button>
                                 {item.backlog_status === 'adopted' && !item.candidate_news_id && (
-                                    <button type="button" className="ap-backlog-action-icon" title="Liberar para o Banco de pautas" aria-label="Liberar para o Banco de pautas" onClick={() => returnToBank(item)} disabled={Boolean(actingId)}>
+                                        <button type="button" className="ap-backlog-action-icon" title="Liberar para o Banco de pautas" aria-label="Liberar para o Banco de pautas" onClick={() => setReleaseItem(item)} disabled={Boolean(actingId)}>
                                         {actingId === item.backlog_id ? <Loader2 size={14} className="ap-spin-icon" /> : <Undo2 size={14} />}
                                     </button>
                                 )}
@@ -162,7 +198,7 @@ export default function TeamNewsWorkPanel({ clienteId }) {
                                     {timelineLoading ? 'Carregando histórico…' : timeline.length === 0 ? 'Sem eventos disponíveis para esta pauta.' : timeline.map((event, index) => (
                                         <div key={`${event.event_at}-${event.action}-${index}`} className="ap-editorial-timeline-event">
                                             <strong>{formatDate(event.event_at)}</strong>
-                                            <span>{event.action.replaceAll('_', ' ')}</span>
+                                            <span>{timelineEventLabel(event.action)}</span>
                                             {event.actor_name && <span>{event.actor_name}</span>}
                                         </div>
                                     ))}
@@ -171,6 +207,22 @@ export default function TeamNewsWorkPanel({ clienteId }) {
                         </article>
                     ))}
                 </div>}
+            <EditorialReasonModal
+                key={releaseItem?.backlog_id ?? 'closed'}
+                isOpen={Boolean(releaseItem)}
+                isSubmitting={actingId === releaseItem?.backlog_id}
+                onClose={() => setReleaseItem(null)}
+                onConfirm={async (reason) => {
+                    await returnToBank(reason)
+                    setReleaseItem(null)
+                }}
+                title="Liberar para o Banco de pautas"
+                subtitle="A matéria ficará disponível para outra pessoa da equipe pegar."
+                itemTitle={releaseItem?.titulo}
+                label="Orientação para a equipe"
+                placeholder="Ex.: ficou sem responsável, prioridade mudou ou pode ser assumida por outra pessoa."
+                confirmLabel="Liberar matéria"
+            />
         </section>
     )
 }
