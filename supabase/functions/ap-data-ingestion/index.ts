@@ -16,6 +16,14 @@ function json(body: unknown, status = 200) {
   });
 }
 
+function domainOf(value: string | null | undefined) {
+  try {
+    return new URL(value || "").hostname.toLowerCase().replace(/^www\./, "") || null;
+  } catch {
+    return null;
+  }
+}
+
 async function sha256(value: string) {
   const bytes = new TextEncoder().encode(value);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
@@ -70,8 +78,11 @@ Deno.serve(async (req: Request) => {
   const results: Array<Record<string, unknown>> = [];
   for (const source of sources ?? []) {
     const sourceStartedAt = new Date().toISOString();
+    const sourceStartedMs = performance.now();
     let discovered = 0;
+    let valid = 0;
     let collected = 0;
+    let duplicates = 0;
     let skippedOld = 0;
     let errors = 0;
     let detectedType: string | null = null;
@@ -96,6 +107,7 @@ Deno.serve(async (req: Request) => {
           skippedOld += 1;
           continue;
         }
+        valid += 1;
         try {
           const contentHash = await sha256([
             item.canonicalUrl || item.url,
@@ -118,10 +130,13 @@ Deno.serve(async (req: Request) => {
             p_metadata: {
               detected_type: discovery.detectedType,
               discovery_url: discovery.discoveryUrl,
+              source_domain: domainOf(source.url),
+              article_domain: domainOf(item.canonicalUrl || item.url),
             },
           });
           if (error) throw error;
           if (data?.created) collected += 1;
+          else duplicates += 1;
         } catch {
           errors += 1;
         }
@@ -142,9 +157,12 @@ Deno.serve(async (req: Request) => {
         source_id: source.id,
         detected_type: detectedType,
         discovered,
+        valid,
         collected,
+        duplicates,
         skipped_old: skippedOld,
         errors,
+        discarded: 0,
       });
       await supabase.schema("ap").from("source_ingestion_runs").insert({
         source_id: source.id,
@@ -159,6 +177,14 @@ Deno.serve(async (req: Request) => {
         error_code: errors ? "ITEM_PERSIST_FAILED" : null,
         started_at: sourceStartedAt,
         finished_at: new Date().toISOString(),
+        metadata: {
+          correlation_id: workerId,
+          source_domain: domainOf(source.url),
+          valid_count: valid,
+          duplicate_count: duplicates,
+          discarded: 0,
+          duration_ms: Math.round(performance.now() - sourceStartedMs),
+        },
       });
     } catch (error) {
       errorCode = error instanceof SourceCollectionError ? error.code : "SOURCE_COLLECTION_FAILED";
@@ -177,6 +203,7 @@ Deno.serve(async (req: Request) => {
         mode: "curated_collection",
         source_id: source.id,
         configured_type: source.tipo,
+        discarded: 0,
       });
       await supabase.schema("ap").from("source_ingestion_runs").insert({
         source_id: source.id,
@@ -191,6 +218,14 @@ Deno.serve(async (req: Request) => {
         error_code: errorCode,
         started_at: sourceStartedAt,
         finished_at: new Date().toISOString(),
+        metadata: {
+          correlation_id: workerId,
+          source_domain: domainOf(source.url),
+          valid_count: 0,
+          duplicate_count: 0,
+          discarded: 0,
+          duration_ms: Math.round(performance.now() - sourceStartedMs),
+        },
       });
     }
 
@@ -198,7 +233,9 @@ Deno.serve(async (req: Request) => {
       source_id: source.id,
       detected_type: detectedType,
       discovered,
+      valid,
       collected,
+      duplicates,
       skipped_old: skippedOld,
       errors,
       error_code: errorCode,
@@ -212,6 +249,7 @@ Deno.serve(async (req: Request) => {
     result: totalErrors ? "completed_with_errors" : "success",
     sources: results.length,
     collected: totalCollected,
+    duplicates: results.reduce((sum, result) => sum + Number(result.duplicates || 0), 0),
     errors: totalErrors,
     started_at: startedAt,
   });
