@@ -1,6 +1,6 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // AutoPublisher — Motor Editorial: Prompt Versioning API
-// MODE: SINGLE-TENANT (TVG only)
+// MODE: tenant resolved from the authenticated user
 // POST: create new version and deactivate old
 // GET: list history
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -8,8 +8,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { EditorialAdminAuthorizationError, requireEditorialAdmin } from "../_shared/editorialAdminAuth.ts";
-
-const FIXED_CLIENT_ID = "cd287e6e-f273-4d0f-a72d-2a8c391e40e9";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -23,10 +21,9 @@ Deno.serve(async (req: Request) => {
     try {
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
         const supabaseServiceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-        const clienteId = FIXED_CLIENT_ID;
-
         const sbAdmin = createClient(supabaseUrl, supabaseServiceRole);
-        await requireEditorialAdmin(req, sbAdmin, clienteId);
+        const authorization = await requireEditorialAdmin(req, sbAdmin);
+        const clienteId = authorization.clienteId;
 
         if (req.method === "GET") {
             const { data: history } = await sbAdmin
@@ -87,7 +84,7 @@ Deno.serve(async (req: Request) => {
         return new Response("Method not allowed", { status: 405, headers: corsHeaders });
     } catch (err: any) {
         console.error("Prompt Err:", err);
-        return new Response(JSON.stringify({ error: err instanceof EditorialAdminAuthorizationError ? "EDITORIAL_ADMIN_REQUIRED" : err.message }), {
+        return new Response(JSON.stringify({ error: err instanceof EditorialAdminAuthorizationError ? err.code : err.message }), {
             status: err instanceof EditorialAdminAuthorizationError ? err.status : 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
         });

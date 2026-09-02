@@ -88,7 +88,7 @@ test('editorial administration and publisher require the intended authority boun
     'supabase/functions/ap-editorial-rag-upload/index.ts',
     'supabase/functions/ap-editorial-test/index.ts',
   ]) {
-    assert.match(await source(path), /requireEditorialAdmin\(req, sbAdmin, clienteId\)|requireEditorialAdmin\(req, sbAdmin, FIXED_CLIENT_ID\)/)
+    assert.match(await source(path), /requireEditorialAdmin\(req, sbAdmin\)/)
   }
   const publisher = await source('supabase/functions/ap-instagram-publisher/index.ts')
   assert.match(publisher, /isTrustedInternalRequest\(req\)/)
@@ -99,7 +99,7 @@ test('editorial administration and publisher require the intended authority boun
 test('editorial administration shares the canonical ap-config tenant authorization', async () => {
   const authorization = await source('supabase/functions/_shared/editorialAdminAuth.ts')
   assert.match(authorization, /authorizeConfigRequest/)
-  assert.match(authorization, /requestedClienteId: clienteId/)
+  assert.match(authorization, /requestedClienteId,/)
   assert.match(authorization, /authorization\.role !== "admin"/)
   assert.doesNotMatch(authorization, /requireActiveOperator|authorizeOperationalTenant/)
 })
