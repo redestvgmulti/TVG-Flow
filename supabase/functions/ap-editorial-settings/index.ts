@@ -1,6 +1,6 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // AutoPublisher — Motor Editorial: Settings API
-// MODE: SINGLE-TENANT (TVG only)
+// MODE: tenant resolved from the authenticated user
 // GET: Fetch settings + active prompt + humanization + rules
 // PUT: Update settings (API keys sent to Vault)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -8,8 +8,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { EditorialAdminAuthorizationError, requireEditorialAdmin } from "../_shared/editorialAdminAuth.ts";
-
-const FIXED_CLIENT_ID = "cd287e6e-f273-4d0f-a72d-2a8c391e40e9";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -25,10 +23,9 @@ Deno.serve(async (req: Request) => {
     try {
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
         const supabaseServiceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-        const clienteId = FIXED_CLIENT_ID;
-
         const sbAdmin = createClient(supabaseUrl, supabaseServiceRole);
-        await requireEditorialAdmin(req, sbAdmin, clienteId);
+        const authorization = await requireEditorialAdmin(req, sbAdmin);
+        const clienteId = authorization.clienteId;
 
         // ============================================================
         // GET
@@ -161,11 +158,57 @@ Deno.serve(async (req: Request) => {
             );
         }
 
+        // Rules used to be written directly by the browser with a fixed tenant
+        // id. Keep their existing UI contract but scope all mutations here.
+        if (req.method === "POST") {
+            const { rule_type, value } = await req.json();
+            if (typeof rule_type !== "string" || typeof value !== "string" || !value.trim()) {
+                return new Response(JSON.stringify({ error: "RULE_INVALID" }), {
+                    status: 400,
+                    headers: { ...corsHeaders, "Content-Type": "application/json" },
+                });
+            }
+
+            const { data: rule, error } = await sbAdmin
+                .schema("ap")
+                .from("editorial_rules")
+                .insert({ cliente_id: clienteId, rule_type, value: value.trim() })
+                .select()
+                .single();
+            if (error) throw error;
+
+            return new Response(JSON.stringify(rule), {
+                headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+        }
+
+        if (req.method === "DELETE") {
+            const { id } = await req.json().catch(() => ({}));
+            if (typeof id !== "string" || !id) {
+                return new Response(JSON.stringify({ error: "RULE_ID_REQUIRED" }), {
+                    status: 400,
+                    headers: { ...corsHeaders, "Content-Type": "application/json" },
+                });
+            }
+
+            const { error } = await sbAdmin
+                .schema("ap")
+                .from("editorial_rules")
+                .delete()
+                .eq("id", id)
+                .eq("cliente_id", clienteId);
+            if (error) throw error;
+
+            return new Response(JSON.stringify({ success: true }), {
+                headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+        }
+
         return new Response("Method not allowed", { status: 405, headers: corsHeaders });
     } catch (err: any) {
         console.error("Settings Error:", err);
         return new Response(
-            JSON.stringify({ error: err instanceof EditorialAdminAuthorizationError ? "EDITORIAL_ADMIN_REQUIRED" : err.message }),
+            JSON.stringify({ error: err instanceof EditorialAdminAuthorizationError ? err.code : err.message }),
             { status: err instanceof EditorialAdminAuthorizationError ? err.status : 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
     }

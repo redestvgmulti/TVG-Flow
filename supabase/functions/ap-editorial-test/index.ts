@@ -10,8 +10,6 @@ import { buildEditorialPrompt, getEditorialContext } from "../_shared/editorialP
 import { callLLM } from "../_shared/llmClient.ts";
 import { EditorialAdminAuthorizationError, requireEditorialAdmin } from "../_shared/editorialAdminAuth.ts";
 
-const FIXED_CLIENT_ID = "cd287e6e-f273-4d0f-a72d-2a8c391e40e9";
-
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -25,7 +23,7 @@ Deno.serve(async (req: Request) => {
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
         const supabaseServiceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
         const sbAdmin = createClient(supabaseUrl, supabaseServiceRole);
-        const authorization = await requireEditorialAdmin(req, sbAdmin, FIXED_CLIENT_ID);
+        const authorization = await requireEditorialAdmin(req, sbAdmin);
         const clienteId = authorization.clienteId;
 
         // 1. Resolve Secret (API Key) from Vault ONLY
@@ -165,7 +163,7 @@ Deno.serve(async (req: Request) => {
 
     } catch (err: any) {
         console.error("Test Endpoint Err:", err);
-        return new Response(JSON.stringify({ error: err instanceof EditorialAdminAuthorizationError ? "EDITORIAL_ADMIN_REQUIRED" : err.message }), {
+        return new Response(JSON.stringify({ error: err instanceof EditorialAdminAuthorizationError ? err.code : err.message }), {
             status: err instanceof EditorialAdminAuthorizationError ? err.status : 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
