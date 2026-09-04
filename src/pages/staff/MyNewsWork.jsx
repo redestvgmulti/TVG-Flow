@@ -10,6 +10,9 @@ const STATUS_LABELS = {
     adopted: 'Para produzir',
     in_production: 'Produzindo',
     completed: 'Concluída',
+    draft: 'Em produção editorial',
+    editing: 'Em produção editorial',
+    content_final: 'Conteúdo finalizado',
 }
 
 function formatDate(value) {
@@ -45,12 +48,71 @@ export default function MyNewsWork() {
     const load = useCallback(async () => {
         if (!clienteId) return
         setLoading(true)
-        const { data, error } = await supabase.schema('ap').rpc('list_my_news_work', {
-            p_cliente_id: clienteId,
-        })
-        if (error) toast.error('Não foi possível carregar suas matérias.')
-        else setItems(data ?? [])
-        setLoading(false)
+        try {
+            let editorialEnabled = false
+            try {
+                const { data: flagData, error: flagError } = await supabase
+                    .schema('ap')
+                    .rpc('get_editorial_workflow_status')
+                if (!flagError && flagData === true) {
+                    editorialEnabled = true
+                }
+            } catch {
+                editorialEnabled = false
+            }
+
+            const { data: legacyData, error: legacyError } = await supabase
+                .schema('ap')
+                .rpc('list_my_news_work', { p_cliente_id: clienteId })
+
+            if (legacyError) {
+                toast.error('Não foi possível carregar suas matérias.')
+                setLoading(false)
+                return
+            }
+
+            let editorialData = []
+            if (editorialEnabled) {
+                try {
+                    const { data: edData, error: edError } = await supabase
+                        .schema('ap')
+                        .rpc('list_my_editorial_articles', { p_cliente_id: clienteId })
+                    if (!edError && Array.isArray(edData)) {
+                        editorialData = edData
+                    }
+                } catch {
+                    editorialData = []
+                }
+            }
+
+            const editorialBacklogIds = new Set(
+                editorialData.map(ed => ed.news_backlog_id).filter(Boolean)
+            )
+
+            const normalizedLegacy = (legacyData ?? [])
+                .filter(leg => !editorialBacklogIds.has(leg.id))
+                .map(leg => ({
+                    ...leg,
+                    origin: 'legacy',
+                    uniqueId: `legacy-${leg.id}`,
+                }))
+
+            const normalizedEditorial = editorialData.map(ed => ({
+                ...ed,
+                origin: 'editorial',
+                uniqueId: `editorial-${ed.article_id || ed.id}`,
+                titulo: ed.headline || 'Matéria sem título',
+                adopted_at: ed.created_at,
+                production_started_at: ed.created_at,
+                production_completed_at: ed.finalized_at || ed.first_finalized_at,
+            }))
+
+            setItems([...normalizedLegacy, ...normalizedEditorial])
+        } catch {
+            toast.error('Não foi possível carregar suas matérias.')
+        } finally {
+            setLoading(false)
+        }
     }, [clienteId])
 
     useEffect(() => {
@@ -59,6 +121,14 @@ export default function MyNewsWork() {
     }, [load])
 
     function openProduction(item) {
+        if (item.origin === 'editorial') {
+            toast.info(
+                item.status === 'content_final'
+                    ? 'Conteúdo editorial finalizado.'
+                    : 'Artigo em produção editorial.'
+            )
+            return
+        }
         setSearchParams(params => {
             params.set('modal', 'employee-mode')
             if (item.status === 'adopted' && !item.candidate_news_id) {
@@ -87,8 +157,8 @@ export default function MyNewsWork() {
         setReleasingId(null)
     }
 
-    const adoptedItems = items.filter(item => item.status === 'adopted' && !item.candidate_news_id)
-    const productionItems = items.filter(item => item.status !== 'adopted' || item.candidate_news_id)
+    const adoptedItems = items.filter(item => item.origin === 'legacy' && item.status === 'adopted' && !item.candidate_news_id)
+    const productionItems = items.filter(item => item.origin === 'editorial' || item.status !== 'adopted' || item.candidate_news_id)
 
     return (
         <div className="ap-page ap-my-work-page">
@@ -120,14 +190,14 @@ export default function MyNewsWork() {
                         <h2 className="ap-my-work-section-title">Minhas pautas</h2>
                         <p className="ap-my-work-section-hint">Pautas que você pegou e ainda não viraram uma produção.</p>
                         {adoptedItems.length === 0 ? <WorkEmptyState title="Nenhuma pauta aguardando início." description="Quando você pegar uma matéria, ela aparecerá aqui." /> : (
-                            <div className="ap-my-work-grid">{adoptedItems.map(item => <NewsWorkCard key={item.id} item={item} onOpen={openProduction} onRelease={release} releasingId={releasingId} />)}</div>
+                            <div className="ap-my-work-grid">{adoptedItems.map(item => <NewsWorkCard key={item.uniqueId || item.id} item={item} onOpen={openProduction} onRelease={release} releasingId={releasingId} />)}</div>
                         )}
                     </section>}
                     {workTab === 'producoes' && <section aria-label="Minhas produções">
                         <h2 className="ap-my-work-section-title">Minhas produções</h2>
                         <p className="ap-my-work-section-hint">Matérias cuja produção já foi iniciada.</p>
                         {productionItems.length === 0 ? <WorkEmptyState title="Não há produções em andamento." description="Quando você começar uma produção, ela aparecerá aqui." /> : (
-                            <div className="ap-my-work-grid">{productionItems.map(item => <NewsWorkCard key={item.id} item={item} onOpen={openProduction} onRelease={release} releasingId={releasingId} />)}</div>
+                            <div className="ap-my-work-grid">{productionItems.map(item => <NewsWorkCard key={item.uniqueId || item.id} item={item} onOpen={openProduction} onRelease={release} releasingId={releasingId} />)}</div>
                         )}
                     </section>}
                 </div>
@@ -149,23 +219,36 @@ function WorkEmptyState({ title, description }) {
 }
 
 function NewsWorkCard({ item, onOpen, onRelease, releasingId }) {
+    const isEditorial = item.origin === 'editorial'
+    const statusLabel = isEditorial
+        ? (item.status === 'content_final' ? 'Conteúdo finalizado' : 'Em produção editorial')
+        : (STATUS_LABELS[item.status] || item.status)
+
     return (
         <article className="ap-my-work-card">
-            <div className={`ap-my-work-status is-${item.status}`}>{STATUS_LABELS[item.status] || item.status}</div>
+            <div className={`ap-my-work-status is-${item.status}`}>{statusLabel}</div>
             <h2>{item.titulo || domainOf(item.url_original)}</h2>
             <p className="ap-my-work-domain">{domainOf(item.url_original)}</p>
             {item.observacao && <p className="ap-my-work-note">{item.observacao}</p>}
             <dl>
-                <div><dt>Adotada em</dt><dd>{formatDate(item.adopted_at)}</dd></div>
-                <div><dt>Produção iniciada</dt><dd>{formatDate(item.production_started_at)}</dd></div>
-                <div><dt>Concluída em</dt><dd>{formatDate(item.production_completed_at)}</dd></div>
+                <div><dt>{isEditorial ? 'Iniciado em' : 'Adotada em'}</dt><dd>{formatDate(item.adopted_at)}</dd></div>
+                <div><dt>{isEditorial ? 'Atualizado em' : 'Produção iniciada'}</dt><dd>{formatDate(isEditorial ? item.updated_at : item.production_started_at)}</dd></div>
+                <div><dt>{isEditorial ? 'Finalizado em' : 'Concluída em'}</dt><dd>{formatDate(item.production_completed_at)}</dd></div>
             </dl>
             <div className="ap-my-work-actions">
-                <a href={item.url_original} target="_blank" rel="noreferrer" className="ap-btn-refresh"><ExternalLink size={13} /> Fonte</a>
-                <button type="button" className="ap-backlog-action-solid" onClick={() => onOpen(item)}>
-                    <Zap size={13} /> {item.status === 'adopted' ? 'Começar produção' : 'Ver produção'}
-                </button>
-                {item.status === 'adopted' && !item.candidate_news_id && (
+                {item.url_original && (
+                    <a href={item.url_original} target="_blank" rel="noreferrer" className="ap-btn-refresh"><ExternalLink size={13} /> Fonte</a>
+                )}
+                {isEditorial ? (
+                    <button type="button" className="ap-backlog-action-solid" onClick={() => onOpen(item)}>
+                        <Zap size={13} /> {item.status === 'content_final' ? 'Conteúdo finalizado' : 'Em produção editorial'}
+                    </button>
+                ) : (
+                    <button type="button" className="ap-backlog-action-solid" onClick={() => onOpen(item)}>
+                        <Zap size={13} /> {item.status === 'adopted' ? 'Começar produção' : 'Ver produção'}
+                    </button>
+                )}
+                {!isEditorial && item.status === 'adopted' && !item.candidate_news_id && (
                     <button type="button" className="ap-backlog-action-icon" onClick={() => onRelease(item)} disabled={Boolean(releasingId)} title="Devolver ao Banco de pautas" aria-label="Devolver ao Banco de pautas">
                         {releasingId === item.id ? <Loader2 size={14} className="ap-spin-icon" /> : <Undo2 size={14} />}
                     </button>
