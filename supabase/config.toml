@@ -54,6 +54,12 @@ verify_jwt = true
 [functions.ap-editorial-test]
 verify_jwt = true
 
+[functions.ai-chat]
+verify_jwt = true
+
+[functions.ai-image-edit]
+verify_jwt = true
+
 [functions.create-professional]
 verify_jwt = true
 

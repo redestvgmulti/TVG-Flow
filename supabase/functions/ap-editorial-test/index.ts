@@ -6,7 +6,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { buildEditorialPrompt, getEditorialContext } from "../_shared/editorialPromptBuilder.ts";
+import { buildEditorialPrompt, getRequiredEditorialContext } from "../_shared/editorialPromptBuilder.ts";
 import { callLLM } from "../_shared/llmClient.ts";
 import { EditorialAdminAuthorizationError, requireEditorialAdmin } from "../_shared/editorialAdminAuth.ts";
 
@@ -28,10 +28,7 @@ Deno.serve(async (req: Request) => {
 
         // 1. Resolve Secret (API Key) from Vault ONLY
         // Load Settings to find vault secret ID
-        const context = await getEditorialContext(sbAdmin, clienteId, "");
-        if (!context || !context.settings) {
-            throw new Error("Editorial Settings not configured.");
-        }
+        const context = await getRequiredEditorialContext(sbAdmin, clienteId);
 
         const vaultId = context.settings.vault_secret_id;
         if (!vaultId) throw new Error("OpenAI Key not saved in Vault.");

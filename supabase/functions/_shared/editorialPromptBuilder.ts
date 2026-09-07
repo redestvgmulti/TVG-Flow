@@ -4,7 +4,7 @@
 // Supports hybrid mode: userHeadline / userTag / userText from human editor
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-import { SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { composeEditorialPolicy, getRequiredEditorialContext } from "./editorialPolicy.ts";
 
 export interface EditorialInput {
     titulo: string;
@@ -25,7 +25,7 @@ export interface EditorialInput {
     status?: string | null;
 }
 
-export async function buildEditorialPrompt(sbAdmin: SupabaseClient, data: EditorialInput): Promise<string> {
+export async function buildEditorialPrompt(sbAdmin: any, data: EditorialInput): Promise<string> {
     const { titulo, conteudo, categoria, url_original, settings, promptVersion, humanization, rules, openaiKey, contentType, userHeadline, userTag, userText, status } = data;
 
     // SANITIZAÇÃO (P0)
@@ -37,19 +37,13 @@ export async function buildEditorialPrompt(sbAdmin: SupabaseClient, data: Editor
     const safeUserHeadline = userHeadline ? userHeadline.slice(0, 150).trim() : null;
     const safeUserTag = userTag ? userTag.toUpperCase().trim().slice(0, 20) : null;
 
-    // 1. SYSTEM BASE (Limit to 10000 chars)
-    let systemPrompt = promptVersion || "Você é um editor sênior de jornalismo digital especializado em curadoria de conteúdo para redes sociais.";
-    if (settings.system_prompt_override && settings.override_prompt_text) {
-        systemPrompt = settings.override_prompt_text.slice(0, 10000);
-    } else {
-        systemPrompt = systemPrompt.slice(0, 10000);
-    }
-
-    if (contentType === 'reels') {
-        systemPrompt += "\n\nVocê está criando conteúdo para REELS, mas mantenha o rigor informativo. Não use linguagem de 'produtor de vídeo', use linguagem de 'jornalista digital'.";
-    } else if (contentType === 'story') {
-        systemPrompt += "\n\nVoce esta criando conteudo para STORIES. Produza texto conciso para leitura vertical, preserve o rigor informativo e nao trate o formato como Feed ou Reels.";
-    }
+    const sharedPolicy = composeEditorialPolicy({
+        settings,
+        promptVersion: promptVersion || "",
+        humanization,
+        rules,
+        contentType,
+    });
 
     // 2. HYBRID HUMAN LOCK — injected right after system before any other instructions
     let hybridLockSection = "";
@@ -66,39 +60,6 @@ Use EXATAMENTE esta tag no campo context_tag do JSON de saída. NÃO a altere.\n
     if (userText) {
         hybridLockSection += `\n📝 MODO TEXTO MANUAL: O conteúdo abaixo foi escrito diretamente pelo editor humano.\nSua tarefa é revisar, expandir com informações contextuais quando necessário, melhorar a legibilidade e gerar uma caption completa com hashtags relevantes. NUNCA invente fatos não presentes no texto original.\n`;
     }
-
-    // 3. RULES (CONSTRAINTS - Limit rules processing to 50)
-    const limitedRules = rules.slice(0, 50);
-    const forbidden = limitedRules.filter(r => r.rule_type === 'forbidden').map(r => r.value).join(", ");
-    const mandatory = limitedRules.filter(r => r.rule_type === 'mandatory').map(r => r.value).join(", ");
-    const substitutions = limitedRules.filter(r => r.rule_type === 'substitution').map(r => r.value).join("; ");
-
-    let constraintsSection = "";
-    if (forbidden || mandatory || substitutions) {
-        constraintsSection = `\nREGRAS EDITORIAIS INEGOCIÁVEIS:\n`;
-        if (forbidden) constraintsSection += `- NUNCA use as palavras/expressões: [${forbidden}]\n`;
-        if (mandatory) constraintsSection += `- É OBRIGATÓRIO incluir/mencionar: [${mandatory}]\n`;
-        if (substitutions) constraintsSection += `- SUBSTITUIÇÕES VIGENTES: ${substitutions}\n`;
-    }
-
-    // 4. STYLE & HUMANIZATION
-    const formLevel = humanization?.formality_level ?? 50;
-    const creaLevel = humanization?.creativity_level ?? 50;
-    const techLevel = humanization?.technical_level ?? 30;
-    const antiAi = humanization?.anti_ai_variation ?? true;
-
-    let formText = "Neutro/Equilibrado";
-    if (formLevel > 75) formText = "Extremamente Formal/Acadêmico";
-    else if (formLevel < 25) formText = "Muito Informal/Descontraído";
-
-    let creaText = "Normal";
-    if (creaLevel > 75) creaText = "Metáforas criativas, storytelling muito rico";
-    else if (creaLevel < 25) creaText = "Extremamente direto, formato hard-news focado nos fatos secos";
-
-    let techText = "Básico/Público Leigo";
-    if (techLevel > 75) techText = "Especializado/Linguagem técnica predominante";
-
-    const styleSection = `\nPARÂMETROS DE ESTILO E HUMANIZAÇÃO:\n- Formalidade: ${formLevel}% (${formText})\n- Criatividade: ${creaLevel}% (${creaText})\n- Densidade Técnica: ${techLevel}% (${techText})\n${antiAi ? '- DIRETRIZ ANTI-AI: Evite clichês de IA como "Descubra agora", "Mergulhe fundo", "É importante ressaltar". Use conectivos naturais, varie o tamanho das frases e mantenha a imperfeição humana.' : ''}\n`;
 
     // 5. KNOWLEDGE CONTEXT (RAG - Dynamically resolved)
     let ragSection = "";
@@ -239,12 +200,12 @@ ${jsonFields.join('\n')}
 ${strictFormattingNorms}
 `;
 
-    // Assemble full prompt
-    return `${systemPrompt}${hybridLockSection}\n${constraintsSection}\n${styleSection}\n${ragSection}\n${newsSection}\n${formatSection}`;
+    // Assemble with the same active policy used by the native chat.
+    return `${sharedPolicy.systemPrompt}${hybridLockSection}\n${sharedPolicy.constraintsSection}\n${sharedPolicy.styleSection}\n${ragSection}\n${newsSection}\n${formatSection}`;
 }
 
 // Helper to fetch entire editorial context for a given tenant
-export async function getEditorialContext(sbAdmin: SupabaseClient, clienteId: string, inputRawText: string) {
+export async function getEditorialContext(sbAdmin: any, clienteId: string, inputRawText: string) {
     try {
         const [{ data: settings }, { data: humanization }, { data: prompts }, { data: rules }] = await Promise.all([
             sbAdmin.schema("ap").from("editorial_settings").select("*").eq("cliente_id", clienteId).eq("is_active", true).maybeSingle(),
@@ -265,6 +226,8 @@ export async function getEditorialContext(sbAdmin: SupabaseClient, clienteId: st
         return null; // fallback
     }
 }
+
+export { getRequiredEditorialContext };
 
 export function buildStudioPrompt(data: EditorialInput): string {
     const { titulo, conteudo, categoria, userText } = data;
