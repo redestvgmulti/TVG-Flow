@@ -452,4 +452,3 @@ YES
 ```
 
 O próximo passo permitido é revisar este gate e, em uma etapa explicitamente autorizada, executar o runbook controlado. Fase 2B continua fora de escopo.
-
