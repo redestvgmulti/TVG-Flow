@@ -136,37 +136,17 @@ Deno.serve(async (req: Request) => {
             });
         }
 
-        // Compare-and-set keeps approval human, tenant-authorized and race-safe.
-        const approvedAt = new Date().toISOString();
-        const { data, error } = await supabase
-            .schema("ap").from("candidate_news")
-            .update({
-                status: "approved",
-                approved_by: operator.id,
-                approved_by_name: operator.email,
-                approved_at: approvedAt,
-            })
-            .eq("id", item.id)
-            .eq("status", "pending_review")
-            .is("processing_started_at", null)
-            .select("id, status")
-            .maybeSingle();
-
-        if (error) {
-            await runTelemetry.logError("APPROVAL_FAILED", 0, { mode: "operator_target", result: "error" });
-            return new Response(JSON.stringify({ error: "APPROVAL_FAILED" }), {
-                status: 500,
-                headers: { ...corsHeaders, "Content-Type": "application/json" },
-            });
-        }
-        if (!data) {
-            await runTelemetry.logError("APPROVAL_INVALID_STATE", 0, { mode: "operator_target", result: "invalid_state" });
-            return new Response(JSON.stringify({ error: "APPROVAL_INVALID_STATE" }), {
-                status: 409,
-                headers: { ...corsHeaders, "Content-Type": "application/json" },
-            });
-        }
-
+        // Use the user's JWT: the database verifies admin access and the asset reviewed.
+        const userClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+            global: { headers: { Authorization: req.headers.get("Authorization")! } },
+        });
+        const { error } = await userClient.schema("ap").rpc("p0_approve_generation", {
+            p_candidate_id: item.id, p_cliente_id: item.cliente_id,
+            p_generation_id: body.generationId, p_asset_url: body.assetUrl,
+        });
+        if (error) return new Response(JSON.stringify({ error: "REVIEWED_GENERATION_REQUIRED" }), {
+            status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
         const telemetry = new Telemetry(supabase);
         await telemetry.logStart({
             worker_name: "ap-content-production",

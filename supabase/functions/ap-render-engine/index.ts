@@ -1,9 +1,9 @@
+import { beginGeneration, generationAssetPath, reserveGenerationAsset, uploadGenerationAsset } from "./generationWorkflow.mjs";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
   buildLegacyLayers,
   buildProfileMasterLayers,
-  claimPendingRender,
   detectRenderPath,
   prepareRotationV1Render,
   RenderContractError,
@@ -376,9 +376,11 @@ Deno.serve(async (req) => {
   }
 
   const results = [];
-  for (const item of items) {
-    const claimedAt = new Date().toISOString();
-    if (!await claimPendingRender(supabase, item, claimedAt)) continue;
+  for (const selectedItem of items) {
+    const generation = await beginGeneration(supabase, selectedItem.id);
+    if (!generation) continue;
+    const item = generation.candidate;
+    const generationId = generation.generation_id;
     const telemetry = new Telemetry(supabase);
     await telemetry.logStart({
       worker_name: "ap-render-engine",
@@ -401,6 +403,10 @@ Deno.serve(async (req) => {
         });
       }
 
+      const { error: planError } = await supabase.schema("ap").rpc("p0_record_render_plan", {
+        p_generation_id: generationId, p_plan: plan,
+      });
+      if (planError) throw new RenderContractError("RENDER_PLAN_PERSIST_FAILED");
       const finalUrl = await requestPlacid(plan.templateId, plan.layers, {
         candidateId: item.id,
         correlationId,
@@ -418,37 +424,13 @@ Deno.serve(async (req) => {
       if (item.content_type === "reels" && !contentType.includes("image/png")) {
         throw new RenderContractError("REELS_OUTPUT_NOT_PNG");
       }
-      const extension = contentType.includes("image/png") ? "png" : "jpg";
-      const path = `${item.cliente_id}/${item.id}.${extension}`;
-      const { error: uploadError } = await supabase.storage
-        .from("ap-renders")
-        .upload(
-          path,
-          new Uint8Array(await download.arrayBuffer()),
-          { contentType, upsert: true },
-        );
-      if (uploadError) {
-        throw new RenderContractError("RENDER_STORAGE_UPLOAD_FAILED");
-      }
-
-      const renderUrl =
-        `${supabaseUrl}/storage/v1/object/public/ap-renders/${path}`;
-      const { error: persistError } = plan.path === "territorial_composer_v1"
-        ? await supabase.schema("ap").rpc(
-          "complete_territorial_composer_render",
-          { p_candidate_id: item.id, p_render_url: renderUrl },
-        )
-        : await supabase
-          .schema("ap")
-          .from("candidate_news")
-          .update({
-            render_url: renderUrl,
-            imagem_url: renderUrl,
-            status: "pending_review",
-            render_started_at: null,
-            completed_at: new Date().toISOString(),
-          })
-          .eq("id", item.id);
+      const path = generationAssetPath(item.cliente_id, item.id, generationId, contentType);
+      await reserveGenerationAsset(supabase, generationId, path);
+      await uploadGenerationAsset(supabase, path, new Uint8Array(await download.arrayBuffer()), contentType);
+      const renderUrl = `${supabaseUrl}/storage/v1/object/public/ap-renders/${path}`;
+      const { error: persistError } = await supabase.schema("ap").rpc("p0_complete_render", {
+        p_generation_id: generationId, p_asset_path: path, p_asset_url: renderUrl,
+      });
       if (persistError) {
         throw new RenderContractError("RENDER_PERSIST_FAILED");
       }
@@ -468,21 +450,9 @@ Deno.serve(async (req) => {
         error_code: error.code,
         correlation_id: correlationId,
       });
-      const { error: failurePersistError } =
-        item.render_contract_version === "territorial_composer_v1"
-          ? await supabase.schema("ap").rpc(
-            "fail_territorial_composer_render",
-            { p_candidate_id: item.id, p_error_code: error.code },
-          )
-          : await supabase
-            .schema("ap")
-            .from("candidate_news")
-            .update({
-              status: "failed",
-              error_log: error.message,
-              render_started_at: null,
-            })
-            .eq("id", item.id);
+      const { error: failurePersistError } = await supabase.schema("ap").rpc("p0_fail_render", {
+        p_generation_id: generationId, p_error_code: error.code,
+      });
       if (failurePersistError) {
         console.error("[ap-render-engine] failure persistence failed", {
           candidate_news_id: item.id,

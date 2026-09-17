@@ -26,7 +26,7 @@ test('matter navigation uses operational labels and keeps team outside status ta
 test('pending queue and its counter use the same non-final status sets', async () => {
   const ui = await source('src/pages/admin/AutoPublisher.jsx')
 
-  assert.match(ui, /const PENDING_AVAILABLE_STATUSES = \['raw', 'ready_for_scoring', 'scored', 'selected', 'studio_selected', 'studio_ready'\]/)
+  assert.match(ui, /const PENDING_AVAILABLE_STATUSES = \['changes_requested', 'raw', 'ready_for_scoring', 'scored', 'selected', 'studio_selected', 'studio_ready'\]/)
   assert.match(ui, /const PENDING_ERROR_STATUSES = \['failed'\]/)
   assert.match(ui, /if \(currentTab === 'pendentes'\) \{[\s\S]*return PENDING_AVAILABLE_STATUSES/)
   assert.match(ui, /key === 'pendentes' \? currentPendingCount/)

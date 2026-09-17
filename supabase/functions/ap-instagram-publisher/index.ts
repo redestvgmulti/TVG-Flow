@@ -5,10 +5,11 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { publishLegacyFeed, supabasePublicationStore } from "./publicationWorkflow.mjs";
 import { Telemetry } from "../_shared/telemetry.ts";
 import { isTrustedInternalRequest } from "../_shared/internalWorkerAuth.ts";
 
-const LOCK_EXPIRY_MINUTES = 10;
+
 const BATCH_LIMIT = 20;
 const TENANT_TIMEZONE = "America/Sao_Paulo";
 
@@ -43,6 +44,7 @@ function isWithinQuietWindow(minutesOfDay: number, quietStart: string, quietEnd:
 }
 
 Deno.serve(async (req: Request) => {
+    if (req.method !== "POST") return new Response(JSON.stringify({ error: "METHOD_NOT_ALLOWED" }), { status: 405 });
     if (!isTrustedInternalRequest(req)) {
         return new Response(JSON.stringify({ error: "INTERNAL_WORKER_AUTH_REQUIRED" }), {
             status: 401,
@@ -50,6 +52,9 @@ Deno.serve(async (req: Request) => {
         });
     }
 
+    if (Deno.env.get("AP_LEGACY_PUBLISH_ENABLED") !== "true") {
+        return new Response(JSON.stringify({ ok: true, disabled: true, published: 0 }));
+    }
     const supabase = createClient(
         Deno.env.get("SUPABASE_URL")!,
         Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -60,15 +65,10 @@ Deno.serve(async (req: Request) => {
     const igAccountId = Deno.env.get("INSTAGRAM_BUSINESS_ACCOUNT_ID");
     const workerId = crypto.randomUUID();
 
-    const { data: candidates } = await supabase
-        .schema("ap").from("candidate_news")
-        .select("id, caption, render_url, cliente_id")
-        .eq("status", "approved")
-        .lte("horario_agendado", new Date().toISOString())
-        .is("instagram_post_id", null)
-        .order("horario_agendado", { ascending: true })
-        .limit(BATCH_LIMIT);
+    const { data: candidates, error: selectionError } = await supabase
+        .schema("ap").rpc("p0_list_publish_candidates", { p_limit: BATCH_LIMIT });
 
+    if (selectionError) return new Response(JSON.stringify({ error: "PUBLICATION_SELECTION_FAILED", published: 0 }), { status: 500 });
     if (!candidates?.length) return new Response(JSON.stringify({ ok: true, published: 0 }));
 
     const { minutesOfDay, startOfDayIso } = nowInTenantTimezone();
@@ -125,36 +125,20 @@ Deno.serve(async (req: Request) => {
     const telemetry = new Telemetry(supabase);
     await telemetry.logStart({ worker_name: "ap-instagram-publisher", worker_id: workerId, news_id: item.id, cliente_id: item.cliente_id });
 
-    const lockTime = new Date().toISOString();
-    const { data: locked } = await supabase
-        .schema("ap").from("candidate_news")
-        .update({ processing_started_at: lockTime, worker_id: workerId })
-        .eq("id", item.id).eq("status", "approved").is("instagram_post_id", null).select("id");
-
-    if (!locked?.length) { await telemetry.logError("acquire_failed"); return new Response(JSON.stringify({ ok: true })); }
-
     try {
-        // ... (Instagram API calls) ...
-        const cRes = await fetch(`https://graph.facebook.com/v22.0/${igAccountId}/media`, {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ image_url: item.render_url, caption: item.caption ?? "", access_token: igToken }),
+        const result = await publishLegacyFeed({
+            store: supabasePublicationStore(supabase), candidateId: item.id,
+            accountId: igAccountId, token: igToken,
         });
-        const { id: containerId } = await cRes.json();
-        const pRes = await fetch(`https://graph.facebook.com/v22.0/${igAccountId}/media_publish`, {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ creation_id: containerId, access_token: igToken }),
+        if (result.outcome === "posted") await telemetry.logSuccess(0, result);
+        else if (result.outcome === "not_claimed") await telemetry.logSuccess(0, result);
+        else await telemetry.logError(result.error || result.outcome, 0, result);
+        return new Response(JSON.stringify({ ...result, published: result.outcome === "posted" ? 1 : 0 }), {
+            status: result.outcome === "reconciliation_required" ? 409 : 200,
+            headers: { "Content-Type": "application/json" },
         });
-        const { id: postId } = await pRes.json();
-
-        await supabase.schema("ap").from("candidate_news").update({
-            instagram_post_id: postId, status: "posted", processing_started_at: null, completed_at: new Date().toISOString()
-        }).eq("id", item.id).eq("processing_started_at", lockTime);
-
-        await telemetry.logSuccess();
-        return new Response(JSON.stringify({ ok: true, published: 1, post_id: postId }));
-    } catch (err: any) {
-        await supabase.schema("ap").from("candidate_news").update({ processing_started_at: null }).eq("id", item.id).eq("processing_started_at", lockTime);
-        await telemetry.logError(err.message);
-        return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+    } catch {
+        await telemetry.logError("PUBLICATION_STOPPED_DATABASE_OR_CONFIGURATION_ERROR");
+        return new Response(JSON.stringify({ error: "PUBLICATION_STOPPED", published: 0 }), { status: 500 });
     }
 });
