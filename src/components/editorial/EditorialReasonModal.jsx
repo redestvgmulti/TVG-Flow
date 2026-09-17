@@ -14,6 +14,7 @@ export default function EditorialReasonModal({
     placeholder,
     confirmLabel,
     danger = false,
+    required = false,
 }) {
     const [reason, setReason] = useState('')
 
@@ -48,8 +49,8 @@ export default function EditorialReasonModal({
             <form id="editorial-reason-form" onSubmit={submit}>
                 {itemTitle && <p style={{ margin: '0 0 20px', color: 'var(--color-text-secondary)', lineHeight: 1.55 }}><strong style={{ color: 'var(--color-text-primary)' }}>{itemTitle}</strong></p>}
                 <div className="input-group">
-                    <label htmlFor="editorial-reason">{label} <span style={{ color: 'var(--color-text-tertiary)', fontWeight: 400 }}>(opcional)</span></label>
-                    <textarea id="editorial-reason" className="input" value={reason} onChange={(event) => setReason(event.target.value)} placeholder={placeholder} rows={4} disabled={isSubmitting} />
+                    <label htmlFor="editorial-reason">{label} <span style={{ color: 'var(--color-text-tertiary)', fontWeight: 400 }}>{required ? '(necessario)' : '(opcional)'}</span></label>
+                    <textarea id="editorial-reason" required={required} className="input" value={reason} onChange={(event) => setReason(event.target.value)} placeholder={placeholder} rows={4} disabled={isSubmitting} />
                 </div>
             </form>
         </Modal>

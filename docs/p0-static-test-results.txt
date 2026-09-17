@@ -1,0 +1,62 @@
+Final P0 suite after Storage trigger removal:
+32 PASS / 0 FAIL
+- 21 publication, render, Storage contract and UI tests
+- 11 PostgreSQL lifecycle, history and concurrency tests
+
+Expanded discovery after the revision:
+425 total
+408 pass
+9 fail
+8 skipped
+
+Comparable pre-P0 baseline:
+393 total
+376 pass
+9 fail
+8 skipped
+
+Comparable P0 contract suite before the two new Storage tests:
+412 total
+395 pass
+9 fail
+8 skipped
+
+The same nine failures were reproduced on the exact original HEAD and on the
+P0 patch. The Storage revision did not change their identity or failure reason.
+
+PREEXISTING_RELEVANT
+- content production enforces targeted admin JWT tenant authorization and separates the internal worker
+  Stale textual assertion expects only admin; current base also accepts super_admin.
+- inspected Feed, Reels and Stories maps produce only their permitted layers
+  Fixture violates the current two-sponsor invariant.
+
+PREEXISTING_UNRELATED
+- manual form offers artwork purpose and no technical picker at all
+  Stale exact JSX assertion; ArticleForm.jsx is unchanged by P0.
+- a valid caller can select an explicitly authorized client
+- TENANT_FORBIDDEN does not reveal a foreign client
+- a single authorized client is selected when cliente_id is absent
+- the agency resolver is only a preference inside a multi-client allowlist
+- an agency outside the caller allowlist cannot authorize a tenant
+- no active client membership is rejected
+  All six generator authorization failures use a stale mock without .from().
+  The helper and test file are unchanged by P0.
+
+REGRESSION
+none
+
+Targeted lint:
+PASS
+
+Global lint:
+225 errors / 39 warnings
+Same count as exact original HEAD.
+
+Deno check of the four changed Edge Functions:
+PASS
+
+Vite/PWA build:
+PASS
+
+git diff --check and untracked text whitespace check:
+PASS

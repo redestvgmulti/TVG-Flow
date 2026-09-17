@@ -71,7 +71,11 @@ test('worker telemetry preserves correlation and start/end timestamps without se
 
 test('render cannot transition directly to approved', () => {
   const source = read('supabase/functions/ap-render-engine/index.ts')
-  assert.match(source, /status:\s*"pending_review"/)
+  assert.match(source, /rpc\("p0_complete_render"/)
+  const migration = read('supabase/migrations/20260909014825_p0_editorial_publication_render_invariants.sql')
+  const completion = migration.split('CREATE FUNCTION ap.p0_complete_render')[1].split('CREATE FUNCTION ap.p0_fail_render')[0]
+  assert.match(completion, /status='pending_review'/)
+  assert.doesNotMatch(completion, /status='approved'/)
   assert.doesNotMatch(source, /status:\s*["']approved["']/)
 })
 
