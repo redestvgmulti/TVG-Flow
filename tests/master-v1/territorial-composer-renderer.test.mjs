@@ -261,8 +261,10 @@ test('renderer lifecycle delegates composer completion, failure and retries to a
     import('node:fs/promises').then(fs =>
       fs.readFile(new URL('../../supabase/functions/ap-render-recovery/index.ts', import.meta.url), 'utf8')),
   ])
-  assert.match(engine, /complete_territorial_composer_render/)
-  assert.match(engine, /fail_territorial_composer_render/)
+  assert.match(engine, /p0_complete_render/)
+  assert.match(engine, /p0_fail_render/)
+  assert.match(recovery, /p0_expire_render/)
+  assert.match(recovery, /p0_retry_render/)
   assert.match(recovery, /retry_territorial_composer_render/)
   assert.match(recovery, /\.eq\("render_contract_version", "territorial_composer_v1"\)/)
   assert.match(recovery, /\.eq\("status", "processing"\)/)

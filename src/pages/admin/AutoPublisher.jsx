@@ -1,3 +1,5 @@
+import EditorialReasonModal from '../../components/editorial/EditorialReasonModal'
+import { canEditCandidate, canApproveGeneration } from '../../services/editorialP0'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../services/supabase'
@@ -52,11 +54,12 @@ const TABS = [
     { key: 'publicadas', label: 'Publicadas' },
 ]
 
-const PENDING_AVAILABLE_STATUSES = ['raw', 'ready_for_scoring', 'scored', 'selected', 'studio_selected', 'studio_ready']
+const PENDING_AVAILABLE_STATUSES = ['changes_requested', 'raw', 'ready_for_scoring', 'scored', 'selected', 'studio_selected', 'studio_ready']
 const PENDING_ERROR_STATUSES = ['failed']
 
 // Status DB → tab mapping
 const STATUS_TAB = {
+    changes_requested: 'pendentes',
     raw: 'pendentes',
     ready_for_scoring: 'pendentes',
     scored: 'pendentes',
@@ -117,6 +120,7 @@ export default function AutoPublisher() {
     const [tabCounts, setTabCounts] = useState({})
     const [items, setItems] = useState([])
     const [loading, setLoading] = useState(false)
+    const [correctionItem, setCorrectionItem] = useState(null)
     const [pendingFilter, setPendingFilter] = useState('available')
     const [reviewFormat, setReviewFormat] = useState('all')
     const [ingestionEnabled, setIngestionEnabled] = useState(true)
@@ -282,7 +286,7 @@ export default function AutoPublisher() {
                      criado_por_user_id, creator_name_snapshot,
                      template_nome_snapshot, roteiro_studio, duracao_estimada, broll_sugestao,
                      studio_media_image_url, studio_media_video_url, enviado_para_studio,
-                     instagram_post_id, horario_agendado`)
+                     instagram_post_id, horario_agendado, current_generation_id, approved_generation_id, correction_draft`)
             .eq('cliente_id', clienteId)
             .in('status', statuses)
             .order('updated_at', { ascending: currentTab === 'revisao' })
@@ -470,7 +474,7 @@ export default function AutoPublisher() {
 
     async function handleApproveSelected(item) {
         const canPrepareRender = item.status === 'selected'
-        const canApproveReview = item.status === 'pending_review'
+        const canApproveReview = canApproveGeneration(item)
         if (!canPrepareRender && !canApproveReview) return
 
         // Part 2 - Frontend Validation
@@ -486,7 +490,7 @@ export default function AutoPublisher() {
             const { data, error: prodError } = await supabase.functions.invoke('ap-content-production', {
                 body: {
                     action: canPrepareRender ? 'process_selected' : 'approve_for_ig',
-                    newsId: item.id
+                    newsId: item.id, generationId: item.current_generation_id, assetUrl: item.render_url
                 }
             })
             if (prodError) throw prodError
@@ -506,11 +510,12 @@ export default function AutoPublisher() {
     }
 
     function handleEditOpen(item) {
+        if (!canEditCandidate(item)) return
         setEditingItem(item)
         setEditForm({
-            headline: item.headline || item.titulo || '',
-            caption: item.caption || '',
-            imagem_url: item.imagem_url || item.render_url || ''
+            headline: item.correction_draft?.headline ?? item.headline ?? item.titulo ?? '',
+            caption: item.correction_draft?.caption ?? item.caption ?? '',
+            imagem_url: item.correction_draft?.source_image ?? item.imagem_url ?? ''
         })
         setEditSelectedFile(null)
         setEditModalOpen(true)
@@ -518,7 +523,7 @@ export default function AutoPublisher() {
 
     async function handleSaveEdit(e) {
         e.preventDefault()
-        if (!editingItem) return
+        if (!editingItem || !canEditCandidate(editingItem)) return
         setIsSavingEdit(true)
         try {
             let finalImageUrl = editForm.imagem_url.trim()
@@ -536,16 +541,24 @@ export default function AutoPublisher() {
                 caption: editForm.caption.trim(),
                 imagem_url: editingItem.content_type === 'reels' ? null : finalImageUrl
             }
-            const { error } = await supabase.schema('ap').from('candidate_news')
-                .update(payload)
-                .eq('id', editingItem.id)
-                .in('status', ['raw', 'ready_for_scoring', 'scored', 'selected', 'pending_review'])
-            if (error) throw error
-
-            // Optimistic UI update
-            setItems(prev => prev.map(i => i.id === editingItem.id ? { ...i, ...payload } : i))
-
-            toast.success("Edição salva com sucesso!")
+            if (editingItem.status === 'changes_requested') {
+                const { error } = await supabase.schema('ap').rpc('p0_submit_correction', {
+                    p_candidate_id: editingItem.id, p_cliente_id: clienteId,
+                    p_expected_draft: editingItem.correction_draft,
+                    p_headline: payload.headline, p_caption: payload.caption,
+                    p_source_image: finalImageUrl || null,
+                })
+                if (error) throw error
+                toast.success('Nova arte solicitada. A arte anterior foi preservada.')
+            } else {
+                const { data, error } = await supabase.schema('ap').from('candidate_news')
+                    .update(payload).eq('id', editingItem.id).eq('cliente_id', clienteId)
+                    .in('status', ['raw', 'ready_for_scoring', 'scored', 'selected'])
+                    .is('render_url', null).is('current_generation_id', null).select('id').maybeSingle()
+                if (error || !data) throw error || new Error('EDITORIAL_STATE_CHANGED')
+                toast.success('Salvo.')
+            }
+            fetchItems(tab)
             setEditModalOpen(false)
             setEditingItem(null)
             fetchCounts()
@@ -555,15 +568,20 @@ export default function AutoPublisher() {
         setIsSavingEdit(false)
     }
 
-    async function handlePublish(item) {
-        if (item.status !== 'approved') return
-        const { error } = await supabase.schema('ap').rpc('mark_candidate_news_posted', {
-            p_candidate_news_id: item.id,
-            p_cliente_id: clienteId,
-        })
-        if (error) toast.error('Esta matéria não está mais disponível para publicação. Atualize a lista.')
-        else toast.success("Matéria marcada como publicada!")
-        fetchItems(tab); fetchCounts()
+    async function requestCorrection(reason) {
+        if (!reason) { toast.error('Informe o motivo.'); return }
+        setIsProcessing(true)
+        try {
+            const { error } = await supabase.schema('ap').rpc('p0_request_correction', {
+                p_candidate_id: correctionItem.id, p_cliente_id: clienteId,
+                p_asset_url: correctionItem.render_url, p_reason: reason,
+            })
+            if (error) throw error
+            setCorrectionItem(null)
+            toast.success('Material devolvido para corrigir em Para produzir. Arte preservada.')
+            fetchItems(tab); fetchCounts()
+        } catch { toast.error('Falha ao devolver. Atualize a lista.') }
+        finally { setIsProcessing(false) }
     }
 
     // ── Manual submission (Hybrid Editorial Engine)
@@ -911,7 +929,7 @@ export default function AutoPublisher() {
                                     onReject={handleReject}
                                     onStudio={handleStudio}
                                     onApproveSelected={handleApproveSelected}
-                                    onEdit={handleEditOpen}
+                                    onEdit={handleEditOpen} onCorrection={setCorrectionItem}
                                     isProcessing={isProcessing}
                                 />
                             ))}
@@ -929,7 +947,7 @@ export default function AutoPublisher() {
                     ) : items.length === 0 ? <EmptyStatePremium /> : (
                         <div className="ap-cards-grid">
                             {items.map(item => (
-                                <AprovadaCard key={item.id} item={item} onPublish={handlePublish} onReject={handleReject} isProcessing={isProcessing} showPublish={false} />
+                                <AprovadaCard key={item.id} item={item}  onReject={handleReject} isProcessing={isProcessing} showPublish={false} />
                             ))}
                         </div>
                     )
@@ -948,7 +966,7 @@ export default function AutoPublisher() {
                     ) : visibleItems.length === 0 ? <EmptyStatePremium title="Nenhuma matéria para revisar agora." /> : (
                         <div className="ap-cards-grid">
                             {visibleItems.map(item => (
-                                <PendenteCard key={item.id} item={item} onReject={handleReject} onStudio={handleStudio} onApproveSelected={handleApproveSelected} onEdit={handleEditOpen} isProcessing={isProcessing} />
+                                <PendenteCard key={item.id} item={item} onReject={handleReject} onStudio={handleStudio} onApproveSelected={handleApproveSelected} onEdit={handleEditOpen} onCorrection={setCorrectionItem} isProcessing={isProcessing} />
                             ))}
                         </div>
                     )}
@@ -966,9 +984,7 @@ export default function AutoPublisher() {
                                 <AprovadaCard
                                     key={item.id}
                                     item={item}
-                                    onPublish={handlePublish}
                                     onReject={handleReject}
-                                    onEdit={handleEditOpen}
                                     isProcessing={isProcessing}
                                 />
                             ))}
@@ -1025,11 +1041,9 @@ export default function AutoPublisher() {
                                                         : new Date(item.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
                                                 </td>
                                                 <td style={{ textAlign: 'center' }}>
-                                                    {item.instagram_post_id ? (
-                                                        <a href={`https://www.instagram.com/p/${item.instagram_post_id}`} target="_blank" rel="noreferrer" style={{ color: 'var(--color-primary)' }}>
-                                                            <Rss size={14} />
-                                                        </a>
-                                                    ) : '—'}
+                                                    {item.instagram_post_id
+                                                        ? <span title={`ID externo: ${item.instagram_post_id}`}>ID externo registrado</span>
+                                                        : <span>Histórico sem comprovação externa</span>}
                                                 </td>
                                             </tr>
                                         ))}
@@ -1085,7 +1099,7 @@ export default function AutoPublisher() {
             <Modal
                 isOpen={editModalOpen && !!editingItem}
                 onClose={() => { setEditModalOpen(false); setEditingItem(null) }}
-                title="Editar Matéria"
+                title={editingItem?.status === 'changes_requested' ? 'Corrigir e gerar nova arte' : 'Editar Matéria'}
                 icon={Pencil}
                 iconColor="#8b5cf6"
                 iconBg="#f5f3ff"
@@ -1093,6 +1107,10 @@ export default function AutoPublisher() {
             >
                 {editingItem && (
                             <form onSubmit={handleSaveEdit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                                {editingItem.status === 'changes_requested' && <p role="status">
+                                    Revise headline, legenda e foto antes de gerar. A arte anterior será preservada;
+                                    a nova arte voltará para revisão e precisará de aprovação.
+                                </p>}
 
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', boxSizing: 'border-box' }}>
                                     <label style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>Headline (Texto do Card)</label>
@@ -1143,12 +1161,18 @@ export default function AutoPublisher() {
 
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #e2e8f0' }}>
                                     <button type="submit" disabled={isSavingEdit} style={{ width: '100%', background: '#8b5cf6', color: '#fff', border: 'none', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: isSavingEdit ? 'not-allowed' : 'pointer', opacity: isSavingEdit ? 0.7 : 1 }}>
-                                        {isSavingEdit ? 'Salvando...' : 'Salvar Alterações'}
+                                        {isSavingEdit ? 'Salvando...' : editingItem.status === 'changes_requested' ? 'Gerar nova arte' : 'Salvar Alterações'}
                                     </button>
                                 </div>
                             </form>
                 )}
             </Modal>
+            {correctionItem && <EditorialReasonModal key={correctionItem.id} isOpen
+                isSubmitting={isProcessing} onClose={() => setCorrectionItem(null)} onConfirm={requestCorrection}
+                title="Voltar para correção" subtitle="A arte atual será preservada. Ao corrigir, uma nova arte será gerada."
+                itemTitle={correctionItem.headline || correctionItem.titulo} label="Motivo"
+                placeholder="Descreva o que precisa ser corrigido" confirmLabel="Devolver para corrigir" required
+            />}
         </>
     )
 }
@@ -1156,7 +1180,7 @@ export default function AutoPublisher() {
 // ──────────────────────────────────────────────────────────
 // PendenteCard — Matérias em "selected" aguardando aprovação
 // ──────────────────────────────────────────────────────────
-function PendenteCard({ item, onReject, onStudio, onApproveSelected, onEdit, isProcessing }) {
+function PendenteCard({ item, onReject, onStudio, onApproveSelected, onEdit, onCorrection, isProcessing }) {
     const [isExpanded, setIsExpanded] = useState(false)
     const [isApprovingLocal, setIsApprovingLocal] = useState(false)
 
@@ -1288,13 +1312,14 @@ function PendenteCard({ item, onReject, onStudio, onApproveSelected, onEdit, isP
                     <button className="ap-btn-reject" onClick={() => onReject(item)} title="Descartar" style={{ flexShrink: 0 }}>
                         <X size={16} />
                     </button>
-                    <button onClick={() => onEdit(item)} disabled={isProcessing} title="Editar Matéria" style={{ padding: '0 12px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '8px', color: '#475569', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '13px' }}>
-                        <Pencil size={14} /> Editar
-                    </button>
+                    {canEditCandidate(item) && <button onClick={() => onEdit(item)} disabled={isProcessing} title="Editar Matéria" style={{ padding: '0 12px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '8px', color: '#475569', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '13px' }}>
+                        <Pencil size={14} /> {item.status === 'changes_requested' ? 'Corrigir e gerar nova arte' : 'Editar'}
+                    </button>}
+                    {item.status === 'pending_review' && item.render_url && <button className="ap-card-btn-secondary" onClick={() => onCorrection(item)} disabled={isProcessing}>Voltar para corrigir</button>}
                     {canStartStudio && <button className="ap-card-btn-black" onClick={() => onStudio(item)} disabled={isProcessing}>
                         <Video size={14} /> Studio
                     </button>}
-                    <button className="ap-card-btn-primary" onClick={handleApprove} disabled={isProcessing || isApprovingLocal}>
+                    <button className="ap-card-btn-primary" onClick={handleApprove} disabled={isProcessing || isApprovingLocal || (item.status !== 'selected' && !canApproveGeneration(item))} title={item.status === 'pending_review' && !item.current_generation_id ? 'Gere uma nova arte antes de aprovar este material antigo' : undefined}>
                         {isApprovingLocal ? <Loader2 size={14} className="ap-spin-icon" /> : null}
                         {isApprovingLocal ? (item.status === 'selected' ? 'Preparando...' : 'Aprovando...') : (item.status === 'selected' ? 'Gerar arte' : 'Aprovar para publicação')}
                     </button>
@@ -1307,7 +1332,7 @@ function PendenteCard({ item, onReject, onStudio, onApproveSelected, onEdit, isP
 // ──────────────────────────────────────────────────────────
 // AprovadaCard — Matérias prontas, aguardam publicação manual
 // ──────────────────────────────────────────────────────────
-function AprovadaCard({ item, onPublish, onReject, isProcessing, showPublish = true }) {
+function AprovadaCard({ item, onReject, isProcessing, showPublish = true }) {
     const [copied, setCopied] = useState(false)
     const [isExpanded, setIsExpanded] = useState(false)
 
@@ -1488,15 +1513,9 @@ function AprovadaCard({ item, onPublish, onReject, isProcessing, showPublish = t
             </div>
 
             {/* Botão Publicar */}
-            {showPublish && item.status === 'approved' && <div className="ap-card-actions-wrap" style={{ paddingTop: 0 }}>
-                <button
-                    onClick={() => onPublish(item)}
-                    disabled={isRendering || isProcessing}
-                    style={{ width: '100%', margin: '0 16px', boxSizing: 'border-box', padding: '12px', borderRadius: '10px', border: 'none', background: '#111827', color: '#fff', fontWeight: 700, fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: isRendering ? 'not-allowed' : 'pointer', opacity: isRendering ? 0.5 : 1, transition: 'opacity 0.2s' }}
-                >
-                    <Check size={16} /> Publicar
-                </button>
-            </div>}
+            {showPublish && item.status === 'approved' && <p role="status" style={{ padding: '0 16px', fontSize: 12 }}>
+                Publicar pelo sistema está temporariamente indisponível. Baixar a arte não confirma envio ao Instagram.
+            </p>}
         </div>
     )
 }
@@ -1512,6 +1531,7 @@ function StatusBadge({ status, small, errorLog }) {
         selected: { label: 'Para produzir', bg: '#ede9fe', color: '#6d28d9' },
         pending_render: { label: 'Preparando', bg: '#fef9c3', color: '#854d0e' },
         processing: { label: 'Gerando arte', bg: '#f5f3ff', color: '#6d28d9' },
+        changes_requested: { label: 'Para corrigir', bg: '#fff7ed', color: '#c2410c' },
         pending_review: { label: 'Para revisar', bg: '#fff7ed', color: '#c2410c' },
         ready_to_publish: { label: 'Preparando', bg: '#fff7ed', color: '#c2410c' },
         approved: { label: 'Pronta', bg: '#dcfce7', color: '#166534' },

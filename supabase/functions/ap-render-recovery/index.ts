@@ -61,11 +61,19 @@ Deno.serve(async (req: Request) => {
         }
 
         const { data: stuckItems } = await supabase.schema("ap").from("candidate_news")
-            .select("id, render_contract_version, render_attempts, render_started_at")
+            .select("id, current_generation_id, render_contract_version, render_attempts, render_started_at")
             .eq("status", "pending_render").is("render_url", null).lt("render_started_at", expiryCutoff).limit(10);
 
         let recoveredCount = 0;
         for (const item of stuckItems || []) {
+            if (item.current_generation_id) {
+                const { error } = await supabase.schema("ap").rpc("p0_expire_render", {
+                    p_generation_id: item.current_generation_id,
+                    p_expected_started_at: item.render_started_at,
+                });
+                if (!error) recoveredCount++;
+                continue;
+            }
             const nextAttempts = (item.render_attempts ?? 0) + 1;
             if (
                 item.render_contract_version === "territorial_composer_v1" &&
@@ -88,7 +96,7 @@ Deno.serve(async (req: Request) => {
         const { data: retryItems, error: retrySelectionError } = await supabase
             .schema("ap")
             .from("candidate_news")
-            .select("id")
+            .select("id, current_generation_id")
             .eq("status", "failed")
             .eq("render_contract_version", "territorial_composer_v1")
             .is("render_url", null)
@@ -100,7 +108,7 @@ Deno.serve(async (req: Request) => {
         let retriedCount = 0;
         for (const item of retryItems || []) {
             const { error } = await supabase.schema("ap").rpc(
-                "retry_territorial_composer_render",
+                item.current_generation_id ? "p0_retry_render" : "retry_territorial_composer_render",
                 { p_candidate_id: item.id },
             );
             if (!error) retriedCount++;

@@ -588,5 +588,5 @@ test("worker mantém kill switch isolado e exige PNG para Reels", async () => {
   assert.match(rotationBranch, /killSwitchEnabled/);
   assert.doesNotMatch(rotationBranch, /resolveProfileMaster/);
   assert.match(source, /REELS_OUTPUT_NOT_PNG/);
-  assert.match(source, /claimPendingRender/);
+  assert.match(source, /beginGeneration\(supabase, selectedItem\.id\)/);
 });

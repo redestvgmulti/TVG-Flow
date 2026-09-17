@@ -1,0 +1,182 @@
+[
+  {
+    "function": "ap-render-engine",
+    "files": [
+      {
+        "path": "supabase/functions/ap-render-engine/index.ts",
+        "match": true,
+        "sha256": "847d5d8ee47e711b1f8e65d58896f04efc93c9830de778489485fd3af127f567"
+      },
+      {
+        "path": "supabase/functions/ap-render-engine/placidErrorTelemetry.ts",
+        "match": true,
+        "sha256": "0683ef8c9b21fa43a8f9e6f9940167e713a85cd264bec7af7d43790debad9e66"
+      },
+      {
+        "path": "supabase/functions/ap-render-engine/renderContract.ts",
+        "match": true,
+        "sha256": "de87427e33497c907dc0cec020caf7ab8df5f934e5c202e4e320dd3e7b6aeba7"
+      },
+      {
+        "path": "supabase/functions/ap-render-engine/territorialRenderContract.ts",
+        "match": true,
+        "sha256": "ef68ef8508e69e9ded8706e7962e5e66288d2851be333f20a9eb15820b4727f0"
+      },
+      {
+        "path": "supabase/functions/_shared/internalWorkerAuth.ts",
+        "match": true,
+        "sha256": "df1bd49560ac09b4e53f859de709a3a2c05205a6910808b4afacb48e426d9366"
+      },
+      {
+        "path": "supabase/functions/_shared/telemetry.ts",
+        "match": true,
+        "sha256": "a46e3cc3794f43b702757443c09b0466232ea0753a9df669be8512689b183d2a"
+      }
+    ]
+  },
+  {
+    "function": "ap-instagram-publisher",
+    "files": [
+      {
+        "path": "supabase/functions/ap-instagram-publisher/index.ts",
+        "match": true,
+        "sha256": "25c53e7bd9f93f76e0c1b4c4a4cf337cfbe3600d82b3507ea695b624df94bd11"
+      },
+      {
+        "path": "supabase/functions/_shared/internalWorkerAuth.ts",
+        "match": true,
+        "sha256": "df1bd49560ac09b4e53f859de709a3a2c05205a6910808b4afacb48e426d9366"
+      },
+      {
+        "path": "supabase/functions/_shared/telemetry.ts",
+        "match": true,
+        "sha256": "a46e3cc3794f43b702757443c09b0466232ea0753a9df669be8512689b183d2a"
+      }
+    ]
+  },
+  {
+    "function": "ap-content-production",
+    "files": [
+      {
+        "path": "supabase/functions/ap-content-production/index.ts",
+        "match": true,
+        "sha256": "e0526df15160b519b22e47e415bb494760da428da056af7d16f1dda5da36390a"
+      },
+      {
+        "path": "supabase/functions/_shared/canonicalEditorial.mjs",
+        "match": true,
+        "sha256": "49fe8e2359315d5e99c878788c98d16c2fe0fe80fafa00fca9809c2f285773e5"
+      },
+      {
+        "path": "supabase/functions/_shared/internalWorkerAuth.ts",
+        "match": true,
+        "sha256": "df1bd49560ac09b4e53f859de709a3a2c05205a6910808b4afacb48e426d9366"
+      },
+      {
+        "path": "supabase/functions/_shared/operatorAuth.ts",
+        "match": true,
+        "sha256": "760337af5df6f543e1d11ddb374358d1a9510bb9d052bd4074a92a0b92756969"
+      },
+      {
+        "path": "supabase/functions/_shared/telemetry.ts",
+        "match": true,
+        "sha256": "a46e3cc3794f43b702757443c09b0466232ea0753a9df669be8512689b183d2a"
+      }
+    ]
+  },
+  {
+    "function": "ap-render-recovery",
+    "files": [
+      {
+        "path": "supabase/functions/ap-render-recovery/index.ts",
+        "match": true,
+        "sha256": "5fa384a04dde1de77a50510ab43567699f7d44ab035da9b3daa5e0b24c44a13d"
+      },
+      {
+        "path": "supabase/functions/_shared/canonicalEditorial.mjs",
+        "match": true,
+        "sha256": "49fe8e2359315d5e99c878788c98d16c2fe0fe80fafa00fca9809c2f285773e5"
+      },
+      {
+        "path": "supabase/functions/_shared/internalWorkerAuth.ts",
+        "match": true,
+        "sha256": "df1bd49560ac09b4e53f859de709a3a2c05205a6910808b4afacb48e426d9366"
+      },
+      {
+        "path": "supabase/functions/_shared/operatorAuth.ts",
+        "match": true,
+        "sha256": "760337af5df6f543e1d11ddb374358d1a9510bb9d052bd4074a92a0b92756969"
+      },
+      {
+        "path": "supabase/functions/_shared/telemetry.ts",
+        "match": true,
+        "sha256": "a46e3cc3794f43b702757443c09b0466232ea0753a9df669be8512689b183d2a"
+      }
+    ]
+  },
+  {
+    "function": "ap-employee-generator",
+    "files": [
+      {
+        "path": "supabase/functions/ap-employee-generator/index.ts",
+        "match": true,
+        "sha256": "a1f3784a0d4c8306e284e4795122486511b19314c7fd16fac99c66583cdd7c4f"
+      },
+      {
+        "path": "supabase/functions/ap-employee-generator/masterConfiguration.ts",
+        "match": true,
+        "sha256": "7bceddf919db6803acf32b0a5249d47045e034caf003d08e88e20ab1bf685953"
+      },
+      {
+        "path": "supabase/functions/ap-employee-generator/sourceQuality.ts",
+        "match": true,
+        "sha256": "5c12e0a8fb52b43f8a5f9cf39994f7564a05de2e04ab82a793a56e6fe7d49f51"
+      },
+      {
+        "path": "supabase/functions/ap-employee-generator/tenantAuthorization.ts",
+        "match": true,
+        "sha256": "2bd1b3351e275d03d7b2229a2daa9e6f77787f5e38866bf3b44e4519e7e23bde"
+      },
+      {
+        "path": "supabase/functions/ap-employee-generator/territorialCandidateWorkflow.ts",
+        "match": true,
+        "sha256": "b8e274f6ba26e07de942f077a58fbbe02cac418b1089a00ee63e48bef86fb91e"
+      },
+      {
+        "path": "supabase/functions/ap-employee-generator/territorialComposer.ts",
+        "match": true,
+        "sha256": "248890c9e0cf850cf91d99e6ec8bac4beb6eb3a6bdfc9dfce5a84fe80c241902"
+      },
+      {
+        "path": "supabase/functions/ap-employee-generator/unexpectedErrorTelemetry.ts",
+        "match": true,
+        "sha256": "f36b22ac09cf711ded5ea4278970a2a3c96cc9ff47cee8641d3200f7081dcdfd"
+      },
+      {
+        "path": "supabase/functions/ap-employee-generator/visualTitleResolution.ts",
+        "match": true,
+        "sha256": "b81604c0a207d96b3c9464aa3093ce704b343d0afd4e198ec94515de92b6c95f"
+      },
+      {
+        "path": "supabase/functions/_shared/canonicalEditorial.mjs",
+        "match": true,
+        "sha256": "49fe8e2359315d5e99c878788c98d16c2fe0fe80fafa00fca9809c2f285773e5"
+      },
+      {
+        "path": "supabase/functions/_shared/internalWorkerAuth.ts",
+        "match": true,
+        "sha256": "df1bd49560ac09b4e53f859de709a3a2c05205a6910808b4afacb48e426d9366"
+      },
+      {
+        "path": "supabase/functions/_shared/operatorAuth.ts",
+        "match": true,
+        "sha256": "760337af5df6f543e1d11ddb374358d1a9510bb9d052bd4074a92a0b92756969"
+      },
+      {
+        "path": "supabase/functions/_shared/telemetry.ts",
+        "match": true,
+        "sha256": "a46e3cc3794f43b702757443c09b0466232ea0753a9df669be8512689b183d2a"
+      }
+    ]
+  }
+]
