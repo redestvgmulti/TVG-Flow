@@ -8,6 +8,8 @@ Este documento é executável somente depois que o relatório de prontidão regi
 
 O gate técnico atual está em `YES`, mas esta etapa não autorizou deploy. **Não executar ainda.** A implantação continua sendo uma ação de produção separada e explicitamente controlada.
 
+Atualização de 17/09/2026: o patch descrito neste runbook foi commitado e enviado ao GitHub, e está sob revisão em [PR #11](https://github.com/redestvgmulti/TVG-Flow/pull/11) (`fix/p0-editorial-foundation-20260909` → `main`). Este runbook só deve ser executado depois que o PR #11 for revisado e mesclado; a partir daí, a fonte de verdade para deploy passa a ser o commit de merge em `origin/main`, não mais o worktree local isolado. As seções abaixo que referenciam o worktree de preparação continuam válidas como registro histórico da validação local, mas o "release SHA" real é o merge commit do PR #11.
+
 A migration revisada não modifica o schema `storage`. O preflight mantém uma verificação fail-closed para impedir que essa dependência reapareça antes da janela.
 
 Projeto Supabase: `gyooxmpyxncrezjiljrj`.
@@ -32,18 +34,15 @@ Uma pessoa pode acumular papéis, mas cada validação precisa ter nome, hora e 
 
 ## 0. Precondições que precisam estar verdes
 
-Na raiz do worktree de release:
+Depois do merge do PR #11, clonar/atualizar um checkout limpo de `main` (não o worktree local isolado):
 
 ```powershell
 $ErrorActionPreference = 'Stop'
-$releaseWorktree = 'D:\DEV\TVG-Flow\.worktrees\p0-editorial-foundation-20260909'
-Set-Location -LiteralPath $releaseWorktree
-
-git status --short --branch
-git log -1 --format='%H %D %s'
+git fetch origin
+git log -1 --format='%H %D %s' origin/main
 git rev-parse origin/main
 git ls-remote origin refs/heads/main
-git diff --check
+git diff --check HEAD
 
 $unsupportedStorageMutation = Select-String `
   -LiteralPath 'supabase\migrations\20260909014825_p0_editorial_publication_render_invariants.sql' `
@@ -53,15 +52,17 @@ if ($unsupportedStorageMutation) {
 }
 ```
 
+Confirmar também que o merge commit de `origin/main` contém exatamente o diff do PR #11 (nenhum arquivo de R1, Radar Instagram ou Flow.IA misturado — ver classificação de escopo no PR) e que as quatro migrations `native_chat`/Flow.IA (`20260907183019`, `20260907201345`, `20260907213000`, `20260907224500`) permanecem deliberadamente fora deste merge (reconciliação tratada em PR separado; o ledger remoto já as tem aplicadas por versão, então `db push` nunca tentará reaplicá-las).
+
 Abortar se:
 
-- HEAD/base não forem os aprovados no novo gate;
+- o merge commit em `origin/main` não corresponder ao PR #11 aprovado;
 - `origin/main` tiver drift material ainda não ensaiado;
-- houver arquivos inesperados;
+- houver arquivos inesperados (R1, Radar Instagram, Flow.IA) no merge;
 - `git diff --check` falhar;
 - a migration ainda modificar diretamente `storage.objects`;
-- os 32 testes P0, typecheck, build ou lint direcionado não passarem;
-- qualquer uma das nove falhas herdadas mudar de identidade ou motivo.
+- os 32 testes P0, o Deno typecheck das quatro Edge Functions alteradas, o build ou o lint direcionado não passarem;
+- qualquer falha herdada pré-existente mudar de identidade ou motivo em relação ao classificado em `docs/p0-static-test-results.txt`.
 
 ## 1. Inventário remoto imediatamente antes da janela
 
