@@ -18,7 +18,12 @@ import ArticleWizard from '../../components/editorial/ArticleWizard'
 import NewsBacklogPanel from '../../components/editorial/NewsBacklogPanel'
 import CollectedNewsPanel from '../../components/editorial/CollectedNewsPanel'
 import TeamNewsWorkPanel from '../../components/editorial/TeamNewsWorkPanel'
+import CanonicalEditorialEditor from '../../components/editorial/CanonicalEditorialEditor'
+import EditorialReviewPanel from '../../components/editorial/EditorialReviewPanel'
 import Modal from '../../components/ui/Modal'
+import { useEditorialWorkflowFlag } from '../../hooks/useEditorialWorkflowFlag'
+import { startEditorialArticleFromBacklog } from '../../services/editorialArticlesService'
+import { CREATION_MODES, messageForRpcError, resolveCreationMode } from '../../services/editorialArticleContract'
 import CreatorSignature from '../../components/ui/CreatorSignature'
 import {
     availableContentTypes,
@@ -100,7 +105,7 @@ function formatOperationalDate(value) {
 
 // ──────────────────────────────────────────────────────────
 export default function AutoPublisher() {
-    const { role } = useAuth()
+    const { role, user } = useAuth()
     const [clienteId, setClienteId] = useState(null)
     const [clienteError, setClienteError] = useState('')
     const [superAdminClients, setSuperAdminClients] = useState([])
@@ -125,6 +130,14 @@ export default function AutoPublisher() {
     const [reviewFormat, setReviewFormat] = useState('all')
     const [ingestionEnabled, setIngestionEnabled] = useState(true)
     const [isProcessing, setIsProcessing] = useState(false)
+
+    // 2B.2.3: single source of truth for which creation UI the "Nova
+    // Matéria" modal shows. canonicalContext is null for a brand-new direct
+    // article, or {articleId, originBacklog} once a pauta has already been
+    // adopted into ap.editorial_articles (start_editorial_article_from_backlog).
+    const editorialFlag = useEditorialWorkflowFlag(supabase)
+    const creationMode = resolveCreationMode(editorialFlag.enabled)
+    const [canonicalContext, setCanonicalContext] = useState(null)
 
     // Manual Input State
     const [isManualModalOpen, setManualModalOpen] = useState(false)
@@ -218,7 +231,26 @@ export default function AutoPublisher() {
 
     function resetManualModal() {
         setManualModalOpen(false)
+        setCanonicalContext(null)
         resetManualForm()
+    }
+
+    // 2B.2.3: adopting a pauta while the flag is on hands it to the
+    // canonical domain instead of pre-filling the legacy form -- the RPC is
+    // idempotent by responsible_user_id, and BACKLOG_LEGACY_CANDIDATE_LINKED
+    // (already vinculada ao fluxo antigo) is surfaced as a friendly error
+    // rather than silently falling back.
+    async function startCanonicalProductionFromBacklog(item) {
+        try {
+            const created = await startEditorialArticleFromBacklog(supabase, {
+                backlogId: item.id,
+                requestId: crypto.randomUUID(),
+            })
+            setCanonicalContext({ articleId: created.id, originBacklog: item })
+            setManualModalOpen(true)
+        } catch (error) {
+            toast.error(messageForRpcError(error.code || error.message).description)
+        }
     }
 
     function handleCreateAnother() {
@@ -827,7 +859,7 @@ export default function AutoPublisher() {
 
                             <button
                                 className="ap-btn-refresh primary"
-                                onClick={() => setManualModalOpen(true)}
+                                onClick={() => { setCanonicalContext(null); setManualModalOpen(true) }}
                             >
                                 <Plus size={14} />
                                 Nova Matéria
@@ -877,6 +909,10 @@ export default function AutoPublisher() {
                 {tab === 'backlog' && <NewsBacklogPanel
                     clienteId={clienteId}
                     onStartProduction={(item) => {
+                        if (creationMode === CREATION_MODES.CANONICAL) {
+                            void startCanonicalProductionFromBacklog(item)
+                            return
+                        }
                         setFormData(previous => ({
                             ...previous,
                             url_original: item.url_original,
@@ -892,6 +928,7 @@ export default function AutoPublisher() {
                 {tab === 'templates' && <AutoPublisherTemplates clienteId={clienteId} />}
                 {tab === 'settings' && <AutoPublisherSettings clienteId={clienteId} clienteError={clienteError} />}
                 {tab === 'operacao' && <TeamNewsWorkPanel clienteId={clienteId} />}
+                {tab === 'revisao_editorial' && <EditorialReviewPanel clienteId={clienteId} />}
 
                 {tab === 'coletadas' && (
                     <CollectedNewsPanel
@@ -1063,36 +1100,46 @@ export default function AutoPublisher() {
                 size="lg"
                 className="ap-new-article-modal"
             >
-                <ArticleWizard
-                    formData={formData}
-                    setFormData={data => {
-                        setFormData(data);
-                        // Optionally clear errors here if mapped
-                        setManualFormErrors({});
-                    }}
-                    errors={manualFormErrors}
-                    onSubmit={submitManualNews}
-                    isSubmitting={isSubmittingManual}
-                    onCancel={resetManualModal}
-                    availableVisualModels={availableVisualModels}
-                    visualModelOptions={visualModelOptions}
-                    availableFormats={availableFormats}
-                    visualTitleGroups={visualTitleGroups}
-                    visualTitlesLoading={visualTitlesLoading}
-                    visualTitlesError={visualTitlesError}
-                    onRetryVisualTitles={loadAvailableVisualTitles}
-                    visualModelsState={visualModelsState}
-                    onRetryVisualModels={loadAvailableMasterRuntime}
-                    territorialComposerEnabled={territorialComposer.enabled}
-                    territorialCatalog={territorialComposer.catalog}
-                    territorialComposerState={territorialComposer.status}
-                    territorialComposerError={territorialComposer.error}
-                    onRetryTerritorialComposer={loadAvailableTerritorialComposer}
-                    selectedFile={selectedFile}
-                    setSelectedFile={setSelectedFile}
-                    submitSucceeded={manualSubmitSucceeded}
-                    onCreateAnother={handleCreateAnother}
-                />
+                {creationMode === CREATION_MODES.CANONICAL ? (
+                    <CanonicalEditorialEditor
+                        key={canonicalContext?.articleId || 'new'}
+                        articleId={canonicalContext?.articleId || null}
+                        originBacklog={canonicalContext?.originBacklog || null}
+                        currentUser={user}
+                        permissions={{ canReview: true }}
+                    />
+                ) : (
+                    <ArticleWizard
+                        formData={formData}
+                        setFormData={data => {
+                            setFormData(data);
+                            // Optionally clear errors here if mapped
+                            setManualFormErrors({});
+                        }}
+                        errors={manualFormErrors}
+                        onSubmit={submitManualNews}
+                        isSubmitting={isSubmittingManual}
+                        onCancel={resetManualModal}
+                        availableVisualModels={availableVisualModels}
+                        visualModelOptions={visualModelOptions}
+                        availableFormats={availableFormats}
+                        visualTitleGroups={visualTitleGroups}
+                        visualTitlesLoading={visualTitlesLoading}
+                        visualTitlesError={visualTitlesError}
+                        onRetryVisualTitles={loadAvailableVisualTitles}
+                        visualModelsState={visualModelsState}
+                        onRetryVisualModels={loadAvailableMasterRuntime}
+                        territorialComposerEnabled={territorialComposer.enabled}
+                        territorialCatalog={territorialComposer.catalog}
+                        territorialComposerState={territorialComposer.status}
+                        territorialComposerError={territorialComposer.error}
+                        onRetryTerritorialComposer={loadAvailableTerritorialComposer}
+                        selectedFile={selectedFile}
+                        setSelectedFile={setSelectedFile}
+                        submitSucceeded={manualSubmitSucceeded}
+                        onCreateAnother={handleCreateAnother}
+                    />
+                )}
             </Modal>
 
             {/* ── Modal Edição de Matéria */}

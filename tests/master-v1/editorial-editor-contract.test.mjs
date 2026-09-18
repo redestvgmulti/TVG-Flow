@@ -2,11 +2,15 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  CREATION_MODES,
   EDITOR_MODES,
   allowedActionsForMode,
+  canRetryDispatch,
+  dispatchButtonLabel,
   editorModeForStatus,
   isArticleReadOnly,
   messageForRpcError,
+  resolveCreationMode,
 } from '../../src/services/editorialArticleContract.js'
 
 test('editorModeForStatus maps every known status to its UI mode', () => {
@@ -74,4 +78,26 @@ test('messageForRpcError maps known RPC error codes and falls back for unknown o
   assert.equal(messageForRpcError('FORBIDDEN').title, 'Sem permissão')
   const fallback = messageForRpcError('SOME_UNKNOWN_CODE_NEVER_SEEN')
   assert.equal(fallback.title, 'Algo deu errado')
+})
+
+test('messageForRpcError covers the backlog-adoption error codes surfaced by 2B.2.3 wiring', () => {
+  assert.equal(messageForRpcError('BACKLOG_NOT_FOUND').title, 'Pauta não encontrada')
+  assert.equal(messageForRpcError('BACKLOG_NOT_ADOPTED').title, 'Pauta não adotada')
+  assert.equal(messageForRpcError('BACKLOG_NOT_OWNED').title, 'Pauta de outra pessoa')
+  assert.ok(messageForRpcError('BACKLOG_LEGACY_CANDIDATE_LINKED').description)
+  assert.ok(messageForRpcError('DISPATCH_FAILED').description.includes('Tente novamente'))
+})
+
+test('resolveCreationMode is the single decision both AutoPublisher.jsx and EmployeeMode.jsx branch on', () => {
+  assert.equal(resolveCreationMode(true), CREATION_MODES.CANONICAL)
+  assert.equal(resolveCreationMode(false), CREATION_MODES.LEGACY)
+  assert.equal(resolveCreationMode(undefined), CREATION_MODES.LEGACY, 'an unresolved/loading flag must fail closed to the legacy flow')
+})
+
+test('canRetryDispatch/dispatchButtonLabel: the manual dispatch action is offered exactly while ready_for_render, worded by whether a prior attempt failed', () => {
+  assert.equal(canRetryDispatch('ready_for_render'), true)
+  assert.equal(canRetryDispatch('dispatched'), false)
+  assert.equal(canRetryDispatch('content_final'), false)
+  assert.equal(dispatchButtonLabel(false), 'Enviar para render')
+  assert.equal(dispatchButtonLabel(true), 'Tentar enviar para render novamente')
 })

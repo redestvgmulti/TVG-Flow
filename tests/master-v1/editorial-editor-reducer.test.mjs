@@ -134,6 +134,32 @@ test('APPROVE_SUCCESS transitions the mode to read_only', () => {
   assert.equal(state.mode, 'read_only')
 })
 
+test('DISPATCH_SUCCESS transitions the mode to read_only with the dispatched status', () => {
+  let state = editorialEditorReducer(initialEditorialEditorState(), { type: 'LOAD_SUCCESS', article: article({ status: 'ready_for_render' }) })
+  state = editorialEditorReducer(state, { type: 'DISPATCH_START' })
+  assert.equal(state.status, 'dispatching')
+  state = editorialEditorReducer(state, { type: 'DISPATCH_SUCCESS', article: article({ status: 'dispatched', candidate_news_id: 'c1' }) })
+  assert.equal(state.mode, 'read_only')
+  assert.equal(state.article.status, 'dispatched')
+  assert.equal(state.lastMessage, 'Enviado para renderização.')
+})
+
+test('2B.2.3: an approval that succeeds but whose dispatch then fails never undoes the approval -- the article stays ready_for_render, not reverted to content_final or lost', () => {
+  let state = editorialEditorReducer(initialEditorialEditorState(), { type: 'LOAD_SUCCESS', article: article({ status: 'content_final' }) })
+  state = editorialEditorReducer(state, { type: 'APPROVE_START' })
+  state = editorialEditorReducer(state, { type: 'APPROVE_SUCCESS', article: article({ status: 'ready_for_render', headline: 'Aprovado de verdade' }) })
+  assert.equal(state.mode, 'read_only')
+  assert.equal(state.article.status, 'ready_for_render')
+
+  state = editorialEditorReducer(state, { type: 'DISPATCH_START' })
+  state = editorialEditorReducer(state, { type: 'DISPATCH_ERROR', error: { code: 'DISPATCH_FAILED' } })
+  assert.equal(state.status, 'idle')
+  assert.equal(state.error.code, 'DISPATCH_FAILED')
+  assert.equal(state.mode, 'read_only', 'still read-only, still frozen -- not bounced back to an editable mode')
+  assert.equal(state.article.status, 'ready_for_render', 'approval is not rolled back by a dispatch failure')
+  assert.equal(state.article.headline, 'Aprovado de verdade', 'the approved article itself is not lost or replaced')
+})
+
 test('REQUEST_CHANGES_SUCCESS transitions the mode to changes_requested', () => {
   let state = editorialEditorReducer(initialEditorialEditorState(), { type: 'LOAD_SUCCESS', article: article({ status: 'content_final' }) })
   state = editorialEditorReducer(state, { type: 'REQUEST_CHANGES_START' })

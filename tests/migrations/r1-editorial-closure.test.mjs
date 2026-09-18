@@ -33,6 +33,13 @@ const myNewsWorkSrc = await readFile(
   path.join(root, 'src', 'pages', 'staff', 'MyNewsWork.jsx'),
   'utf8',
 )
+// 2B.2.3: origin/uniqueId dedup logic moved out of MyNewsWork.jsx into its
+// own tested module -- see the sibling assertion in
+// r1-editorial-reporting-and-work.test.mjs for why.
+const editorialWorkNormalizationSrc = await readFile(
+  path.join(root, 'src', 'services', 'editorialWorkNormalization.js'),
+  'utf8',
+)
 
 const runtimeEnabled = Boolean(process.env.LOCAL_PG_PORT) || process.env.RUN_LOCAL_R1_CLOSURE_SQL === '1'
 const connection = {
@@ -87,17 +94,21 @@ test('Static contract: R1 migrations declare strict RLS, search_path, and zero c
 })
 
 test('Static contract: MyNewsWork dual-read preserves legacy flow when flag is OFF', () => {
-  assert.match(myNewsWorkSrc, /get_editorial_workflow_status/)
+  // 2B.2.3: see the equivalent assertion in
+  // r1-editorial-reporting-and-work.test.mjs for the extraction rationale.
+  assert.match(myNewsWorkSrc, /useEditorialWorkflowFlag/)
   assert.match(myNewsWorkSrc, /list_my_news_work/)
-  assert.match(myNewsWorkSrc, /list_my_editorial_articles/)
-  assert.match(myNewsWorkSrc, /origin:\s*'legacy'/)
-  assert.match(myNewsWorkSrc, /origin:\s*'editorial'/)
-  assert.match(myNewsWorkSrc, /uniqueId:\s*`legacy-/)
-  assert.match(myNewsWorkSrc, /uniqueId:\s*`editorial-/)
+  assert.match(myNewsWorkSrc, /listMyEditorialArticles/)
+  assert.match(editorialWorkNormalizationSrc, /uniqueId:\s*`legacy-/)
+  assert.match(editorialWorkNormalizationSrc, /uniqueId:\s*`editorial-/)
   assert.match(myNewsWorkSrc, /item\.origin === 'editorial'/)
-  assert.match(myNewsWorkSrc, /toast\.info/)
-  // Ensures editorial articles do not redirect to employee-mode
-  assert.match(myNewsWorkSrc, /if\s*\(item\.origin === 'editorial'\)\s*\{\s*toast\.info/)
+  // Ensures editorial articles do not redirect to employee-mode: 2B.2.3
+  // replaced the earlier toast.info placeholder with actually opening the
+  // canonical editor, which is the stronger form of the same guarantee this
+  // test always meant to enforce (editorial items never fall into the
+  // legacy employee-mode flow).
+  assert.match(myNewsWorkSrc, /if\s*\(item\.origin === 'editorial'\)\s*\{\s*setOpenArticle/)
+  assert.doesNotMatch(myNewsWorkSrc, /if\s*\(item\.origin === 'editorial'\)\s*\{\s*toast\.info/)
 })
 
 test('R1 Closure: Full end-to-end certification on ephemeral PostgreSQL', {

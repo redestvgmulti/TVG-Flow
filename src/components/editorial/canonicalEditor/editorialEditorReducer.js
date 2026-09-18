@@ -117,6 +117,18 @@ export function editorialEditorReducer(state, action) {
     case 'APPROVE_ERROR':
       return { ...state, status: 'idle', error: action.error }
 
+    case 'DISPATCH_START':
+      return { ...state, status: 'dispatching', error: null }
+    case 'DISPATCH_SUCCESS':
+      return fromArticle(state, action.article, 'Enviado para renderização.')
+    // The editorial approval that got the article to ready_for_render is
+    // never undone by a dispatch failure -- article/mode/revisionNumber stay
+    // exactly as APPROVE_SUCCESS left them; only the error surfaces, and the
+    // read-only view's retry button stays available (status is still
+    // ready_for_render).
+    case 'DISPATCH_ERROR':
+      return { ...state, status: 'idle', error: action.error }
+
     case 'REQUEST_CHANGES_START':
       return { ...state, status: 'requestingChanges', error: null }
     case 'REQUEST_CHANGES_SUCCESS':

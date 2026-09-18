@@ -1,4 +1,4 @@
-import { LayoutGrid, CheckSquare, Calendar, Bot, PlusSquare, User, BarChart, Users, Building, Rss, Inbox, Settings, Newspaper } from 'lucide-react'
+import { LayoutGrid, CheckSquare, Calendar, Bot, PlusSquare, User, BarChart, Users, Building, Rss, Inbox, Settings, Newspaper, ClipboardCheck } from 'lucide-react'
 
 // Single source of truth for every role-aware navigation surface.
 export const NAV_ITEMS = [
@@ -24,6 +24,7 @@ export const NAV_ITEMS = [
         children: [
             { key: 'ap-pipeline', label: 'Matérias', path: '/admin/autopublisher', icon: Rss },
             { key: 'ap-team-work', label: 'Equipe', path: '/admin/autopublisher/operacao', icon: Users },
+            { key: 'ap-editorial-review', label: 'Revisão editorial', path: '/admin/autopublisher/revisao_editorial', icon: ClipboardCheck },
             { key: 'ap-settings', label: 'Configurações', path: '/admin/autopublisher/settings', icon: Settings },
         ],
     },

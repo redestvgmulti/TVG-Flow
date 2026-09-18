@@ -4,15 +4,19 @@ import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { supabase } from '../../services/supabase'
 import { resolveOperationalClienteId } from '../../services/visualTitleGroups'
+import { useAuth } from '../../contexts/AuthContext'
+import { useEditorialWorkflowFlag } from '../../hooks/useEditorialWorkflowFlag'
+import { listMyEditorialArticles } from '../../services/editorialArticlesService'
+import { mergeLegacyAndEditorialWork } from '../../services/editorialWorkNormalization'
+import { operationalStageForEditorialStatus } from '../../services/editorialOperationalStage'
+import CanonicalEditorialEditor from '../../components/editorial/CanonicalEditorialEditor'
+import Modal from '../../components/ui/Modal'
 import '../../styles/AutoPublisher.css'
 
 const STATUS_LABELS = {
     adopted: 'Para produzir',
     in_production: 'Produzindo',
     completed: 'Concluída',
-    draft: 'Em produção editorial',
-    editing: 'Em produção editorial',
-    content_final: 'Conteúdo finalizado',
 }
 
 function formatDate(value) {
@@ -31,11 +35,14 @@ function domainOf(url) {
 
 export default function MyNewsWork() {
     const [, setSearchParams] = useSearchParams()
+    const { user } = useAuth()
     const [clienteId, setClienteId] = useState(null)
     const [items, setItems] = useState([])
     const [loading, setLoading] = useState(true)
     const [releasingId, setReleasingId] = useState(null)
     const [workTab, setWorkTab] = useState('pautas')
+    const [openArticle, setOpenArticle] = useState(null)
+    const editorialFlag = useEditorialWorkflowFlag(supabase)
 
     useEffect(() => {
         let active = true
@@ -49,18 +56,6 @@ export default function MyNewsWork() {
         if (!clienteId) return
         setLoading(true)
         try {
-            let editorialEnabled = false
-            try {
-                const { data: flagData, error: flagError } = await supabase
-                    .schema('ap')
-                    .rpc('get_editorial_workflow_status')
-                if (!flagError && flagData === true) {
-                    editorialEnabled = true
-                }
-            } catch {
-                editorialEnabled = false
-            }
-
             const { data: legacyData, error: legacyError } = await supabase
                 .schema('ap')
                 .rpc('list_my_news_work', { p_cliente_id: clienteId })
@@ -72,48 +67,21 @@ export default function MyNewsWork() {
             }
 
             let editorialData = []
-            if (editorialEnabled) {
+            if (editorialFlag.enabled) {
                 try {
-                    const { data: edData, error: edError } = await supabase
-                        .schema('ap')
-                        .rpc('list_my_editorial_articles', { p_cliente_id: clienteId })
-                    if (!edError && Array.isArray(edData)) {
-                        editorialData = edData
-                    }
+                    editorialData = await listMyEditorialArticles(supabase)
                 } catch {
                     editorialData = []
                 }
             }
 
-            const editorialBacklogIds = new Set(
-                editorialData.map(ed => ed.news_backlog_id).filter(Boolean)
-            )
-
-            const normalizedLegacy = (legacyData ?? [])
-                .filter(leg => !editorialBacklogIds.has(leg.id))
-                .map(leg => ({
-                    ...leg,
-                    origin: 'legacy',
-                    uniqueId: `legacy-${leg.id}`,
-                }))
-
-            const normalizedEditorial = editorialData.map(ed => ({
-                ...ed,
-                origin: 'editorial',
-                uniqueId: `editorial-${ed.article_id || ed.id}`,
-                titulo: ed.headline || 'Matéria sem título',
-                adopted_at: ed.created_at,
-                production_started_at: ed.created_at,
-                production_completed_at: ed.finalized_at || ed.first_finalized_at,
-            }))
-
-            setItems([...normalizedLegacy, ...normalizedEditorial])
+            setItems(mergeLegacyAndEditorialWork(legacyData, editorialData))
         } catch {
             toast.error('Não foi possível carregar suas matérias.')
         } finally {
             setLoading(false)
         }
-    }, [clienteId])
+    }, [clienteId, editorialFlag.enabled])
 
     useEffect(() => {
         const timer = window.setTimeout(() => { void load() }, 0)
@@ -122,11 +90,12 @@ export default function MyNewsWork() {
 
     function openProduction(item) {
         if (item.origin === 'editorial') {
-            toast.info(
-                item.status === 'content_final'
-                    ? 'Conteúdo editorial finalizado.'
-                    : 'Artigo em produção editorial.'
-            )
+            setOpenArticle({
+                id: item.article_id || item.id,
+                originBacklog: item.news_backlog_id
+                    ? { id: item.news_backlog_id, titulo: item.titulo, url_original: item.url_original, observacao: item.observacao }
+                    : null,
+            })
             return
         }
         setSearchParams(params => {
@@ -202,6 +171,17 @@ export default function MyNewsWork() {
                     </section>}
                 </div>
             )}
+
+            <Modal isOpen={Boolean(openArticle)} onClose={() => { setOpenArticle(null); void load() }} title="Matéria editorial" size="lg">
+                {openArticle && (
+                    <CanonicalEditorialEditor
+                        articleId={openArticle.id}
+                        originBacklog={openArticle.originBacklog}
+                        currentUser={user}
+                        permissions={{ canReview: false }}
+                    />
+                )}
+            </Modal>
         </div>
     )
 }
@@ -220,9 +200,8 @@ function WorkEmptyState({ title, description }) {
 
 function NewsWorkCard({ item, onOpen, onRelease, releasingId }) {
     const isEditorial = item.origin === 'editorial'
-    const statusLabel = isEditorial
-        ? (item.status === 'content_final' ? 'Conteúdo finalizado' : 'Em produção editorial')
-        : (STATUS_LABELS[item.status] || item.status)
+    const editorialStage = isEditorial ? operationalStageForEditorialStatus(item.status) : null
+    const statusLabel = isEditorial ? editorialStage.label : (STATUS_LABELS[item.status] || item.status)
 
     return (
         <article className="ap-my-work-card">
@@ -241,7 +220,7 @@ function NewsWorkCard({ item, onOpen, onRelease, releasingId }) {
                 )}
                 {isEditorial ? (
                     <button type="button" className="ap-backlog-action-solid" onClick={() => onOpen(item)}>
-                        <Zap size={13} /> {item.status === 'content_final' ? 'Conteúdo finalizado' : 'Em produção editorial'}
+                        <Zap size={13} /> {editorialStage.label}
                     </button>
                 ) : (
                     <button type="button" className="ap-backlog-action-solid" onClick={() => onOpen(item)}>

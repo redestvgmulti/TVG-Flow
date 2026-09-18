@@ -34,6 +34,14 @@ const myNewsWorkSrc = await readFile(
   path.join(root, 'src', 'pages', 'staff', 'MyNewsWork.jsx'),
   'utf8',
 )
+// 2B.2.3: the dual-read/dedup logic this suite originally found inline in
+// MyNewsWork.jsx was extracted into its own tested module so it could be
+// reused by the admin editorial review panel too -- the contract now spans
+// both files instead of one.
+const editorialWorkNormalizationSrc = await readFile(
+  path.join(root, 'src', 'services', 'editorialWorkNormalization.js'),
+  'utf8',
+)
 
 const runtimeEnabled = process.env.RUN_LOCAL_R1_REPORTING_SQL === '1' || Boolean(process.env.LOCAL_PG_PORT)
 const connection = {
@@ -58,15 +66,24 @@ test('Migration 4 defines reporting bridge and list_my_editorial_articles withou
 })
 
 test('MyNewsWork frontend implements dual-read with discriminator and safe non-redirecting editorial actions', () => {
-  assert.match(myNewsWorkSrc, /get_editorial_workflow_status/)
+  // 2B.2.3: the flag read, the two RPC calls, and the origin/uniqueId
+  // dedup logic used to live inline in this file; they were extracted into
+  // useEditorialWorkflowFlag / editorialArticlesService / editorialWorkNormalization
+  // so the admin editorial review panel could reuse them too. The contract
+  // this test enforces is unchanged in spirit -- dual-read, a discriminator,
+  // no duplicates -- just verified across the file that now owns each piece.
+  assert.match(myNewsWorkSrc, /useEditorialWorkflowFlag/)
   assert.match(myNewsWorkSrc, /list_my_news_work/)
-  assert.match(myNewsWorkSrc, /list_my_editorial_articles/)
-  assert.match(myNewsWorkSrc, /origin:\s*'legacy'/)
-  assert.match(myNewsWorkSrc, /origin:\s*'editorial'/)
-  assert.match(myNewsWorkSrc, /uniqueId/)
+  assert.match(myNewsWorkSrc, /listMyEditorialArticles/)
+  assert.match(myNewsWorkSrc, /mergeLegacyAndEditorialWork/)
   assert.match(myNewsWorkSrc, /if\s*\(item\.origin === 'editorial'\)/)
-  assert.match(myNewsWorkSrc, /Em produção editorial/)
-  assert.match(myNewsWorkSrc, /Conteúdo finalizado/)
+  assert.match(editorialWorkNormalizationSrc, /origin:\s*'legacy'/)
+  assert.match(editorialWorkNormalizationSrc, /origin:\s*'editorial'/)
+  assert.match(editorialWorkNormalizationSrc, /uniqueId/)
+  // "Editorial actions are safe/non-redirecting" now means opening the real
+  // canonical editor (2B.2.3) rather than the earlier toast-only placeholder.
+  assert.match(myNewsWorkSrc, /CanonicalEditorialEditor/)
+  assert.match(myNewsWorkSrc, /operationalStageForEditorialStatus/)
 })
 
 test('R1 Migration 4 SQL runtime validates reporting bridge, deduplication, tenant isolation and dual-read', {

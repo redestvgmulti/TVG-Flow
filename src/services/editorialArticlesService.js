@@ -92,6 +92,48 @@ export async function approveEditorialArticleForRender(supabase, { articleId, ex
   })
 }
 
+export async function startEditorialArticleFromBacklog(supabase, { backlogId, requestId }) {
+  return callArticleRpc(supabase, 'start_editorial_article_from_backlog', {
+    p_backlog_id: backlogId,
+    p_request_id: requestId,
+  })
+}
+
+export async function listMyEditorialArticles(supabase) {
+  const { data, error } = await supabase.schema('ap').rpc('list_my_editorial_articles')
+  if (error) throw new EditorialArticleError(error.message || 'UNKNOWN_ERROR', error)
+  return Array.isArray(data) ? data : []
+}
+
+// Defensive by design (never throws, defaults to false): callers use this to
+// decide which creation UI to render, so a transient RPC failure must fall
+// back to the legacy flow rather than break the screen. Mirrors the pattern
+// already established in MyNewsWork.jsx before this hook existed.
+export async function getEditorialWorkflowStatus(supabase) {
+  try {
+    const { data, error } = await supabase.schema('ap').rpc('get_editorial_workflow_status')
+    if (error) return false
+    return data === true
+  } catch {
+    return false
+  }
+}
+
+// Invoked synchronously right after ap.approve_editorial_article_for_render
+// succeeds (2B.2.1's dispatch design requires a live admin JWT). Any non-2xx
+// response is treated as one generic dispatch failure -- the caller always
+// shows the fixed "aprovada, mas o envio falhou" message regardless of the
+// underlying HTTP status, since the article's editorial approval already
+// happened and must not be undone by a dispatch-side error.
+export async function dispatchEditorialArticleRender(supabase, articleId) {
+  const { data, error } = await supabase.functions.invoke('ap-editorial-render-dispatch', {
+    body: { article_id: articleId },
+  })
+  if (error) throw new EditorialArticleError('DISPATCH_FAILED', error)
+  if (!data?.success) throw new EditorialArticleError('DISPATCH_FAILED', data)
+  return data
+}
+
 export async function scrapeArticleSource(supabase, url) {
   const { data, error } = await supabase.functions.invoke('ap-link-scraper', { body: { url } })
   if (error) throw new EditorialArticleError('SOURCE_SCRAPE_FAILED', error)
