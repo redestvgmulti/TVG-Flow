@@ -122,6 +122,26 @@ const MESSAGES = Object.freeze({
     title: 'Falha no envio',
     description: 'Não foi possível enviar a imagem. Tente novamente.',
   },
+  BACKLOG_NOT_FOUND: {
+    title: 'Pauta não encontrada',
+    description: 'Esta pauta não existe mais no banco de pautas.',
+  },
+  BACKLOG_NOT_ADOPTED: {
+    title: 'Pauta não adotada',
+    description: 'Esta pauta precisa ser adotada antes de iniciar a produção.',
+  },
+  BACKLOG_NOT_OWNED: {
+    title: 'Pauta de outra pessoa',
+    description: 'Esta pauta foi adotada por outra pessoa da equipe.',
+  },
+  BACKLOG_LEGACY_CANDIDATE_LINKED: {
+    title: 'Pauta já em produção',
+    description: 'Esta pauta já está vinculada a uma produção pelo fluxo antigo.',
+  },
+  DISPATCH_FAILED: {
+    title: 'Falha ao enviar para renderização',
+    description: 'A matéria foi aprovada, mas o envio para renderização falhou. Tente novamente.',
+  },
 })
 
 const DEFAULT_MESSAGE = Object.freeze({
@@ -131,4 +151,29 @@ const DEFAULT_MESSAGE = Object.freeze({
 
 export function messageForRpcError(code) {
   return MESSAGES[code] || DEFAULT_MESSAGE
+}
+
+export const CREATION_MODES = Object.freeze({
+  CANONICAL: 'canonical',
+  LEGACY: 'legacy',
+})
+
+// Single source of truth for "which creation UI does a host render", used by
+// both AutoPublisher.jsx and EmployeeMode.jsx instead of each having its own
+// ad hoc ternary -- keeps the decision testable and identical in both places
+// (2B.2.3 section 24: same domain, same rules, regardless of who's asking).
+export function resolveCreationMode(editorialFlagEnabled) {
+  return editorialFlagEnabled ? CREATION_MODES.CANONICAL : CREATION_MODES.LEGACY
+}
+
+// An article sits in ready_for_render until dispatch succeeds -- this is
+// true whether it just failed a dispatch attempt or an admin simply closed
+// the tab before dispatch ran. Either way, "show the manual retry action" is
+// the same rule (2B.2.3 sections 17 and 20 share one mechanism).
+export function canRetryDispatch(status) {
+  return status === 'ready_for_render'
+}
+
+export function dispatchButtonLabel(hasPendingError) {
+  return hasPendingError ? 'Tentar enviar para render novamente' : 'Enviar para render'
 }

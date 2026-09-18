@@ -2,11 +2,13 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '../../services/supabase'
 import { toast } from 'sonner'
 import {
-    Plus, Trash2, Globe, Cpu, Shield, Brain, Zap, RefreshCw, Award,
+    Plus, Trash2, Globe, Cpu, Shield, Brain, Zap, RefreshCw, Award, Flag,
     Save, UploadCloud, FileText, CheckCircle2, AlertCircle, Loader2,
 } from 'lucide-react'
 import AutoPublisherMasterV1Settings from './AutoPublisherMasterV1Settings'
 import { formatRelativeTime } from '../../utils/dateUtils'
+import { getEditorialWorkflowStatus } from '../../services/editorialArticlesService'
+import { messageForRpcError } from '../../services/editorialArticleContract'
 import '../../styles/AutoPublisherSettingsPremium.css'
 
 function editorialTenantMessage(error) {
@@ -36,6 +38,7 @@ const SECTIONS = [
     { key: 'automacao', label: 'Automação', icon: Zap },
     { key: 'validacao', label: 'Validação', icon: RefreshCw },
     { key: 'artes', label: 'Selos e patrocinadores', icon: Award },
+    { key: 'editorial_flow', label: 'Fluxo editorial', icon: Flag },
 ]
 
 const RULE_TYPES = [
@@ -138,6 +141,14 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
     const [savingDraft, setSavingDraft] = useState(false)
     const [savedFlash, setSavedFlash] = useState(false)
 
+    // ── Fluxo editorial (ap.editorial_feature_flags, 2B.2.3) ─
+    // Self-contained: does not go through fetchAll/apConfig (those exist for
+    // the ap-config Edge Function's own resources) -- this flag is read/set
+    // directly via its own RPCs, already built and hardened in R1.
+    const [editorialFlowEnabled, setEditorialFlowEnabled] = useState(false)
+    const [editorialFlowLoading, setEditorialFlowLoading] = useState(true)
+    const [editorialFlowSaving, setEditorialFlowSaving] = useState(false)
+
     const isAnthropic = !!(editorial.api_base_url && editorial.api_base_url.toLowerCase().includes('anthropic.com'))
     const draftDirty = useMemo(() => (
         JSON.stringify(editorial) !== JSON.stringify(editorialLoaded) ||
@@ -217,6 +228,34 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
     }, [clienteId, apConfig])
 
     useEffect(() => { fetchAll() }, [fetchAll])
+
+    useEffect(() => {
+        let active = true
+        setEditorialFlowLoading(true)
+        void getEditorialWorkflowStatus(supabase).then(status => {
+            if (active) {
+                setEditorialFlowEnabled(status)
+                setEditorialFlowLoading(false)
+            }
+        })
+        return () => { active = false }
+    }, [clienteId])
+
+    async function toggleEditorialFlow() {
+        if (editorialFlowSaving) return
+        const next = !editorialFlowEnabled
+        setEditorialFlowSaving(true)
+        const { data, error } = await supabase.schema('ap').rpc('set_editorial_workflow_v1_enabled', {
+            p_editorial_workflow_v1_enabled: next,
+        })
+        if (error) {
+            toast.error(messageForRpcError(error.message).description)
+        } else {
+            setEditorialFlowEnabled(data === true)
+            toast.success(data ? 'Fluxo editorial ativado.' : 'Fluxo editorial desativado.')
+        }
+        setEditorialFlowSaving(false)
+    }
 
     // ── Fontes actions ───────────────────────────────────────
     async function addSource() {
@@ -454,6 +493,7 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
         automacao: `${automationActiveCount} de 3 ativas`,
         validacao: testOutput ? 'Último teste: ok' : 'Nunca executado',
         artes: 'Selos e patrocinadores',
+        editorial_flow: editorialFlowLoading ? '…' : (editorialFlowEnabled ? 'Ativo' : 'Inativo'),
     }
 
     const cycleSummary = automation.ingestion_enabled
@@ -1005,6 +1045,35 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
 
                 {section === 'artes' && (
                     <AutoPublisherMasterV1Settings clienteId={clienteId} clienteError={clienteError} />
+                )}
+
+                {section === 'editorial_flow' && (
+                    <div className="aps-card no-pad">
+                        <div className="aps-card-head bordered">
+                            <div>
+                                <h2 className="aps-card-title"><Flag size={17} color="#0F766E" /> Fluxo editorial</h2>
+                                <p className="aps-card-desc">
+                                    Substitui a criação e revisão de matérias pelo editor editorial canônico
+                                    (rascunho, revisão de conteúdo e aprovação antes de gerar a arte). O fluxo
+                                    antigo continua disponível e nada que já foi criado é perdido ao desligar.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="aps-automation-row">
+                            <Toggle on={editorialFlowEnabled} onClick={toggleEditorialFlow} disabled={editorialFlowLoading || editorialFlowSaving} />
+                            <div className="aps-automation-row-body">
+                                <span className="aps-switch-body-label">Novo fluxo editorial</span>
+                                <span className="aps-switch-body-hint">
+                                    Quando ativo, criar uma matéria nova (link, texto, imagem ou pauta adotada) abre o
+                                    editor editorial canônico em vez do formulário atual. Matérias já criadas em
+                                    qualquer um dos dois fluxos continuam acessíveis independentemente deste estado.
+                                </span>
+                            </div>
+                            <span className="aps-automation-state" style={{ color: editorialFlowEnabled ? 'var(--color-success)' : 'var(--color-text-tertiary)' }}>
+                                {editorialFlowLoading ? 'Carregando…' : (editorialFlowEnabled ? 'Ativo' : 'Inativo')}
+                            </span>
+                        </div>
+                    </div>
                 )}
 
                 {draftDirty && (section === 'motor' || section === 'regras') && (

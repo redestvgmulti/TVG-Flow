@@ -7,6 +7,8 @@ import { useEditorialCatalogs } from '../../hooks/useEditorialCatalogs'
 import {
   EDITOR_MODES,
   allowedActionsForMode,
+  canRetryDispatch,
+  dispatchButtonLabel,
   messageForRpcError,
 } from '../../services/editorialArticleContract'
 import {
@@ -22,6 +24,7 @@ import {
 import {
   EditorialArticleError,
   approveEditorialArticleForRender,
+  dispatchEditorialArticleRender,
   finalizeEditorialArticle,
   getEditorialArticleForEdit,
   requestEditorialArticleChanges,
@@ -278,6 +281,14 @@ export default function CanonicalEditorialEditor({
     }
   }
 
+  // Approval and dispatch are chained (2B.2.3 sections 15-16): once
+  // approve_editorial_article_for_render succeeds the article is already
+  // ready_for_render, so the browser immediately attempts the handoff with
+  // the approving admin's own live JWT (required by
+  // create_territorial_composer_candidate, see ap-editorial-render-dispatch).
+  // A dispatch failure never rolls back the approval -- handleDispatch
+  // reports its own error and leaves the article exactly where APPROVE_SUCCESS
+  // put it (ready_for_render), so the retry button below stays available.
   async function handleApprove() {
     dispatch({ type: 'APPROVE_START' })
     try {
@@ -293,6 +304,21 @@ export default function CanonicalEditorialEditor({
     } catch (error) {
       const code = reportError(error)
       dispatch({ type: code === 'EDITORIAL_REVISION_CONFLICT' ? 'APPROVE_CONFLICT' : 'APPROVE_ERROR', error: { code } })
+      return
+    }
+    await handleDispatch()
+  }
+
+  async function handleDispatch() {
+    dispatch({ type: 'DISPATCH_START' })
+    try {
+      await dispatchEditorialArticleRender(supabase, state.articleId)
+      const refreshed = await refreshArticle(state.articleId)
+      dispatch({ type: 'DISPATCH_SUCCESS', article: refreshed })
+      toast.success('Enviado para renderização.')
+    } catch {
+      dispatch({ type: 'DISPATCH_ERROR', error: { code: 'DISPATCH_FAILED' } })
+      toast.error('A matéria foi aprovada, mas o envio para renderização falhou. Tente novamente.')
     }
   }
 
@@ -355,6 +381,12 @@ export default function CanonicalEditorialEditor({
             {state.article?.status === 'ready_for_render' && 'Aprovada e aguardando renderização.'}
             {state.article?.status === 'abandoned' && 'Esta matéria foi abandonada.'}
           </span>
+          {canReview && canRetryDispatch(state.article?.status) && (
+            <button type="button" className="ap-af-submit" disabled={isBusy} onClick={() => void handleDispatch()}>
+              {state.status === 'dispatching' ? <Loader2 size={14} className="ap-spin-icon" /> : null}
+              {' '}{dispatchButtonLabel(Boolean(state.error))}
+            </button>
+          )}
         </div>
       )}
 

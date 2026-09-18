@@ -5,7 +5,11 @@ import { Check, CheckCircle2, Copy, Download, X, AlertCircle, RefreshCcw, ImageI
 import { useAuth } from '../../contexts/AuthContext';
 import ArticleForm from '../../components/editorial/ArticleForm';
 import NewsBacklogPanel from '../../components/editorial/NewsBacklogPanel';
+import CanonicalEditorialEditor from '../../components/editorial/CanonicalEditorialEditor';
 import CreatorSignature from '../../components/ui/CreatorSignature';
+import { useEditorialWorkflowFlag } from '../../hooks/useEditorialWorkflowFlag';
+import { startEditorialArticleFromBacklog } from '../../services/editorialArticlesService';
+import { CREATION_MODES, messageForRpcError, resolveCreationMode } from '../../services/editorialArticleContract';
 import {
     availableContentTypes,
     availableVisualModelsForFormat,
@@ -364,9 +368,18 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
     const [activeTab, setActiveTab] = useState('create');
     const loadedBacklogId = useRef(null);
 
+    // 2B.2.3: same decision AutoPublisher.jsx uses for its "Nova Matéria"
+    // modal -- when the article an adopted pauta produced already exists in
+    // ap.editorial_articles, canonicalContext carries it into the same
+    // 'create' tab instead of a separate screen.
+    const editorialFlag = useEditorialWorkflowFlag(supabase);
+    const creationMode = resolveCreationMode(editorialFlag.enabled);
+    const [canonicalContext, setCanonicalContext] = useState(null);
+
     useEffect(() => {
         if (!isOpen) {
             loadedBacklogId.current = null;
+            setCanonicalContext(null);
             return;
         }
         if (['create', 'history', 'backlog'].includes(initialTab)) setActiveTab(initialTab);
@@ -1091,6 +1104,14 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                 </div>
 
                             </div>
+                        ) : creationMode === CREATION_MODES.CANONICAL ? (
+                            <CanonicalEditorialEditor
+                                key={canonicalContext?.articleId || 'new'}
+                                articleId={canonicalContext?.articleId || null}
+                                originBacklog={canonicalContext?.originBacklog || null}
+                                currentUser={user}
+                                permissions={{ canReview: false }}
+                            />
                         ) : (
                             <ArticleForm
                                 mode="employee"
@@ -1122,7 +1143,20 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                     {activeTab === 'backlog' && (
                         <NewsBacklogPanel
                             clienteId={clienteId}
-                            onStartProduction={(item) => {
+                            onStartProduction={async (item) => {
+                                if (creationMode === CREATION_MODES.CANONICAL) {
+                                    try {
+                                        const created = await startEditorialArticleFromBacklog(supabase, {
+                                            backlogId: item.id,
+                                            requestId: crypto.randomUUID(),
+                                        });
+                                        setCanonicalContext({ articleId: created.id, originBacklog: item });
+                                        setActiveTab('create');
+                                    } catch (error) {
+                                        setErrorMsg(messageForRpcError(error.code || error.message).description);
+                                    }
+                                    return;
+                                }
                                 setFormData(previous => ({
                                     ...previous,
                                     source_mode: 'link',
