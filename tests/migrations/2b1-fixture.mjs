@@ -195,6 +195,8 @@ export async function createFixtureDatabase(namePrefix) {
   const m5 = await readMigration('_2b1_editorial_review_and_freeze_rpcs.sql')
   const m6 = await readMigration('_2b1_editorial_render_handoff_rpcs.sql')
   const m7 = await readMigration('_2b1_backlog_editorial_exclusivity.sql')
+  const m8 = await readMigration('_2b2_editorial_article_for_edit_rpc.sql')
+  const m9 = await readMigration('_2b2_editorial_admin_tenant_visibility.sql')
 
   await client.query(BASE_SQL)
   await client.query(operationalResolver)
@@ -217,6 +219,8 @@ export async function createFixtureDatabase(namePrefix) {
   await client.query(m5)
   await client.query(m6)
   await client.query(m7)
+  await client.query(m8)
+  await client.query(m9)
 
   return { admin, client, databaseName }
 }
