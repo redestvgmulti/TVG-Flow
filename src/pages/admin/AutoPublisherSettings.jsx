@@ -259,12 +259,24 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
 
     // ── Fontes actions ───────────────────────────────────────
     async function addSource() {
-        const { nome, url } = newSource
+        const { nome, url, tipo } = newSource
         if (!nome.trim() || !url.trim()) { setSourceError('Informe o nome e a URL do site ou feed.'); return }
         setSourceSaving(true)
         setSourceError('')
         setSourceProbe(null)
         try {
+            let finalUrl = url.trim()
+            if (tipo === 'instagram') {
+                if (finalUrl.startsWith('@')) finalUrl = `https://www.instagram.com/${finalUrl.substring(1)}/`
+                else if (!finalUrl.includes('instagram.com')) throw new Error('INSTAGRAM_URL_INVALID')
+                await apConfig('sources', 'insert', { ...newSource, url: finalUrl })
+                setNewSource({ nome: '', url: '', tipo: 'auto' })
+                const s = await apConfig('sources', 'list')
+                setSources(s ?? [])
+                setSourceSaving(false)
+                return
+            }
+
             const { data: probe, error: probeError } = await supabase.functions.invoke('ap-source-probe', {
                 method: 'POST',
                 body: { cliente_id: clienteId, ...newSource },
@@ -570,6 +582,7 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
                                         <option value="atom">Atom</option>
                                         <option value="google_news_rss">Google News RSS</option>
                                         <option value="sitemap">Sitemap</option>
+                                        <option value="instagram">Instagram</option>
                                     </select>
                                 </div>
                                 <button type="button" className="aps-btn aps-btn-dark" onClick={addSource} disabled={sourceSaving}>
@@ -596,7 +609,7 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
                                         <div className="aps-list-row-main">
                                             <div className="aps-list-row-title">
                                                 {s.nome}
-                                                <span className="aps-list-row-tag">{{ auto: 'Automático', website: 'Site', rss: 'RSS', atom: 'Atom', google_news_rss: 'Google News', sitemap: 'Sitemap' }[s.detected_type || s.tipo] || s.tipo}</span>
+                                                <span className="aps-list-row-tag">{{ auto: 'Automático', website: 'Site', rss: 'RSS', atom: 'Atom', google_news_rss: 'Google News', sitemap: 'Sitemap', instagram: 'Instagram' }[s.detected_type || s.tipo] || s.tipo}</span>
                                             </div>
                                             <span className="aps-list-row-sub">{s.url}</span>
                                             <span className="aps-list-row-sub">
