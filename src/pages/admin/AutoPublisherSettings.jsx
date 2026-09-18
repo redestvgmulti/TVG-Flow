@@ -9,13 +9,24 @@ import AutoPublisherMasterV1Settings from './AutoPublisherMasterV1Settings'
 import { formatRelativeTime } from '../../utils/dateUtils'
 import '../../styles/AutoPublisherSettingsPremium.css'
 
-// The editorial edge functions (ap-editorial-settings/-prompt/-rag-upload)
-// are intentionally single-tenant today (`MODE: SINGLE-TENANT (TVG only)` in
-// their headers) and always resolve to this cliente_id server-side no matter
-// what's sent. Reads and writes below must stay pinned to the same constant
-// or a rule/doc written under a different id would silently vanish from the
-// next GET.
-const FIXED_CLIENT_ID = 'cd287e6e-f273-4d0f-a72d-2a8c391e40e9'
+function editorialTenantMessage(error) {
+    const code = String(error?.message || error || '')
+    if (code.includes('NO_OPERATIONAL_CLIENT') || code.includes('OPERATIONAL_CLIENT_NOT_FOUND')) {
+        return 'Sua conta não possui um cliente operacional. Peça ao administrador para concluir o vínculo antes de configurar o Motor Editorial.'
+    }
+    if (code.includes('OPERATIONAL_CLIENT_SELECTION_REQUIRED')) {
+        return 'Esta conta possui mais de um cliente operacional. A seleção explícita de cliente ainda não está disponível nesta tela.'
+    }
+    return null
+}
+
+function assertEditorialFunctionSuccess(result, fallbackMessage) {
+    const code = result?.data?.error
+    if (result?.error || code) {
+        throw new Error(code || result.error?.message || fallbackMessage)
+    }
+    return result?.data
+}
 
 const SECTIONS = [
     { key: 'fontes', label: 'Fontes de conteúdo', icon: Globe },
@@ -82,6 +93,7 @@ function Toggle({ on, onClick, disabled }) {
 export default function AutoPublisherSettings({ clienteId, clienteError }) {
     const [section, setSection] = useState('fontes')
     const [loading, setLoading] = useState(true)
+    const [editorialTenantError, setEditorialTenantError] = useState('')
 
     // ── Fontes ──────────────────────────────────────────────
     const [sources, setSources] = useState([])
@@ -145,8 +157,12 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
 
     // ── Load everything ──────────────────────────────────────
     const fetchAll = useCallback(async () => {
-        if (!clienteId) return
+        if (!clienteId) {
+            setLoading(false)
+            return
+        }
         setLoading(true)
+        setEditorialTenantError('')
         try {
             const [sourcesRes, editorialRes, ragRes, configRes] = await Promise.all([
                 apConfig('sources', 'list'),
@@ -157,25 +173,26 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
 
             setSources(sourcesRes ?? [])
 
-            if (editorialRes.error) throw new Error(editorialRes.error.message || 'Erro ao carregar o Motor de IA')
-            const es = editorialRes.data?.settings
+            const editorialData = assertEditorialFunctionSuccess(editorialRes, 'Erro ao carregar o Motor de IA')
+            const ragData = assertEditorialFunctionSuccess(ragRes, 'Erro ao carregar a base de conhecimento')
+            const es = editorialData?.settings
             if (es) {
                 const merged = { ...DEFAULT_EDITORIAL, ...es }
                 setEditorial(merged)
                 setEditorialLoaded(merged)
             }
-            if (editorialRes.data?.humanization) {
-                setHumanization(editorialRes.data.humanization)
-                setHumanizationLoaded(editorialRes.data.humanization)
+            if (editorialData?.humanization) {
+                setHumanization(editorialData.humanization)
+                setHumanizationLoaded(editorialData.humanization)
             }
-            if (editorialRes.data?.active_prompt) {
-                setActivePrompt(editorialRes.data.active_prompt.prompt_base)
-                setActivePromptLoaded(editorialRes.data.active_prompt.prompt_base)
-                setPromptMeta(editorialRes.data.active_prompt)
+            if (editorialData?.active_prompt) {
+                setActivePrompt(editorialData.active_prompt.prompt_base)
+                setActivePromptLoaded(editorialData.active_prompt.prompt_base)
+                setPromptMeta(editorialData.active_prompt)
             }
-            setRules(editorialRes.data?.rules ?? [])
+            setRules(editorialData?.rules ?? [])
 
-            if (ragRes.data && !ragRes.error) setRagDocs(Array.isArray(ragRes.data) ? ragRes.data : [])
+            setRagDocs(Array.isArray(ragData) ? ragData : [])
 
             if (configRes.data) {
                 setAutomation({
@@ -191,7 +208,9 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
             }
         } catch (err) {
             console.error('[AutoPublisherSettings] fetchAll error:', err)
-            toast.error('Não foi possível carregar as configurações. ' + (err.message || ''))
+            const tenantMessage = editorialTenantMessage(err)
+            if (tenantMessage) setEditorialTenantError(err.message)
+            toast.error(tenantMessage || ('Não foi possível carregar as configurações. ' + (err.message || '')))
         } finally {
             setLoading(false)
         }
@@ -255,29 +274,33 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
         }
     }
 
-    // ── Regras actions (immediate — direct table, same as before) ──
+    // ── Regras actions (immediate — server-scoped) ──
     async function submitRule() {
         if (!ruleInput.trim() || !activeRuleType) return
         try {
-            const { error } = await supabase.schema('ap').from('editorial_rules')
-                .insert({ cliente_id: FIXED_CLIENT_ID, rule_type: activeRuleType, value: ruleInput.trim() })
-            if (error) throw error
-            const { data } = await supabase.schema('ap').from('editorial_rules').select('*').eq('cliente_id', FIXED_CLIENT_ID)
-            setRules(data ?? [])
+            const result = await supabase.functions.invoke('ap-editorial-settings', {
+                method: 'POST',
+                body: { rule_type: activeRuleType, value: ruleInput.trim() },
+            })
+            const rule = assertEditorialFunctionSuccess(result, 'Erro ao salvar regra')
+            setRules(prev => [...prev, rule])
             setActiveRuleType(null)
             setRuleInput('')
         } catch (err) {
-            toast.error('Erro ao salvar regra: ' + err.message)
+            toast.error(editorialTenantMessage(err) || ('Erro ao salvar regra: ' + err.message))
         }
     }
 
     async function deleteRule(id) {
         setRules(prev => prev.filter(r => r.id !== id))
         try {
-            const { error } = await supabase.schema('ap').from('editorial_rules').delete().eq('id', id)
-            if (error) throw error
+            const result = await supabase.functions.invoke('ap-editorial-settings', {
+                method: 'DELETE',
+                body: { id },
+            })
+            assertEditorialFunctionSuccess(result, 'Erro ao remover regra')
         } catch (err) {
-            toast.error('Erro ao remover regra: ' + err.message)
+            toast.error(editorialTenantMessage(err) || ('Erro ao remover regra: ' + err.message))
             fetchAll()
         }
     }
@@ -294,13 +317,14 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
             setRagBusy(true)
             const toastId = toast.loading('Gerando vetores e anexando à base…')
             try {
-                const { error } = await supabase.functions.invoke('ap-editorial-rag-upload', { method: 'POST', body: { file_name: file.name, content } })
-                if (error) throw error
+                const result = await supabase.functions.invoke('ap-editorial-rag-upload', { method: 'POST', body: { file_name: file.name, content } })
+                assertEditorialFunctionSuccess(result, 'Erro no upload')
                 toast.success('Documento adicionado à base de conhecimento.', { id: toastId })
                 const ragRes = await supabase.functions.invoke('ap-editorial-rag-upload', { method: 'GET' })
-                if (ragRes.data && !ragRes.error) setRagDocs(Array.isArray(ragRes.data) ? ragRes.data : [])
+                const ragData = assertEditorialFunctionSuccess(ragRes, 'Erro ao carregar a base de conhecimento')
+                setRagDocs(Array.isArray(ragData) ? ragData : [])
             } catch (err) {
-                toast.error('Erro no upload: ' + err.message, { id: toastId })
+                toast.error(editorialTenantMessage(err) || ('Erro no upload: ' + err.message), { id: toastId })
             } finally {
                 setRagBusy(false)
             }
@@ -311,10 +335,10 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
     async function deleteRagDoc(source_document_id) {
         setRagDocs(prev => prev.filter(d => d.source_document_id !== source_document_id))
         try {
-            const { error } = await supabase.functions.invoke('ap-editorial-rag-upload', { method: 'DELETE', body: { source_document_id } })
-            if (error) throw error
+            const result = await supabase.functions.invoke('ap-editorial-rag-upload', { method: 'DELETE', body: { source_document_id } })
+            assertEditorialFunctionSuccess(result, 'Erro ao remover documento')
         } catch (err) {
-            toast.error('Erro ao remover documento: ' + err.message)
+            toast.error(editorialTenantMessage(err) || ('Erro ao remover documento: ' + err.message))
             fetchAll()
         }
     }
@@ -350,8 +374,8 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
         try {
             const payload = { settings: editorial, humanization }
             if (newApiKey) payload.apiKey = newApiKey
-            const { error } = await supabase.functions.invoke('ap-editorial-settings', { method: 'PUT', body: payload })
-            if (error) throw error
+            const result = await supabase.functions.invoke('ap-editorial-settings', { method: 'PUT', body: payload })
+            assertEditorialFunctionSuccess(result, 'Erro ao salvar configurações')
 
             setEditorialLoaded(editorial)
             setHumanizationLoaded(humanization)
@@ -359,7 +383,7 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
             setSavedFlash(true)
             setTimeout(() => setSavedFlash(false), 2800)
         } catch (err) {
-            toast.error(err.message || 'Erro ao salvar configurações.')
+            toast.error(editorialTenantMessage(err) || err.message || 'Erro ao salvar configurações.')
         } finally {
             setSavingDraft(false)
         }
@@ -375,12 +399,12 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
         if (!activePrompt.trim()) return
         setSavingPromptVersion(true)
         try {
-            const { error } = await supabase.functions.invoke('ap-editorial-prompt', { method: 'POST', body: { prompt_base: activePrompt } })
-            if (error) throw error
+            const result = await supabase.functions.invoke('ap-editorial-prompt', { method: 'POST', body: { prompt_base: activePrompt } })
+            assertEditorialFunctionSuccess(result, 'Erro ao salvar o prompt')
             toast.success('Nova versão do prompt salva.')
             fetchAll()
         } catch (err) {
-            toast.error(err.message || 'Erro ao salvar o prompt.')
+            toast.error(editorialTenantMessage(err) || err.message || 'Erro ao salvar o prompt.')
         } finally {
             setSavingPromptVersion(false)
         }
@@ -394,12 +418,11 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
         setTestOutput(null)
         setPromptSnapshot(null)
         try {
-            const { data, error } = await supabase.functions.invoke('ap-editorial-test', { method: 'POST', body: testInput })
-            if (error) throw error
-            if (data.error) throw new Error(data.error)
+            const result = await supabase.functions.invoke('ap-editorial-test', { method: 'POST', body: testInput })
+            const data = assertEditorialFunctionSuccess(result, 'Erro ao executar o teste')
             setTestOutput(data)
         } catch (err) {
-            setTestError(err.message)
+            setTestError(editorialTenantMessage(err) || err.message)
         } finally {
             setTestLoading(false)
         }
@@ -437,10 +460,13 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
         ? `Ingestão automática ativa${automation.daily_cap ? ` · até ${automation.daily_cap} matérias/dia` : ''}${!automation.publish_on_quiet ? ` · silêncio das ${automation.quiet_start} às ${automation.quiet_end}` : ''}.`
         : 'Ingestão automática desligada — só entram pautas enviadas pelo backlog.'
 
-    if (!clienteId) {
+    const tenantResolutionError = editorialTenantError || clienteError
+    const tenantResolutionMessage = editorialTenantMessage(tenantResolutionError)
+
+    if (tenantResolutionError || !clienteId) {
         return (
-            <div className="ap-form-section" role={clienteError ? 'alert' : 'status'}>
-                {clienteError || 'Carregando cliente operacional...'}
+            <div className="ap-form-section" role={tenantResolutionError ? 'alert' : 'status'}>
+                {tenantResolutionMessage || tenantResolutionError || 'Carregando cliente operacional...'}
             </div>
         )
     }
