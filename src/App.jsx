@@ -29,6 +29,7 @@ import StaffCalendar from './pages/staff/Calendar'
 import StaffProfile from './pages/staff/Profile'
 import StaffRequestCreate from './pages/staff/RequestCreate'
 import MyNewsWork from './pages/staff/MyNewsWork'
+import CanonicalEditorialEditorHarness from './pages/dev/CanonicalEditorialEditorHarness'
 import ProtectedRoute from './routes/ProtectedRoute'
 import RoleProtectedRoute from './routes/RoleProtectedRoute'
 import StrictSuperAdminRoute from './routes/StrictSuperAdminRoute'
@@ -156,6 +157,18 @@ function App() {
                   </Route>
 
 
+
+                  {/* 2B.2.2 canonical editor harness -- dev-only, tree-shaken out of production builds */}
+                  {import.meta.env.DEV && (
+                    <Route
+                      path="/dev/editorial-editor"
+                      element={(
+                        <ProtectedRoute>
+                          <CanonicalEditorialEditorHarness />
+                        </ProtectedRoute>
+                      )}
+                    />
+                  )}
 
                   <Route path="/" element={<Navigate to="/login" replace />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
