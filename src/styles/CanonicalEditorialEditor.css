@@ -1,0 +1,105 @@
+/* Styles scoped to CanonicalEditorialEditor (2B.2.2). Reuses the ap-af-*
+   vocabulary from AutoPublisher.css for shared primitives (inputs, dropzone,
+   format tabs); this file only covers pieces with no legacy equivalent. */
+
+.ap-cee {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.ap-cee-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ap-cee-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #334155;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ap-cee-banner {
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ap-cee-banner--changes {
+  background: #fff7ed;
+  color: #9a3412;
+  border: 1px solid #fdba74;
+}
+
+.ap-cee-banner--conflict {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+}
+
+.ap-cee-banner--readonly {
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+}
+
+.ap-cee-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  background: #e2e8f0;
+  color: #334155;
+  width: fit-content;
+}
+
+.ap-cee-preview {
+  border: 1px dashed #cbd5e1;
+  border-radius: 12px;
+  padding: 14px;
+  background: #f8fafc;
+}
+
+.ap-cee-preview-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.ap-cee-preview-headline {
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 6px;
+}
+
+.ap-cee-preview-body {
+  color: #475569;
+  font-size: 13px;
+  white-space: pre-wrap;
+  margin: 0;
+}
+
+.ap-cee-review-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ap-cee-footer {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
