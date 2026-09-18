@@ -1,25 +1,30 @@
 # 2B Production Deploy Runbook
 
 **Não executar nada deste documento ainda.** Este runbook é o produto de uma
-auditoria (`docs/2b-integrated-readiness-report.md`); ele fica pronto para
-quando a decisão de prosseguir for tomada, condicionada a resolver o
-bloqueador registrado na seção 5.1 do relatório antes de ligar a flag para
-qualquer tenant real.
+auditoria (`docs/2b-integrated-readiness-report.md`). Os dois bloqueadores
+que a auditoria original encontrou (seções 5.1 e 5.3 do relatório) já foram
+corrigidos e testados no topo do stack (migration
+`20260918100000_2b2_editorial_visibility_and_grants_hardening.sql`, seção 9
+do relatório) — o que resta pendente abaixo é só a QA manual em navegador.
 
 ---
 
 ## 0. Pré-condições antes de começar
 
-- [ ] Bloqueador da seção 5.1 do readiness report corrigido (migration
-      aditiva em `list_my_editorial_articles` removendo o early-return por
-      flag) e testado.
-- [ ] Achado da seção 5.3/23 corrigido (grants ausentes em
-      `save_editorial_article_draft`/`finalize_editorial_article`).
+- [x] Bloqueador da seção 5.1 do readiness report corrigido (migration
+      aditiva removendo o early-return por flag de `list_my_editorial_articles`)
+      e testado — `2b2-editorial-visibility-and-grants-hardening.test.mjs`.
+- [x] Achado da seção 5.3/23 corrigido (grants ausentes em
+      `save_editorial_article_draft`/`finalize_editorial_article`) — mesma
+      migration e mesmo arquivo de teste, checagem via `has_function_privilege`
+      e chamada funcional real como `anon`.
 - [ ] QA manual dos checklists `docs/qa/2b2-2-canonical-editor-checklist.md`
       e `docs/qa/2b2-3-ui-wiring-checklist.md` executado por um humano no
-      navegador, contra ambiente local ou de staging.
-- [ ] Confirmado (de novo, a cada correção acima) que a suíte completa
-      continua em 0 regressões novas.
+      navegador, contra ambiente local ou de staging. **Único item ainda
+      pendente antes do piloto.**
+- [x] Confirmado que a suíte completa continua em 0 regressões novas depois
+      das duas correções (572 tests, 553 pass, 8 falhas pré-existentes
+      inalteradas, 11 skip).
 
 ---
 
@@ -47,7 +52,8 @@ intermediário de `main`, sozinho, é seguro de rodar em produção?"**
 | **Merge #14** | idem | idem | idem — **zero arquivo frontend em #14** | Seguro |
 | **Merge #15** | idem (0 migrations novas) | idem | + `CanonicalEditorialEditor` + rota `/dev/editorial-editor` (`import.meta.env.DEV`-only, **confirmado ausente do bundle de produção** por grep nesta auditoria e nas duas anteriores) | Seguro — nada novo é alcançável em produção |
 | **Merge #16, flag OFF (padrão de fábrica)** | idem | idem | + wiring condicional em `AutoPublisher.jsx`/`EmployeeMode.jsx`/`MyNewsWork.jsx`, mas `resolveCreationMode(false) → LEGACY` para todo tenant sem linha em `ap.editorial_feature_flags` | Seguro — código novo existe mas é inalcançável até alguém ligar a flag |
-| **Flag ligada para um tenant piloto** | idem | idem | Editor canônico ativo só para esse tenant | **Condicional — ver seção 0** |
+| Migration de correção (`20260918100000`) aplicada, **antes** do piloto | + visibilidade/grants corrigidos | idem | idem | Seguro — aditiva, mesma assinatura, sem mudança de comportamento visível com a flag OFF |
+| **Flag ligada para um tenant piloto** | idem | idem | Editor canônico ativo só para esse tenant | Seguro, condicionado apenas à QA manual da seção 0 (nenhum bloqueador técnico restante) |
 
 **Resposta às 4 perguntas da seção 32 do pedido**:
 
@@ -68,13 +74,14 @@ intermediário de `main`, sozinho, é seguro de rodar em produção?"**
 - A rota nova (`/dev/editorial-editor`) não é usada em produção — comprovado
   por build + grep, três vezes ao longo desta cadeia (2B.2.2, 2B.2.3, esta
   auditoria).
-- Backend legado permanece compatível — confirmado pela suíte completa (543
+- Backend legado permanece compatível — confirmado pela suíte completa (553
   passando, todas as suítes legadas inclusas) sem nenhuma nova falha.
-- **Ressalva descoberta nesta auditoria**: a flag protege bem a
-  **criação** (seção 8/9), mas **não protege visibilidade de artigos já
-  criados** — ver bloqueador 5.1 do readiness report. Antes desta auditoria,
-  isso não estava comprovado, só assumido; agora está desmentido para leitura
-  e confirmado para escrita.
+- **Ressalva encontrada nesta auditoria, já corrigida**: a versão original de
+  `list_my_editorial_articles` protegia bem a **criação** (seção 8/9), mas
+  também escondia a **visibilidade** de artigos já criados quando a flag era
+  desligada — ver seção 5.1 do readiness report. Corrigido pela migration da
+  seção 9 do relatório; agora comprovado (não só assumido) que a flag
+  protege exclusivamente a criação, nunca a leitura de trabalho existente.
 
 ## 4. Runbook de deploy (depois das pré-condições da seção 0)
 
@@ -89,7 +96,8 @@ intermediário de `main`, sozinho, é seguro de rodar em produção?"**
    - Validar com uma consulta simples (`SELECT COUNT(*) FROM ap.editorial_articles`
      deve retornar 0 — tabela nova, vazia).
    - A migration de `get_editorial_article_for_edit` (antes de mergear #14).
-   - As 2 migrations de correção desta auditoria (seção 0), quando prontas.
+   - A migration de correção `20260918100000_2b2_editorial_visibility_and_grants_hardening.sql`
+     (já commitada no topo do stack — entra junto com #16).
 3. **Edge Function** — `supabase functions deploy ap-editorial-render-dispatch`
    (antes de mergear #14). Confirmar no dashboard que `verify_jwt = true`
    está ativo.
@@ -131,7 +139,7 @@ intermediário de `main`, sozinho, é seguro de rodar em produção?"**
 
 | Camada | Ação | Observação |
 |---|---|---|
-| **Flag** | Desligar imediatamente (`Configurações → Fluxo editorial`) | Efeito instantâneo — próxima criação já cai no legado. **Mas, até o bloqueador 5.1 ser corrigido, isso também esconde artigos em andamento do piloto — não usar como rollback sem a correção aplicada primeiro, ou aceitar que alguém com acesso a SQL direto precisará recuperar o `article_id` manualmente.** |
+| **Flag** | Desligar imediatamente (`Configurações → Fluxo editorial`) | Efeito instantâneo — próxima criação já cai no legado. Com a correção da seção 9 do readiness report aplicada, artigos em andamento do piloto **continuam visíveis e recuperáveis** em Meu Trabalho/Revisão editorial mesmo depois de desligar — a flag já não afeta mais leitura, só criação. |
 | **Frontend** | Reverter para o deployment anterior no Vercel (rollback nativo da plataforma) | Não requer reverter migrations — o frontend antigo simplesmente não referencia as tabelas/RPCs novas. |
 | **Edge Function** | Reverter para a versão anterior, ou desabilitar (`supabase functions delete` só em último caso — preferir apenas parar de chamá-la desligando a flag) | Não há necessidade de apagar a função; ela é inofensiva sem chamadas. |
 | **Banco** | **Nada é destruído.** Estruturas aditivas (tabelas, colunas, RPCs) permanecem. Artigos criados durante o piloto **não são apagados** — continuam acessíveis via `get_editorial_article_for_edit` mesmo com a flag desligada (ver ressalva na seção 3). | Nunca rodar um `DROP TABLE`/migration reversa como parte de rollback — 2B é aditivo por desenho; reverter destruiria trabalho real do piloto. |
@@ -139,5 +147,5 @@ intermediário de `main`, sozinho, é seguro de rodar em produção?"**
 **Princípio do rollback**: desligar a flag e reverter o frontend resolve
 99% dos cenários de rollback sem tocar no banco. O banco só teria motivo
 para mudar se um bug de **escrita** corrompesse dados — o que a suíte de
-testes (543 casos, incluindo concorrência real e freeze) não encontrou
-nesta auditoria.
+testes (553 casos passando, incluindo concorrência real e freeze) não
+encontrou nesta auditoria, nem depois da correção da seção 9.
