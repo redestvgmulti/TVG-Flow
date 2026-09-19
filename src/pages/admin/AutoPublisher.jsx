@@ -136,7 +136,7 @@ export default function AutoPublisher() {
     // article, or {articleId, originBacklog} once a pauta has already been
     // adopted into ap.editorial_articles (start_editorial_article_from_backlog).
     const editorialFlag = useEditorialWorkflowFlag(supabase)
-    const creationMode = resolveCreationMode(editorialFlag.enabled)
+    const creationMode = resolveCreationMode(editorialFlag.enabled, editorialFlag)
     const [canonicalContext, setCanonicalContext] = useState(null)
 
     // Manual Input State
@@ -859,10 +859,21 @@ export default function AutoPublisher() {
 
                             <button
                                 className="ap-btn-refresh primary"
-                                onClick={() => { setCanonicalContext(null); setManualModalOpen(true) }}
+                                onClick={() => {
+                                    if (editorialFlag.error) {
+                                        void editorialFlag.refresh()
+                                        return
+                                    }
+                                    if (creationMode === CREATION_MODES.PENDING) return
+                                    setCanonicalContext(null)
+                                    setManualModalOpen(true)
+                                }}
+                                disabled={editorialFlag.loading}
+                                aria-busy={editorialFlag.loading}
+                                title={editorialFlag.error ? 'Não foi possível confirmar o fluxo editorial. Tente novamente.' : undefined}
                             >
-                                <Plus size={14} />
-                                Nova Matéria
+                                {editorialFlag.loading || editorialFlag.error ? <RefreshCcw size={14} /> : <Plus size={14} />}
+                                {editorialFlag.loading ? 'Verificando fluxo...' : editorialFlag.error ? 'Tentar novamente' : 'Nova Matéria'}
                             </button>
                         </div>
                     </div>
@@ -909,6 +920,12 @@ export default function AutoPublisher() {
                 {tab === 'backlog' && <NewsBacklogPanel
                     clienteId={clienteId}
                     onStartProduction={(item) => {
+                        if (creationMode === CREATION_MODES.PENDING) {
+                            toast.error(editorialFlag.loading
+                                ? 'Aguarde a verificação do fluxo editorial.'
+                                : 'Não foi possível confirmar o fluxo editorial. Tente novamente.')
+                            return
+                        }
                         if (creationMode === CREATION_MODES.CANONICAL) {
                             void startCanonicalProductionFromBacklog(item)
                             return
@@ -1100,7 +1117,15 @@ export default function AutoPublisher() {
                 size="lg"
                 className="ap-new-article-modal"
             >
-                {creationMode === CREATION_MODES.CANONICAL ? (
+                {creationMode === CREATION_MODES.PENDING ? (
+                    <div role="status" aria-live="polite" style={{ padding: '32px', textAlign: 'center', color: '#64748b' }}>
+                        {editorialFlag.loading ? 'Verificando o fluxo editorial...' : (
+                            <button type="button" className="ap-btn-refresh" onClick={() => void editorialFlag.refresh()}>
+                                <RefreshCcw size={14} /> Tentar novamente
+                            </button>
+                        )}
+                    </div>
+                ) : creationMode === CREATION_MODES.CANONICAL ? (
                     <CanonicalEditorialEditor
                         key={canonicalContext?.articleId || 'new'}
                         articleId={canonicalContext?.articleId || null}

@@ -105,18 +105,10 @@ export async function listMyEditorialArticles(supabase) {
   return Array.isArray(data) ? data : []
 }
 
-// Defensive by design (never throws, defaults to false): callers use this to
-// decide which creation UI to render, so a transient RPC failure must fall
-// back to the legacy flow rather than break the screen. Mirrors the pattern
-// already established in MyNewsWork.jsx before this hook existed.
 export async function getEditorialWorkflowStatus(supabase) {
-  try {
-    const { data, error } = await supabase.schema('ap').rpc('get_editorial_workflow_status')
-    if (error) return false
-    return data === true
-  } catch {
-    return false
-  }
+  const { data, error } = await supabase.schema('ap').rpc('get_editorial_workflow_status')
+  if (error) throw new EditorialArticleError('EDITORIAL_FLAG_LOAD_FAILED', error)
+  return data === true
 }
 
 // Invoked synchronously right after ap.approve_editorial_article_for_render
