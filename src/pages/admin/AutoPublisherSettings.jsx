@@ -237,6 +237,12 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
                 setEditorialFlowEnabled(status)
                 setEditorialFlowLoading(false)
             }
+        }).catch(() => {
+            if (active) {
+                setEditorialFlowEnabled(false)
+                setEditorialFlowLoading(false)
+                toast.error('Não foi possível carregar o estado do fluxo editorial.')
+            }
         })
         return () => { active = false }
     }, [clienteId])

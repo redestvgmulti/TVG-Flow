@@ -373,7 +373,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
     // ap.editorial_articles, canonicalContext carries it into the same
     // 'create' tab instead of a separate screen.
     const editorialFlag = useEditorialWorkflowFlag(supabase);
-    const creationMode = resolveCreationMode(editorialFlag.enabled);
+    const creationMode = resolveCreationMode(editorialFlag.enabled, editorialFlag);
     const [canonicalContext, setCanonicalContext] = useState(null);
 
     useEffect(() => {
@@ -1104,6 +1104,14 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                 </div>
 
                             </div>
+                        ) : creationMode === CREATION_MODES.PENDING ? (
+                            <div role="status" aria-live="polite" style={{ padding: '32px', textAlign: 'center', color: '#64748b' }}>
+                                {editorialFlag.loading ? 'Verificando o fluxo editorial...' : (
+                                    <button type="button" onClick={() => void editorialFlag.refresh()} style={{ border: '1px solid #cbd5e1', borderRadius: '10px', padding: '10px 14px', background: '#fff', color: '#334155', cursor: 'pointer' }}>
+                                        Tentar novamente
+                                    </button>
+                                )}
+                            </div>
                         ) : creationMode === CREATION_MODES.CANONICAL ? (
                             <CanonicalEditorialEditor
                                 key={canonicalContext?.articleId || 'new'}
@@ -1144,6 +1152,12 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                         <NewsBacklogPanel
                             clienteId={clienteId}
                             onStartProduction={async (item) => {
+                                if (creationMode === CREATION_MODES.PENDING) {
+                                    setErrorMsg(editorialFlag.loading
+                                        ? 'Aguarde a verificação do fluxo editorial.'
+                                        : 'Não foi possível confirmar o fluxo editorial. Tente novamente.');
+                                    return;
+                                }
                                 if (creationMode === CREATION_MODES.CANONICAL) {
                                     try {
                                         const created = await startEditorialArticleFromBacklog(supabase, {

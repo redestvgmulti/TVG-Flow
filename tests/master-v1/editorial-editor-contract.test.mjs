@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 
 import {
   CREATION_MODES,
@@ -91,7 +92,26 @@ test('messageForRpcError covers the backlog-adoption error codes surfaced by 2B.
 test('resolveCreationMode is the single decision both AutoPublisher.jsx and EmployeeMode.jsx branch on', () => {
   assert.equal(resolveCreationMode(true), CREATION_MODES.CANONICAL)
   assert.equal(resolveCreationMode(false), CREATION_MODES.LEGACY)
-  assert.equal(resolveCreationMode(undefined), CREATION_MODES.LEGACY, 'an unresolved/loading flag must fail closed to the legacy flow')
+  assert.equal(resolveCreationMode(undefined), CREATION_MODES.PENDING)
+  assert.equal(resolveCreationMode(false, { loading: true }), CREATION_MODES.PENDING)
+  assert.equal(resolveCreationMode(true, { loading: true }), CREATION_MODES.PENDING)
+  assert.equal(resolveCreationMode(false, { error: true }), CREATION_MODES.PENDING)
+})
+
+test('creation hosts never route an unresolved feature flag into the legacy editor', async () => {
+  const [autoPublisher, employeeMode, hook] = await Promise.all([
+    readFile(new URL('../../src/pages/admin/AutoPublisher.jsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../src/pages/admin/EmployeeMode.jsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../src/hooks/useEditorialWorkflowFlag.js', import.meta.url), 'utf8'),
+  ])
+
+  for (const host of [autoPublisher, employeeMode]) {
+    assert.match(host, /resolveCreationMode\(editorialFlag\.enabled, editorialFlag\)/)
+    assert.match(host, /creationMode === CREATION_MODES\.PENDING/)
+  }
+  assert.match(autoPublisher, /disabled=\{editorialFlag\.loading\}/)
+  assert.match(hook, /useState\(null\)/)
+  assert.match(hook, /setError\(true\)/)
 })
 
 test('canRetryDispatch/dispatchButtonLabel: the manual dispatch action is offered exactly while ready_for_render, worded by whether a prior attempt failed', () => {

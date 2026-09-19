@@ -156,13 +156,15 @@ export function messageForRpcError(code) {
 export const CREATION_MODES = Object.freeze({
   CANONICAL: 'canonical',
   LEGACY: 'legacy',
+  PENDING: 'pending',
 })
 
 // Single source of truth for "which creation UI does a host render", used by
 // both AutoPublisher.jsx and EmployeeMode.jsx instead of each having its own
 // ad hoc ternary -- keeps the decision testable and identical in both places
 // (2B.2.3 section 24: same domain, same rules, regardless of who's asking).
-export function resolveCreationMode(editorialFlagEnabled) {
+export function resolveCreationMode(editorialFlagEnabled, { loading = false, error = false } = {}) {
+  if (loading || error || typeof editorialFlagEnabled !== 'boolean') return CREATION_MODES.PENDING
   return editorialFlagEnabled ? CREATION_MODES.CANONICAL : CREATION_MODES.LEGACY
 }
 
