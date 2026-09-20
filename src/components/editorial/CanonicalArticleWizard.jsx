@@ -197,28 +197,41 @@ export default function CanonicalArticleWizard({
 
         let sourceTitle = (originBacklog.source_title || originBacklog.titulo || '').trim()
         let sourceBody = (originBacklog.source_body || '').trim()
-        let sourceImageUrl = (originBacklog.source_image_url || '').trim()
-        if (!current.ai_source_captured) {
+        const collectedImageUrl = (originBacklog.source_image_url || '').trim()
+        let sourceImageUrl = /^https:\/\//i.test(collectedImageUrl) ? collectedImageUrl : ''
+        const shouldScrape = originBacklog.source_requires_scrape
+          || (!current.original_source_image_url && !sourceImageUrl)
+        if (shouldScrape) {
+          let scraped
+          try {
+            scraped = await scrapeArticleSource(supabase, originBacklog.source_url || originBacklog.url_original)
+          } catch (error) {
+            throw Object.assign(error, { code: 'SOURCE_SCRAPE_FAILED' })
+          }
           if (originBacklog.source_requires_scrape) {
-            let scraped
-            try {
-              scraped = await scrapeArticleSource(supabase, originBacklog.source_url || originBacklog.url_original)
-            } catch (error) {
-              throw Object.assign(error, { code: 'SOURCE_SCRAPE_FAILED' })
-            }
             sourceTitle = (scraped.title || sourceTitle).trim()
             sourceBody = (scraped.content || '').trim()
-            sourceImageUrl = (sourceImageUrl || scraped.image_url || '').trim()
           }
+          sourceImageUrl = (sourceImageUrl || scraped.image_url || '').trim()
+        }
+        if (!current.ai_source_captured) {
           await captureCollectedNewsArticleSource(supabase, {
             articleId: articleIdRef.current,
             collectedNewsId: originBacklog.collected_news_id,
             scrapedTitle: originBacklog.source_requires_scrape ? sourceTitle : null,
             scrapedBody: originBacklog.source_requires_scrape ? sourceBody : null,
-            scrapedImageUrl: originBacklog.source_requires_scrape ? sourceImageUrl : null,
+            scrapedImageUrl: shouldScrape ? sourceImageUrl : null,
             requestId: requestId(requests, 'source'),
           })
           resetRequestId(requests, 'source')
+        }
+
+        // Image preparation is independent from the LLM. Make it available to
+        // the operator and to the later production-intent/Placid path even if
+        // the AI provider fails and the user needs to retry the text draft.
+        sourceImageRef.current = sourceImageUrl || current.original_source_image_url || ''
+        if (sourceImageRef.current) {
+          setFormData(previous => ({ ...previous, image_url: sourceImageRef.current }))
         }
 
         try {

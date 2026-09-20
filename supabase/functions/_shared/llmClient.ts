@@ -77,7 +77,13 @@ export async function callLLM({
     isAnthropic = true;
     isGoogle = false;
     cleanBaseUrl = 'https://api.anthropic.com';
-    if (!cleanModel.startsWith('claude')) cleanModel = 'claude-3-5-sonnet-20241022';
+    // Some tenants still carry the original GPT defaults or retired Claude 3
+    // identifiers in editorial_settings. The active Anthropic credential is
+    // authoritative for provider routing; converge those legacy model values
+    // on the currently supported Sonnet compatibility target.
+    if (!cleanModel.startsWith('claude') || /^claude-3(?:-|$)/.test(cleanModel)) {
+      cleanModel = 'claude-sonnet-4-6';
+    }
 
   } else if (isGeminiKey && !isOpenRouterKey) {
     isGoogle = true;
@@ -133,9 +139,17 @@ export async function callLLM({
       max_tokens: maxTokens
     }
     if (jsonSchema) {
-      body.output_config = {
-        format: { type: 'json_schema', schema: jsonSchema },
-      }
+      // Tool use is supported by both the older Claude models kept in some
+      // tenant settings and the current models. `output_config.format` is not
+      // accepted by every historical model and caused the whole draft request
+      // to fail with a provider 400. Force one schema-bound tool instead.
+      body.tools = [{
+        name: 'emit_editorial_draft',
+        description: 'Return the prepared editorial draft.',
+        input_schema: jsonSchema,
+      }]
+      body.tool_choice = { type: 'tool', name: 'emit_editorial_draft' }
+      body.disable_parallel_tool_use = true
     }
   } else if (isGoogle) {
     // Gemini Native API — generateContent?key=
@@ -230,10 +244,14 @@ export async function callLLM({
     const completionTokens = Number(usage.output_tokens ?? 0) || 0
     const totalTokens = promptTokens + completionTokens
 
-    const textBlock = jsonBody && Array.isArray(jsonBody.content)
-      ? jsonBody.content.find((block: any) => block?.type === 'text')
+    const blocks = jsonBody && Array.isArray(jsonBody.content) ? jsonBody.content : []
+    const toolBlock = jsonSchema
+      ? blocks.find((block: any) => block?.type === 'tool_use' && block?.name === 'emit_editorial_draft')
       : null
-    const content = textBlock?.text ?? textBlock?.content ?? ''
+    const textBlock = blocks.find((block: any) => block?.type === 'text')
+    const content = toolBlock?.input
+      ? JSON.stringify(toolBlock.input)
+      : (textBlock?.text ?? textBlock?.content ?? '')
 
     return {
       content: String(content ?? ''),

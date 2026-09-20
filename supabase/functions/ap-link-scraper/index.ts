@@ -44,6 +44,20 @@ function statusFor(error: SafeLinkFetchError) {
   }
 }
 
+function normalizeMediaUrl(value: string | undefined, baseUrl: string) {
+  if (!value?.trim()) return "";
+  try {
+    const url = new URL(value.trim(), baseUrl);
+    // Production pages are HTTPS. Avoid mixed-content previews and hand the
+    // renderer a secure URL while retaining the raw collected URL in source
+    // metadata elsewhere in the editorial domain.
+    if (url.protocol === "http:") url.protocol = "https:";
+    return url.protocol === "https:" ? url.toString() : "";
+  } catch {
+    return "";
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   const correlationId = crypto.randomUUID();
@@ -99,8 +113,8 @@ Deno.serve(async (req: Request) => {
       $("meta[property='og:video:url']").attr("content") ||
       $("meta[property='og:video:secure_url']").attr("content") || null;
 
-    if (imageUrl?.startsWith("/")) imageUrl = new URL(imageUrl, finalUrl).toString();
-    if (videoUrl?.startsWith("/")) videoUrl = new URL(videoUrl, finalUrl).toString();
+    imageUrl = normalizeMediaUrl(imageUrl, finalUrl);
+    videoUrl = normalizeMediaUrl(videoUrl || undefined, finalUrl) || null;
 
     let content = "";
     const articleNode = $("article").length > 0 ? $("article") :

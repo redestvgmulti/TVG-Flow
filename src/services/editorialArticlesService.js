@@ -115,7 +115,11 @@ export async function prepareEditorialAiDraft(supabase, { articleId, requestId }
     body: { article_id: articleId, request_id: requestId },
   })
   if (error) {
-    const code = data?.error || error?.context?.error || 'EDITORIAL_AI_PREPARATION_FAILED'
+    let responseBody = null
+    if (typeof error?.context?.json === 'function') {
+      responseBody = await error.context.json().catch(() => null)
+    }
+    const code = data?.error || responseBody?.error || 'EDITORIAL_AI_PREPARATION_FAILED'
     throw new EditorialArticleError(code, error)
   }
   if (!data?.success || !data?.draft) {

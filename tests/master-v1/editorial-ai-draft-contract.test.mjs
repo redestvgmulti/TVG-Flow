@@ -60,14 +60,14 @@ test('LLM client fails explicitly on timeout and provider failure', async () => 
   }
 })
 
-test('Anthropic requests constrain the editorial draft with the canonical JSON schema', async () => {
+test('Anthropic requests constrain old and current models through one forced schema tool', async () => {
   const originalFetch = globalThis.fetch
   let requestBody
   try {
     globalThis.fetch = async (_url, init) => {
       requestBody = JSON.parse(init.body)
       return new Response(JSON.stringify({
-        content: [{ type: 'text', text: JSON.stringify(validDraft) }],
+        content: [{ type: 'tool_use', name: 'emit_editorial_draft', input: validDraft }],
         usage: { input_tokens: 20, output_tokens: 30 },
       }), { status: 200 })
     }
@@ -75,16 +75,22 @@ test('Anthropic requests constrain the editorial draft with the canonical JSON s
     const result = await callLLM({
       apiKey: 'sk-ant-test',
       baseUrl: 'https://api.anthropic.com',
-      model: 'claude-sonnet-4-6',
+      model: 'claude-3-5-sonnet-20241022',
       prompt: 'source only',
       temperature: 0,
       maxTokens: 500,
       jsonSchema: EDITORIAL_AI_DRAFT_JSON_SCHEMA,
     })
 
-    assert.deepEqual(requestBody.output_config, {
-      format: { type: 'json_schema', schema: EDITORIAL_AI_DRAFT_JSON_SCHEMA },
-    })
+    assert.deepEqual(requestBody.tools, [{
+      name: 'emit_editorial_draft',
+      description: 'Return the prepared editorial draft.',
+      input_schema: EDITORIAL_AI_DRAFT_JSON_SCHEMA,
+    }])
+    assert.deepEqual(requestBody.tool_choice, { type: 'tool', name: 'emit_editorial_draft' })
+    assert.equal(requestBody.disable_parallel_tool_use, true)
+    assert.equal(requestBody.output_config, undefined)
+    assert.equal(requestBody.model, 'claude-sonnet-4-6')
     assert.deepEqual(parseEditorialAiDraft(result.content), validDraft)
   } finally {
     globalThis.fetch = originalFetch
@@ -117,6 +123,7 @@ test('dedicated AI edge function is user-authenticated, tenant-derived and edito
   assert.match(editor, /captureEditorialArticleSource/)
   assert.match(editor, /scrapeArticleSource[\s\S]+prepareAiDraft/)
   assert.match(service, /functions\.invoke\('ap-link-scraper'/)
+  assert.match(service, /error\?\.context\?\.json/)
 })
 
 test('legacy production workers remain free of the old editorial workflow and LLM client', async () => {
