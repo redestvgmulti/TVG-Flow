@@ -40,6 +40,23 @@ test('source sufficiency and scraper fallback preserve complete collected proven
   assert.match(migration, /IF FOUND THEN RETURN v_source; END IF/)
 })
 
+test('a missing or insecure collected image is scraped independently from text sufficiency', async () => {
+  const [repair, wizard, scraper] = await Promise.all([
+    source('supabase/migrations/20260920201120_repair_collected_image_and_ai_retry.sql'),
+    source('src/components/editorial/CanonicalArticleWizard.jsx'),
+    source('supabase/functions/ap-link-scraper/index.ts'),
+  ])
+
+  assert.match(wizard, /!current\.original_source_image_url && !sourceImageUrl/)
+  assert.match(wizard, /sourceImageRef\.current = sourceImageUrl \|\| current\.original_source_image_url/)
+  assert.match(wizard, /setFormData\(previous => \(\{ \.\.\.previous, image_url: sourceImageRef\.current \}\)\)/)
+  assert.match(repair, /v_scraped_image := NULLIF\(btrim\(p_scraped_image_url\), ''\)/)
+  assert.match(repair, /WHEN v_scraped_image ~\* '\^https:\/\/' THEN v_scraped_image/)
+  assert.match(repair, /'original_image_url', v_collected\.image_url/)
+  assert.match(repair, /'scraped_image_url', v_scraped_image/)
+  assert.match(scraper, /if \(url\.protocol === "http:"\) url\.protocol = "https:"/)
+})
+
 test('CollectedNewsPanel exposes Produzir as the single preparation action', async () => {
   const panel = await source('src/components/editorial/CollectedNewsPanel.jsx')
 
