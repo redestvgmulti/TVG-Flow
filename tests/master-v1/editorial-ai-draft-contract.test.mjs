@@ -115,6 +115,8 @@ test('dedicated AI edge function is user-authenticated, tenant-derived and edito
   assert.doesNotMatch(edge, /adminClient\.rpc\("(?:reserve|refund)_editorial_tokens"/)
   assert.doesNotMatch(edge, /payload\?\.cliente_id|FIXED_CLIENT_ID/)
   assert.doesNotMatch(edge, /candidate_news|ap-render|placid|instagram|approve_editorial/)
+  assert.match(edge, /const EDITORIAL_AI_LLM_TIMEOUT_MS = 60000/)
+  assert.equal([...edge.matchAll(/timeoutMs: EDITORIAL_AI_LLM_TIMEOUT_MS/g)].length, 2)
   assert.match(prompt, /buildCanonicalEditorialDraftPrompt/)
   assert.match(prompt, /Não pesquise na web\. Não acrescente fatos/)
   assert.doesNotMatch(client, /interleaved-thinking/)

@@ -18,6 +18,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
+const EDITORIAL_AI_LLM_TIMEOUT_MS = 60000;
 
 function response(status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), { status, headers: jsonHeaders });
@@ -178,7 +179,7 @@ Deno.serve(async (req: Request) => {
         prompt,
         temperature: context.settings.temperature ?? 0.7,
         maxTokens,
-        timeoutMs: 30000,
+        timeoutMs: EDITORIAL_AI_LLM_TIMEOUT_MS,
         jsonSchema: EDITORIAL_AI_DRAFT_JSON_SCHEMA,
       });
     } catch (primaryError) {
@@ -191,7 +192,7 @@ Deno.serve(async (req: Request) => {
         prompt,
         temperature: context.settings.temperature ?? 0.7,
         maxTokens,
-        timeoutMs: 30000,
+        timeoutMs: EDITORIAL_AI_LLM_TIMEOUT_MS,
         jsonSchema: EDITORIAL_AI_DRAFT_JSON_SCHEMA,
       });
     }
