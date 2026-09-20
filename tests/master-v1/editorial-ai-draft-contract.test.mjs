@@ -88,7 +88,7 @@ test('Anthropic requests constrain old and current models through one forced sch
       input_schema: EDITORIAL_AI_DRAFT_JSON_SCHEMA,
     }])
     assert.deepEqual(requestBody.tool_choice, { type: 'tool', name: 'emit_editorial_draft' })
-    assert.equal(requestBody.disable_parallel_tool_use, true)
+    assert.equal(requestBody.disable_parallel_tool_use, undefined)
     assert.equal(requestBody.output_config, undefined)
     assert.equal(requestBody.model, 'claude-sonnet-4-6')
     assert.deepEqual(parseEditorialAiDraft(result.content), validDraft)

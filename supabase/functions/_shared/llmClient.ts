@@ -149,7 +149,6 @@ export async function callLLM({
         input_schema: jsonSchema,
       }]
       body.tool_choice = { type: 'tool', name: 'emit_editorial_draft' }
-      body.disable_parallel_tool_use = true
     }
   } else if (isGoogle) {
     // Gemini Native API — generateContent?key=
