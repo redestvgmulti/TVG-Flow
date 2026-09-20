@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { toast } from 'sonner';
 import { supabase } from '../../services/supabase';
 import { Check, CheckCircle2, Copy, Download, X, AlertCircle, RefreshCcw, ImageIcon, Brain, Search, SearchCode, Video, Image as ImageIconLucide, Loader2, Share2 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import ArticleForm from '../../components/editorial/ArticleForm';
 import NewsBacklogPanel from '../../components/editorial/NewsBacklogPanel';
-import CanonicalEditorialEditor from '../../components/editorial/CanonicalEditorialEditor';
+import CanonicalArticleWizard from '../../components/editorial/CanonicalArticleWizard';
 import CreatorSignature from '../../components/ui/CreatorSignature';
 import { useEditorialWorkflowFlag } from '../../hooks/useEditorialWorkflowFlag';
 import { startEditorialArticleFromBacklog } from '../../services/editorialArticlesService';
@@ -38,6 +39,10 @@ const createInitialFormData = () => ({
     url_original: '',
     titulo: '',
     conteudo: '',
+    caption: '',
+    context_tag: '',
+    category: '',
+    location: { city: null, region: null, state: null },
     content_type: 'feed',
     image_url: '',
     visual_title_id: null,
@@ -215,29 +220,26 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
         return () => window.clearTimeout(timeoutId);
     }, [loadAvailableMasterRuntime]);
 
+    const loadAvailableVisualTitles = useCallback(async () => {
+        if (!isOpen || !clienteId) return;
+        setVisualTitlesLoading(true);
+        setVisualTitlesError('');
+        try {
+            setVisualTitleGroups(await loadVisualTitleCatalog(supabase, clienteId));
+        } catch (error) {
+            console.error('[EmployeeMode] visual title catalog failed', error);
+            setVisualTitleGroups([]);
+            setVisualTitlesError('Não foi possível carregar os selos da matéria.');
+        } finally {
+            setVisualTitlesLoading(false);
+        }
+    }, [isOpen, clienteId]);
+
     // ── Load the grouped seal catalog every time the modal opens
     useEffect(() => {
-        if (!isOpen || !clienteId) return;
-        let cancelled = false;
-        async function loadTitles() {
-            setVisualTitlesLoading(true);
-            setVisualTitlesError('');
-            try {
-                const groups = await loadVisualTitleCatalog(supabase, clienteId);
-                if (!cancelled) setVisualTitleGroups(groups);
-            } catch (error) {
-                console.error('[EmployeeMode] visual title catalog failed', error);
-                if (!cancelled) {
-                    setVisualTitleGroups([]);
-                    setVisualTitlesError('Não foi possível carregar os selos da matéria.');
-                }
-            } finally {
-                if (!cancelled) setVisualTitlesLoading(false);
-            }
-        }
-        loadTitles();
-        return () => { cancelled = true };
-    }, [isOpen, clienteId]);
+        const timeoutId = window.setTimeout(loadAvailableVisualTitles, 0);
+        return () => window.clearTimeout(timeoutId);
+    }, [loadAvailableVisualTitles]);
 
     // Each (cliente, content_type, visual_model) row is one fixed Placid
     // template; a model is offered only when its config is enabled and complete.
@@ -327,7 +329,8 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
             if (cancelled) return;
             window.clearTimeout(pollTimer);
             const { data, error } = await supabase
-                .from('ap_candidate_news_complete')
+                .schema('ap')
+                .from('candidate_news')
                 .select('id, status, headline, caption, context_tag, content_type, template_nome_snapshot, render_url, render_completed_at, error_log, roteiro_json, roteiro_studio, acao_baixou, acao_copiou')
                 .eq('id', successData.news_id)
                 .maybeSingle();
@@ -434,6 +437,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
     const [historyPage, setHistoryPage] = useState(0);
     const [hasMoreHistory, setHasMoreHistory] = useState(true);
     const [copiedHistoryItems, setCopiedHistoryItems] = useState({});
+    const [approvingHistoryId, setApprovingHistoryId] = useState(null);
     const ITEMS_PER_PAGE = 20;
 
     const handleCopyHistory = async (item) => {
@@ -883,12 +887,34 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
         }
     };
 
+    const approveOwnRenderedMaterial = async (item) => {
+        if (!item.current_generation_id || !item.render_url || !clienteId) return;
+        setApprovingHistoryId(item.id);
+        try {
+            const { error } = await supabase.schema('ap').rpc('p0_approve_generation', {
+                p_candidate_id: item.id,
+                p_cliente_id: clienteId,
+                p_generation_id: item.current_generation_id,
+                p_asset_url: item.render_url,
+            });
+            if (error) throw error;
+            toast.success('Arte aprovada e disponível em seu histórico.');
+            await fetchHistory(0, false);
+        } catch (error) {
+            console.error('[EmployeeMode] MATERIAL_APPROVAL_FAILED', error);
+            setErrorMsg('Não foi possível aprovar esta arte. Atualize e tente novamente.');
+        } finally {
+            setApprovingHistoryId(null);
+        }
+    };
+
     const fetchHistory = async (page = 0, append = false) => {
         setIsLoadingHistory(true);
         try {
             const { data, error } = await supabase
-                .from('ap_candidate_news_complete')
-                .select('id, titulo, headline, caption, render_url, render_completed_at, gerado_em, created_at, status, content_type, acao_baixou, acao_copiou, template_nome_snapshot, context_tag, fonte_id, criado_por_user_id, creator_name_snapshot')
+                .schema('ap')
+                .from('candidate_news')
+                .select('id, titulo, headline, caption, render_url, render_completed_at, gerado_em, created_at, status, content_type, acao_baixou, acao_copiou, template_nome_snapshot, context_tag, fonte_id, criado_por_user_id, creator_name_snapshot, current_generation_id, approved_generation_id')
                 .eq('criado_por_user_id', user?.id)
                 .order('gerado_em', { ascending: false })
                 .range(page * ITEMS_PER_PAGE, (page + 1) * ITEMS_PER_PAGE - 1);
@@ -1113,12 +1139,41 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                 )}
                             </div>
                         ) : creationMode === CREATION_MODES.CANONICAL ? (
-                            <CanonicalEditorialEditor
+                            <CanonicalArticleWizard
                                 key={canonicalContext?.articleId || 'new'}
                                 articleId={canonicalContext?.articleId || null}
                                 originBacklog={canonicalContext?.originBacklog || null}
-                                currentUser={user}
-                                permissions={{ canReview: false }}
+                                formData={formData}
+                                setFormData={updateFormData}
+                                onCancel={onClose}
+                                onComplete={() => {
+                                    setCanonicalContext(null);
+                                    setActiveTab('history');
+                                }}
+                                onCreateAnother={() => {
+                                    setCanonicalContext(null);
+                                    setFormData(createInitialFormData());
+                                    setSelectedFile(null);
+                                }}
+                                availableVisualModels={availableVisualModels}
+                                visualModelOptions={visualModelOptions}
+                                availableFormats={availableFormats}
+                                visualTitleGroups={visualTitleGroups}
+                                visualTitlesLoading={visualTitlesLoading}
+                                visualTitlesError={visualTitlesError}
+                                onRetryVisualTitles={loadAvailableVisualTitles}
+                                visualModelsState={visualModelsState}
+                                onRetryVisualModels={loadAvailableMasterRuntime}
+                                territorialComposerEnabled={territorialComposer.enabled}
+                                territorialCatalog={territorialComposer.catalog}
+                                territorialComposerState={territorialComposer.status}
+                                territorialComposerError={territorialComposer.error}
+                                onRetryTerritorialComposer={loadAvailableTerritorialComposer}
+                                masterConfigs={masterRuntime.configs}
+                                masterControl={runtimeControl}
+                                poolCounts={masterRuntime.poolCounts}
+                                selectedFile={selectedFile}
+                                setSelectedFile={setSelectedFile}
                             />
                         ) : (
                             <ArticleForm
@@ -1241,6 +1296,15 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
                                             )}
 
                                             <div style={{ display: 'flex', gap: '8px' }}>
+                                                {item.status === 'pending_review' && item.current_generation_id && item.render_url && (
+                                                    <button
+                                                        onClick={() => void approveOwnRenderedMaterial(item)}
+                                                        disabled={approvingHistoryId === item.id}
+                                                        style={{ flex: 1, padding: '10px', background: '#16a34a', border: '1px solid #16a34a', borderRadius: '8px', fontSize: '13px', fontWeight: 600, color: '#fff', cursor: approvingHistoryId === item.id ? 'wait' : 'pointer' }}
+                                                    >
+                                                        {approvingHistoryId === item.id ? 'Aprovando...' : 'Aprovar arte'}
+                                                    </button>
+                                                )}
                                                 {copiedHistoryItems[item.id] ? (
                                                     <button disabled style={{ flex: 1, padding: '10px', background: '#16a34a', border: '1px solid #16a34a', borderRadius: '8px', fontSize: '13px', fontWeight: 600, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: 'default' }}>
                                                         <CheckCircle2 size={16} /> Texto copiado

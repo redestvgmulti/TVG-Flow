@@ -18,7 +18,7 @@ import ArticleWizard from '../../components/editorial/ArticleWizard'
 import NewsBacklogPanel from '../../components/editorial/NewsBacklogPanel'
 import CollectedNewsPanel from '../../components/editorial/CollectedNewsPanel'
 import TeamNewsWorkPanel from '../../components/editorial/TeamNewsWorkPanel'
-import CanonicalEditorialEditor from '../../components/editorial/CanonicalEditorialEditor'
+import CanonicalArticleWizard from '../../components/editorial/CanonicalArticleWizard'
 import EditorialReviewPanel from '../../components/editorial/EditorialReviewPanel'
 import Modal from '../../components/ui/Modal'
 import { useEditorialWorkflowFlag } from '../../hooks/useEditorialWorkflowFlag'
@@ -105,7 +105,7 @@ function formatOperationalDate(value) {
 
 // ──────────────────────────────────────────────────────────
 export default function AutoPublisher() {
-    const { role, user } = useAuth()
+    const { role } = useAuth()
     const [clienteId, setClienteId] = useState(null)
     const [clienteError, setClienteError] = useState('')
     const [superAdminClients, setSuperAdminClients] = useState([])
@@ -146,6 +146,10 @@ export default function AutoPublisher() {
         url_original: '',
         titulo: '',
         conteudo: '',
+        caption: '',
+        context_tag: '',
+        category: '',
+        location: { city: null, region: null, state: null },
         image_url: '',
         content_type: 'feed',
         source_mode: 'link',
@@ -212,6 +216,10 @@ export default function AutoPublisher() {
             url_original: '',
             titulo: '',
             conteudo: '',
+            caption: '',
+            context_tag: '',
+            category: '',
+            location: { city: null, region: null, state: null },
             image_url: '',
             content_type: 'feed',
             source_mode: 'link',
@@ -1126,12 +1134,39 @@ export default function AutoPublisher() {
                         )}
                     </div>
                 ) : creationMode === CREATION_MODES.CANONICAL ? (
-                    <CanonicalEditorialEditor
+                    <CanonicalArticleWizard
                         key={canonicalContext?.articleId || 'new'}
                         articleId={canonicalContext?.articleId || null}
                         originBacklog={canonicalContext?.originBacklog || null}
-                        currentUser={user}
-                        permissions={{ canReview: true }}
+                        formData={formData}
+                        setFormData={setFormData}
+                        onCancel={resetManualModal}
+                        onComplete={() => {
+                            resetManualModal()
+                            setTab('em_producao')
+                            void fetchCounts()
+                            void fetchItems('em_producao')
+                        }}
+                        onCreateAnother={handleCreateAnother}
+                        availableVisualModels={availableVisualModels}
+                        visualModelOptions={visualModelOptions}
+                        availableFormats={availableFormats}
+                        visualTitleGroups={visualTitleGroups}
+                        visualTitlesLoading={visualTitlesLoading}
+                        visualTitlesError={visualTitlesError}
+                        onRetryVisualTitles={loadAvailableVisualTitles}
+                        visualModelsState={visualModelsState}
+                        onRetryVisualModels={loadAvailableMasterRuntime}
+                        territorialComposerEnabled={territorialComposer.enabled}
+                        territorialCatalog={territorialComposer.catalog}
+                        territorialComposerState={territorialComposer.status}
+                        territorialComposerError={territorialComposer.error}
+                        onRetryTerritorialComposer={loadAvailableTerritorialComposer}
+                        masterConfigs={masterRuntime.configs}
+                        masterControl={runtimeControl}
+                        poolCounts={masterRuntime.poolCounts}
+                        selectedFile={selectedFile}
+                        setSelectedFile={setSelectedFile}
                     />
                 ) : (
                     <ArticleWizard

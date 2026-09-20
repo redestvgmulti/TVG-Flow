@@ -3,9 +3,8 @@
 // ap.render_generations, ap_private, or any p0_* RPC directly -- it only
 // creates a candidate through the two existing, already-hardened creation
 // RPCs (create_candidate_with_sponsors / create_territorial_composer_candidate)
-// and then calls ap.attach_editorial_article_candidate. The pg_cron-driven
-// ap-render-engine already sweeps pending_render candidates; this function
-// deliberately does not call it or replicate scheduleTargetedRender.
+// then calls ap.attach_editorial_article_candidate and schedules exactly that
+// candidate in ap-render-engine. It never starts a batch or enables a cron.
 //
 // Invoked synchronously by the approving admin's browser right after
 // ap.approve_editorial_article_for_render succeeds -- create_territorial_composer_candidate
@@ -38,7 +37,9 @@ import {
 } from "../ap-employee-generator/territorialCandidateWorkflow.ts";
 import { composerModeFromArticle } from "./composerModeFromArticle.ts";
 
-const FUNCTION_VERSION = "2026-09-17-editorial-render-dispatch.1";
+declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void };
+
+const FUNCTION_VERSION = "2026-09-20-editorial-render-dispatch.2";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -96,6 +97,40 @@ function jsonResponse(
     JSON.stringify({ ...body, correlation_id: fields.correlationId }),
     { status, headers: jsonHeaders },
   );
+}
+
+function scheduleTargetedRender(fields: LogFields, candidateId: string) {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const internalSecret = Deno.env.get("AP_INTERNAL_WORKER_SECRET");
+  if (!supabaseUrl || !serviceRoleKey || !internalSecret) return false;
+
+  const task = (async () => {
+    const response = await fetch(`${supabaseUrl}/functions/v1/ap-render-engine`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${serviceRoleKey}`,
+        apikey: serviceRoleKey,
+        "x-ap-internal-secret": internalSecret,
+        "x-correlation-id": fields.correlationId,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ newsId: candidateId }),
+      signal: AbortSignal.timeout(120_000),
+    });
+    if (!response.ok) throw new Error(`TARGETED_RENDER_HTTP_${response.status}`);
+    await response.arrayBuffer();
+    logEvent({ ...fields, candidateId, stage: "targeted_render", result: "TARGETED_RENDER_COMPLETED" });
+  })().catch(() => {
+    logEvent(
+      { ...fields, candidateId, stage: "targeted_render", result: "TARGETED_RENDER_FAILED" },
+      "error",
+    );
+  });
+
+  EdgeRuntime.waitUntil(task);
+  logEvent({ ...fields, candidateId, stage: "targeted_render", result: "TARGETED_RENDER_SCHEDULED" });
+  return true;
 }
 
 function tenantAuthorizationMessage(error: TenantAuthorizationError): string {
@@ -165,10 +200,17 @@ Deno.serve(async (req: Request) => {
 
     // Already dispatched by an earlier attempt: idempotent success, no new writes.
     if (claim.candidate_news_id) {
+      const renderScheduled = scheduleTargetedRender(fields, claim.candidate_news_id);
       return jsonResponse(
-        { ...fields, candidateId: claim.candidate_news_id, stage: "complete", result: "ALREADY_DISPATCHED" },
-        200,
-        { success: true, candidate_news_id: claim.candidate_news_id, status: claim.status, reused: true },
+        { ...fields, candidateId: claim.candidate_news_id, stage: "complete", result: renderScheduled ? "ALREADY_DISPATCHED" : "TARGETED_RENDER_CONFIG_MISSING" },
+        renderScheduled ? 200 : 503,
+        {
+          success: renderScheduled,
+          candidate_news_id: claim.candidate_news_id,
+          status: claim.status,
+          reused: true,
+          render_scheduled: renderScheduled,
+        },
       );
     }
 
@@ -404,11 +446,26 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    const renderScheduled = scheduleTargetedRender(fields, candidateId);
+    if (!renderScheduled) {
+      return jsonResponse(
+        { ...fields, candidateId, stage: "targeted_render", result: "TARGETED_RENDER_CONFIG_MISSING" },
+        503,
+        {
+          success: false,
+          error: "TARGETED_RENDER_CONFIG_MISSING",
+          candidate_news_id: candidateId,
+          message: "A materia entrou na fila, mas o render nao pode ser iniciado. Tente novamente.",
+        },
+      );
+    }
+
     return jsonResponse({ ...fields, stage: "complete", result: "DISPATCHED" }, 200, {
       success: true,
       candidate_news_id: candidateId,
       status: "dispatched",
       reused: false,
+      render_scheduled: true,
     });
   } catch (error) {
     logEvent({ ...fields, result: "INTERNAL_ERROR" }, "error");

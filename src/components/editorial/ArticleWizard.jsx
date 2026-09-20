@@ -75,11 +75,18 @@ export default function ArticleWizard({
     onRetryTerritorialComposer,
     submitSucceeded = false,
     onCreateAnother,
+    onBeforeReview,
+    sourceLocked = false,
+    fixedFiveSteps = false,
+    showEditorialDraft = false,
+    submitLabel = 'Gerar Matéria',
 }) {
     const [step, setStep] = useState(0);
     const [maxReached, setMaxReached] = useState(0);
     const [isDragging, setIsDragging] = useState(false);
     const [visualTitleFormatNotice, setVisualTitleFormatNotice] = useState('');
+    const [isPreparing, setIsPreparing] = useState(false);
+    const [preparationError, setPreparationError] = useState('');
 
     // The parent flips submitSucceeded back to false both when the modal is
     // reopened fresh and when "Criar outra matéria" resets formData — either
@@ -106,10 +113,10 @@ export default function ArticleWizard({
             { key: 'origem', label: 'Origem' },
             { key: 'detalhes', label: 'Detalhes' },
         ];
-        if (sourceImageRequired) list.push({ key: 'imagem', label: 'Imagem' });
+        if (fixedFiveSteps || sourceImageRequired) list.push({ key: 'imagem', label: 'Imagem' });
         list.push({ key: 'revisao', label: 'Revisão' });
         return list;
-    }, [sourceImageRequired]);
+    }, [fixedFiveSteps, sourceImageRequired]);
 
     const currentStep = steps[Math.min(step, steps.length - 1)];
     const isLastStep = step === steps.length - 1;
@@ -143,7 +150,9 @@ export default function ArticleWizard({
                 }
                 return formData.visual_title_id ? '' : 'Selecione o selo visual da peça.';
             case 'imagem':
-                return (selectedFile || (formData.image_url || '').trim()) ? '' : 'Anexe uma foto ou informe a URL da imagem.';
+                return !sourceImageRequired || selectedFile || (formData.image_url || '').trim()
+                    ? ''
+                    : 'Anexe uma foto ou informe a URL da imagem.';
             case 'revisao':
                 return '';
             default:
@@ -190,9 +199,21 @@ export default function ArticleWizard({
         setStep(s => Math.max(0, s - 1));
     }
 
-    function handleContinue() {
+    async function handleContinue() {
         if (!canContinue) return;
         const next = step + 1;
+        if (steps[next]?.key === 'revisao' && onBeforeReview) {
+            setIsPreparing(true);
+            setPreparationError('');
+            try {
+                await onBeforeReview();
+            } catch (error) {
+                setPreparationError(error?.userMessage || 'Não foi possível preparar a matéria automaticamente.');
+                return;
+            } finally {
+                setIsPreparing(false);
+            }
+        }
         setMaxReached(m => Math.max(m, next));
         setStep(next);
     }
@@ -271,7 +292,7 @@ export default function ArticleWizard({
             label: 'Origem do conteúdo',
             value: formData.source_mode === 'link'
                 ? `Link: ${formData.url_original || '—'}`
-                : `Manual: ${formData.titulo || '—'}`,
+                : `Manual: ${formData.source_titulo || formData.titulo || '—'}`,
             stepKey: 'origem',
         });
         if (sourceImageRequired) {
@@ -438,6 +459,7 @@ export default function ArticleWizard({
                                     <button
                                         key={option.value}
                                         type="button"
+                                        disabled={sourceLocked}
                                         className={`ap-wizard-origin-btn${active ? ' is-active' : ''}`}
                                         onClick={() => selectSourceMode(option.value)}
                                     >
@@ -454,6 +476,7 @@ export default function ArticleWizard({
                                 <p className="ap-af-linkbox-hint">A IA irá extrair e validar o conteúdo desta URL.</p>
                                 <input
                                     className={`ap-af-input ap-af-input--link${typeof errors.url_original === 'string' ? ' ap-af-input--error' : ''}`}
+                                    disabled={sourceLocked}
                                     value={formData.url_original || ''}
                                     onChange={e => setFormData({ ...formData, url_original: e.target.value, idempotency_key: null })}
                                     placeholder="https://site.com/noticia..."
@@ -467,7 +490,8 @@ export default function ArticleWizard({
                                     <FieldLabel required>Headline Maior</FieldLabel>
                                     <input
                                         className={`ap-af-input${typeof errors.titulo === 'string' ? ' ap-af-input--error' : ''}`}
-                                        value={formData.titulo || ''}
+                                        disabled={sourceLocked}
+                                        value={sourceLocked ? (formData.source_titulo || '') : (formData.titulo || '')}
                                         onChange={e => setFormData({ ...formData, titulo: e.target.value, idempotency_key: null })}
                                         placeholder="Ex: Novo viaduto é inaugurado..."
                                     />
@@ -478,7 +502,8 @@ export default function ArticleWizard({
                                     <textarea
                                         rows={5}
                                         className={`ap-af-textarea${typeof errors.conteudo === 'string' ? ' ap-af-textarea--error' : ''}`}
-                                        value={formData.conteudo || ''}
+                                        disabled={sourceLocked}
+                                        value={sourceLocked ? (formData.source_conteudo || '') : (formData.conteudo || '')}
                                         onChange={e => setFormData({ ...formData, conteudo: e.target.value, idempotency_key: null })}
                                         placeholder="Escreva os fatos confirmados. A IA revisará e criará a legenda."
                                     />
@@ -524,18 +549,20 @@ export default function ArticleWizard({
                 {currentStep.key === 'imagem' && (
                     <div className="ap-wizard-panel">
                         <div className="ap-af-field">
-                            <FieldLabel required>Foto (Fundo do Card)</FieldLabel>
+                            <FieldLabel required={sourceImageRequired}>Foto (Fundo do Card)</FieldLabel>
+                            {!sourceImageRequired && <small className="ap-af-hint">Opcional para esta configuração.</small>}
                             <div
                                 role="button"
-                                tabIndex={0}
+                                tabIndex={sourceLocked ? -1 : 0}
                                 aria-label="Selecionar imagem"
+                                aria-disabled={sourceLocked}
                                 className={`ap-af-dropzone${isDragging ? ' ap-af-dropzone--active' : ''}`}
-                                onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
+                                onDragOver={e => { e.preventDefault(); if (!sourceLocked) setIsDragging(true); }}
                                 onDragLeave={() => setIsDragging(false)}
-                                onDrop={e => { e.preventDefault(); setIsDragging(false); onDropFile(e.dataTransfer.files?.[0]); }}
-                                onClick={() => document.getElementById('upload-input-wizard').click()}
+                                onDrop={e => { e.preventDefault(); setIsDragging(false); if (!sourceLocked) onDropFile(e.dataTransfer.files?.[0]); }}
+                                onClick={() => { if (!sourceLocked) document.getElementById('upload-input-wizard').click(); }}
                                 onKeyDown={e => {
-                                    if (e.key === 'Enter' || e.key === ' ') {
+                                    if (!sourceLocked && (e.key === 'Enter' || e.key === ' ')) {
                                         e.preventDefault();
                                         document.getElementById('upload-input-wizard').click();
                                     }
@@ -545,6 +572,7 @@ export default function ArticleWizard({
                                     id="upload-input-wizard"
                                     type="file"
                                     accept="image/*"
+                                    disabled={sourceLocked}
                                     onChange={e => onDropFile(e.target.files?.[0])}
                                 />
                                 {selectedFile ? (
@@ -572,6 +600,7 @@ export default function ArticleWizard({
 
                             <input
                                 className={`ap-af-input${typeof errors.image_url === 'string' ? ' ap-af-input--error' : ''}`}
+                                disabled={sourceLocked}
                                 value={formData.image_url || ''}
                                 onChange={e => {
                                     setFormData({ ...formData, image_url: e.target.value, idempotency_key: null });
@@ -586,6 +615,35 @@ export default function ArticleWizard({
 
                 {currentStep.key === 'revisao' && (
                     <div className="ap-wizard-panel">
+                        {showEditorialDraft && <div className="ap-af-field">
+                            <FieldLabel required>Headline</FieldLabel>
+                            <input
+                                className={`ap-af-input${typeof errors.titulo === 'string' ? ' ap-af-input--error' : ''}`}
+                                value={formData.titulo || ''}
+                                onChange={e => setFormData({ ...formData, titulo: e.target.value, idempotency_key: null })}
+                            />
+                            <FieldError message={typeof errors.titulo === 'string' ? errors.titulo : ''} />
+                        </div>}
+                        {showEditorialDraft && <div className="ap-af-field">
+                            <FieldLabel required>Corpo da matéria</FieldLabel>
+                            <textarea
+                                rows={7}
+                                className={`ap-af-textarea${typeof errors.conteudo === 'string' ? ' ap-af-textarea--error' : ''}`}
+                                value={formData.conteudo || ''}
+                                onChange={e => setFormData({ ...formData, conteudo: e.target.value, idempotency_key: null })}
+                            />
+                            <FieldError message={typeof errors.conteudo === 'string' ? errors.conteudo : ''} />
+                        </div>}
+                        {showEditorialDraft && <div className="ap-af-field">
+                            <FieldLabel required>Legenda</FieldLabel>
+                            <textarea
+                                rows={4}
+                                className={`ap-af-textarea${typeof errors.caption === 'string' ? ' ap-af-textarea--error' : ''}`}
+                                value={formData.caption || ''}
+                                onChange={e => setFormData({ ...formData, caption: e.target.value, idempotency_key: null })}
+                            />
+                            <FieldError message={typeof errors.caption === 'string' ? errors.caption : ''} />
+                        </div>}
                         <div className="ap-wizard-review">
                             {buildReviewRows().map(row => (
                                 <div key={row.label} className="ap-wizard-review-row">
@@ -618,7 +676,9 @@ export default function ArticleWizard({
             </div>
 
             <div className="ap-wizard-footer">
-                <div className={`ap-wizard-footer-hint${blocker ? ' is-blocked' : ''}`}>{footerHint}</div>
+                <div className={`ap-wizard-footer-hint${blocker || preparationError ? ' is-blocked' : ''}`} role={preparationError ? 'alert' : undefined}>
+                    {isPreparing ? 'Preparando matéria...' : preparationError || footerHint}
+                </div>
                 <div className="ap-wizard-footer-actions">
                     {step === 0 ? (
                         <button key="cancel" type="button" className="ap-af-cancel" onClick={onCancel}>Cancelar</button>
@@ -632,11 +692,11 @@ export default function ArticleWizard({
                         // browser's native default-action (computed after JS handlers run) then
                         // submits the form from the click that was only meant to advance a step.
                         <button key="submit" type="submit" disabled={isSubmitting} className="ap-af-submit">
-                            {isSubmitting ? (<><span className="ap-af-submit-spinner" aria-hidden="true" />Gerando...</>) : 'Gerar Matéria'}
+                            {isSubmitting ? (<><span className="ap-af-submit-spinner" aria-hidden="true" />Enviando...</>) : submitLabel}
                         </button>
                     ) : (
-                        <button key="continue" type="button" disabled={!canContinue} className="ap-af-submit" onClick={handleContinue}>
-                            Continuar →
+                        <button key="continue" type="button" disabled={!canContinue || isPreparing} className="ap-af-submit" onClick={() => void handleContinue()}>
+                            {isPreparing ? 'Preparando matéria...' : 'Continuar →'}
                         </button>
                     )}
                 </div>
