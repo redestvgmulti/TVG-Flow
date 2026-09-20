@@ -278,6 +278,7 @@ Deno.serve(async (req: Request) => {
           composerMode,
           requestedHeadline: claim.headline,
           requestedText: claim.body,
+          requestedCaption: claim.caption,
           userHeadline: null,
           userText: null,
           userTag: null,

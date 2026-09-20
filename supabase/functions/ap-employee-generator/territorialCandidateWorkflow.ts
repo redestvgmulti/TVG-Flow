@@ -55,6 +55,7 @@ export async function createAndProcessTerritorialCandidate(input: {
   composerMode: string;
   requestedHeadline: string;
   requestedText: string;
+  requestedCaption?: string | null;
   userHeadline: string | null;
   userText: string | null;
   userTag: string | null;
@@ -107,13 +108,18 @@ export async function createAndProcessTerritorialCandidate(input: {
     // Territorial candidates use the persisted input as editorial truth too.
     // The finalizer only freezes render fields; it must not rewrite content.
     const canonical = canonicalEditorialFields(news);
+    // input.requestedCaption is the AI-authored social caption (hashtags,
+    // source line) when this workflow was dispatched from an editorial
+    // draft; canonical.caption is only a body-text fallback for the manual
+    // employee-generator path, which has no separate caption to offer.
+    const finalCaption = input.requestedCaption?.trim() || canonical.caption;
     const { data: finalizeResult, error: finalizeError } = await input
       .serviceSupabase
       .schema("ap")
       .rpc("finalize_territorial_composer_candidate", {
         p_candidate_id: news.id,
         p_headline: canonical.headline,
-        p_caption: canonical.caption,
+        p_caption: finalCaption,
         p_context_tag: canonical.context_tag,
         p_roteiro_json: canonical.roteiro_json,
       });
