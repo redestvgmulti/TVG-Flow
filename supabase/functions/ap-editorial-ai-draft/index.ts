@@ -161,7 +161,11 @@ Deno.serve(async (req: Request) => {
       rules: context.rules,
     });
 
-    const maxTokens = Math.min(Math.max(Number(context.settings.max_tokens) || 1200, 800), 2000);
+    // A complete structured draft includes the article body plus mandatory
+    // caption/classification/location fields. The previous 1,200-2,000 range
+    // could truncate the tool input after headline/body, which must remain a
+    // hard validation failure rather than being accepted as a partial draft.
+    const maxTokens = Math.min(Math.max(Number(context.settings.max_tokens) || 2400, 2400), 4000);
     const estimatedInputTokens = Math.ceil(prompt.length / 3);
     const requestedReservation = maxTokens + estimatedInputTokens;
     const { data: reserved, error: reserveError } = await adminClient.schema("ap").rpc("reserve_editorial_tokens", {
