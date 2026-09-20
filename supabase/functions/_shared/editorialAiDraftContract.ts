@@ -37,6 +37,31 @@ export const EDITORIAL_AI_DRAFT_JSON_SCHEMA: Record<string, unknown> = {
 const ROOT_KEYS = ["body", "caption", "category", "context_tag", "headline", "location"];
 const LOCATION_KEYS = ["city", "region", "state"];
 
+export function editorialAiDraftShapeDiagnostics(content: string) {
+  try {
+    const parsed = JSON.parse(String(content ?? ""));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return { root_type: Array.isArray(parsed) ? "array" : typeof parsed };
+    }
+    const root = parsed as Record<string, unknown>;
+    const location = root.location;
+    const rootKeys = Object.keys(root);
+    const result: Record<string, unknown> = {
+      missing_root: ROOT_KEYS.filter((key) => !rootKeys.includes(key)),
+      extra_root_count: rootKeys.filter((key) => !ROOT_KEYS.includes(key)).length,
+      location_type: Array.isArray(location) ? "array" : typeof location,
+    };
+    if (location && typeof location === "object" && !Array.isArray(location)) {
+      const locationKeys = Object.keys(location as Record<string, unknown>);
+      result.missing_location = LOCATION_KEYS.filter((key) => !locationKeys.includes(key));
+      result.extra_location_count = locationKeys.filter((key) => !LOCATION_KEYS.includes(key)).length;
+    }
+    return result;
+  } catch {
+    return { root_type: "invalid_json" };
+  }
+}
+
 function requiredString(value: unknown, field: string, maxLength: number): string {
   if (typeof value !== "string" || !value.trim()) {
     throw new Error(`EDITORIAL_AI_INVALID_${field.toUpperCase()}`);

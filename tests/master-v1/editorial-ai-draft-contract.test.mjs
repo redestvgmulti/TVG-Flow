@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises'
 
 import {
   EDITORIAL_AI_DRAFT_JSON_SCHEMA,
+  editorialAiDraftShapeDiagnostics,
   parseEditorialAiDraft,
   providerFromBaseUrl,
   sanitizedAiErrorCode,
@@ -29,6 +30,22 @@ test('strict AI draft parser rejects invalid, partial, fenced and augmented outp
   assert.throws(() => parseEditorialAiDraft(`\`\`\`json\n${JSON.stringify(validDraft)}\n\`\`\``), /EDITORIAL_AI_INVALID_JSON/)
   assert.throws(() => parseEditorialAiDraft(JSON.stringify({ ...validDraft, reasoning: 'hidden' })), /EDITORIAL_AI_INVALID_SCHEMA/)
   assert.throws(() => parseEditorialAiDraft(JSON.stringify({ ...validDraft, location: { city: null } })), /EDITORIAL_AI_INVALID_LOCATION/)
+})
+
+test('schema diagnostics expose shape only and never editorial values', () => {
+  const diagnostics = editorialAiDraftShapeDiagnostics(JSON.stringify({
+    ...validDraft,
+    body: 'sensitive source text',
+    reasoning: 'sensitive model comment',
+  }))
+  assert.deepEqual(diagnostics, {
+    missing_root: [],
+    extra_root_count: 1,
+    location_type: 'object',
+    missing_location: [],
+    extra_location_count: 0,
+  })
+  assert.doesNotMatch(JSON.stringify(diagnostics), /sensitive/)
 })
 
 test('provider routing and persisted errors expose only stable metadata', () => {
