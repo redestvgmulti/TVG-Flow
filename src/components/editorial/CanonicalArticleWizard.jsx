@@ -4,6 +4,7 @@ import ArticleWizard from './ArticleWizard'
 import { supabase } from '../../services/supabase'
 import { messageForRpcError } from '../../services/editorialArticleContract'
 import {
+  buildDraftPayload,
   buildFinalizePayload,
   buildProductionIntentPayload,
   validateContentStep,
@@ -11,6 +12,7 @@ import {
 } from '../../services/editorialArticleForm'
 import {
   approveEditorialArticleForRender,
+  captureCollectedNewsArticleSource,
   captureEditorialArticleSource,
   dispatchEditorialArticleRender,
   finalizeEditorialArticle,
@@ -18,6 +20,7 @@ import {
   getEditorialArticleForEdit,
   prepareEditorialAiDraft,
   requestEditorialArticleChanges,
+  saveEditorialArticleDraft,
   saveEditorialArticleProductionIntent,
   scrapeArticleSource,
   startEditorialArticleDirect,
@@ -95,11 +98,16 @@ export default function CanonicalArticleWizard({
 }) {
   const [errors, setErrors] = useState({})
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isSavingDraft, setIsSavingDraft] = useState(false)
   const [submitSucceeded, setSubmitSucceeded] = useState(false)
-  const [sourceLocked, setSourceLocked] = useState(false)
+  const [sourceLocked, setSourceLocked] = useState(Boolean(originBacklog))
+  const [automaticPreparation, setAutomaticPreparation] = useState({ status: 'idle', error: '' })
   const articleIdRef = useRef(articleId)
   const sourceImageRef = useRef('')
+  const revisionNumberRef = useRef(null)
   const preparedRef = useRef(false)
+  const preparationPromiseRef = useRef(null)
+  const autoPrepareStartedRef = useRef(false)
   const requests = useRef({})
 
   useEffect(() => {
@@ -109,10 +117,12 @@ export default function CanonicalArticleWizard({
       .then(row => {
         if (!active) return
         articleIdRef.current = row.id
+        revisionNumberRef.current = row.revision_number
         sourceImageRef.current = row.source_image_url || row.original_source_image_url || ''
         const hasPreparedDraft = Number(row.revision_number || 0) > 0
+        if (preparedRef.current && !hasPreparedDraft) return
         preparedRef.current = hasPreparedDraft
-        setSourceLocked(Boolean(row.ai_source_captured || hasPreparedDraft))
+        setSourceLocked(Boolean(originBacklog || row.ai_source_captured || hasPreparedDraft))
         setFormData(previous => ({
           ...previous,
           source_mode: row.origin_type === 'text' ? 'manual' : 'link',
@@ -138,12 +148,96 @@ export default function CanonicalArticleWizard({
     return () => { active = false }
   }, [articleId, originBacklog, setFormData])
 
+  function applyPreparedArticle(prepared, fallback = {}) {
+    preparedRef.current = true
+    revisionNumberRef.current = prepared.revision_number
+    setSourceLocked(true)
+    sourceImageRef.current = prepared.source_image_url || prepared.original_source_image_url || fallback.sourceImageUrl || ''
+    const sourceTitle = prepared.original_source_title || fallback.sourceTitle || ''
+    const sourceBody = prepared.original_source_body || fallback.sourceBody || ''
+    setFormData(previous => ({
+      ...previous,
+      source_titulo: sourceTitle || previous.source_titulo || '',
+      source_conteudo: sourceBody || previous.source_conteudo || '',
+      titulo: prepared.headline || '',
+      conteudo: prepared.body || '',
+      caption: prepared.caption || '',
+      context_tag: prepared.context_tag || '',
+      category: prepared.category || '',
+      location: prepared.location || { city: null, region: null, state: null },
+      image_url: prepared.source_image_url || prepared.original_source_image_url || fallback.sourceImageUrl || previous.image_url,
+    }))
+  }
+
+  async function waitForPreparedDraft(targetArticleId) {
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      const current = await getEditorialArticleForEdit(supabase, targetArticleId)
+      if (Number(current.revision_number || 0) > 0) return current
+      await new Promise(resolve => window.setTimeout(resolve, 1000))
+    }
+    throw Object.assign(new Error('EDITORIAL_AI_TIMEOUT'), { code: 'EDITORIAL_AI_TIMEOUT' })
+  }
+
   async function prepareForReview() {
     if (preparedRef.current) return
-    setErrors({})
-    try {
+    if (preparationPromiseRef.current) return preparationPromiseRef.current
+    const preparation = (async () => {
+      setErrors({})
+      setAutomaticPreparation({ status: 'preparing', error: '' })
       const aiEnabled = await getEditorialAiDraftStatus(supabase)
       if (!aiEnabled) throw new Error('EDITORIAL_AI_DISABLED')
+
+      if (originBacklog?.collected_news_id) {
+        const current = await getEditorialArticleForEdit(supabase, articleIdRef.current)
+        if (Number(current.revision_number || 0) > 0) {
+          applyPreparedArticle(current)
+          setAutomaticPreparation({ status: 'ready', error: '' })
+          return
+        }
+
+        let sourceTitle = (originBacklog.source_title || originBacklog.titulo || '').trim()
+        let sourceBody = (originBacklog.source_body || '').trim()
+        let sourceImageUrl = (originBacklog.source_image_url || '').trim()
+        if (!current.ai_source_captured) {
+          if (originBacklog.source_requires_scrape) {
+            let scraped
+            try {
+              scraped = await scrapeArticleSource(supabase, originBacklog.source_url || originBacklog.url_original)
+            } catch (error) {
+              throw Object.assign(error, { code: 'SOURCE_SCRAPE_FAILED' })
+            }
+            sourceTitle = (scraped.title || sourceTitle).trim()
+            sourceBody = (scraped.content || '').trim()
+            sourceImageUrl = (sourceImageUrl || scraped.image_url || '').trim()
+          }
+          await captureCollectedNewsArticleSource(supabase, {
+            articleId: articleIdRef.current,
+            collectedNewsId: originBacklog.collected_news_id,
+            scrapedTitle: originBacklog.source_requires_scrape ? sourceTitle : null,
+            scrapedBody: originBacklog.source_requires_scrape ? sourceBody : null,
+            scrapedImageUrl: originBacklog.source_requires_scrape ? sourceImageUrl : null,
+            requestId: requestId(requests, 'source'),
+          })
+          resetRequestId(requests, 'source')
+        }
+
+        try {
+          await prepareEditorialAiDraft(supabase, {
+            articleId: articleIdRef.current,
+            requestId: requestId(requests, 'aiDraft'),
+          })
+          resetRequestId(requests, 'aiDraft')
+        } catch (error) {
+          const code = String(error?.code || error?.message || '')
+          resetRequestId(requests, 'aiDraft')
+          if (!code.includes('EDITORIAL_AI_DRAFT_IN_PROGRESS')) throw error
+        }
+        const prepared = await waitForPreparedDraft(articleIdRef.current)
+        applyPreparedArticle(prepared, { sourceTitle, sourceBody, sourceImageUrl })
+        setAutomaticPreparation({ status: 'ready', error: '' })
+        toast.success('Matéria preparada para sua revisão.')
+        return
+      }
 
       let sourceTitle = (formData.titulo || originBacklog?.titulo || '').trim()
       let sourceBody = (formData.conteudo || '').trim()
@@ -198,25 +292,31 @@ export default function CanonicalArticleWizard({
       resetRequestId(requests, 'aiDraft')
 
       const prepared = await getEditorialArticleForEdit(supabase, articleIdRef.current)
-      preparedRef.current = true
-      setSourceLocked(true)
-      setFormData(previous => ({
-        ...previous,
-        source_titulo: sourceTitle,
-        source_conteudo: sourceBody,
-        titulo: prepared.headline || '',
-        conteudo: prepared.body || '',
-        caption: prepared.caption || '',
-        context_tag: prepared.context_tag || '',
-        category: prepared.category || '',
-        location: prepared.location || { city: null, region: null, state: null },
-        image_url: sourceImageUrl || previous.image_url,
-      }))
+      applyPreparedArticle(prepared, { sourceTitle, sourceBody, sourceImageUrl })
+      setAutomaticPreparation({ status: 'ready', error: '' })
       toast.success('Matéria preparada para sua revisão.')
+    })()
+    preparationPromiseRef.current = preparation
+    try {
+      return await preparation
     } catch (error) {
-      throw userFacingError(error)
+      resetRequestId(requests, 'aiDraft')
+      const friendly = userFacingError(error)
+      setAutomaticPreparation({ status: 'error', error: friendly.userMessage })
+      throw friendly
+    } finally {
+      preparationPromiseRef.current = null
     }
   }
+
+  useEffect(() => {
+    if (!articleId || !originBacklog?.auto_prepare || autoPrepareStartedRef.current) return
+    autoPrepareStartedRef.current = true
+    void prepareForReview().catch(() => {})
+    // The one-shot is keyed by the wizard's articleId; callbacks intentionally
+    // remain outside the dependency list so form edits cannot start a second run.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [articleId, originBacklog?.auto_prepare])
 
   async function submit(e) {
     e.preventDefault()
@@ -312,12 +412,50 @@ export default function CanonicalArticleWizard({
     }
   }
 
+  async function saveHumanDraft() {
+    if (isSavingDraft || !articleIdRef.current || !preparedRef.current) return
+
+    const canonicalForm = canonicalFormFromWizard(formData, sourceImageRef.current)
+    const contentErrors = validateContentStep(canonicalForm, { requireAiFields: true })
+    if (Object.keys(contentErrors).length) {
+      setErrors({
+        ...(contentErrors.headline ? { titulo: contentErrors.headline } : {}),
+        ...(contentErrors.body ? { conteudo: contentErrors.body } : {}),
+        ...(contentErrors.caption ? { caption: contentErrors.caption } : {}),
+      })
+      toast.error('Revise os campos editoriais destacados.')
+      return
+    }
+
+    setErrors({})
+    setIsSavingDraft(true)
+    try {
+      await saveEditorialArticleDraft(supabase, buildDraftPayload(canonicalForm, {
+        articleId: articleIdRef.current,
+        requestId: requestId(requests, 'humanDraft'),
+        expectedRevisionNumber: revisionNumberRef.current,
+      }))
+      resetRequestId(requests, 'humanDraft')
+      const saved = await getEditorialArticleForEdit(supabase, articleIdRef.current)
+      applyPreparedArticle(saved)
+      toast.success('Rascunho salvo.')
+    } catch (error) {
+      resetRequestId(requests, 'humanDraft')
+      toast.error(messageForRpcError(error?.code || error?.message).description)
+    } finally {
+      setIsSavingDraft(false)
+    }
+  }
+
   function createAnother() {
     articleIdRef.current = null
     sourceImageRef.current = ''
+    revisionNumberRef.current = null
     preparedRef.current = false
     requests.current = {}
     setSourceLocked(false)
+    setAutomaticPreparation({ status: 'idle', error: '' })
+    autoPrepareStartedRef.current = false
     setSubmitSucceeded(false)
     setErrors({})
     onCreateAnother?.()
@@ -335,6 +473,14 @@ export default function CanonicalArticleWizard({
       isSubmitting={isSubmitting}
       onCancel={onCancel}
       onBeforeReview={prepareForReview}
+      preparationStatus={automaticPreparation.status}
+      automaticPreparationError={automaticPreparation.error}
+      onRetryPreparation={() => {
+        autoPrepareStartedRef.current = true
+        void prepareForReview().catch(() => {})
+      }}
+      onSaveDraft={saveHumanDraft}
+      isSavingDraft={isSavingDraft}
       sourceLocked={sourceLocked}
       fixedFiveSteps
       showEditorialDraft

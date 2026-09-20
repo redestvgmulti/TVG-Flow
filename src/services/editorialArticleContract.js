@@ -117,7 +117,7 @@ const MESSAGES = Object.freeze({
   },
   SOURCE_SCRAPE_FAILED: {
     title: 'Falha ao extrair link',
-    description: 'Não foi possível extrair os dados do link. Tente preencher manualmente.',
+    description: 'Não foi possível obter o conteúdo completo desta matéria.',
   },
   EDITORIAL_AI_FLAG_LOAD_FAILED: {
     title: 'Preparação indisponível',
@@ -170,6 +170,14 @@ const MESSAGES = Object.freeze({
   BACKLOG_NOT_OWNED: {
     title: 'Pauta de outra pessoa',
     description: 'Esta pauta foi adotada por outra pessoa da equipe.',
+  },
+  COLLECTED_NEWS_ALREADY_IN_PRODUCTION: {
+    title: 'Matéria em produção',
+    description: 'Esta matéria já está sendo produzida por outro usuário.',
+  },
+  COLLECTED_NEWS_SCRAPE_REQUIRED: {
+    title: 'Conteúdo incompleto',
+    description: 'Não foi possível obter o conteúdo completo desta matéria.',
   },
   BACKLOG_LEGACY_CANDIDATE_LINKED: {
     title: 'Pauta já em produção',

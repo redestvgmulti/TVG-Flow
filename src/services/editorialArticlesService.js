@@ -147,6 +147,27 @@ export async function startEditorialArticleFromBacklog(supabase, { backlogId, re
   })
 }
 
+export async function startCollectedNewsEditorialProduction(supabase, { collectedNewsId, requestId }) {
+  return callArticleRpc(supabase, 'start_collected_news_editorial_production', {
+    p_collected_news_id: collectedNewsId,
+    p_request_id: requestId,
+  })
+}
+
+export async function captureCollectedNewsArticleSource(supabase, {
+  articleId, collectedNewsId, scrapedTitle = null, scrapedBody = null,
+  scrapedImageUrl = null, requestId,
+}) {
+  return callArticleRpc(supabase, 'capture_collected_news_article_source', {
+    p_article_id: articleId,
+    p_collected_news_id: collectedNewsId,
+    p_scraped_title: scrapedTitle,
+    p_scraped_body: scrapedBody,
+    p_scraped_image_url: scrapedImageUrl,
+    p_request_id: requestId,
+  })
+}
+
 export async function listMyEditorialArticles(supabase) {
   const { data, error } = await supabase.schema('ap').rpc('list_my_editorial_articles')
   if (error) throw new EditorialArticleError(error.message || 'UNKNOWN_ERROR', error)

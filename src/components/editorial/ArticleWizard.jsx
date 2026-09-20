@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, ImageIcon, Video, BookOpen, Pencil, Check } from 'lucide-react';
+import { CheckCircle2, ImageIcon, Video, BookOpen, Pencil, Check, Loader2 } from 'lucide-react';
 import VisualTitleCombobox from './VisualTitleCombobox';
 import TerritorialComposerFields from './TerritorialComposerFields';
 import { FieldLabel, FieldError } from './ArticleForm';
@@ -80,6 +80,11 @@ export default function ArticleWizard({
     fixedFiveSteps = false,
     showEditorialDraft = false,
     submitLabel = 'Gerar Matéria',
+    preparationStatus = 'idle',
+    automaticPreparationError = '',
+    onRetryPreparation,
+    onSaveDraft,
+    isSavingDraft = false,
 }) {
     const [step, setStep] = useState(0);
     const [maxReached, setMaxReached] = useState(0);
@@ -370,6 +375,18 @@ export default function ArticleWizard({
                     <div className="ap-wizard-section-title-sub">{stepCopy.subtitle}</div>
                 </div>
 
+                {preparationStatus === 'preparing' && (
+                    <div role="status" aria-live="polite" className="ap-af-alert ap-af-alert--info">
+                        <Loader2 size={14} className="ap-spin-icon" /> Preparando matéria...
+                    </div>
+                )}
+                {preparationStatus === 'error' && (
+                    <div role="alert" className="ap-af-alert ap-af-alert--error">
+                        <span>{automaticPreparationError || 'Não foi possível preparar a matéria automaticamente.'}</span>
+                        <button type="button" className="ap-af-alert-retry" onClick={onRetryPreparation}>Tentar novamente</button>
+                    </div>
+                )}
+
                 {currentStep.key === 'formato' && (
                     <div className="ap-wizard-panel">
                         <div className="ap-af-format" role="tablist">
@@ -553,16 +570,15 @@ export default function ArticleWizard({
                             {!sourceImageRequired && <small className="ap-af-hint">Opcional para esta configuração.</small>}
                             <div
                                 role="button"
-                                tabIndex={sourceLocked ? -1 : 0}
+                                tabIndex={0}
                                 aria-label="Selecionar imagem"
-                                aria-disabled={sourceLocked}
                                 className={`ap-af-dropzone${isDragging ? ' ap-af-dropzone--active' : ''}`}
-                                onDragOver={e => { e.preventDefault(); if (!sourceLocked) setIsDragging(true); }}
+                                onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
                                 onDragLeave={() => setIsDragging(false)}
-                                onDrop={e => { e.preventDefault(); setIsDragging(false); if (!sourceLocked) onDropFile(e.dataTransfer.files?.[0]); }}
-                                onClick={() => { if (!sourceLocked) document.getElementById('upload-input-wizard').click(); }}
+                                onDrop={e => { e.preventDefault(); setIsDragging(false); onDropFile(e.dataTransfer.files?.[0]); }}
+                                onClick={() => document.getElementById('upload-input-wizard').click()}
                                 onKeyDown={e => {
-                                    if (!sourceLocked && (e.key === 'Enter' || e.key === ' ')) {
+                                    if (e.key === 'Enter' || e.key === ' ') {
                                         e.preventDefault();
                                         document.getElementById('upload-input-wizard').click();
                                     }
@@ -572,7 +588,6 @@ export default function ArticleWizard({
                                     id="upload-input-wizard"
                                     type="file"
                                     accept="image/*"
-                                    disabled={sourceLocked}
                                     onChange={e => onDropFile(e.target.files?.[0])}
                                 />
                                 {selectedFile ? (
@@ -600,7 +615,6 @@ export default function ArticleWizard({
 
                             <input
                                 className={`ap-af-input${typeof errors.image_url === 'string' ? ' ap-af-input--error' : ''}`}
-                                disabled={sourceLocked}
                                 value={formData.image_url || ''}
                                 onChange={e => {
                                     setFormData({ ...formData, image_url: e.target.value, idempotency_key: null });
@@ -676,8 +690,8 @@ export default function ArticleWizard({
             </div>
 
             <div className="ap-wizard-footer">
-                <div className={`ap-wizard-footer-hint${blocker || preparationError ? ' is-blocked' : ''}`} role={preparationError ? 'alert' : undefined}>
-                    {isPreparing ? 'Preparando matéria...' : preparationError || footerHint}
+                <div className={`ap-wizard-footer-hint${blocker || preparationError || automaticPreparationError ? ' is-blocked' : ''}`} role={preparationError || automaticPreparationError ? 'alert' : undefined}>
+                    {isPreparing || preparationStatus === 'preparing' ? 'Preparando matéria...' : preparationError || automaticPreparationError || footerHint}
                 </div>
                 <div className="ap-wizard-footer-actions">
                     {step === 0 ? (
@@ -686,14 +700,18 @@ export default function ArticleWizard({
                         <button key="back" type="button" className="ap-wizard-back-btn" onClick={handleBack}>← Voltar</button>
                     )}
                     {isLastStep ? (
-                        // Distinct `key` from the Continuar button below is load-bearing, not
-                        // decorative: without it React patches type="button" -> type="submit"
-                        // on the *same* DOM node during this click's own bubble phase, and the
-                        // browser's native default-action (computed after JS handlers run) then
-                        // submits the form from the click that was only meant to advance a step.
-                        <button key="submit" type="submit" disabled={isSubmitting} className="ap-af-submit">
-                            {isSubmitting ? (<><span className="ap-af-submit-spinner" aria-hidden="true" />Enviando...</>) : submitLabel}
-                        </button>
+                        <>
+                            {onSaveDraft && (
+                                <button type="button" disabled={isSubmitting || isSavingDraft} className="ap-wizard-back-btn" onClick={() => void onSaveDraft()}>
+                                    {isSavingDraft ? 'Salvando...' : 'Salvar rascunho'}
+                                </button>
+                            )}
+                            {/* Distinct `key` from the Continuar button below is load-bearing, not
+                                decorative: it prevents the advancing click from becoming submit. */}
+                            <button key="submit" type="submit" disabled={isSubmitting || isSavingDraft} className="ap-af-submit">
+                                {isSubmitting ? (<><span className="ap-af-submit-spinner" aria-hidden="true" />Enviando...</>) : submitLabel}
+                            </button>
+                        </>
                     ) : (
                         <button key="continue" type="button" disabled={!canContinue || isPreparing} className="ap-af-submit" onClick={() => void handleContinue()}>
                             {isPreparing ? 'Preparando matéria...' : 'Continuar →'}
