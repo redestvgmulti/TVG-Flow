@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Check, ExternalLink, Inbox, Loader2, RefreshCcw, Trash2 } from 'lucide-react'
+import { ExternalLink, Inbox, Loader2, RefreshCcw, Trash2, Zap } from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase } from '../../services/supabase'
-import ApproveCollectedNewsModal from './ApproveCollectedNewsModal'
 import EditorialReasonModal from './EditorialReasonModal'
 
 const FILTERS = [
@@ -26,13 +25,12 @@ function formatDate(value) {
     }).format(new Date(value))
 }
 
-export default function CollectedNewsPanel({ clienteId, onCountsChange }) {
+export default function CollectedNewsPanel({ clienteId, onCountsChange, onProduce }) {
     const [status, setStatus] = useState('pending_review')
     const [items, setItems] = useState([])
     const [counts, setCounts] = useState({})
     const [loading, setLoading] = useState(false)
     const [actingId, setActingId] = useState(null)
-    const [approvalItem, setApprovalItem] = useState(null)
     const [discardItem, setDiscardItem] = useState(null)
 
     const load = useCallback(async ({ silent = false } = {}) => {
@@ -71,26 +69,20 @@ export default function CollectedNewsPanel({ clienteId, onCountsChange }) {
         return () => window.clearTimeout(timer)
     }, [load])
 
-    async function approve(observation) {
-        const item = approvalItem
-        if (!item || actingId) return
+    async function produce(item) {
+        if (!item || actingId || !onProduce) return
         setActingId(item.id)
-        const { data, error } = await supabase.schema('ap').rpc('approve_collected_news', {
-            p_cliente_id: clienteId,
-            p_collected_news_id: item.id,
-            p_observacao: observation,
-        })
-        if (error) {
-            toast.error('Não foi possível aprovar esta matéria.')
-        } else if (data?.duplicate) {
-            toast.info('Esta matéria já estava no Banco de pautas e foi marcada como duplicada.')
-            setApprovalItem(null)
-        } else {
-            toast.success('Matéria aprovada e enviada ao Banco de pautas.')
-            setApprovalItem(null)
+        try {
+            await onProduce(item)
+            await load({ silent: true })
+        } catch (error) {
+            const code = String(error?.code || error?.message || '')
+            toast.error(code.includes('COLLECTED_NEWS_ALREADY_IN_PRODUCTION') || code.includes('BACKLOG_NOT_OWNED')
+                ? 'Esta matéria já está sendo produzida por outro usuário.'
+                : 'Não foi possível iniciar a produção desta matéria.')
+        } finally {
+            setActingId(null)
         }
-        await load({ silent: true })
-        setActingId(null)
     }
 
     async function discard(reason) {
@@ -167,14 +159,16 @@ export default function CollectedNewsPanel({ clienteId, onCountsChange }) {
                                 <a href={item.canonical_url} target="_blank" rel="noreferrer" className="ap-btn-refresh">
                                     <ExternalLink size={13} /> Abrir fonte
                                 </a>
-                                {item.status === 'pending_review' && (
+                                {['pending_review', 'approved', 'duplicate'].includes(item.status) && (
                                     <>
-                                        <button type="button" className="ap-backlog-action-solid" onClick={() => setApprovalItem(item)} disabled={Boolean(actingId)}>
-                                            {actingId === item.id ? <Loader2 size={13} className="ap-spin-icon" /> : <Check size={13} />} Aprovar pauta
+                                        <button type="button" className="ap-backlog-action-solid" onClick={() => void produce(item)} disabled={Boolean(actingId)}>
+                                            {actingId === item.id ? <Loader2 size={13} className="ap-spin-icon" /> : <Zap size={13} />} Produzir
                                         </button>
-                                        <button type="button" className="ap-backlog-action-icon danger" onClick={() => setDiscardItem(item)} disabled={Boolean(actingId)} title="Descartar" aria-label="Descartar matéria">
-                                            <Trash2 size={14} />
-                                        </button>
+                                        {item.status === 'pending_review' && (
+                                            <button type="button" className="ap-backlog-action-icon danger" onClick={() => setDiscardItem(item)} disabled={Boolean(actingId)} title="Descartar" aria-label="Descartar matéria">
+                                                <Trash2 size={14} />
+                                            </button>
+                                        )}
                                     </>
                                 )}
                             </div>
@@ -182,14 +176,6 @@ export default function CollectedNewsPanel({ clienteId, onCountsChange }) {
                     ))}
                 </div>
             )}
-            <ApproveCollectedNewsModal
-                key={approvalItem?.id ?? 'closed'}
-                item={approvalItem}
-                isOpen={Boolean(approvalItem)}
-                isSubmitting={actingId === approvalItem?.id}
-                onClose={() => setApprovalItem(null)}
-                onConfirm={approve}
-            />
             <EditorialReasonModal
                 key={discardItem?.id ?? 'closed'}
                 isOpen={Boolean(discardItem)}
