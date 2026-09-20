@@ -11,6 +11,7 @@ export interface CallLLMParams {
   maxTokens: number
   imageUrl?: string | null
   timeoutMs?: number
+  jsonSchema?: Record<string, unknown> | null
 }
 
 export interface CallLLMResult {
@@ -44,6 +45,7 @@ export async function callLLM({
   maxTokens,
   imageUrl,
   timeoutMs = 30000,
+  jsonSchema,
 }: CallLLMParams): Promise<CallLLMResult> {
   let cleanBaseUrl = normalizeBaseUrl(baseUrl || '');
   let cleanModel = model.trim();
@@ -129,6 +131,11 @@ export async function callLLM({
       }],
       temperature,
       max_tokens: maxTokens
+    }
+    if (jsonSchema) {
+      body.output_config = {
+        format: { type: 'json_schema', schema: jsonSchema },
+      }
     }
   } else if (isGoogle) {
     // Gemini Native API — generateContent?key=

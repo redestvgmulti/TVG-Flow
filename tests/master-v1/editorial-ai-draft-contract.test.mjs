@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 
 import {
+  EDITORIAL_AI_DRAFT_JSON_SCHEMA,
   parseEditorialAiDraft,
   providerFromBaseUrl,
   sanitizedAiErrorCode,
@@ -56,6 +57,37 @@ test('LLM client fails explicitly on timeout and provider failure', async () => 
   } finally {
     globalThis.fetch = originalFetch
     console.error = originalConsoleError
+  }
+})
+
+test('Anthropic requests constrain the editorial draft with the canonical JSON schema', async () => {
+  const originalFetch = globalThis.fetch
+  let requestBody
+  try {
+    globalThis.fetch = async (_url, init) => {
+      requestBody = JSON.parse(init.body)
+      return new Response(JSON.stringify({
+        content: [{ type: 'text', text: JSON.stringify(validDraft) }],
+        usage: { input_tokens: 20, output_tokens: 30 },
+      }), { status: 200 })
+    }
+
+    const result = await callLLM({
+      apiKey: 'sk-ant-test',
+      baseUrl: 'https://api.anthropic.com',
+      model: 'claude-sonnet-4-6',
+      prompt: 'source only',
+      temperature: 0,
+      maxTokens: 500,
+      jsonSchema: EDITORIAL_AI_DRAFT_JSON_SCHEMA,
+    })
+
+    assert.deepEqual(requestBody.output_config, {
+      format: { type: 'json_schema', schema: EDITORIAL_AI_DRAFT_JSON_SCHEMA },
+    })
+    assert.deepEqual(parseEditorialAiDraft(result.content), validDraft)
+  } finally {
+    globalThis.fetch = originalFetch
   }
 })
 

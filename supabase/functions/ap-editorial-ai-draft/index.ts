@@ -6,6 +6,7 @@ import {
 } from "../_shared/editorialPromptBuilder.ts";
 import { callLLM } from "../_shared/llmClient.ts";
 import {
+  EDITORIAL_AI_DRAFT_JSON_SCHEMA,
   parseEditorialAiDraft,
   providerFromBaseUrl,
   sanitizedAiErrorCode,
@@ -178,6 +179,7 @@ Deno.serve(async (req: Request) => {
         temperature: context.settings.temperature ?? 0.7,
         maxTokens,
         timeoutMs: 30000,
+        jsonSchema: EDITORIAL_AI_DRAFT_JSON_SCHEMA,
       });
     } catch (primaryError) {
       if (!fallbackModel || fallbackModel === model) throw primaryError;
@@ -190,6 +192,7 @@ Deno.serve(async (req: Request) => {
         temperature: context.settings.temperature ?? 0.7,
         maxTokens,
         timeoutMs: 30000,
+        jsonSchema: EDITORIAL_AI_DRAFT_JSON_SCHEMA,
       });
     }
 
