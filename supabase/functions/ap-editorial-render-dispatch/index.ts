@@ -405,13 +405,17 @@ Deno.serve(async (req: Request) => {
         if (claimed?.id) {
           try {
             const canonical = canonicalEditorialFields(news);
+            // claim.caption is the AI-authored social caption (hashtags,
+            // source line) from the latest revision; canonical.caption is
+            // only a body-text fallback for candidates with no such claim.
+            const finalCaption = claim.caption?.trim() || canonical.caption;
             const { error: updateError } = await supabase
               .schema("ap")
               .from("candidate_news")
               .update({
                 status: "pending_render",
                 headline: canonical.headline,
-                caption: canonical.caption,
+                caption: finalCaption,
                 context_tag: canonical.context_tag,
                 roteiro_json: canonical.roteiro_json,
                 processing_started_at: null,
