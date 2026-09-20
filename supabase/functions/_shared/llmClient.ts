@@ -146,6 +146,7 @@ export async function callLLM({
       body.tools = [{
         name: 'emit_editorial_draft',
         description: 'Return the prepared editorial draft.',
+        strict: true,
         input_schema: jsonSchema,
       }]
       body.tool_choice = { type: 'tool', name: 'emit_editorial_draft' }
