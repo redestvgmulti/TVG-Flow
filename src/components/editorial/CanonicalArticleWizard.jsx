@@ -198,9 +198,10 @@ export default function CanonicalArticleWizard({
         let sourceTitle = (originBacklog.source_title || originBacklog.titulo || '').trim()
         let sourceBody = (originBacklog.source_body || '').trim()
         const collectedImageUrl = (originBacklog.source_image_url || '').trim()
+        const capturedImageUrl = (current.original_source_image_url || '').trim()
         let sourceImageUrl = /^https:\/\//i.test(collectedImageUrl) ? collectedImageUrl : ''
         const shouldScrape = originBacklog.source_requires_scrape
-          || (!current.original_source_image_url && !sourceImageUrl)
+          || (!/^https:\/\//i.test(capturedImageUrl) && !sourceImageUrl)
         if (shouldScrape) {
           let scraped
           try {
@@ -229,7 +230,8 @@ export default function CanonicalArticleWizard({
         // Image preparation is independent from the LLM. Make it available to
         // the operator and to the later production-intent/Placid path even if
         // the AI provider fails and the user needs to retry the text draft.
-        sourceImageRef.current = sourceImageUrl || current.original_source_image_url || ''
+        sourceImageRef.current = sourceImageUrl
+          || (/^https:\/\//i.test(capturedImageUrl) ? capturedImageUrl : '')
         if (sourceImageRef.current) {
           setFormData(previous => ({ ...previous, image_url: sourceImageRef.current }))
         }

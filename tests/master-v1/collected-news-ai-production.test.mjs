@@ -47,8 +47,8 @@ test('a missing or insecure collected image is scraped independently from text s
     source('supabase/functions/ap-link-scraper/index.ts'),
   ])
 
-  assert.match(wizard, /!current\.original_source_image_url && !sourceImageUrl/)
-  assert.match(wizard, /sourceImageRef\.current = sourceImageUrl \|\| current\.original_source_image_url/)
+  assert.match(wizard, /!\/\^https:\\\/\\\/\/i\.test\(capturedImageUrl\) && !sourceImageUrl/)
+  assert.match(wizard, /sourceImageRef\.current = sourceImageUrl[\s\S]+\/\^https:\\\/\\\/\/i\.test\(capturedImageUrl\)/)
   assert.match(wizard, /setFormData\(previous => \(\{ \.\.\.previous, image_url: sourceImageRef\.current \}\)\)/)
   assert.match(repair, /v_scraped_image := NULLIF\(btrim\(p_scraped_image_url\), ''\)/)
   assert.match(repair, /WHEN v_scraped_image ~\* '\^https:\/\/' THEN v_scraped_image/)
