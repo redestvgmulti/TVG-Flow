@@ -7,6 +7,7 @@ import {
 import { callLLM } from "../_shared/llmClient.ts";
 import {
   EDITORIAL_AI_DRAFT_JSON_SCHEMA,
+  editorialAiDraftShapeDiagnostics,
   parseEditorialAiDraft,
   providerFromBaseUrl,
   sanitizedAiErrorCode,
@@ -198,7 +199,18 @@ Deno.serve(async (req: Request) => {
     }
 
     chargedTokens = Math.max(Number(llmResult.tokens.total) || 0, 0);
-    const draft = parseEditorialAiDraft(llmResult.content);
+    let draft;
+    try {
+      draft = parseEditorialAiDraft(llmResult.content);
+    } catch (validationError) {
+      console.error(JSON.stringify({
+        event: "EDITORIAL_AI_DRAFT_SCHEMA_REJECTED",
+        article_id: articleId,
+        request_id: requestId,
+        ...editorialAiDraftShapeDiagnostics(llmResult.content),
+      }));
+      throw validationError;
+    }
 
     if (reservedTokens > chargedTokens) {
       await adminClient.schema("ap").rpc("refund_editorial_tokens", {
