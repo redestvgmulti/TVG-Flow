@@ -117,7 +117,7 @@ Deno.serve(async (req: Request) => {
       p_duration_ms: Date.now() - startedAt,
     });
     if (reservedTokens > chargedTokens) {
-      await adminClient.rpc("refund_editorial_tokens", {
+      await adminClient.schema("ap").rpc("refund_editorial_tokens", {
         p_cliente_id: claim.cliente_id,
         p_tokens_to_refund: reservedTokens - chargedTokens,
       });
@@ -161,7 +161,7 @@ Deno.serve(async (req: Request) => {
     const maxTokens = Math.min(Math.max(Number(context.settings.max_tokens) || 1200, 800), 2000);
     const estimatedInputTokens = Math.ceil(prompt.length / 3);
     const requestedReservation = maxTokens + estimatedInputTokens;
-    const { data: reserved, error: reserveError } = await adminClient.rpc("reserve_editorial_tokens", {
+    const { data: reserved, error: reserveError } = await adminClient.schema("ap").rpc("reserve_editorial_tokens", {
       p_cliente_id: claim.cliente_id,
       p_tokens: requestedReservation,
     });
@@ -197,7 +197,7 @@ Deno.serve(async (req: Request) => {
     const draft = parseEditorialAiDraft(llmResult.content);
 
     if (reservedTokens > chargedTokens) {
-      await adminClient.rpc("refund_editorial_tokens", {
+      await adminClient.schema("ap").rpc("refund_editorial_tokens", {
         p_cliente_id: claim.cliente_id,
         p_tokens_to_refund: reservedTokens - chargedTokens,
       });
