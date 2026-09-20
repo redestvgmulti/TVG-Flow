@@ -462,7 +462,7 @@ export default function CanonicalEditorialEditor({
             {state.article?.status === 'ready_for_render' && 'Aprovada e aguardando renderização.'}
             {state.article?.status === 'abandoned' && 'Esta matéria foi abandonada.'}
           </span>
-          {canReview && canRetryDispatch(state.article?.status) && (
+          {(isResponsible || canReview) && canRetryDispatch(state.article?.status) && (
             <button type="button" className="ap-af-submit" disabled={isBusy} onClick={() => void handleDispatch()}>
               {state.status === 'dispatching' ? <Loader2 size={14} className="ap-spin-icon" /> : null}
               {' '}{dispatchButtonLabel(Boolean(state.error))}
@@ -746,7 +746,9 @@ export default function CanonicalEditorialEditor({
       {state.mode === EDITOR_MODES.REVIEW_PREVIEW && actions.canApprove && (
         <div className="ap-cee-review-actions">
           <button type="button" className="ap-af-submit" disabled={isBusy} onClick={() => void handleApprove()}>Aprovar para render</button>
-          <button type="button" className="ap-af-cancel" disabled={isBusy} onClick={() => setReasonModalOpen(true)}>Devolver para correção</button>
+          <button type="button" className="ap-af-cancel" disabled={isBusy} onClick={() => setReasonModalOpen(true)}>
+            {isResponsible ? 'Voltar para editar' : 'Devolver para correção'}
+          </button>
         </div>
       )}
 
@@ -768,8 +770,8 @@ export default function CanonicalEditorialEditor({
         isSubmitting={state.status === 'requestingChanges'}
         onClose={() => setReasonModalOpen(false)}
         onConfirm={reason => void handleRequestChanges(reason)}
-        title="Devolver para correção"
-        subtitle="Explique o que precisa ser ajustado antes de aprovar."
+        title={isResponsible ? 'Voltar para editar' : 'Devolver para correção'}
+        subtitle={isResponsible ? 'Registre o ajuste que você quer fazer antes de aprovar.' : 'Explique o que precisa ser ajustado antes de aprovar.'}
         label="Motivo"
         placeholder="Ex: ajustar a manchete e revisar o segundo parágrafo."
         confirmLabel="Devolver"

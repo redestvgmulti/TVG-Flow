@@ -33,7 +33,7 @@ test('isArticleReadOnly matches exactly the frozen statuses', () => {
   assert.equal(isArticleReadOnly('content_final'), false)
 })
 
-test('allowedActionsForMode: staff author can edit/save/submit in edit and changes_requested, never approve', () => {
+test('allowedActionsForMode: the responsible author edits, submits and reviews their own article', () => {
   const edit = allowedActionsForMode(EDITOR_MODES.EDIT, { isResponsible: true, canReview: false })
   assert.equal(edit.canSave, true)
   assert.equal(edit.canSubmitForReview, true)
@@ -43,6 +43,10 @@ test('allowedActionsForMode: staff author can edit/save/submit in edit and chang
   const changes = allowedActionsForMode(EDITOR_MODES.CHANGES_REQUESTED, { isResponsible: true, canReview: false })
   assert.equal(changes.canSave, true)
   assert.equal(changes.canSubmitForReview, true)
+
+  const review = allowedActionsForMode(EDITOR_MODES.REVIEW_PREVIEW, { isResponsible: true, canReview: false })
+  assert.equal(review.canApprove, true)
+  assert.equal(review.canRequestChanges, true)
 })
 
 test('allowedActionsForMode: an unrelated staff member (not responsible, no review rights) can do nothing', () => {

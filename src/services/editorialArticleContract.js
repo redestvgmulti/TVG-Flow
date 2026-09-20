@@ -31,13 +31,14 @@ export function editorModeForStatus({ hasArticle, status }) {
 export function allowedActionsForMode(mode, { isResponsible = false, canReview = false } = {}) {
   const editable = mode === EDITOR_MODES.CREATE || mode === EDITOR_MODES.EDIT || mode === EDITOR_MODES.CHANGES_REQUESTED
   const canEdit = editable && (isResponsible || canReview)
+  const canReviewArticle = isResponsible || canReview
   return {
     canEditContent: canEdit,
     canEditProductionIntent: canEdit,
     canSave: canEdit,
     canSubmitForReview: canEdit,
-    canApprove: mode === EDITOR_MODES.REVIEW_PREVIEW && canReview,
-    canRequestChanges: mode === EDITOR_MODES.REVIEW_PREVIEW && canReview,
+    canApprove: mode === EDITOR_MODES.REVIEW_PREVIEW && canReviewArticle,
+    canRequestChanges: mode === EDITOR_MODES.REVIEW_PREVIEW && canReviewArticle,
   }
 }
 
