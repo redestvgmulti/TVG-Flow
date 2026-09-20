@@ -11,6 +11,29 @@ export interface EditorialAiDraft {
   };
 }
 
+export const EDITORIAL_AI_DRAFT_JSON_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    headline: { type: "string" },
+    body: { type: "string" },
+    caption: { type: "string" },
+    context_tag: { type: "string" },
+    category: { type: "string" },
+    location: {
+      type: "object",
+      properties: {
+        city: { type: ["string", "null"] },
+        region: { type: ["string", "null"] },
+        state: { type: ["string", "null"] },
+      },
+      required: ["city", "region", "state"],
+      additionalProperties: false,
+    },
+  },
+  required: ["headline", "body", "caption", "context_tag", "category", "location"],
+  additionalProperties: false,
+};
+
 const ROOT_KEYS = ["body", "caption", "category", "context_tag", "headline", "location"];
 const LOCATION_KEYS = ["city", "region", "state"];
 
