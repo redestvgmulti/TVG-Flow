@@ -68,8 +68,31 @@ test('validateContentStep enforces a minimum length on headline and body', () =>
 test('buildDraftPayload / buildFinalizePayload trim content and carry the expected revision number', () => {
   const form = { headline: '  Título  ', body: '  Corpo  ' }
   const ctx = { articleId: 'a1', requestId: 'r1', expectedRevisionNumber: 2 }
-  assert.deepEqual(buildDraftPayload(form, ctx), { articleId: 'a1', headline: 'Título', body: 'Corpo', requestId: 'r1', expectedRevisionNumber: 2 })
-  assert.deepEqual(buildFinalizePayload(form, ctx), { articleId: 'a1', headline: 'Título', body: 'Corpo', requestId: 'r1', expectedRevisionNumber: 2 })
+  const expected = {
+    articleId: 'a1', headline: 'Título', body: 'Corpo', caption: null,
+    contextTag: null, category: null, location: null,
+    requestId: 'r1', expectedRevisionNumber: 2,
+  }
+  assert.deepEqual(buildDraftPayload(form, ctx), expected)
+  assert.deepEqual(buildFinalizePayload(form, ctx), expected)
+})
+
+test('validateContentStep requires the complete structured AI draft when requested', () => {
+  const incomplete = validateContentStep(
+    { headline: 'Manchete válida', body: 'Corpo editorial com tamanho suficiente.', caption: '', context_tag: '', category: '' },
+    { requireAiFields: true },
+  )
+  assert.ok(incomplete.caption)
+  assert.ok(incomplete.context_tag)
+  assert.ok(incomplete.category)
+
+  assert.deepEqual(validateContentStep({
+    headline: 'Manchete válida',
+    body: 'Corpo editorial com tamanho suficiente.',
+    caption: 'Legenda editorial válida.',
+    context_tag: 'gestão pública',
+    category: 'Política',
+  }, { requireAiFields: true }), {})
 })
 
 test('buildProductionIntentPayload: legacy (non-territorial) path passes visual_model/visual_title_id straight through', () => {

@@ -77,7 +77,8 @@ export function editorialEditorReducer(state, action) {
       const nextForm = typeof action.updater === 'function'
         ? action.updater(state.form)
         : { ...state.form, ...action.updater }
-      const contentChanged = nextForm.headline !== state.form.headline || nextForm.body !== state.form.body
+      const contentChanged = ['headline', 'body', 'caption', 'context_tag', 'category', 'location']
+        .some(key => JSON.stringify(nextForm[key]) !== JSON.stringify(state.form[key]))
       const productionIntentChanged = fieldsDiffer(nextForm, state.form, PRODUCTION_INTENT_KEYS)
       return {
         ...state,

@@ -24,9 +24,12 @@ import {
 import {
   EditorialArticleError,
   approveEditorialArticleForRender,
+  captureEditorialArticleSource,
   dispatchEditorialArticleRender,
   finalizeEditorialArticle,
+  getEditorialAiDraftStatus,
   getEditorialArticleForEdit,
+  prepareEditorialAiDraft,
   requestEditorialArticleChanges,
   saveEditorialArticleDraft,
   saveEditorialArticleProductionIntent,
@@ -80,6 +83,10 @@ export default function CanonicalEditorialEditor({
   const [isScraping, setIsScraping] = useState(false)
   const [fieldErrors, setFieldErrors] = useState({})
   const [reasonModalOpen, setReasonModalOpen] = useState(false)
+  const [aiFlag, setAiFlag] = useState({ loading: true, enabled: false, error: false })
+  const [aiPreparing, setAiPreparing] = useState(false)
+  const [aiPreparationError, setAiPreparationError] = useState(false)
+  const [sourceCaptured, setSourceCaptured] = useState(false)
   const requestIds = useRef({})
 
   useEffect(() => {
@@ -90,6 +97,20 @@ export default function CanonicalEditorialEditor({
     return () => { active = false }
   }, [])
 
+  const loadAiFlag = useCallback(async () => {
+    setAiFlag({ loading: true, enabled: false, error: false })
+    try {
+      const enabled = await getEditorialAiDraftStatus(supabase)
+      setAiFlag({ loading: false, enabled, error: false })
+    } catch {
+      setAiFlag({ loading: false, enabled: false, error: true })
+    }
+  }, [])
+
+  // Async loader intentionally owns its loading/error state for initial load and retry.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { void loadAiFlag() }, [loadAiFlag])
+
   const catalogs = useEditorialCatalogs(supabase, clienteId, state.form.content_type)
 
   const load = useCallback(async () => {
@@ -98,11 +119,14 @@ export default function CanonicalEditorialEditor({
     try {
       const row = await getEditorialArticleForEdit(supabase, articleId)
       dispatch({ type: 'LOAD_SUCCESS', article: row })
+      setSourceCaptured(Boolean(row.ai_source_captured))
     } catch (error) {
       dispatch({ type: 'LOAD_ERROR', error: { code: error instanceof EditorialArticleError ? error.code : 'UNKNOWN_ERROR' } })
     }
   }, [articleId])
 
+  // Existing async article loader synchronizes the reducer with the canonical RPC.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load() }, [load])
 
   useEffect(() => {
@@ -160,12 +184,59 @@ export default function CanonicalEditorialEditor({
     setIsScraping(true)
     try {
       const result = await scrapeArticleSource(supabase, state.form.origin_reference)
-      setForm(previous => ({ ...previous, ...scrapedResultToDraftFields(result) }))
-      toast.success('Fonte analisada.')
+      const scrapedFields = scrapedResultToDraftFields(result)
+      setForm(previous => ({ ...previous, ...scrapedFields }))
+      if (aiFlag.enabled) {
+        await prepareAiDraft({ ...state.form, ...scrapedFields })
+      } else {
+        toast.success('Fonte analisada.')
+      }
     } catch (error) {
       reportError(error, 'SOURCE_SCRAPE_FAILED')
     } finally {
       setIsScraping(false)
+    }
+  }
+
+  async function prepareAiDraft(sourceForm = state.form) {
+    const sourceBody = (sourceForm.body || '').trim()
+    if (sourceBody.length < 20) {
+      setFieldErrors(previous => ({ ...previous, body: 'Informe o texto original com pelo menos 20 caracteres.' }))
+      return
+    }
+    if (aiFlag.loading || aiFlag.error || !aiFlag.enabled) return
+
+    setAiPreparing(true)
+    setAiPreparationError(false)
+    try {
+      const preparedArticleId = await ensureArticleCreated()
+      await captureEditorialArticleSource(supabase, {
+        articleId: preparedArticleId,
+        sourceType: sourceForm.origin_type,
+        sourceUrl: sourceForm.origin_type === 'link' ? sourceForm.origin_reference : null,
+        sourceTitle: sourceForm.headline || null,
+        sourceBody,
+        sourceImageUrl: sourceForm.source_image_url || null,
+        requestId: mintRequestId(requestIds, 'source'),
+      })
+      clearRequestId(requestIds, 'source')
+      setSourceCaptured(true)
+
+      await prepareEditorialAiDraft(supabase, {
+        articleId: preparedArticleId,
+        requestId: mintRequestId(requestIds, 'aiDraft'),
+      })
+      clearRequestId(requestIds, 'aiDraft')
+      const refreshed = await refreshArticle(preparedArticleId)
+      dispatch({ type: 'LOAD_SUCCESS', article: refreshed })
+      setAiPreparationError(false)
+      toast.success('Matéria preparada para revisão.')
+    } catch (error) {
+      clearRequestId(requestIds, 'aiDraft')
+      setAiPreparationError(true)
+      reportError(error, 'EDITORIAL_AI_PREPARATION_FAILED')
+    } finally {
+      setAiPreparing(false)
     }
   }
 
@@ -201,13 +272,15 @@ export default function CanonicalEditorialEditor({
   }
 
   async function handleSave() {
+    if (aiGatePending) return
+    if (aiDraftRequired && !aiDraftReady) return
     setFieldErrors({})
     dispatch({ type: 'SAVE_START' })
     try {
       const savedArticleId = await ensureArticleCreated()
       let didMutate = false
       if (state.dirty.content || !state.articleId) {
-        const contentErrors = validateContentStep(state.form)
+        const contentErrors = validateContentStep(state.form, { requireAiFields: aiDraftRequired })
         if (Object.keys(contentErrors).length) {
           setFieldErrors(contentErrors)
           toast.error('Corrija os campos destacados.')
@@ -241,8 +314,10 @@ export default function CanonicalEditorialEditor({
   }
 
   async function handleSubmitForReview() {
+    if (aiGatePending) return
+    if (aiDraftRequired && !aiDraftReady) return
     setFieldErrors({})
-    const contentErrors = validateContentStep(state.form)
+    const contentErrors = validateContentStep(state.form, { requireAiFields: aiDraftRequired })
     const intentErrors = validateProductionIntentStep(state.form, {
       territorialComposerEnabled: catalogs.territorialComposerEnabled,
       territorialCatalog: catalogs.territorialCatalog,
@@ -341,7 +416,13 @@ export default function CanonicalEditorialEditor({
     }
   }
 
-  const isBusy = state.status !== 'idle' && state.status !== 'loading' && state.status !== 'error'
+  const aiEligibleOrigin = state.form.origin_type === 'text' || state.form.origin_type === 'link'
+  const aiDraftRequired = aiFlag.enabled && aiEligibleOrigin && (
+    sourceCaptured || state.article?.ai_source_captured || state.revisionNumber === 0
+  )
+  const aiDraftReady = !aiDraftRequired || state.revisionNumber > 0
+  const aiGatePending = aiEligibleOrigin && (aiFlag.loading || aiFlag.error)
+  const isBusy = aiPreparing || (state.status !== 'idle' && state.status !== 'loading' && state.status !== 'error')
   const sourceImageRequired = catalogs.territorialComposerEnabled
     ? composerRequiresSourceImage(catalogs.territorialCatalog, state.form.content_type)
     : catalogs.visualModelOptions.find(model => model.slug === state.form.visual_model)?.sourceImage === 'required'
@@ -426,7 +507,7 @@ export default function CanonicalEditorialEditor({
                 inputMode="url"
               />
               <FieldError message={fieldErrors.origin_reference} />
-              <button type="button" className="ap-af-alert-retry" disabled={isScraping} onClick={() => void handleScrape()}>
+              <button type="button" className="ap-af-alert-retry" disabled={isScraping || aiGatePending} onClick={() => void handleScrape()}>
                 {isScraping ? <Loader2 size={14} className="ap-spin-icon" /> : null} Analisar link
               </button>
             </div>
@@ -454,17 +535,46 @@ export default function CanonicalEditorialEditor({
 
       <section className="ap-cee-section" aria-label="Conteúdo">
         <span className="ap-cee-section-title">Conteúdo</span>
+        {aiGatePending && (
+          <div role="status" aria-live="polite" className="ap-af-alert">
+            {aiFlag.loading ? 'Verificando preparação editorial...' : (
+              <>
+                Não foi possível confirmar a preparação automática.
+                <button type="button" className="ap-af-alert-retry" onClick={() => void loadAiFlag()}>Tentar novamente</button>
+              </>
+            )}
+          </div>
+        )}
+        {aiPreparing && (
+          <div role="status" aria-live="polite" className="ap-af-alert">
+            <Loader2 size={14} className="ap-spin-icon" /> Preparando matéria...
+          </div>
+        )}
+        {aiPreparationError && !aiPreparing && (
+          <div role="alert" className="ap-af-alert ap-af-alert--error">
+            Não foi possível preparar a matéria automaticamente.
+            <button type="button" className="ap-af-alert-retry" onClick={() => void prepareAiDraft()}>Tentar novamente</button>
+          </div>
+        )}
         {isReadOnly ? (
           <div className="ap-cee-preview">
             <span className="ap-cee-preview-label">Manchete</span>
             <p className="ap-cee-preview-headline">{state.form.headline || '—'}</p>
             <span className="ap-cee-preview-label">Corpo</span>
             <p className="ap-cee-preview-body">{state.form.body || '—'}</p>
+            {state.form.caption && (
+              <>
+                <span className="ap-cee-preview-label">Legenda</span>
+                <p className="ap-cee-preview-body">{state.form.caption}</p>
+              </>
+            )}
           </div>
         ) : (
           <>
             <div className="ap-af-field">
-              <FieldLabel required>Manchete</FieldLabel>
+              <FieldLabel required={!aiDraftRequired || aiDraftReady}>
+                {aiDraftRequired && !aiDraftReady ? 'Título da fonte (opcional)' : 'Manchete'}
+              </FieldLabel>
               <input
                 className={`ap-af-input${fieldErrors.headline ? ' ap-af-input--error' : ''}`}
                 value={state.form.headline || ''}
@@ -474,7 +584,7 @@ export default function CanonicalEditorialEditor({
               <FieldError message={fieldErrors.headline} />
             </div>
             <div className="ap-af-field">
-              <FieldLabel required>Corpo</FieldLabel>
+              <FieldLabel required>{aiDraftRequired && !aiDraftReady ? 'Texto original' : 'Corpo'}</FieldLabel>
               <textarea
                 rows={5}
                 className={`ap-af-textarea${fieldErrors.body ? ' ap-af-textarea--error' : ''}`}
@@ -484,6 +594,67 @@ export default function CanonicalEditorialEditor({
               />
               <FieldError message={fieldErrors.body} />
             </div>
+            {aiDraftRequired && !aiDraftReady && state.form.origin_type === 'text' && (
+              <button
+                type="button"
+                className="ap-af-submit"
+                disabled={isBusy || aiGatePending}
+                onClick={() => void prepareAiDraft()}
+              >
+                {aiPreparing ? <Loader2 size={14} className="ap-spin-icon" /> : null}
+                {' '}Preparar matéria
+              </button>
+            )}
+            {aiDraftRequired && aiDraftReady && (
+              <>
+                <div className="ap-af-field">
+                  <FieldLabel required>Legenda</FieldLabel>
+                  <textarea
+                    rows={4}
+                    className={`ap-af-textarea${fieldErrors.caption ? ' ap-af-textarea--error' : ''}`}
+                    value={state.form.caption || ''}
+                    onChange={event => setForm(previous => ({ ...previous, caption: event.target.value }))}
+                    placeholder="Legenda preparada para publicação."
+                  />
+                  <FieldError message={fieldErrors.caption} />
+                </div>
+                <div className="ap-af-field">
+                  <FieldLabel required>Contexto editorial</FieldLabel>
+                  <input
+                    className={`ap-af-input${fieldErrors.context_tag ? ' ap-af-input--error' : ''}`}
+                    value={state.form.context_tag || ''}
+                    onChange={event => setForm(previous => ({ ...previous, context_tag: event.target.value }))}
+                  />
+                  <FieldError message={fieldErrors.context_tag} />
+                </div>
+                <div className="ap-af-field">
+                  <FieldLabel required>Categoria</FieldLabel>
+                  <input
+                    className={`ap-af-input${fieldErrors.category ? ' ap-af-input--error' : ''}`}
+                    value={state.form.category || ''}
+                    onChange={event => setForm(previous => ({ ...previous, category: event.target.value }))}
+                  />
+                  <FieldError message={fieldErrors.category} />
+                </div>
+                <div className="ap-af-field">
+                  <FieldLabel>Localidade identificada</FieldLabel>
+                  <div className="ap-af-source-grid">
+                    {['city', 'region', 'state'].map(part => (
+                      <input
+                        key={part}
+                        className="ap-af-input"
+                        value={state.form.location?.[part] || ''}
+                        onChange={event => setForm(previous => ({
+                          ...previous,
+                          location: { ...previous.location, [part]: event.target.value.trim() || null },
+                        }))}
+                        placeholder={{ city: 'Cidade', region: 'Região', state: 'Estado' }[part]}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
           </>
         )}
       </section>
@@ -581,11 +752,11 @@ export default function CanonicalEditorialEditor({
 
       {!isReadOnly && actions.canSave && (
         <div className="ap-cee-footer">
-          <button type="button" className="ap-af-submit" disabled={isBusy} onClick={() => void handleSave()}>
+          <button type="button" className="ap-af-submit" disabled={isBusy || aiGatePending || (aiDraftRequired && !aiDraftReady)} onClick={() => void handleSave()}>
             {state.status === 'saving' ? <Loader2 size={14} className="ap-spin-icon" /> : null} Salvar
           </button>
           {actions.canSubmitForReview && (
-            <button type="button" className="ap-af-cancel" disabled={isBusy} onClick={() => void handleSubmitForReview()}>
+            <button type="button" className="ap-af-cancel" disabled={isBusy || aiGatePending || (aiDraftRequired && !aiDraftReady)} onClick={() => void handleSubmitForReview()}>
               {state.mode === EDITOR_MODES.CHANGES_REQUESTED ? 'Reenviar para revisão' : 'Enviar para revisão'}
             </button>
           )}

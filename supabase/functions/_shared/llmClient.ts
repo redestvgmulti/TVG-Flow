@@ -10,6 +10,7 @@ export interface CallLLMParams {
   temperature: number
   maxTokens: number
   imageUrl?: string | null
+  timeoutMs?: number
 }
 
 export interface CallLLMResult {
@@ -42,6 +43,7 @@ export async function callLLM({
   temperature,
   maxTokens,
   imageUrl,
+  timeoutMs = 30000,
 }: CallLLMParams): Promise<CallLLMResult> {
   let cleanBaseUrl = normalizeBaseUrl(baseUrl || '');
   let cleanModel = model.trim();
@@ -110,7 +112,6 @@ export async function callLLM({
 
     headers['x-api-key'] = apiKey
     headers['anthropic-version'] = '2023-06-01'
-    headers['anthropic-beta'] = 'interleaved-thinking-2025-05-14'
 
     body = {
       model: cleanModel,
@@ -182,21 +183,22 @@ export async function callLLM({
       method: 'POST',
       headers,
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(30000)
+      signal: AbortSignal.timeout(timeoutMs)
     } as RequestInit)
   } catch (e: any) {
     console.error('[llmClient] Network/timeout error calling LLM:', e)
-    throw new Error('Falha ao conectar ao provedor de IA. Verifique a rede, URL base e chave.')
+    const isTimeout = e?.name === 'TimeoutError' || e?.name === 'AbortError' || /timeout|timed out/i.test(String(e?.message ?? e))
+    throw new Error(isTimeout ? 'EDITORIAL_AI_TIMEOUT' : 'EDITORIAL_AI_PROVIDER_FAILURE')
   }
 
   const textBody = await res.text()
   const jsonBody = await safeParseJson(textBody)
 
   if (!res.ok) {
-    // Log corpo completo apenas no servidor para auditoria
+    // Provider bodies may echo source material or internal policy details.
+    // Keep runtime logs sanitized; callers persist only stable error codes.
     console.error('[llmClient] LLM provider error:', {
-      status: res.status,
-      body: jsonBody
+      status: res.status
     })
 
     let shortMessage = 'Erro ao chamar o provedor de IA.'
@@ -221,12 +223,10 @@ export async function callLLM({
     const completionTokens = Number(usage.output_tokens ?? 0) || 0
     const totalTokens = promptTokens + completionTokens
 
-    const content =
-      jsonBody &&
-      Array.isArray(jsonBody.content) &&
-      jsonBody.content[0] &&
-      (jsonBody.content[0].text ?? jsonBody.content[0].content) ||
-      ''
+    const textBlock = jsonBody && Array.isArray(jsonBody.content)
+      ? jsonBody.content.find((block: any) => block?.type === 'text')
+      : null
+    const content = textBlock?.text ?? textBlock?.content ?? ''
 
     return {
       content: String(content ?? ''),
