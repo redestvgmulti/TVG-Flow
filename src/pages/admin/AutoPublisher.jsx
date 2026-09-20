@@ -55,9 +55,7 @@ import {
 // Tab config
 const TABS = [
     { key: 'coletadas', label: 'Novas matérias' },
-    { key: 'pendentes', label: 'Para produzir' },
     { key: 'em_producao', label: 'Produzindo' },
-    { key: 'revisao', label: 'Para revisar' },
     { key: 'aprovadas', label: 'Prontas' },
     { key: 'publicadas', label: 'Publicadas' },
 ]
@@ -74,7 +72,7 @@ const STATUS_TAB = {
     selected: 'pendentes',
     pending_render: 'em_producao',
     processing: 'em_producao',
-    pending_review: 'revisao',
+    pending_review: 'aprovadas',
     ready_to_publish: 'em_producao',
     render_complete: 'em_producao',
     approved: 'aprovadas',
@@ -92,7 +90,7 @@ function statusesForTab(currentTab, pendingFilter = 'available') {
     }
     if (currentTab === 'em_producao') return ['pending_render', 'processing', 'render_complete', 'ready_to_publish', 'queued_for_posting']
     if (currentTab === 'revisao') return ['pending_review']
-    if (currentTab === 'aprovadas') return ['approved']
+    if (currentTab === 'aprovadas') return ['approved', 'pending_review']
     if (currentTab === 'publicadas') return ['posted']
     return []
 }
@@ -119,7 +117,7 @@ export default function AutoPublisher() {
     // old bookmarks/links to the "editorial" tab redirect there.
     const { tab: tabParam } = useParams()
     const navigate = useNavigate()
-    const tab = tabParam === 'editorial' ? 'settings' : (tabParam || 'pendentes')
+    const tab = tabParam === 'editorial' ? 'settings' : (tabParam || 'coletadas')
     const setTab = useCallback((nextTab) => navigate(`/admin/autopublisher/${nextTab}`), [navigate])
 
     useEffect(() => {
@@ -367,7 +365,7 @@ export default function AutoPublisher() {
                      instagram_post_id, horario_agendado, current_generation_id, approved_generation_id, correction_draft`)
             .eq('cliente_id', clienteId)
             .in('status', statuses)
-            .order('updated_at', { ascending: currentTab === 'revisao' })
+            .order('updated_at', { ascending: false })
 
         if (error) { toast.error("Erro ao carregar itens.") }
         setItems(data ?? [])
