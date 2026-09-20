@@ -118,6 +118,42 @@ const MESSAGES = Object.freeze({
     title: 'Falha ao extrair link',
     description: 'Não foi possível extrair os dados do link. Tente preencher manualmente.',
   },
+  EDITORIAL_AI_FLAG_LOAD_FAILED: {
+    title: 'Preparação indisponível',
+    description: 'Não foi possível confirmar a preparação automática. Tente novamente.',
+  },
+  EDITORIAL_SOURCE_REQUIRED: {
+    title: 'Fonte obrigatória',
+    description: 'Informe o texto original antes de preparar a matéria.',
+  },
+  EDITORIAL_SOURCE_ALREADY_CAPTURED: {
+    title: 'Fonte já registrada',
+    description: 'A fonte original desta matéria já foi preservada e não pode ser substituída.',
+  },
+  EDITORIAL_AI_DRAFT_IN_PROGRESS: {
+    title: 'Preparação em andamento',
+    description: 'A matéria já está sendo preparada. Aguarde alguns instantes.',
+  },
+  EDITORIAL_AI_HUMAN_REVISION_PRESENT: {
+    title: 'Edição humana preservada',
+    description: 'A matéria já foi editada e não será sobrescrita automaticamente.',
+  },
+  EDITORIAL_AI_REVISION_CONFLICT: {
+    title: 'Edição humana preservada',
+    description: 'A matéria mudou durante a preparação. Recarregue para manter a edição mais recente.',
+  },
+  EDITORIAL_AI_PREPARATION_FAILED: {
+    title: 'Não foi possível preparar a matéria',
+    description: 'Não foi possível preparar a matéria automaticamente.',
+  },
+  EDITORIAL_AI_INVALID_JSON: {
+    title: 'Resposta inválida',
+    description: 'Não foi possível preparar a matéria automaticamente.',
+  },
+  EDITORIAL_AI_TIMEOUT: {
+    title: 'Tempo esgotado',
+    description: 'A preparação demorou mais que o esperado. Tente novamente.',
+  },
   IMAGE_UPLOAD_FAILED: {
     title: 'Falha no envio',
     description: 'Não foi possível enviar a imagem. Tente novamente.',

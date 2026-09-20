@@ -15,6 +15,10 @@ export function emptyForm(originType = null) {
     production_input_type: originType,
     headline: '',
     body: '',
+    caption: '',
+    context_tag: '',
+    category: '',
+    location: { city: null, region: null, state: null },
     content_type: '',
     visual_model: '',
     visual_title_id: null,
@@ -45,8 +49,12 @@ export function initialFormFromArticle(row) {
     origin_type: row.origin_type || null,
     origin_reference: row.origin_reference || '',
     production_input_type: row.production_input_type || row.origin_type || null,
-    headline: row.headline || '',
-    body: row.body || '',
+    headline: row.headline || row.original_source_title || '',
+    body: row.body || row.original_source_body || '',
+    caption: row.caption || '',
+    context_tag: row.context_tag || '',
+    category: row.category || '',
+    location: row.location || { city: null, region: null, state: null },
     content_type: row.content_type || '',
     visual_model: row.visual_model || '',
     visual_title_id: row.visual_title_id || null,
@@ -82,7 +90,7 @@ export function buildOriginPayload(form, { requestId }) {
   }
 }
 
-export function validateContentStep({ headline, body }) {
+export function validateContentStep({ headline, body, caption, context_tag, category }, { requireAiFields = false } = {}) {
   const errors = {}
   if ((headline || '').trim().length < 8) {
     errors.headline = 'A manchete precisa ter pelo menos 8 caracteres.'
@@ -90,6 +98,11 @@ export function validateContentStep({ headline, body }) {
   if ((body || '').trim().length < 20) {
     errors.body = 'O corpo precisa ter pelo menos 20 caracteres.'
   }
+  if (requireAiFields && (caption || '').trim().length < 10) {
+    errors.caption = 'A legenda precisa ter pelo menos 10 caracteres.'
+  }
+  if (requireAiFields && !(context_tag || '').trim()) errors.context_tag = 'Informe o contexto editorial.'
+  if (requireAiFields && !(category || '').trim()) errors.category = 'Informe a categoria.'
   return errors
 }
 
@@ -98,6 +111,10 @@ export function buildDraftPayload(form, { articleId, requestId, expectedRevision
     articleId,
     headline: (form.headline || '').trim(),
     body: (form.body || '').trim(),
+    caption: (form.caption || '').trim() || null,
+    contextTag: (form.context_tag || '').trim() || null,
+    category: (form.category || '').trim() || null,
+    location: form.location || null,
     requestId,
     expectedRevisionNumber,
   }
@@ -108,6 +125,10 @@ export function buildFinalizePayload(form, { articleId, requestId, expectedRevis
     articleId,
     headline: (form.headline || '').trim(),
     body: (form.body || '').trim(),
+    caption: (form.caption || '').trim() || null,
+    contextTag: (form.context_tag || '').trim() || null,
+    category: (form.category || '').trim() || null,
+    location: form.location || null,
     requestId,
     expectedRevisionNumber,
   }

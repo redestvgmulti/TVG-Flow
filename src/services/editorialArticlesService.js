@@ -38,11 +38,18 @@ export async function getEditorialArticleForEdit(supabase, articleId) {
   return row
 }
 
-export async function saveEditorialArticleDraft(supabase, { articleId, headline, body, requestId, expectedRevisionNumber = null }) {
-  return callArticleRpc(supabase, 'save_editorial_article_draft', {
+export async function saveEditorialArticleDraft(supabase, {
+  articleId, headline, body, caption = null, contextTag = null, category = null,
+  location = null, requestId, expectedRevisionNumber = null,
+}) {
+  return callArticleRpc(supabase, 'save_editorial_article_draft_v2', {
     p_article_id: articleId,
     p_headline: headline,
     p_body: body,
+    p_caption: caption,
+    p_context_tag: contextTag,
+    p_category: category,
+    p_location: location,
     p_request_id: requestId,
     p_expected_revision_number: expectedRevisionNumber,
   })
@@ -66,14 +73,55 @@ export async function saveEditorialArticleProductionIntent(supabase, {
   })
 }
 
-export async function finalizeEditorialArticle(supabase, { articleId, headline, body, requestId, expectedRevisionNumber = null }) {
-  return callArticleRpc(supabase, 'finalize_editorial_article', {
+export async function finalizeEditorialArticle(supabase, {
+  articleId, headline, body, caption = null, contextTag = null, category = null,
+  location = null, requestId, expectedRevisionNumber = null,
+}) {
+  return callArticleRpc(supabase, 'finalize_editorial_article_v2', {
     p_article_id: articleId,
     p_headline: headline,
     p_body: body,
+    p_caption: caption,
+    p_context_tag: contextTag,
+    p_category: category,
+    p_location: location,
     p_request_id: requestId,
     p_expected_revision_number: expectedRevisionNumber,
   })
+}
+
+export async function getEditorialAiDraftStatus(supabase) {
+  const { data, error } = await supabase.schema('ap').rpc('get_editorial_ai_draft_status')
+  if (error) throw new EditorialArticleError('EDITORIAL_AI_FLAG_LOAD_FAILED', error)
+  return data === true
+}
+
+export async function captureEditorialArticleSource(supabase, {
+  articleId, sourceType, sourceUrl, sourceTitle, sourceBody, sourceImageUrl, requestId,
+}) {
+  return callArticleRpc(supabase, 'capture_editorial_article_source', {
+    p_article_id: articleId,
+    p_source_type: sourceType,
+    p_source_url: sourceUrl || null,
+    p_source_title: sourceTitle || null,
+    p_source_body: sourceBody,
+    p_source_image_url: sourceImageUrl || null,
+    p_request_id: requestId,
+  })
+}
+
+export async function prepareEditorialAiDraft(supabase, { articleId, requestId }) {
+  const { data, error } = await supabase.functions.invoke('ap-editorial-ai-draft', {
+    body: { article_id: articleId, request_id: requestId },
+  })
+  if (error) {
+    const code = data?.error || error?.context?.error || 'EDITORIAL_AI_PREPARATION_FAILED'
+    throw new EditorialArticleError(code, error)
+  }
+  if (!data?.success || !data?.draft) {
+    throw new EditorialArticleError(data?.error || 'EDITORIAL_AI_PREPARATION_FAILED', data)
+  }
+  return data
 }
 
 export async function requestEditorialArticleChanges(supabase, { articleId, reason, requestId }) {

@@ -57,6 +57,9 @@ verify_jwt = true
 [functions.ap-editorial-test]
 verify_jwt = true
 
+[functions.ap-editorial-ai-draft]
+verify_jwt = true
+
 [functions.create-professional]
 verify_jwt = true
 
