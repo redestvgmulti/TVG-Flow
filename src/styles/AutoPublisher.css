@@ -214,6 +214,7 @@
 .ap-nav {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 12px;
   margin-bottom: 1.5rem;
   overflow-x: auto;
@@ -223,13 +224,12 @@
 .ap-seg {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(var(--ap-tab-count, 6), minmax(112px, 1fr));
+  grid-template-columns: repeat(var(--ap-tab-count, 6), minmax(112px, max-content));
   background: var(--color-bg-subtle, #F0F2F5);
   border: 1px solid var(--color-border, #E5E7EB);
   border-radius: 12px;
   padding: 3px;
-  flex: 1 0 720px;
-  min-width: 720px;
+  flex: 0 0 auto;
 }
 
 .ap-seg-pill {
