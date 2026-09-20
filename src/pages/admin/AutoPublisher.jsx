@@ -927,6 +927,7 @@ export default function AutoPublisher() {
                             className="ap-seg"
                             role="tablist"
                             aria-label="Status das matérias"
+                            style={{ '--ap-tab-count': TABS.length }}
                         >
                             <span
                                 className="ap-seg-pill"
@@ -935,7 +936,6 @@ export default function AutoPublisher() {
                                         0,
                                         TABS.findIndex(item => item.key === tab)
                                     )} * (100% - 6px) / ${TABS.length})`,
-                                    '--ap-tab-count': TABS.length,
                                     opacity: TABS.some(item => item.key === tab)
                                         ? 1
                                         : 0
