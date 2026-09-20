@@ -36,6 +36,9 @@ test('invisible AI preserves source then submits the reviewed canonical draft', 
   assert.match(canonical, /finalizeEditorialArticle/)
   assert.match(canonical, /approveEditorialArticleForRender/)
   assert.match(canonical, /dispatchEditorialArticleRender/)
+  assert.match(canonical, /article\.status === 'draft' \|\| article\.status === 'editing' \|\| article\.status === 'changes_requested'/)
+  assert.match(canonical, /article\.status !== 'dispatched' \|\| !candidateNewsId/)
+  assert.match(canonical, /throw Object\.assign\(new Error\('DISPATCH_FAILED'\)/)
   assert.doesNotMatch(canonical, /ap-employee-generator|runEditorialWorkflow|candidate_news.*insert/i)
 })
 

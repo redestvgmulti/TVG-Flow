@@ -261,7 +261,7 @@ export default function CanonicalArticleWizard({
         resetRequestId(requests, 'reopenAfterFailure')
         article = await getEditorialArticleForEdit(supabase, article.id)
       }
-      if (article.status === 'draft' || article.status === 'changes_requested') {
+      if (article.status === 'draft' || article.status === 'editing' || article.status === 'changes_requested') {
         await saveEditorialArticleProductionIntent(supabase, buildProductionIntentPayload(canonicalForm, {
           articleId: article.id,
           requestId: requestId(requests, 'productionIntent'),
@@ -294,11 +294,16 @@ export default function CanonicalArticleWizard({
         article = await getEditorialArticleForEdit(supabase, article.id)
       }
 
+      const candidateNewsId = dispatchResult?.candidate_news_id || article.candidate_news_id || null
+      if (article.status !== 'dispatched' || !candidateNewsId) {
+        throw Object.assign(new Error('DISPATCH_FAILED'), { code: 'DISPATCH_FAILED' })
+      }
+
       setSubmitSucceeded(true)
       toast.success('Aprovada e enviada para renderização.')
       onComplete?.({
         articleId: article.id,
-        candidateNewsId: dispatchResult?.candidate_news_id || article.candidate_news_id || null,
+        candidateNewsId,
       })
     } catch (error) {
       toast.error(messageForRpcError(error?.code || error?.message).description)
