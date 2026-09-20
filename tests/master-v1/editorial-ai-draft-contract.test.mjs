@@ -85,6 +85,7 @@ test('Anthropic requests constrain old and current models through one forced sch
     assert.deepEqual(requestBody.tools, [{
       name: 'emit_editorial_draft',
       description: 'Return the prepared editorial draft.',
+      strict: true,
       input_schema: EDITORIAL_AI_DRAFT_JSON_SCHEMA,
     }])
     assert.deepEqual(requestBody.tool_choice, { type: 'tool', name: 'emit_editorial_draft' })
