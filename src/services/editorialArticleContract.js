@@ -51,6 +51,14 @@ const MESSAGES = Object.freeze({
     title: 'Conteúdo obrigatório',
     description: 'Preencha manchete e corpo antes de salvar.',
   },
+  SOURCE_TITLE_REQUIRED: {
+    title: 'Headline obrigatória',
+    description: 'Informe uma headline para a IA preparar a matéria.',
+  },
+  SOURCE_BODY_REQUIRED: {
+    title: 'Texto-base obrigatório',
+    description: 'Informe um texto-base para a IA preparar a matéria.',
+  },
   ARTICLE_NOT_EDITABLE: {
     title: 'Matéria não editável',
     description: 'Esta matéria não pode mais ser editada neste estado.',

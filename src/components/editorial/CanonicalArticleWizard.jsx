@@ -290,8 +290,11 @@ export default function CanonicalArticleWizard({
         sourceBody = (scraped.content || '').trim()
         sourceImageUrl = (sourceImageUrl || scraped.image_url || '').trim()
       }
-      if (sourceTitle.length < 8) throw Object.assign(new Error('SOURCE_TITLE_REQUIRED'), { code: 'SOURCE_TITLE_REQUIRED' })
-      if (sourceBody.length < 20) throw Object.assign(new Error('SOURCE_BODY_REQUIRED'), { code: 'SOURCE_BODY_REQUIRED' })
+      // The source is input for the editorial AI, not the finished article.
+      // Accept any non-empty factual seed and let the AI produce the complete
+      // headline/body instead of imposing an arbitrary character threshold.
+      if (!sourceTitle) throw Object.assign(new Error('SOURCE_TITLE_REQUIRED'), { code: 'SOURCE_TITLE_REQUIRED' })
+      if (!sourceBody) throw Object.assign(new Error('SOURCE_BODY_REQUIRED'), { code: 'SOURCE_BODY_REQUIRED' })
 
       sourceImageUrl = await resolveProductionImageUrl(sourceImageUrl)
 

@@ -27,7 +27,11 @@ test('canonical creation uses the same fixed five-step wizard for admin and staf
 })
 
 test('invisible AI preserves source then submits the reviewed canonical draft', async () => {
-  const canonical = await source('src/components/editorial/CanonicalArticleWizard.jsx')
+  const [canonical, form, contract] = await Promise.all([
+    source('src/components/editorial/CanonicalArticleWizard.jsx'),
+    source('src/components/editorial/ArticleForm.jsx'),
+    source('src/services/editorialArticleContract.js'),
+  ])
 
   assert.match(canonical, /captureEditorialArticleSource/)
   assert.match(canonical, /prepareEditorialAiDraft/)
@@ -40,6 +44,17 @@ test('invisible AI preserves source then submits the reviewed canonical draft', 
   assert.match(canonical, /article\.status !== 'dispatched' \|\| !candidateNewsId/)
   assert.match(canonical, /throw Object\.assign\(new Error\('DISPATCH_FAILED'\)/)
   assert.doesNotMatch(canonical, /ap-employee-generator|runEditorialWorkflow|candidate_news.*insert/i)
+
+  // Manual text is source material for the AI, so one non-whitespace
+  // character is valid. Only empty inputs remain blocked for both hosts.
+  assert.match(canonical, /if \(!sourceTitle\).*SOURCE_TITLE_REQUIRED/)
+  assert.match(canonical, /if \(!sourceBody\).*SOURCE_BODY_REQUIRED/)
+  assert.doesNotMatch(canonical, /sourceTitle\.length\s*</)
+  assert.doesNotMatch(canonical, /sourceBody\.length\s*</)
+  assert.doesNotMatch(form, /minLength=/)
+  assert.doesNotMatch(form, /Mínimo de/)
+  assert.match(contract, /SOURCE_TITLE_REQUIRED:[\s\S]*Informe uma headline para a IA/)
+  assert.match(contract, /SOURCE_BODY_REQUIRED:[\s\S]*Informe um texto-base para a IA/)
 })
 
 test('a human image replacement after AI preparation wins without duplicate uploads', async () => {
