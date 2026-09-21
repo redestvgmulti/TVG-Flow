@@ -89,7 +89,6 @@ function statusesForTab(currentTab, pendingFilter = 'available') {
         return PENDING_AVAILABLE_STATUSES
     }
     if (currentTab === 'em_producao') return ['pending_render', 'processing', 'render_complete', 'ready_to_publish', 'queued_for_posting']
-    if (currentTab === 'revisao') return ['pending_review']
     if (currentTab === 'aprovadas') return ['approved', 'pending_review']
     if (currentTab === 'publicadas') return ['posted']
     return []

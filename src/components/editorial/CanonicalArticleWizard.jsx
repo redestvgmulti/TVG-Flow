@@ -64,7 +64,9 @@ function canonicalFormFromWizard(formData, sourceImageUrl) {
     region_id: formData.region_id,
     city_id: formData.city_id,
     manual_slots: formData.manual_slots,
-    source_image_url: sourceImageUrl || formData.image_url || '',
+    // The operator may replace the extracted/source image after the AI draft is
+    // ready. The current form value is therefore authoritative for production.
+    source_image_url: formData.image_url || sourceImageUrl || '',
   }
 }
 
@@ -104,6 +106,7 @@ export default function CanonicalArticleWizard({
   const [automaticPreparation, setAutomaticPreparation] = useState({ status: 'idle', error: '' })
   const articleIdRef = useRef(articleId)
   const sourceImageRef = useRef('')
+  const uploadedSourceFileRef = useRef({ file: null, url: '' })
   const revisionNumberRef = useRef(null)
   const preparedRef = useRef(false)
   const preparationPromiseRef = useRef(null)
@@ -165,8 +168,30 @@ export default function CanonicalArticleWizard({
       context_tag: prepared.context_tag || '',
       category: prepared.category || '',
       location: prepared.location || { city: null, region: null, state: null },
-      image_url: prepared.source_image_url || prepared.original_source_image_url || fallback.sourceImageUrl || previous.image_url,
+      image_url: fallback.preserveImage
+        ? previous.image_url
+        : (prepared.source_image_url || prepared.original_source_image_url || fallback.sourceImageUrl || previous.image_url),
     }))
+  }
+
+  async function resolveProductionImageUrl(fallbackUrl = '') {
+    if (selectedFile) {
+      if (uploadedSourceFileRef.current.file === selectedFile && uploadedSourceFileRef.current.url) {
+        sourceImageRef.current = uploadedSourceFileRef.current.url
+        return uploadedSourceFileRef.current.url
+      }
+      const uploadedUrl = await uploadEditorialSourceImage(supabase, {
+        file: selectedFile,
+        folder: 'editorial_uploads',
+      })
+      uploadedSourceFileRef.current = { file: selectedFile, url: uploadedUrl }
+      sourceImageRef.current = uploadedUrl
+      return uploadedUrl
+    }
+
+    const resolvedUrl = (formData.image_url || fallbackUrl || sourceImageRef.current || '').trim()
+    sourceImageRef.current = resolvedUrl
+    return resolvedUrl
   }
 
   async function waitForPreparedDraft(targetArticleId) {
@@ -268,13 +293,7 @@ export default function CanonicalArticleWizard({
       if (sourceTitle.length < 8) throw Object.assign(new Error('SOURCE_TITLE_REQUIRED'), { code: 'SOURCE_TITLE_REQUIRED' })
       if (sourceBody.length < 20) throw Object.assign(new Error('SOURCE_BODY_REQUIRED'), { code: 'SOURCE_BODY_REQUIRED' })
 
-      if (selectedFile) {
-        sourceImageUrl = await uploadEditorialSourceImage(supabase, {
-          file: selectedFile,
-          folder: 'editorial_uploads',
-        })
-      }
-      sourceImageRef.current = sourceImageUrl
+      sourceImageUrl = await resolveProductionImageUrl(sourceImageUrl)
 
       if (!articleIdRef.current) {
         const created = await startEditorialArticleDirect(supabase, {
@@ -337,7 +356,7 @@ export default function CanonicalArticleWizard({
     e.preventDefault()
     if (isSubmitting || !articleIdRef.current || !preparedRef.current) return
 
-    const canonicalForm = canonicalFormFromWizard(formData, sourceImageRef.current)
+    let canonicalForm = canonicalFormFromWizard(formData, sourceImageRef.current)
     const contentErrors = validateContentStep(canonicalForm, { requireAiFields: true })
     const intentErrors = validateProductionIntentStep(canonicalForm, {
       territorialComposerEnabled,
@@ -361,6 +380,8 @@ export default function CanonicalArticleWizard({
     setErrors({})
     setIsSubmitting(true)
     try {
+      const productionImageUrl = await resolveProductionImageUrl(sourceImageRef.current)
+      canonicalForm = canonicalFormFromWizard(formData, productionImageUrl)
       let article = await getEditorialArticleForEdit(supabase, articleIdRef.current)
       const finalizedContentChanged = article.status === 'content_final' && (
         (article.headline || '').trim() !== (canonicalForm.headline || '').trim()
@@ -452,7 +473,7 @@ export default function CanonicalArticleWizard({
       }))
       resetRequestId(requests, 'humanDraft')
       const saved = await getEditorialArticleForEdit(supabase, articleIdRef.current)
-      applyPreparedArticle(saved)
+      applyPreparedArticle(saved, { preserveImage: true })
       toast.success('Rascunho salvo.')
     } catch (error) {
       resetRequestId(requests, 'humanDraft')
@@ -465,6 +486,7 @@ export default function CanonicalArticleWizard({
   function createAnother() {
     articleIdRef.current = null
     sourceImageRef.current = ''
+    uploadedSourceFileRef.current = { file: null, url: '' }
     revisionNumberRef.current = null
     preparedRef.current = false
     requests.current = {}

@@ -42,6 +42,16 @@ test('invisible AI preserves source then submits the reviewed canonical draft', 
   assert.doesNotMatch(canonical, /ap-employee-generator|runEditorialWorkflow|candidate_news.*insert/i)
 })
 
+test('a human image replacement after AI preparation wins without duplicate uploads', async () => {
+  const canonical = await source('src/components/editorial/CanonicalArticleWizard.jsx')
+
+  assert.match(canonical, /source_image_url: formData\.image_url \|\| sourceImageUrl \|\| ''/)
+  assert.match(canonical, /uploadedSourceFileRef\.current\.file === selectedFile/)
+  assert.match(canonical, /uploadedSourceFileRef\.current = \{ file: selectedFile, url: uploadedUrl \}/)
+  assert.match(canonical, /const productionImageUrl = await resolveProductionImageUrl\(sourceImageRef\.current\)/)
+  assert.match(canonical, /applyPreparedArticle\(saved, \{ preserveImage: true \}\)/)
+})
+
 test('self review remains tenant-scoped and exact-generation approval remains P0 guarded', async () => {
   const migration = await source('supabase/migrations/20260920153000_editorial_self_review.sql')
 
@@ -72,8 +82,9 @@ test('rendered work remains visible to its creator and follows the shared operat
   ])
 
   assert.match(admin, /pending_render: 'em_producao'/)
-  assert.match(admin, /pending_review: 'revisao'/)
+  assert.match(admin, /pending_review: 'aprovadas'/)
   assert.match(admin, /approved: 'aprovadas'/)
+  assert.doesNotMatch(admin, /currentTab === 'revisao'/)
   assert.match(staff, /\.schema\('ap'\)[\s\S]+\.from\('candidate_news'\)[\s\S]+\.eq\('criado_por_user_id', user\?\.id\)/)
   assert.match(staff, /p0_approve_generation/)
   assert.match(staff, /p_generation_id: item\.current_generation_id/)
