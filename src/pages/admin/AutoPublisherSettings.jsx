@@ -9,6 +9,7 @@ import AutoPublisherMasterV1Settings from './AutoPublisherMasterV1Settings'
 import { formatRelativeTime } from '../../utils/dateUtils'
 import { getEditorialWorkflowStatus } from '../../services/editorialArticlesService'
 import { messageForRpcError } from '../../services/editorialArticleContract'
+import { useAuth } from '../../contexts/AuthContext'
 import '../../styles/AutoPublisherSettingsPremium.css'
 
 function editorialTenantMessage(error) {
@@ -94,6 +95,7 @@ function Toggle({ on, onClick, disabled }) {
 }
 
 export default function AutoPublisherSettings({ clienteId, clienteError }) {
+    const { authReady, authStatus } = useAuth()
     const [section, setSection] = useState('fontes')
     const [loading, setLoading] = useState(true)
     const [editorialTenantError, setEditorialTenantError] = useState('')
@@ -157,18 +159,39 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
     ), [editorial, editorialLoaded, humanization, humanizationLoaded, newApiKey])
 
     // ── apConfig — generic gateway used for Fontes (ap.sources) ──
+    const invokeAuthenticatedFunction = useCallback(async (functionName, options = {}) => {
+        if (!authReady || authStatus !== 'authenticated') {
+            const error = new Error('AUTH_SESSION_UNAVAILABLE')
+            error.code = 'AUTH_SESSION_UNAVAILABLE'
+            throw error
+        }
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+        if (sessionError || !session?.access_token) {
+            const error = new Error('AUTH_SESSION_UNAVAILABLE')
+            error.code = 'AUTH_SESSION_UNAVAILABLE'
+            throw error
+        }
+        return supabase.functions.invoke(functionName, {
+            ...options,
+            headers: {
+                ...(options.headers || {}),
+                Authorization: `Bearer ${session.access_token}`,
+            },
+        })
+    }, [authReady, authStatus])
+
     const apConfig = useCallback(async (resource, action, payload = null) => {
         const body = { resource, action, cliente_id: clienteId }
         if (payload) body.payload = payload
-        const { data, error } = await supabase.functions.invoke('ap-config', { method: 'POST', body })
+        const { data, error } = await invokeAuthenticatedFunction('ap-config', { method: 'POST', body })
         if (error) throw error
         if (data && data.has_error) throw new Error(`Edge Function Error: ${data.error} | Type: ${data.type}`)
         return data
-    }, [clienteId])
+    }, [clienteId, invokeAuthenticatedFunction])
 
     // ── Load everything ──────────────────────────────────────
     const fetchAll = useCallback(async () => {
-        if (!clienteId) {
+        if (!clienteId || !authReady || authStatus !== 'authenticated') {
             setLoading(false)
             return
         }
@@ -177,8 +200,8 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
         try {
             const [sourcesRes, editorialRes, ragRes, configRes] = await Promise.all([
                 apConfig('sources', 'list'),
-                supabase.functions.invoke('ap-editorial-settings', { method: 'GET' }),
-                supabase.functions.invoke('ap-editorial-rag-upload', { method: 'GET' }),
+                invokeAuthenticatedFunction('ap-editorial-settings', { method: 'GET' }),
+                invokeAuthenticatedFunction('ap-editorial-rag-upload', { method: 'GET' }),
                 supabase.schema('ap').from('system_config').select('*').eq('cliente_id', clienteId).maybeSingle(),
             ])
 
@@ -225,7 +248,7 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
         } finally {
             setLoading(false)
         }
-    }, [clienteId, apConfig])
+    }, [clienteId, authReady, authStatus, apConfig, invokeAuthenticatedFunction])
 
     useEffect(() => { fetchAll() }, [fetchAll])
 
@@ -271,7 +294,7 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
         setSourceError('')
         setSourceProbe(null)
         try {
-            const { data: probe, error: probeError } = await supabase.functions.invoke('ap-source-probe', {
+            const { data: probe, error: probeError } = await invokeAuthenticatedFunction('ap-source-probe', {
                 method: 'POST',
                 body: { cliente_id: clienteId, ...newSource },
             })
@@ -323,7 +346,7 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
     async function submitRule() {
         if (!ruleInput.trim() || !activeRuleType) return
         try {
-            const result = await supabase.functions.invoke('ap-editorial-settings', {
+            const result = await invokeAuthenticatedFunction('ap-editorial-settings', {
                 method: 'POST',
                 body: { rule_type: activeRuleType, value: ruleInput.trim() },
             })
@@ -339,7 +362,7 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
     async function deleteRule(id) {
         setRules(prev => prev.filter(r => r.id !== id))
         try {
-            const result = await supabase.functions.invoke('ap-editorial-settings', {
+            const result = await invokeAuthenticatedFunction('ap-editorial-settings', {
                 method: 'DELETE',
                 body: { id },
             })
@@ -362,10 +385,10 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
             setRagBusy(true)
             const toastId = toast.loading('Gerando vetores e anexando à base…')
             try {
-                const result = await supabase.functions.invoke('ap-editorial-rag-upload', { method: 'POST', body: { file_name: file.name, content } })
+                const result = await invokeAuthenticatedFunction('ap-editorial-rag-upload', { method: 'POST', body: { file_name: file.name, content } })
                 assertEditorialFunctionSuccess(result, 'Erro no upload')
                 toast.success('Documento adicionado à base de conhecimento.', { id: toastId })
-                const ragRes = await supabase.functions.invoke('ap-editorial-rag-upload', { method: 'GET' })
+                const ragRes = await invokeAuthenticatedFunction('ap-editorial-rag-upload', { method: 'GET' })
                 const ragData = assertEditorialFunctionSuccess(ragRes, 'Erro ao carregar a base de conhecimento')
                 setRagDocs(Array.isArray(ragData) ? ragData : [])
             } catch (err) {
@@ -380,7 +403,7 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
     async function deleteRagDoc(source_document_id) {
         setRagDocs(prev => prev.filter(d => d.source_document_id !== source_document_id))
         try {
-            const result = await supabase.functions.invoke('ap-editorial-rag-upload', { method: 'DELETE', body: { source_document_id } })
+            const result = await invokeAuthenticatedFunction('ap-editorial-rag-upload', { method: 'DELETE', body: { source_document_id } })
             assertEditorialFunctionSuccess(result, 'Erro ao remover documento')
         } catch (err) {
             toast.error(editorialTenantMessage(err) || ('Erro ao remover documento: ' + err.message))
@@ -419,7 +442,7 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
         try {
             const payload = { settings: editorial, humanization }
             if (newApiKey) payload.apiKey = newApiKey
-            const result = await supabase.functions.invoke('ap-editorial-settings', { method: 'PUT', body: payload })
+            const result = await invokeAuthenticatedFunction('ap-editorial-settings', { method: 'PUT', body: payload })
             assertEditorialFunctionSuccess(result, 'Erro ao salvar configurações')
 
             setEditorialLoaded(editorial)
@@ -444,7 +467,7 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
         if (!activePrompt.trim()) return
         setSavingPromptVersion(true)
         try {
-            const result = await supabase.functions.invoke('ap-editorial-prompt', { method: 'POST', body: { prompt_base: activePrompt } })
+            const result = await invokeAuthenticatedFunction('ap-editorial-prompt', { method: 'POST', body: { prompt_base: activePrompt } })
             assertEditorialFunctionSuccess(result, 'Erro ao salvar o prompt')
             toast.success('Nova versão do prompt salva.')
             fetchAll()
@@ -463,7 +486,7 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
         setTestOutput(null)
         setPromptSnapshot(null)
         try {
-            const result = await supabase.functions.invoke('ap-editorial-test', { method: 'POST', body: testInput })
+            const result = await invokeAuthenticatedFunction('ap-editorial-test', { method: 'POST', body: testInput })
             const data = assertEditorialFunctionSuccess(result, 'Erro ao executar o teste')
             setTestOutput(data)
         } catch (err) {
