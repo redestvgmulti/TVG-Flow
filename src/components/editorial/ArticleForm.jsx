@@ -317,7 +317,6 @@ export default function ArticleForm({
                         value={formData.titulo || ''}
                         onChange={e => setFormData({ ...formData, titulo: e.target.value, idempotency_key: null })}
                         placeholder="Ex: Novo viaduto é inaugurado..."
-                        minLength={mode === 'employee' ? 8 : undefined}
                     />
                     <FieldError message={typeof errors.titulo === 'string' ? errors.titulo : ''} />
                 </div>
@@ -333,9 +332,7 @@ export default function ArticleForm({
                             ? 'Descreva o fato, local, data e contexto. A IA também analisará a imagem.'
                             : 'Escreva os fatos confirmados. A IA revisará e criará a legenda.'}
                     />
-                    <small className="ap-af-hint">
-                        Mínimo de {sourceMode === 'image' ? '40' : '5'} caracteres verificáveis.
-                    </small>
+                    <small className="ap-af-hint">A IA usará este conteúdo como fonte para preparar a matéria.</small>
                     <FieldError message={typeof errors.conteudo === 'string' ? errors.conteudo : ''} />
                 </div>
             </>}
