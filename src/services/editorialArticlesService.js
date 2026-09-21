@@ -207,11 +207,34 @@ export async function scrapeArticleSource(supabase, url) {
 }
 
 export async function uploadEditorialSourceImage(supabase, { file, folder }) {
-  const extension = file.name.split('.').pop()
-  const fileName = `${Date.now()}_${Math.random().toString(36).slice(2, 9)}.${extension}`
-  const filePath = `${folder}/${fileName}`
+  const extensionsByMimeType = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+  }
+  const extension = extensionsByMimeType[file?.type]
+  if (!extension) throw new EditorialArticleError('IMAGE_TYPE_UNSUPPORTED')
 
-  const { error: uploadError } = await supabase.storage.from('ap-images').upload(filePath, file)
+  // Resolve the operational client from the authenticated backend context.
+  // The Storage policy independently verifies both this tenant segment and
+  // the auth.uid() segment, so neither value is trusted merely because the
+  // browser placed it in the object path.
+  const { data: clienteId, error: clienteError } = await supabase.rpc('require_single_operational_cliente_id')
+  if (clienteError || !clienteId) {
+    throw new EditorialArticleError('EDITORIAL_UPLOAD_SCOPE_FAILED', clienteError)
+  }
+
+  const { data: authData, error: authError } = await supabase.auth.getUser()
+  const userId = authData?.user?.id
+  if (authError || !userId) throw new EditorialArticleError('AUTH_REQUIRED', authError)
+
+  const fileName = `${crypto.randomUUID()}.${extension}`
+  const filePath = `${folder}/${clienteId}/${userId}/${fileName}`
+
+  const { error: uploadError } = await supabase.storage.from('ap-images').upload(filePath, file, {
+    contentType: file.type,
+    upsert: false,
+  })
   if (uploadError) throw new EditorialArticleError('IMAGE_UPLOAD_FAILED', uploadError)
 
   const { data } = supabase.storage.from('ap-images').getPublicUrl(filePath)

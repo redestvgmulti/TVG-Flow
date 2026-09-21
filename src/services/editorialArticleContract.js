@@ -167,6 +167,14 @@ const MESSAGES = Object.freeze({
     title: 'Falha no envio',
     description: 'Não foi possível enviar a imagem. Tente novamente.',
   },
+  IMAGE_TYPE_UNSUPPORTED: {
+    title: 'Formato não suportado',
+    description: 'Use uma imagem PNG, JPG ou WebP.',
+  },
+  EDITORIAL_UPLOAD_SCOPE_FAILED: {
+    title: 'Acesso não confirmado',
+    description: 'Não foi possível confirmar o espaço desta matéria. Tente novamente.',
+  },
   BACKLOG_NOT_FOUND: {
     title: 'Pauta não encontrada',
     description: 'Esta pauta não existe mais no banco de pautas.',
