@@ -24,3 +24,14 @@ export function composerModeFromArticle(article: {
   if (slots.length > 0 && !hasRegion && !hasCity) return "individual";
   return null;
 }
+
+// Reels and Story Placid contracts do not have a news-image layer.  Keep the
+// editorial source image intact on the article, but only carry it into the
+// render candidate when the selected Feed template can render it.
+export function sourceImageForRender(article: {
+  content_type: string | null;
+  source_image_url: string | null;
+}): string | null {
+  if (article.content_type !== "feed") return null;
+  return article.source_image_url || null;
+}
