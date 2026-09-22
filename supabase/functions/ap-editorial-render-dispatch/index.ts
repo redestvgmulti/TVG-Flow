@@ -35,7 +35,10 @@ import {
   createAndProcessTerritorialCandidate,
   TerritorialCandidateRpcError,
 } from "../ap-employee-generator/territorialCandidateWorkflow.ts";
-import { composerModeFromArticle } from "./composerModeFromArticle.ts";
+import {
+  composerModeFromArticle,
+  sourceImageForRender,
+} from "./composerModeFromArticle.ts";
 
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void };
 
@@ -283,7 +286,10 @@ Deno.serve(async (req: Request) => {
           userText: null,
           userTag: null,
           urlOriginal: claim.origin_reference,
-          imageUrl: claim.source_image_url,
+          // Feed consumes the operator/scraped source image. Reels and Story
+          // deliberately receive none because their active Placid contracts
+          // have no news-image layer.
+          imageUrl: sourceImageForRender(claim),
           sourceMode: claim.production_input_type,
           regionId: claim.region_id,
           cityId: claim.city_id,
