@@ -11,6 +11,9 @@ CREATE SCHEMA vault;
 CREATE TABLE vault.secrets (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), name text UNIQUE, secret text, description text);
 CREATE FUNCTION vault.create_secret(p_secret text, p_name text DEFAULT NULL, p_description text DEFAULT NULL)
 RETURNS uuid LANGUAGE plpgsql AS $$ DECLARE result uuid; BEGIN
+  IF p_secret = '__FAIL_VAULT_CREATE__' THEN
+    RAISE EXCEPTION 'injected vault create failure' USING ERRCODE = 'P0001';
+  END IF;
   INSERT INTO vault.secrets(name, secret, description) VALUES (p_name, p_secret, p_description) RETURNING id INTO result;
   RETURN result;
 END $$;
@@ -38,6 +41,21 @@ INSERT INTO public.profissionais(id, role) VALUES
 INSERT INTO public.cliente_profissionais(profissional_id, cliente_id) VALUES
   ('00000000-0000-4000-8000-000000000011', '00000000-0000-4000-8000-000000000001'),
   ('00000000-0000-4000-8000-000000000011', '00000000-0000-4000-8000-000000000002');
+
+-- OAuth start receives one immutable database-clock timestamp and derives its
+-- expiry from that same value.
+SELECT ap.create_meta_oauth_state(
+  repeat('a', 64), '00000000-0000-4000-8000-000000000011',
+  '00000000-0000-4000-8000-000000000001', '/admin/settings/integrations/meta/callback'
+);
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM ap.meta_oauth_states
+    WHERE state_hash = repeat('a', 64)
+      AND flow_started_at IS NOT NULL
+      AND expires_at = flow_started_at + interval '10 minutes'
+  ) THEN RAISE EXCEPTION 'OAuth state flow_started_at contract failed'; END IF;
+END $$;
 
 -- Graph-version constraints are executed by PostgreSQL, not inferred from text inspection.
 INSERT INTO ap.instagram_connections (cliente_id, instagram_user_id, instagram_username, facebook_page_id, token_secret_ref, connected_at, graph_api_version)
@@ -84,7 +102,7 @@ DECLARE new_user uuid := vault.create_secret('new-user', 'tx-new-user');
 BEGIN
   INSERT INTO ap.instagram_connections(cliente_id, provider, status, is_primary, facebook_user_id, instagram_user_id, instagram_username, facebook_page_id, token_secret_ref, revocation_secret_ref, connected_at, graph_api_version)
   VALUES ('00000000-0000-4000-8000-000000000003', 'meta', 'connected', true, 'fb-tx', 'ig-tx', 'old', 'page-old', old_page, old_user, now(), 'v23.0');
-  PERFORM ap.reconnect_meta_connection('00000000-0000-4000-8000-000000000003', '00000000-0000-4000-8000-000000000011', 'fb-tx', 'ig-tx', 'new', 'page-new', 'New', new_page, new_user, ARRAY['instagram_basic'], '{}'::jsonb, 'v23.0', now() + interval '1 hour');
+  PERFORM ap.reconnect_meta_connection('00000000-0000-4000-8000-000000000003', '00000000-0000-4000-8000-000000000011', 'fb-tx', 'ig-tx', 'new', 'page-new', 'New', new_page, new_user, ARRAY['instagram_basic'], '{}'::jsonb, 'v23.0', now() + interval '1 hour', clock_timestamp(), 0);
   IF EXISTS (SELECT 1 FROM vault.secrets WHERE id IN (old_page, old_user))
      OR NOT EXISTS (SELECT 1 FROM ap.instagram_connections WHERE cliente_id = '00000000-0000-4000-8000-000000000003' AND instagram_user_id = 'ig-tx' AND token_secret_ref = new_page AND revocation_secret_ref = new_user AND status = 'connected') THEN
     RAISE EXCEPTION 'transactional reconnect did not swap refs atomically';
@@ -106,7 +124,7 @@ BEGIN
   INSERT INTO ap.instagram_connections(cliente_id, provider, status, is_primary, facebook_user_id, instagram_user_id, instagram_username, facebook_page_id, token_secret_ref, revocation_secret_ref, connected_at, graph_api_version)
   VALUES ('00000000-0000-4000-8000-000000000003', 'meta', 'connected', true, 'fb-fail', 'ig-retry', 'old', 'page-old', missing_old, gen_random_uuid(), now(), 'v23.0');
   BEGIN
-    PERFORM ap.reconnect_meta_connection('00000000-0000-4000-8000-000000000003', '00000000-0000-4000-8000-000000000011', 'fb-fail', 'ig-retry', 'new', 'page-new', 'New', new_page, new_user, ARRAY[]::text[], '{}'::jsonb, 'v23.0', NULL);
+    PERFORM ap.reconnect_meta_connection('00000000-0000-4000-8000-000000000003', '00000000-0000-4000-8000-000000000011', 'fb-fail', 'ig-retry', 'new', 'page-new', 'New', new_page, new_user, ARRAY[]::text[], '{}'::jsonb, 'v23.0', NULL, clock_timestamp(), 0);
     RAISE EXCEPTION 'reconnect accepted a missing old Vault ref';
   EXCEPTION WHEN SQLSTATE 'P0001' THEN NULL;
   END;
@@ -216,32 +234,77 @@ END $$;
 CREATE TRIGGER meta_test_selection_delay BEFORE INSERT ON ap.instagram_connections
 FOR EACH ROW EXECUTE FUNCTION ap.meta_test_selection_delay();
 
--- A global Meta deauthorization advances the authorization epoch. OAuth
--- material whose state began before that event can never restore connected.
+-- The single-account callback contract uses both immutable flow time and the
+-- captured epoch. Old OAuth material and a callback racing deauthorization are
+-- rejected, while a genuinely new flow can reconnect.
 DO $$
 DECLARE old_page uuid := vault.create_secret('epoch-old-page', 'epoch-old-page');
 DECLARE old_user uuid := vault.create_secret('epoch-old-user', 'epoch-old-user');
-DECLARE fresh_page uuid := vault.create_secret('epoch-fresh-page', 'epoch-fresh-page');
-DECLARE fresh_user uuid := vault.create_secret('epoch-fresh-user', 'epoch-fresh-user');
+DECLARE first_deauthorized_at timestamptz; flow_after_revoke timestamptz;
+DECLARE captured_epoch bigint; fresh_epoch bigint;
 BEGIN
   INSERT INTO ap.instagram_connections(cliente_id, provider, status, is_primary, facebook_user_id, instagram_user_id, instagram_username, facebook_page_id, token_secret_ref, revocation_secret_ref, connected_at, graph_api_version)
   VALUES ('00000000-0000-4000-8000-000000000001', 'meta', 'connected', false, 'fb-epoch', 'ig-epoch', 'epoch', 'page-epoch', old_page, old_user, now(), 'v23.0');
   PERFORM ap.mark_meta_connections_revoked('fb-epoch');
+  SELECT last_deauthorized_at INTO first_deauthorized_at FROM ap.meta_authorizations WHERE facebook_user_id = 'fb-epoch';
+
+  -- A. Callback discovers the Meta identity only after revoke but its flow is old.
   BEGIN
-    PERFORM ap.reconnect_meta_connection('00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000011', 'fb-epoch', 'ig-epoch', 'stale', 'page-stale', 'Stale', fresh_page, fresh_user, ARRAY[]::text[], '{}'::jsonb, 'v23.0', NULL, now() - interval '1 minute', 0);
+    PERFORM ap.complete_meta_oauth_connection(
+      '00000000-0000-4000-8000-000000000011', '00000000-0000-4000-8000-000000000001',
+      'v23.0', 'fb-epoch', 'stale-user-access-token', NULL, ARRAY[]::text[],
+      first_deauthorized_at - interval '1 second', 1,
+      jsonb_build_object('facebook_page_id','page-stale','facebook_page_name','Stale','instagram_user_id','ig-epoch','instagram_username','stale','page_access_token','stale-page-access-token')
+    );
     RAISE EXCEPTION 'pre-revocation OAuth material reactivated the connection';
   EXCEPTION WHEN SQLSTATE '28000' THEN NULL;
   END;
   IF NOT EXISTS (SELECT 1 FROM ap.instagram_connections WHERE facebook_user_id = 'fb-epoch' AND status = 'revoked') THEN
     RAISE EXCEPTION 'deauthorization was not preserved after stale reconnect';
   END IF;
-  PERFORM ap.reconnect_meta_connection('00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000011', 'fb-epoch', 'ig-epoch', 'fresh', 'page-fresh', 'Fresh', fresh_page, fresh_user, ARRAY[]::text[], '{}'::jsonb, 'v23.0', NULL, now() + interval '1 second', 1);
+
+  -- B. A flow started after revoke connects through the automatic callback RPC.
+  flow_after_revoke := first_deauthorized_at + interval '1 second';
+  SELECT ap.capture_meta_authorization_epoch('fb-epoch', flow_after_revoke) INTO captured_epoch;
+  PERFORM ap.complete_meta_oauth_connection(
+    '00000000-0000-4000-8000-000000000011', '00000000-0000-4000-8000-000000000001',
+    'v23.0', 'fb-epoch', 'fresh-user-access-token', NULL, ARRAY[]::text[],
+    flow_after_revoke, captured_epoch,
+    jsonb_build_object('facebook_page_id','page-fresh','facebook_page_name','Fresh','instagram_user_id','ig-epoch','instagram_username','fresh','page_access_token','fresh-page-access-token')
+  );
   IF NOT EXISTS (SELECT 1 FROM ap.instagram_connections WHERE facebook_user_id = 'fb-epoch' AND status = 'connected') THEN
     RAISE EXCEPTION 'new OAuth material after deauthorization did not reconnect';
   END IF;
+
+  -- C. Epoch captured before a subsequent revoke cannot complete afterward.
+  PERFORM ap.mark_meta_connections_revoked('fb-epoch');
+  BEGIN
+    PERFORM ap.complete_meta_oauth_connection(
+      '00000000-0000-4000-8000-000000000011', '00000000-0000-4000-8000-000000000001',
+      'v23.0', 'fb-epoch', 'racing-user-access-token', NULL, ARRAY[]::text[],
+      clock_timestamp() + interval '1 second', captured_epoch,
+      jsonb_build_object('facebook_page_id','page-racing','facebook_page_name','Racing','instagram_user_id','ig-epoch','instagram_username','racing','page_access_token','racing-page-access-token')
+    );
+    RAISE EXCEPTION 'epoch mismatch was accepted';
+  EXCEPTION WHEN SQLSTATE '28000' THEN NULL;
+  END;
+  IF NOT EXISTS (SELECT 1 FROM ap.instagram_connections WHERE facebook_user_id = 'fb-epoch' AND status = 'revoked') THEN
+    RAISE EXCEPTION 'epoch mismatch changed revoked connection';
+  END IF;
+
+  -- A new OAuth flow snapshots the new epoch and may connect; revoke after its
+  -- commit still wins and leaves the final state revoked.
+  flow_after_revoke := clock_timestamp() + interval '1 second';
+  SELECT ap.capture_meta_authorization_epoch('fb-epoch', flow_after_revoke) INTO fresh_epoch;
+  PERFORM ap.complete_meta_oauth_connection(
+    '00000000-0000-4000-8000-000000000011', '00000000-0000-4000-8000-000000000001',
+    'v23.0', 'fb-epoch', 'new-user-access-token', NULL, ARRAY[]::text[],
+    flow_after_revoke, fresh_epoch,
+    jsonb_build_object('facebook_page_id','page-new','facebook_page_name','New','instagram_user_id','ig-epoch','instagram_username','new','page_access_token','new-page-access-token')
+  );
   PERFORM ap.mark_meta_connections_revoked('fb-epoch');
   IF NOT EXISTS (SELECT 1 FROM ap.instagram_connections WHERE facebook_user_id = 'fb-epoch' AND status = 'revoked') THEN
-    RAISE EXCEPTION 'deauthorization after reconnect did not win';
+    RAISE EXCEPTION 'deauthorization after callback completion did not win';
   END IF;
 END $$;
 
@@ -252,7 +315,7 @@ DECLARE sid uuid := gen_random_uuid();
 DECLARE page_secret uuid := vault.create_secret('epoch-selection-page', 'epoch-selection-page');
 DECLARE user_secret uuid := vault.create_secret('epoch-selection-user', 'epoch-selection-user');
 BEGIN
-  INSERT INTO ap.meta_oauth_selection_sessions(id, user_id, cliente_id, graph_api_version, facebook_user_id, user_token_secret_ref, expires_at, granted_scopes, authorization_epoch, oauth_started_at)
+  INSERT INTO ap.meta_oauth_selection_sessions(id, user_id, cliente_id, graph_api_version, facebook_user_id, user_token_secret_ref, expires_at, granted_scopes, authorization_epoch, flow_started_at)
   VALUES (sid, '00000000-0000-4000-8000-000000000011', '00000000-0000-4000-8000-000000000001', 'v23.0', 'fb-selection-epoch', user_secret, now() + interval '5 minutes', ARRAY[]::text[], 0, now() - interval '1 minute');
   INSERT INTO ap.meta_oauth_selection_candidates(session_id, facebook_page_id, facebook_page_name, instagram_user_id, instagram_username, page_token_secret_ref)
   VALUES (sid, 'page-selection-epoch', 'Selection epoch', 'ig-selection-epoch', 'selectionepoch', page_secret);
@@ -280,26 +343,100 @@ BEGIN
   END IF;
 END $$;
 
--- Session creation is atomic: a missing later candidate ref leaves neither a
--- valid-looking session nor candidate metadata behind.
+-- Vault secret creation, session ownership, and candidates form one atomic
+-- boundary. Failures at every stage must leave no session or credential.
 DO $$
-DECLARE user_secret uuid := vault.create_secret('partial-session-user', 'partial-session-user');
-DECLARE valid_page uuid := vault.create_secret('partial-session-page', 'partial-session-page');
+DECLARE before_count integer; sid uuid; owned_refs uuid[];
 BEGIN
+  SELECT count(*) INTO before_count FROM vault.secrets;
+
+  -- A. First Vault create fails.
   BEGIN
     PERFORM ap.create_meta_oauth_selection_session(
       '00000000-0000-4000-8000-000000000011', '00000000-0000-4000-8000-000000000001',
-      'v23.0', 'fb-partial-session', user_secret, NULL, ARRAY[]::text[], now(),
-      now() + interval '10 minutes', jsonb_build_array(
-        jsonb_build_object('facebook_page_id','partial-a','facebook_page_name','Partial A','instagram_user_id','ig-partial-a','instagram_username','partiala','page_token_secret_ref',valid_page),
-        jsonb_build_object('facebook_page_id','partial-b','facebook_page_name','Partial B','instagram_user_id','ig-partial-b','instagram_username','partialb','page_token_secret_ref',gen_random_uuid())
+      'v23.0', 'fb-atomic-first', '__FAIL_VAULT_CREATE__', NULL, ARRAY[]::text[],
+      clock_timestamp(), 0, clock_timestamp() + interval '10 minutes', jsonb_build_array(
+        jsonb_build_object('facebook_page_id','first-a','facebook_page_name','First A','instagram_user_id','ig-first-a','instagram_username','firsta','page_access_token','first-page-token-a'),
+        jsonb_build_object('facebook_page_id','first-b','facebook_page_name','First B','instagram_user_id','ig-first-b','instagram_username','firstb','page_access_token','first-page-token-b')
       )
     );
-    RAISE EXCEPTION 'partial selection session was accepted';
+    RAISE EXCEPTION 'first Vault failure was accepted';
   EXCEPTION WHEN SQLSTATE 'P0001' THEN NULL;
   END;
-  IF EXISTS (SELECT 1 FROM ap.meta_oauth_selection_sessions WHERE facebook_user_id = 'fb-partial-session') THEN
-    RAISE EXCEPTION 'partial callback session was persisted';
+
+  -- B. Second Page token fails after user and first Page secrets were created.
+  BEGIN
+    PERFORM ap.create_meta_oauth_selection_session(
+      '00000000-0000-4000-8000-000000000011', '00000000-0000-4000-8000-000000000001',
+      'v23.0', 'fb-atomic-second', 'atomic-user-token-second', NULL, ARRAY[]::text[],
+      clock_timestamp(), 0, clock_timestamp() + interval '10 minutes', jsonb_build_array(
+        jsonb_build_object('facebook_page_id','second-a','facebook_page_name','Second A','instagram_user_id','ig-second-a','instagram_username','seconda','page_access_token','second-page-token-a'),
+        jsonb_build_object('facebook_page_id','second-b','facebook_page_name','Second B','instagram_user_id','ig-second-b','instagram_username','secondb','page_access_token','__FAIL_VAULT_CREATE__')
+      )
+    );
+    RAISE EXCEPTION 'second Vault failure was accepted';
+  EXCEPTION WHEN SQLSTATE 'P0001' THEN NULL;
+  END;
+
+  -- C. Session constraint failure occurs after the user secret is created.
+  BEGIN
+    PERFORM ap.create_meta_oauth_selection_session(
+      '00000000-0000-4000-8000-000000000011', '00000000-0000-4000-8000-000000000001',
+      'latest', 'fb-atomic-session', 'atomic-user-token-session', NULL, ARRAY[]::text[],
+      clock_timestamp(), 0, clock_timestamp() + interval '10 minutes', jsonb_build_array(
+        jsonb_build_object('facebook_page_id','session-a','facebook_page_name','Session A','instagram_user_id','ig-session-a','instagram_username','sessiona','page_access_token','session-page-token-a'),
+        jsonb_build_object('facebook_page_id','session-b','facebook_page_name','Session B','instagram_user_id','ig-session-b','instagram_username','sessionb','page_access_token','session-page-token-b')
+      )
+    );
+    RAISE EXCEPTION 'invalid session insert was accepted';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+
+  -- D. Duplicate candidate fails after both Page secrets were created.
+  BEGIN
+    PERFORM ap.create_meta_oauth_selection_session(
+      '00000000-0000-4000-8000-000000000011', '00000000-0000-4000-8000-000000000001',
+      'v23.0', 'fb-atomic-candidate', 'atomic-user-token-candidate', NULL, ARRAY[]::text[],
+      clock_timestamp(), 0, clock_timestamp() + interval '10 minutes', jsonb_build_array(
+        jsonb_build_object('facebook_page_id','duplicate','facebook_page_name','Duplicate A','instagram_user_id','ig-duplicate','instagram_username','duplicatea','page_access_token','candidate-page-token-a'),
+        jsonb_build_object('facebook_page_id','duplicate','facebook_page_name','Duplicate B','instagram_user_id','ig-duplicate','instagram_username','duplicateb','page_access_token','candidate-page-token-b')
+      )
+    );
+    RAISE EXCEPTION 'duplicate candidate insert was accepted';
+  EXCEPTION WHEN unique_violation THEN NULL;
+  END;
+
+  IF (SELECT count(*) FROM vault.secrets) <> before_count
+     OR EXISTS (SELECT 1 FROM ap.meta_oauth_selection_sessions WHERE facebook_user_id LIKE 'fb-atomic-%') THEN
+    RAISE EXCEPTION 'atomic session failure left Vault or session residue';
+  END IF;
+
+  -- E/F. Success owns every ref; expiry cleanup removes session and secrets.
+  SELECT ap.create_meta_oauth_selection_session(
+    '00000000-0000-4000-8000-000000000011', '00000000-0000-4000-8000-000000000001',
+    'v23.0', 'fb-atomic-success', 'atomic-user-token-success', NULL, ARRAY[]::text[],
+    clock_timestamp(), 0, clock_timestamp() + interval '10 minutes', jsonb_build_array(
+      jsonb_build_object('facebook_page_id','success-a','facebook_page_name','Success A','instagram_user_id','ig-success-a','instagram_username','successa','page_access_token','success-page-token-a'),
+      jsonb_build_object('facebook_page_id','success-b','facebook_page_name','Success B','instagram_user_id','ig-success-b','instagram_username','successb','page_access_token','success-page-token-b')
+    )
+  ) INTO sid;
+  SELECT array_agg(secret_ref) INTO owned_refs FROM (
+    SELECT user_token_secret_ref AS secret_ref FROM ap.meta_oauth_selection_sessions WHERE id = sid
+    UNION ALL
+    SELECT page_token_secret_ref FROM ap.meta_oauth_selection_candidates WHERE session_id = sid
+  ) refs;
+  IF cardinality(owned_refs) <> 3
+     OR EXISTS (SELECT 1 FROM unnest(owned_refs) ref WHERE NOT EXISTS (SELECT 1 FROM vault.secrets WHERE id = ref)) THEN
+    RAISE EXCEPTION 'successful session does not own all Vault refs';
+  END IF;
+  UPDATE ap.meta_oauth_selection_sessions
+     SET created_at = clock_timestamp() - interval '2 seconds',
+         expires_at = clock_timestamp() - interval '1 second'
+   WHERE id = sid;
+  PERFORM ap.cleanup_expired_meta_oauth_sessions(20);
+  IF EXISTS (SELECT 1 FROM ap.meta_oauth_selection_sessions WHERE id = sid)
+     OR EXISTS (SELECT 1 FROM vault.secrets WHERE id = ANY(owned_refs)) THEN
+    RAISE EXCEPTION 'expired atomic session cleanup did not remove owned refs';
   END IF;
 END $$;
 
@@ -322,11 +459,24 @@ END $$;
 DO $$ BEGIN
   IF EXISTS (
     SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-    WHERE n.nspname = 'ap' AND c.relname IN ('instagram_connections','meta_oauth_states','meta_oauth_selection_sessions','meta_oauth_selection_candidates')
+    WHERE n.nspname = 'ap' AND c.relname IN ('instagram_connections','meta_authorizations','meta_oauth_states','meta_oauth_selection_sessions','meta_oauth_selection_candidates')
       AND c.relrowsecurity IS NOT TRUE
   ) THEN RAISE EXCEPTION 'Meta table missing RLS'; END IF;
   IF has_table_privilege('anon', 'ap.instagram_connections', 'SELECT')
-     OR has_table_privilege('authenticated', 'ap.meta_oauth_states', 'SELECT') THEN
+     OR has_table_privilege('authenticated', 'ap.meta_oauth_states', 'SELECT')
+     OR has_table_privilege('authenticated', 'ap.meta_authorizations', 'SELECT') THEN
     RAISE EXCEPTION 'frontend role has direct Meta connection table access';
+  END IF;
+  IF EXISTS (
+       SELECT 1
+       FROM pg_proc p
+       CROSS JOIN LATERAL aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner))) acl
+       WHERE p.oid = 'ap.complete_meta_oauth_connection(uuid,uuid,text,text,text,timestamptz,text[],timestamptz,bigint,jsonb)'::regprocedure
+         AND acl.grantee = 0 AND acl.privilege_type = 'EXECUTE'
+     )
+     OR has_function_privilege('anon', 'ap.create_meta_oauth_selection_session(uuid,uuid,text,text,text,timestamptz,text[],timestamptz,bigint,timestamptz,jsonb)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'ap.capture_meta_authorization_epoch(text,timestamptz)', 'EXECUTE')
+     OR NOT has_function_privilege('service_role', 'ap.complete_meta_oauth_connection(uuid,uuid,text,text,text,timestamptz,text[],timestamptz,bigint,jsonb)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'raw-token RPC grants are unsafe';
   END IF;
 END $$;

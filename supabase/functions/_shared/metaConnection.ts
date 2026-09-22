@@ -4,7 +4,7 @@ import {
   ConfigAuthorizationError,
 } from "../ap-config/authorization.ts";
 
-const corsBaseHeaders = {
+const corsBaseHeaders: Record<string, string> = {
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-ap-cliente-id",
   "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",

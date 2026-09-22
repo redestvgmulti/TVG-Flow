@@ -17,4 +17,3 @@ BEGIN
 END $$;
 CREATE TRIGGER meta_test_connection_delay BEFORE UPDATE ON ap.instagram_connections
 FOR EACH ROW EXECUTE FUNCTION ap.meta_test_connection_delay();
-

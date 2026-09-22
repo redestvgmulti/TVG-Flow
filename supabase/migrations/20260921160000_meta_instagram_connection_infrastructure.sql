@@ -64,10 +64,11 @@ CREATE TABLE ap.meta_oauth_states (
     user_id uuid NOT NULL REFERENCES public.profissionais(id) ON DELETE CASCADE,
     cliente_id uuid NOT NULL REFERENCES public.clientes(id) ON DELETE CASCADE,
     redirect_target text NOT NULL CHECK (redirect_target = '/admin/settings/integrations/meta/callback'),
+    flow_started_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     created_at timestamptz NOT NULL DEFAULT now(),
     expires_at timestamptz NOT NULL,
     consumed_at timestamptz,
-    CONSTRAINT meta_oauth_state_expiry_check CHECK (expires_at > created_at)
+    CONSTRAINT meta_oauth_state_expiry_check CHECK (expires_at > flow_started_at)
 );
 CREATE INDEX idx_meta_oauth_states_expiry ON ap.meta_oauth_states(expires_at) WHERE consumed_at IS NULL;
 
@@ -81,7 +82,7 @@ CREATE TABLE ap.meta_oauth_selection_sessions (
     user_token_expires_at timestamptz,
     granted_scopes text[] NOT NULL DEFAULT ARRAY[]::text[],
     authorization_epoch bigint NOT NULL DEFAULT 0,
-    oauth_started_at timestamptz NOT NULL DEFAULT now(),
+    flow_started_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     created_at timestamptz NOT NULL DEFAULT now(),
     expires_at timestamptz NOT NULL,
     consumed_at timestamptz,
@@ -219,6 +220,31 @@ BEGIN
     );
 END; $$;
 
+CREATE OR REPLACE FUNCTION ap.create_meta_oauth_state(
+    p_state_hash text,
+    p_user_id uuid,
+    p_cliente_id uuid,
+    p_redirect_target text
+)
+RETURNS timestamptz
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE v_flow_started_at timestamptz := clock_timestamp();
+BEGIN
+    IF session_user <> 'postgres' AND COALESCE(auth.jwt() ->> 'role', '') <> 'service_role' THEN
+        RAISE EXCEPTION 'SERVICE_ROLE_REQUIRED' USING ERRCODE = '42501';
+    END IF;
+    IF NOT ap.revalidate_meta_connection_actor(p_user_id, p_cliente_id) THEN
+        RAISE EXCEPTION 'META_ACTOR_NOT_AUTHORIZED' USING ERRCODE = '42501';
+    END IF;
+    INSERT INTO ap.meta_oauth_states (
+      state_hash, user_id, cliente_id, redirect_target, flow_started_at, expires_at
+    ) VALUES (
+      p_state_hash, p_user_id, p_cliente_id, p_redirect_target,
+      v_flow_started_at, v_flow_started_at + interval '10 minutes'
+    );
+    RETURN v_flow_started_at;
+END; $$;
+
 CREATE OR REPLACE FUNCTION ap.get_meta_connection_status()
 RETURNS TABLE (
     connected boolean, status text, username text, page_name text,
@@ -259,11 +285,13 @@ BEGIN
 END; $$;
 
 REVOKE ALL ON FUNCTION ap.meta_create_secret(text, text, text), ap.meta_read_secret(uuid),
-    ap.meta_delete_secret(uuid), ap.consume_meta_oauth_state(text), ap.revalidate_meta_connection_actor(uuid, uuid),
+    ap.meta_delete_secret(uuid), ap.create_meta_oauth_state(text, uuid, uuid, text),
+    ap.consume_meta_oauth_state(text), ap.revalidate_meta_connection_actor(uuid, uuid),
     ap.get_meta_connection_status(),
     ap.set_instagram_connection_updated_at() FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION ap.meta_create_secret(text, text, text), ap.meta_read_secret(uuid),
-    ap.meta_delete_secret(uuid), ap.consume_meta_oauth_state(text), ap.revalidate_meta_connection_actor(uuid, uuid)
+    ap.meta_delete_secret(uuid), ap.create_meta_oauth_state(text, uuid, uuid, text),
+    ap.consume_meta_oauth_state(text), ap.revalidate_meta_connection_actor(uuid, uuid)
     TO service_role;
 GRANT EXECUTE ON FUNCTION ap.get_meta_connection_status() TO authenticated;
 
@@ -332,14 +360,14 @@ END; $$;
 
 CREATE OR REPLACE FUNCTION ap.meta_lock_authorization(
     p_facebook_user_id text,
-    p_oauth_started_at timestamptz,
+    p_flow_started_at timestamptz,
     p_expected_epoch bigint DEFAULT NULL
 )
 RETURNS bigint
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 DECLARE v_authorization ap.meta_authorizations%ROWTYPE;
 BEGIN
-    IF p_facebook_user_id IS NULL OR p_facebook_user_id = '' OR p_oauth_started_at IS NULL THEN
+    IF p_facebook_user_id IS NULL OR p_facebook_user_id = '' OR p_flow_started_at IS NULL THEN
       RAISE EXCEPTION 'META_AUTHORIZATION_INVALID' USING ERRCODE = '22023';
     END IF;
     PERFORM pg_advisory_xact_lock(hashtext('ap.meta.authorization:' || p_facebook_user_id));
@@ -348,7 +376,7 @@ BEGIN
     SELECT * INTO v_authorization FROM ap.meta_authorizations
       WHERE facebook_user_id = p_facebook_user_id FOR UPDATE;
     IF v_authorization.last_deauthorized_at IS NOT NULL
-       AND p_oauth_started_at <= v_authorization.last_deauthorized_at THEN
+       AND p_flow_started_at <= v_authorization.last_deauthorized_at THEN
       RAISE EXCEPTION 'META_AUTHORIZATION_REVOKED_DURING_FLOW' USING ERRCODE = '28000';
     END IF;
     IF p_expected_epoch IS NOT NULL AND p_expected_epoch <> v_authorization.authorization_epoch THEN
@@ -357,15 +385,32 @@ BEGIN
     RETURN v_authorization.authorization_epoch;
 END; $$;
 
+-- Snapshot the current authorization epoch only after the callback has learned
+-- the canonical Meta user. The temporal guard rejects an OAuth flow that began
+-- before the most recent global deauthorization.
+CREATE OR REPLACE FUNCTION ap.capture_meta_authorization_epoch(
+    p_facebook_user_id text,
+    p_flow_started_at timestamptz
+)
+RETURNS bigint
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+BEGIN
+    IF session_user <> 'postgres' AND COALESCE(auth.jwt() ->> 'role', '') <> 'service_role' THEN
+      RAISE EXCEPTION 'SERVICE_ROLE_REQUIRED' USING ERRCODE = '42501';
+    END IF;
+    RETURN ap.meta_lock_authorization(p_facebook_user_id, p_flow_started_at);
+END; $$;
+
 CREATE OR REPLACE FUNCTION ap.create_meta_oauth_selection_session(
     p_user_id uuid, p_cliente_id uuid, p_graph_api_version text,
-    p_facebook_user_id text, p_user_token_secret_ref uuid, p_user_token_expires_at timestamptz,
-    p_granted_scopes text[], p_oauth_started_at timestamptz, p_expires_at timestamptz,
-    p_candidates jsonb
+    p_facebook_user_id text, p_user_access_token text, p_user_token_expires_at timestamptz,
+    p_granted_scopes text[], p_flow_started_at timestamptz, p_authorization_epoch bigint,
+    p_expires_at timestamptz, p_candidates jsonb
 )
 RETURNS uuid
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 DECLARE v_session_id uuid; v_epoch bigint; v_candidate record;
+DECLARE v_user_secret_ref uuid; v_page_secret_ref uuid;
 BEGIN
     IF session_user <> 'postgres' AND COALESCE(auth.jwt() ->> 'role', '') <> 'service_role' THEN
       RAISE EXCEPTION 'SERVICE_ROLE_REQUIRED' USING ERRCODE = '42501';
@@ -376,35 +421,48 @@ BEGIN
     IF jsonb_typeof(p_candidates) <> 'array' OR jsonb_array_length(p_candidates) < 2 THEN
       RAISE EXCEPTION 'META_SELECTION_INVALID' USING ERRCODE = '22023';
     END IF;
-    v_epoch := ap.meta_lock_authorization(p_facebook_user_id, p_oauth_started_at);
-    PERFORM ap.meta_assert_secret_exists(p_user_token_secret_ref);
-    FOR v_candidate IN SELECT * FROM jsonb_to_recordset(p_candidates) AS c(
-      facebook_page_id text, facebook_page_name text, instagram_user_id text,
-      instagram_username text, page_token_secret_ref uuid
-    ) LOOP
-      IF v_candidate.facebook_page_id IS NULL OR v_candidate.instagram_user_id IS NULL
-         OR v_candidate.page_token_secret_ref IS NULL THEN
-        RAISE EXCEPTION 'META_SELECTION_INVALID' USING ERRCODE = '22023';
-      END IF;
-      PERFORM ap.meta_assert_secret_exists(v_candidate.page_token_secret_ref);
-    END LOOP;
+    IF p_authorization_epoch IS NULL THEN
+      RAISE EXCEPTION 'META_AUTHORIZATION_INVALID' USING ERRCODE = '22023';
+    END IF;
+    v_epoch := ap.meta_lock_authorization(
+      p_facebook_user_id, p_flow_started_at, p_authorization_epoch
+    );
+    v_user_secret_ref := ap.meta_create_secret(
+      p_user_access_token,
+      'ap_meta_user_' || replace(gen_random_uuid()::text, '-', ''),
+      'Temporary Meta OAuth user token owned by selection session'
+    );
     INSERT INTO ap.meta_oauth_selection_sessions (
       user_id, cliente_id, graph_api_version, facebook_user_id, user_token_secret_ref,
-      user_token_expires_at, granted_scopes, authorization_epoch, oauth_started_at, expires_at
+      user_token_expires_at, granted_scopes, authorization_epoch, flow_started_at, expires_at
     ) VALUES (
-      p_user_id, p_cliente_id, p_graph_api_version, p_facebook_user_id, p_user_token_secret_ref,
+      p_user_id, p_cliente_id, p_graph_api_version, p_facebook_user_id, v_user_secret_ref,
       p_user_token_expires_at, COALESCE(p_granted_scopes, ARRAY[]::text[]), v_epoch,
-      p_oauth_started_at, p_expires_at
+      p_flow_started_at, p_expires_at
     ) RETURNING id INTO v_session_id;
-    INSERT INTO ap.meta_oauth_selection_candidates (
-      session_id, facebook_page_id, facebook_page_name, instagram_user_id,
-      instagram_username, page_token_secret_ref
-    ) SELECT v_session_id, c.facebook_page_id, c.facebook_page_name, c.instagram_user_id,
-      c.instagram_username, c.page_token_secret_ref
-      FROM jsonb_to_recordset(p_candidates) AS c(
-        facebook_page_id text, facebook_page_name text, instagram_user_id text,
-        instagram_username text, page_token_secret_ref uuid
+    FOR v_candidate IN SELECT * FROM jsonb_to_recordset(p_candidates) AS c(
+      facebook_page_id text, facebook_page_name text, instagram_user_id text,
+      instagram_username text, page_access_token text
+    ) LOOP
+      IF COALESCE(v_candidate.facebook_page_id, '') = ''
+         OR COALESCE(v_candidate.instagram_user_id, '') = ''
+         OR COALESCE(v_candidate.instagram_username, '') = ''
+         OR COALESCE(v_candidate.page_access_token, '') = '' THEN
+        RAISE EXCEPTION 'META_SELECTION_INVALID' USING ERRCODE = '22023';
+      END IF;
+      v_page_secret_ref := ap.meta_create_secret(
+        v_candidate.page_access_token,
+        'ap_meta_page_' || replace(gen_random_uuid()::text, '-', ''),
+        'Temporary Meta Page access token owned by selection session'
       );
+      INSERT INTO ap.meta_oauth_selection_candidates (
+        session_id, facebook_page_id, facebook_page_name, instagram_user_id,
+        instagram_username, page_token_secret_ref
+      ) VALUES (
+        v_session_id, v_candidate.facebook_page_id, v_candidate.facebook_page_name,
+        v_candidate.instagram_user_id, v_candidate.instagram_username, v_page_secret_ref
+      );
+    END LOOP;
     RETURN v_session_id;
 END; $$;
 
@@ -415,7 +473,7 @@ CREATE OR REPLACE FUNCTION ap.reconnect_meta_connection(
     p_page_secret_ref uuid, p_user_secret_ref uuid,
     p_granted_scopes text[], p_capabilities jsonb,
     p_graph_api_version text, p_expires_at timestamptz,
-    p_oauth_started_at timestamptz DEFAULT now(), p_authorization_epoch bigint DEFAULT NULL
+    p_flow_started_at timestamptz, p_authorization_epoch bigint
 )
 RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
@@ -431,7 +489,12 @@ BEGIN
     IF p_instagram_user_id IS NULL OR p_instagram_user_id = '' THEN
         RAISE EXCEPTION 'META_CONNECTION_INVALID' USING ERRCODE = '22023';
     END IF;
-    v_epoch := ap.meta_lock_authorization(p_facebook_user_id, p_oauth_started_at, p_authorization_epoch);
+    IF p_authorization_epoch IS NULL THEN
+        RAISE EXCEPTION 'META_AUTHORIZATION_INVALID' USING ERRCODE = '22023';
+    END IF;
+    v_epoch := ap.meta_lock_authorization(
+      p_facebook_user_id, p_flow_started_at, p_authorization_epoch
+    );
     PERFORM pg_advisory_xact_lock(hashtext('ap.meta.connection:' || p_cliente_id::text || ':meta:' || p_instagram_user_id));
     PERFORM pg_advisory_xact_lock(hashtext('ap.meta.primary:' || p_cliente_id::text));
     PERFORM ap.meta_assert_secret_exists(p_page_secret_ref);
@@ -483,6 +546,63 @@ BEGIN
     RETURN jsonb_build_object('connection_id', v_connection_id, 'connection_version', v_version);
 END; $$;
 
+-- Single-account OAuth completion is one PostgreSQL/Vault transaction. Raw
+-- tokens are accepted only from service_role and are persisted exclusively by
+-- Vault; the result contains connection metadata only.
+CREATE OR REPLACE FUNCTION ap.complete_meta_oauth_connection(
+    p_user_id uuid, p_cliente_id uuid, p_graph_api_version text,
+    p_facebook_user_id text, p_user_access_token text, p_user_token_expires_at timestamptz,
+    p_granted_scopes text[], p_flow_started_at timestamptz, p_authorization_epoch bigint,
+    p_page jsonb
+)
+RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE v_epoch bigint; v_user_secret_ref uuid; v_page_secret_ref uuid;
+DECLARE v_result jsonb;
+DECLARE v_page_id text := p_page ->> 'facebook_page_id';
+DECLARE v_page_name text := p_page ->> 'facebook_page_name';
+DECLARE v_instagram_user_id text := p_page ->> 'instagram_user_id';
+DECLARE v_instagram_username text := p_page ->> 'instagram_username';
+DECLARE v_page_access_token text := p_page ->> 'page_access_token';
+BEGIN
+    IF session_user <> 'postgres' AND COALESCE(auth.jwt() ->> 'role', '') <> 'service_role' THEN
+      RAISE EXCEPTION 'SERVICE_ROLE_REQUIRED' USING ERRCODE = '42501';
+    END IF;
+    IF NOT ap.revalidate_meta_connection_actor(p_user_id, p_cliente_id) THEN
+      RAISE EXCEPTION 'META_ACTOR_NOT_AUTHORIZED' USING ERRCODE = '42501';
+    END IF;
+    IF p_authorization_epoch IS NULL OR COALESCE(v_page_id, '') = ''
+       OR COALESCE(v_page_name, '') = '' OR COALESCE(v_instagram_user_id, '') = ''
+       OR COALESCE(v_instagram_username, '') = '' OR COALESCE(v_page_access_token, '') = '' THEN
+      RAISE EXCEPTION 'META_CONNECTION_INVALID' USING ERRCODE = '22023';
+    END IF;
+    v_epoch := ap.meta_lock_authorization(
+      p_facebook_user_id, p_flow_started_at, p_authorization_epoch
+    );
+    v_user_secret_ref := ap.meta_create_secret(
+      p_user_access_token,
+      'ap_meta_user_' || replace(gen_random_uuid()::text, '-', ''),
+      'Meta OAuth user token owned by active connection'
+    );
+    v_page_secret_ref := ap.meta_create_secret(
+      v_page_access_token,
+      'ap_meta_page_' || replace(gen_random_uuid()::text, '-', ''),
+      'Meta Page access token owned by active connection'
+    );
+    SELECT ap.reconnect_meta_connection(
+      p_cliente_id, p_user_id, p_facebook_user_id, v_instagram_user_id,
+      v_instagram_username, v_page_id, v_page_name, v_page_secret_ref,
+      v_user_secret_ref, COALESCE(p_granted_scopes, ARRAY[]::text[]),
+      jsonb_build_object(
+        'radar_read', COALESCE(p_granted_scopes, ARRAY[]::text[]) @> ARRAY['pages_show_list','pages_read_engagement','instagram_basic']::text[],
+        'publishing', COALESCE(p_granted_scopes, ARRAY[]::text[]) @> ARRAY['instagram_content_publish']::text[],
+        'comments', COALESCE(p_granted_scopes, ARRAY[]::text[]) @> ARRAY['instagram_manage_comments']::text[],
+        'messages', COALESCE(p_granted_scopes, ARRAY[]::text[]) @> ARRAY['instagram_manage_messages']::text[]
+      ), p_graph_api_version, p_user_token_expires_at, p_flow_started_at, v_epoch
+    ) INTO v_result;
+    RETURN v_result;
+END; $$;
+
 CREATE OR REPLACE FUNCTION ap.disconnect_meta_connection(p_cliente_id uuid, p_actor_user_id uuid)
 RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
@@ -515,7 +635,7 @@ END; $$;
 CREATE OR REPLACE FUNCTION ap.mark_meta_connections_revoked(p_facebook_user_id text)
 RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
-DECLARE v_ids jsonb;
+DECLARE v_ids jsonb; v_deauthorized_at timestamptz;
 BEGIN
     IF session_user <> 'postgres' AND COALESCE(auth.jwt() ->> 'role', '') <> 'service_role' THEN
         RAISE EXCEPTION 'SERVICE_ROLE_REQUIRED' USING ERRCODE = '42501';
@@ -523,17 +643,22 @@ BEGIN
     -- The same lock is taken by reconnect/selection before they can write a
     -- connected row. The epoch rejects OAuth material that predates this event.
     PERFORM pg_advisory_xact_lock(hashtext('ap.meta.authorization:' || p_facebook_user_id));
+    v_deauthorized_at := clock_timestamp();
     INSERT INTO ap.meta_authorizations (facebook_user_id, authorization_epoch, last_deauthorized_at)
-      VALUES (p_facebook_user_id, 1, now())
+      VALUES (p_facebook_user_id, 1, v_deauthorized_at)
       ON CONFLICT (facebook_user_id) DO UPDATE SET
         authorization_epoch = ap.meta_authorizations.authorization_epoch + 1,
-        last_deauthorized_at = now(), updated_at = now();
+        last_deauthorized_at = GREATEST(
+          COALESCE(ap.meta_authorizations.last_deauthorized_at, '-infinity'::timestamptz),
+          v_deauthorized_at
+        ),
+        updated_at = v_deauthorized_at;
     WITH locked AS (
       SELECT id FROM ap.instagram_connections WHERE provider = 'meta' AND facebook_user_id = p_facebook_user_id FOR UPDATE
     ), changed AS (
       UPDATE ap.instagram_connections c SET status = 'revoked', is_primary = false, capabilities = '{}'::jsonb,
-        granted_scopes = ARRAY[]::text[], deauthorized_at = now(), last_error_code = 'META_ACCESS_REVOKED',
-        last_error_at = now(), secret_cleanup_pending = (c.token_secret_ref IS NOT NULL OR c.revocation_secret_ref IS NOT NULL),
+        granted_scopes = ARRAY[]::text[], deauthorized_at = v_deauthorized_at, last_error_code = 'META_ACCESS_REVOKED',
+        last_error_at = v_deauthorized_at, secret_cleanup_pending = (c.token_secret_ref IS NOT NULL OR c.revocation_secret_ref IS NOT NULL),
         secret_cleanup_last_error = NULL, secret_cleanup_last_attempt_at = NULL,
         connection_version = c.connection_version + 1
       FROM locked WHERE c.id = locked.id RETURNING c.id
@@ -638,7 +763,7 @@ BEGIN
         'comments', v_session.granted_scopes @> ARRAY['instagram_manage_comments']::text[],
         'messages', v_session.granted_scopes @> ARRAY['instagram_manage_messages']::text[]
       ), v_session.graph_api_version, v_session.user_token_expires_at,
-      v_session.oauth_started_at, v_session.authorization_epoch
+      v_session.flow_started_at, v_session.authorization_epoch
     ) INTO v_result;
     FOR v_other IN SELECT id, page_token_secret_ref FROM ap.meta_oauth_selection_candidates
       WHERE session_id = v_session.id AND id <> v_candidate.id FOR UPDATE
@@ -659,13 +784,17 @@ END; $$;
 
 REVOKE ALL ON FUNCTION ap.meta_delete_secret_required(uuid), ap.meta_assert_secret_exists(uuid),
   ap.meta_delete_connection_secret(uuid, uuid, boolean), ap.meta_lock_authorization(text, timestamptz, bigint),
-  ap.create_meta_oauth_selection_session(uuid, uuid, text, text, uuid, timestamptz, text[], timestamptz, timestamptz, jsonb),
+  ap.capture_meta_authorization_epoch(text, timestamptz),
+  ap.create_meta_oauth_selection_session(uuid, uuid, text, text, text, timestamptz, text[], timestamptz, bigint, timestamptz, jsonb),
   ap.reconnect_meta_connection(uuid, uuid, text, text, text, text, text, uuid, uuid, text[], jsonb, text, timestamptz, timestamptz, bigint),
+  ap.complete_meta_oauth_connection(uuid, uuid, text, text, text, timestamptz, text[], timestamptz, bigint, jsonb),
   ap.select_meta_oauth_candidate(uuid, uuid, uuid),
   ap.disconnect_meta_connection(uuid, uuid), ap.mark_meta_connections_revoked(text), ap.cleanup_revoked_meta_connection(uuid),
   ap.record_meta_secret_cleanup_failure(uuid, text), ap.cleanup_expired_meta_oauth_sessions(integer) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION ap.create_meta_oauth_selection_session(uuid, uuid, text, text, uuid, timestamptz, text[], timestamptz, timestamptz, jsonb),
+GRANT EXECUTE ON FUNCTION ap.capture_meta_authorization_epoch(text, timestamptz),
+  ap.create_meta_oauth_selection_session(uuid, uuid, text, text, text, timestamptz, text[], timestamptz, bigint, timestamptz, jsonb),
   ap.reconnect_meta_connection(uuid, uuid, text, text, text, text, text, uuid, uuid, text[], jsonb, text, timestamptz, timestamptz, bigint),
+  ap.complete_meta_oauth_connection(uuid, uuid, text, text, text, timestamptz, text[], timestamptz, bigint, jsonb),
   ap.select_meta_oauth_candidate(uuid, uuid, uuid),
   ap.disconnect_meta_connection(uuid, uuid), ap.mark_meta_connections_revoked(text), ap.cleanup_revoked_meta_connection(uuid),
   ap.record_meta_secret_cleanup_failure(uuid, text), ap.cleanup_expired_meta_oauth_sessions(integer) TO service_role;

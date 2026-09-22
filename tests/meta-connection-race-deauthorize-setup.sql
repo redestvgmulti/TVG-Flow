@@ -19,7 +19,7 @@ SELECT vault.create_secret('deauth-new-user', 'deauth-new-user');
 
 INSERT INTO ap.instagram_connections(cliente_id, provider, status, is_primary, facebook_user_id, instagram_user_id, instagram_username, facebook_page_id, token_secret_ref, revocation_secret_ref, connected_at, graph_api_version)
 VALUES ('00000000-0000-4000-8000-000000000002', 'meta', 'connected', false, 'fb-deauth-selection', 'ig-deauth-selection', 'oldselection', 'page-old-selection', vault.create_secret('deauth-selection-old-page', 'deauth-selection-old-page'), vault.create_secret('deauth-selection-old-user', 'deauth-selection-old-user'), now(), 'v23.0');
-INSERT INTO ap.meta_oauth_selection_sessions(id, user_id, cliente_id, graph_api_version, facebook_user_id, user_token_secret_ref, expires_at, granted_scopes, authorization_epoch, oauth_started_at)
+INSERT INTO ap.meta_oauth_selection_sessions(id, user_id, cliente_id, graph_api_version, facebook_user_id, user_token_secret_ref, expires_at, granted_scopes, authorization_epoch, flow_started_at)
 VALUES ('00000000-0000-4000-8000-000000000301', '00000000-0000-4000-8000-000000000011', '00000000-0000-4000-8000-000000000002', 'v23.0', 'fb-deauth-selection', vault.create_secret('deauth-selection-user', 'deauth-selection-user'), now() + interval '10 minutes', ARRAY[]::text[], 0, now());
 INSERT INTO ap.meta_oauth_selection_candidates(id, session_id, facebook_page_id, facebook_page_name, instagram_user_id, instagram_username, page_token_secret_ref)
 VALUES ('00000000-0000-4000-8000-000000000302', '00000000-0000-4000-8000-000000000301', 'page-deauth-selection', 'Deauth selection', 'ig-deauth-selection', 'selectionrace', vault.create_secret('deauth-selection-page', 'deauth-selection-page'));

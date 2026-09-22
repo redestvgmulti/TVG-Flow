@@ -4,6 +4,6 @@ SELECT ap.reconnect_meta_connection(
   'fb-race', 'ig-race', 'new', 'page-new', 'New',
   (SELECT id FROM vault.secrets WHERE name = 'race-new-page'),
   (SELECT id FROM vault.secrets WHERE name = 'race-new-user'),
-  ARRAY['instagram_basic'], '{}'::jsonb, 'v23.0', now() + interval '1 hour'
+  ARRAY['instagram_basic'], '{}'::jsonb, 'v23.0', now() + interval '1 hour',
+  clock_timestamp(), 0
 );
-

@@ -25,15 +25,12 @@ Deno.serve(async (req: Request) => {
     await cleanupExpiredMetaSelectionSessions(admin);
     const config = readMetaAppConfig();
     const state = createOAuthState();
-    const { error } = await admin.schema("ap").from("meta_oauth_states").insert(
-      {
-        state_hash: await hashOAuthState(state),
-        user_id: actor.userId,
-        cliente_id: actor.clienteId,
-        redirect_target: "/admin/settings/integrations/meta/callback",
-        expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-      },
-    );
+    const { error } = await admin.schema("ap").rpc("create_meta_oauth_state", {
+      p_state_hash: await hashOAuthState(state),
+      p_user_id: actor.userId,
+      p_cliente_id: actor.clienteId,
+      p_redirect_target: "/admin/settings/integrations/meta/callback",
+    });
     if (error) throw new Error("META_STATE_STORE_FAILED");
     return json({ authorize_url: buildMetaAuthorizeUrl(config, state) }, 200, cors);
   } catch (error) {
