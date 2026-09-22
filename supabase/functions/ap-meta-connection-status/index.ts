@@ -6,6 +6,7 @@ import {
   metaCorsHeaders,
   requireMetaAdmin,
 } from "../_shared/metaConnection.ts";
+import { isMetaAppConfigured } from "../_shared/metaOAuth.ts";
 
 type MetaSelectionCandidateResponse = {
   id: string;
@@ -60,6 +61,7 @@ Deno.serve(async (req: Request) => {
     const expired = connection?.status === "connected" && connection.expires_at &&
       new Date(connection.expires_at).getTime() <= Date.now();
     return json({
+      oauth_available: isMetaAppConfigured(),
       connected: connection?.status === "connected" && !expired,
       status: expired ? "expired" : (connection?.status ?? "disconnected"),
       username: connection?.instagram_username ?? null,

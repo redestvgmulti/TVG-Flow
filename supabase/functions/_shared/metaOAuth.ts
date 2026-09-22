@@ -31,6 +31,19 @@ export function readMetaAppConfig(env = Deno.env.toObject()): MetaAppConfig {
   return { appId, appSecret, redirectUri, graphApiVersion };
 }
 
+/**
+ * Safe for UI/status responses: it reveals only whether the server has a
+ * complete Meta App configuration, never which value is missing or secret.
+ */
+export function isMetaAppConfigured(env = Deno.env.toObject()): boolean {
+  try {
+    readMetaAppConfig(env);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function createOAuthState() {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
   return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(
