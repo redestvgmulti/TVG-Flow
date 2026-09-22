@@ -18,6 +18,7 @@ import CompanyDetails from './pages/admin/CompanyDetails'
 import AdminContent from './pages/admin/AdminContent'
 import Meetings from './pages/admin/Meetings'
 import AutoPublisher from './pages/admin/AutoPublisher'
+import MetaOAuthCallback from './pages/admin/MetaOAuthCallback'
 import EmployeeMode from './pages/admin/EmployeeMode'
 import StaffDashboard from './pages/staff/Dashboard'
 import StaffTasks from './pages/staff/Tasks'
@@ -109,6 +110,7 @@ function App() {
                     <Route path="profile" element={<StaffProfile />} />
                     <Route path="reports" element={<Reports />} />
                     <Route path="autopublisher/:tab?" element={<AutoPublisher />} />
+                    <Route path="settings/integrations/meta/callback" element={<MetaOAuthCallback />} />
                     <Route path="materias" element={<MyNewsWork />} />
                   </Route>
 

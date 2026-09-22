@@ -102,6 +102,26 @@ verify_jwt = true
 [functions.ap-instagram-publisher]
 verify_jwt = false
 
+[functions.ap-meta-oauth-start]
+verify_jwt = true
+
+# Meta redirects directly to this public callback. Authentication is the
+# single-use, expiring state stored server-side by ap-meta-oauth-start.
+[functions.ap-meta-oauth-callback]
+verify_jwt = false
+
+[functions.ap-meta-connection-status]
+verify_jwt = true
+
+[functions.ap-meta-oauth-select]
+verify_jwt = true
+
+[functions.ap-meta-disconnect]
+verify_jwt = true
+
+[functions.ap-meta-deauthorize]
+verify_jwt = false
+
 [functions.meeting-reminders]
 verify_jwt = false
 

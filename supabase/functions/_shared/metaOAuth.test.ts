@@ -1,0 +1,296 @@
+import {
+  buildMetaAuthorizeUrl,
+  capabilitiesFromScopes,
+  createOAuthState,
+  exchangeMetaOAuthCode,
+  hashOAuthState,
+  readMetaAppConfig,
+  sanitizeMetaError,
+} from "./metaOAuth.ts";
+
+function assertEquals(actual: unknown, expected: unknown) {
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    throw new Error(
+      `Expected ${JSON.stringify(expected)}, received ${
+        JSON.stringify(actual)
+      }`,
+    );
+  }
+}
+function assertMatch(actual: string, expected: RegExp) {
+  if (!expected.test(actual)) {
+    throw new Error(`Expected ${actual} to match ${expected}`);
+  }
+}
+async function assertRejects(
+  action: () => unknown | Promise<unknown>,
+  expectedMessage: string,
+) {
+  try {
+    await action();
+  } catch (error) {
+    if (String(error).includes(expectedMessage)) return;
+    throw error;
+  }
+  throw new Error(`Expected rejection: ${expectedMessage}`);
+}
+
+const env = {
+  META_APP_ID: "123456",
+  META_APP_SECRET: "fixture-app-secret",
+  META_OAUTH_REDIRECT_URI:
+    "https://example.test/functions/v1/ap-meta-oauth-callback",
+  META_GRAPH_API_VERSION: "v99.0",
+};
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+
+Deno.test("OAuth authorization URL is Meta HTTPS, configured-version and state-bound", () => {
+  const state = createOAuthState();
+  assertMatch(state, /^[A-Za-z0-9_-]{43}$/);
+  const url = new URL(buildMetaAuthorizeUrl(readMetaAppConfig(env), state));
+  assertEquals(url.origin, "https://www.facebook.com");
+  assertEquals(url.pathname, "/v99.0/dialog/oauth");
+  assertEquals(url.searchParams.get("state"), state);
+  assertEquals(
+    url.searchParams.get("scope"),
+    "pages_show_list,pages_read_engagement,instagram_basic",
+  );
+  assertEquals(url.searchParams.has("client_secret"), false);
+});
+
+Deno.test("state hashes are stable and raw values are not database-shaped", async () => {
+  const state = createOAuthState();
+  assertMatch(await hashOAuthState(state), /^[a-f0-9]{64}$/);
+  assertEquals(await hashOAuthState(state), await hashOAuthState(state));
+});
+
+Deno.test("Meta application configuration is complete, HTTPS and version-configured", async () => {
+  assertEquals(readMetaAppConfig(env).graphApiVersion, "v99.0");
+  for (
+    const bad of [
+      {},
+      { ...env, META_GRAPH_API_VERSION: "latest" },
+      { ...env, META_GRAPH_API_VERSION: "v1" },
+      { ...env, META_OAUTH_REDIRECT_URI: "http://example.test/callback" },
+    ]
+  ) {
+    await assertRejects(
+      async () => readMetaAppConfig(bad as typeof env),
+      "META_",
+    );
+  }
+});
+
+Deno.test("token exchange discovers one eligible Page and never puts tokens in URLs after exchange", async () => {
+  const calls: URL[] = [];
+  const fetchImpl: typeof fetch = async (input) => {
+    const url = new URL(String(input));
+    calls.push(url);
+    if (
+      url.pathname.endsWith("/oauth/access_token") &&
+      url.searchParams.get("grant_type") !== "fb_exchange_token"
+    ) return json({ access_token: "short-token" });
+    if (url.pathname.endsWith("/oauth/access_token")) {
+      return json({ access_token: "long-token", expires_in: 5184000 });
+    }
+    if (url.pathname.endsWith("/me")) {
+      return json({
+        id: "111",
+        permissions: [
+          { permission: "instagram_basic", status: "granted" },
+          { permission: "pages_show_list", status: "granted" },
+          { permission: "pages_read_engagement", status: "granted" },
+          { permission: "instagram_content_publish", status: "declined" },
+        ],
+      });
+    }
+    return json({
+      data: [{
+        id: "page-1",
+        name: "Página TVG",
+        access_token: "page-token",
+        instagram_business_account: { id: "ig-1", username: "tvgmulti" },
+      }],
+    });
+  };
+  const result = await exchangeMetaOAuthCode(
+    readMetaAppConfig(env),
+    "code-fixture",
+    fetchImpl,
+  );
+  assertEquals(result.facebookUserId, "111");
+  assertEquals(result.pages[0].instagramUsername, "tvgmulti");
+  assertEquals(
+    result.grantedScopes.includes("instagram_content_publish"),
+    false,
+  );
+  assertEquals(calls[2].searchParams.has("access_token"), false);
+  assertEquals(calls[3].searchParams.has("access_token"), false);
+});
+
+Deno.test("multiple Pages, no Instagram Page, token failures and Meta errors stay deterministic", async () => {
+  const pagesOnly = async (input: RequestInfo | URL) => {
+    const url = new URL(String(input));
+    if (
+      url.pathname.endsWith("/oauth/access_token") &&
+      !url.searchParams.get("grant_type")
+    ) return json({ access_token: "short" });
+    if (url.pathname.endsWith("/oauth/access_token")) {
+      return json({ access_token: "long" });
+    }
+    if (url.pathname.endsWith("/me")) return json({ id: "1", permissions: [] });
+    return json({
+      data: [{
+        id: "page-without-ig",
+        name: "Página sem Instagram",
+        access_token: "page-token",
+      }],
+    });
+  };
+  const result = await exchangeMetaOAuthCode(
+    readMetaAppConfig(env),
+    "code",
+    pagesOnly as typeof fetch,
+  );
+  assertEquals(result.pages.length, 0);
+  await assertRejects(
+    () =>
+      exchangeMetaOAuthCode(
+        readMetaAppConfig(env),
+        "code",
+        async () => json({ error: { code: 190 } }, 400),
+      ),
+    "META_TOKEN_EXCHANGE_FAILED",
+  );
+  await assertRejects(
+    () =>
+      exchangeMetaOAuthCode(
+        readMetaAppConfig(env),
+        "",
+        pagesOnly as typeof fetch,
+      ),
+    "META_OAUTH_CODE_INVALID",
+  );
+});
+
+Deno.test("account discovery includes eligible Pages beyond the first response page", async () => {
+  const fetchImpl: typeof fetch = async (input) => {
+    const url = new URL(String(input));
+    if (url.pathname.endsWith("/oauth/access_token")) {
+      return json({ access_token: url.searchParams.has("grant_type") ? "long-token" : "short-token" });
+    }
+    if (url.pathname.endsWith("/me")) {
+      return json({ id: "111", permissions: META_GRANTED_PERMISSIONS });
+    }
+    const page = url.searchParams.get("after") === "next-page" ? "2" : "1";
+    return json({
+      data: [{
+        id: `page-${page}`,
+        name: `Page ${page}`,
+        access_token: `page-token-${page}`,
+        instagram_business_account: { id: `ig-${page}`, username: `account${page}` },
+      }],
+      ...(page === "1" ? { paging: { cursors: { after: "next-page" } } } : {}),
+    });
+  };
+  const result = await exchangeMetaOAuthCode(readMetaAppConfig(env), "code", fetchImpl);
+  assertEquals(result.pages.map((page) => page.instagramUserId), ["ig-1", "ig-2"]);
+});
+
+Deno.test("missing permission evidence never grants Radar capability", async () => {
+  const fetchImpl: typeof fetch = async (input) => {
+    const url = new URL(String(input));
+    if (url.pathname.endsWith("/oauth/access_token")) {
+      return json({ access_token: url.searchParams.has("grant_type") ? "long-token" : "short-token" });
+    }
+    if (url.pathname.endsWith("/me")) return json({ id: "111" });
+    return json({ data: [{
+      id: "page-1", name: "Page 1", access_token: "page-token",
+      instagram_business_account: { id: "ig-1", username: "account1" },
+    }] });
+  };
+  const result = await exchangeMetaOAuthCode(readMetaAppConfig(env), "code", fetchImpl);
+  assertEquals(result.grantedScopes, []);
+  assertEquals(capabilitiesFromScopes(result.grantedScopes).radar_read, false);
+});
+
+Deno.test("declined, empty, malformed and failed permission responses fail closed", async () => {
+  for (const permissions of [
+    { data: META_GRANTED_PERMISSIONS.map((item) => item.permission === "instagram_basic" ? { ...item, status: "declined" } : item) },
+    { data: [] },
+    { unexpected: true },
+    null,
+  ]) {
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith("/oauth/access_token")) return json({ access_token: url.searchParams.has("grant_type") ? "long" : "short" });
+      if (url.pathname.endsWith("/me/permissions")) {
+        if (permissions === null) return json({ error: { code: 190 } }, 400);
+        return json(permissions);
+      }
+      if (url.pathname.endsWith("/me")) return json({ id: "111" });
+      return json({ data: [{ id: "page", name: "Page", access_token: "page-token", instagram_business_account: { id: "ig", username: "account" } }] });
+    };
+    const result = await exchangeMetaOAuthCode(readMetaAppConfig(env), "code", fetchImpl);
+    assertEquals(capabilitiesFromScopes(result.grantedScopes).radar_read, false);
+  }
+});
+
+Deno.test("repeated cursors and account pagination limits fail explicitly", async () => {
+  const repeated: typeof fetch = async (input) => {
+    const url = new URL(String(input));
+    if (url.pathname.endsWith("/oauth/access_token")) return json({ access_token: url.searchParams.has("grant_type") ? "long" : "short" });
+    if (url.pathname.endsWith("/me/permissions")) return json({ data: META_GRANTED_PERMISSIONS });
+    if (url.pathname.endsWith("/me")) return json({ id: "111" });
+    return json({ data: [], paging: { cursors: { after: "repeat" } } });
+  };
+  await assertRejects(() => exchangeMetaOAuthCode(readMetaAppConfig(env), "code", repeated), "META_ACCOUNT_DISCOVERY_PARTIAL_FAILED");
+  let calls = 0;
+  const overLimit: typeof fetch = async (input) => {
+    const url = new URL(String(input));
+    if (url.pathname.endsWith("/oauth/access_token")) return json({ access_token: url.searchParams.has("grant_type") ? "long" : "short" });
+    if (url.pathname.endsWith("/me/permissions")) return json({ data: META_GRANTED_PERMISSIONS });
+    if (url.pathname.endsWith("/me")) return json({ id: "111" });
+    calls += 1;
+    return json({ data: [], paging: { cursors: { after: `cursor-${calls}` } } });
+  };
+  await assertRejects(() => exchangeMetaOAuthCode(readMetaAppConfig(env), "code", overLimit), "META_ACCOUNT_DISCOVERY_LIMIT_REACHED");
+});
+
+const META_GRANTED_PERMISSIONS = [
+  { permission: "instagram_basic", status: "granted" },
+  { permission: "pages_show_list", status: "granted" },
+  { permission: "pages_read_engagement", status: "granted" },
+];
+
+Deno.test("capabilities are independent and error output is sanitized", () => {
+  assertEquals(
+    capabilitiesFromScopes([
+      "pages_show_list",
+      "pages_read_engagement",
+      "instagram_basic",
+    ]),
+    {
+      radar_read: true,
+      publishing: false,
+      comments: false,
+      messages: false,
+    },
+  );
+  assertEquals(
+    capabilitiesFromScopes(["instagram_content_publish"]).publishing,
+    true,
+  );
+  assertEquals(
+    sanitizeMetaError(new Error("META_OAUTH_STATE_INVALID")),
+    "META_OAUTH_STATE_INVALID",
+  );
+  assertEquals(
+    sanitizeMetaError(new Error("raw token fixture")),
+    "META_CONNECTION_FAILED",
+  );
+});
