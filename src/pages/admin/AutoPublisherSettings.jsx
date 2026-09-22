@@ -3,8 +3,10 @@ import { supabase } from '../../services/supabase'
 import { toast } from 'sonner'
 import {
     Plus, Trash2, Globe, Cpu, Shield, Brain, Zap, RefreshCw, Award, Flag,
-    Save, UploadCloud, FileText, CheckCircle2, AlertCircle, Loader2,
+    Save, UploadCloud, FileText, CheckCircle2, AlertCircle, Loader2, Instagram, Radar,
 } from 'lucide-react'
+import MetaIntegrationSettings from '../../components/editorial/MetaIntegrationSettings'
+import InstagramRadarShell from '../../components/editorial/InstagramRadarShell'
 import AutoPublisherMasterV1Settings from './AutoPublisherMasterV1Settings'
 import { formatRelativeTime } from '../../utils/dateUtils'
 import { getEditorialWorkflowStatus } from '../../services/editorialArticlesService'
@@ -39,6 +41,8 @@ const SECTIONS = [
     { key: 'validacao', label: 'Validação', icon: RefreshCw },
     { key: 'artes', label: 'Selos e patrocinadores', icon: Award },
     { key: 'editorial_flow', label: 'Fluxo editorial', icon: Flag },
+    { key: 'integrations', label: 'Integrações', icon: Instagram },
+    { key: 'radar', label: 'Radar Instagram', icon: Radar },
 ]
 
 const RULE_TYPES = [
@@ -94,7 +98,7 @@ function Toggle({ on, onClick, disabled }) {
 }
 
 export default function AutoPublisherSettings({ clienteId, clienteError }) {
-    const [section, setSection] = useState('fontes')
+    const [section, setSection] = useState(() => new URLSearchParams(window.location.search).get('section') || 'fontes')
     const [loading, setLoading] = useState(true)
     const [editorialTenantError, setEditorialTenantError] = useState('')
 
@@ -500,6 +504,8 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
         validacao: testOutput ? 'Último teste: ok' : 'Nunca executado',
         artes: 'Selos e patrocinadores',
         editorial_flow: editorialFlowLoading ? '…' : (editorialFlowEnabled ? 'Ativo' : 'Inativo'),
+        integrations: 'Instagram / Meta',
+        radar: 'Descoberta desativada',
     }
 
     const cycleSummary = automation.ingestion_enabled
@@ -1081,6 +1087,10 @@ export default function AutoPublisherSettings({ clienteId, clienteError }) {
                         </div>
                     </div>
                 )}
+
+                {section === 'integrations' && <MetaIntegrationSettings clienteId={clienteId} />}
+
+                {section === 'radar' && <InstagramRadarShell clienteId={clienteId} onConnect={() => setSection('integrations')} />}
 
                 {draftDirty && (section === 'motor' || section === 'regras') && (
                     <div className="aps-savebar">
