@@ -4,6 +4,7 @@ import {
   createOAuthState,
   exchangeMetaOAuthCode,
   hashOAuthState,
+  isMetaAppConfigured,
   readMetaAppConfig,
   sanitizeMetaError,
 } from "./metaOAuth.ts";
@@ -70,6 +71,8 @@ Deno.test("state hashes are stable and raw values are not database-shaped", asyn
 
 Deno.test("Meta application configuration is complete, HTTPS and version-configured", async () => {
   assertEquals(readMetaAppConfig(env).graphApiVersion, "v99.0");
+  assertEquals(isMetaAppConfigured(env), true);
+  assertEquals(isMetaAppConfigured({}), false);
   for (
     const bad of [
       {},

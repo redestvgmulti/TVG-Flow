@@ -53,6 +53,7 @@ export default function MetaIntegrationSettings({ clienteId }) {
 
   if (!status) return <div className="aps-card" role="status">Carregando integração Meta…</div>
   const candidates = Array.isArray(status.selection_candidates) ? status.selection_candidates : []
+  const oauthAvailable = status.oauth_available !== false
   return <div className="aps-card no-pad">
     <div className="aps-card-head bordered">
       <div><h2 className="aps-card-title"><Instagram size={17} color="#E1306C" /> Instagram / Meta</h2>
@@ -74,7 +75,8 @@ export default function MetaIntegrationSettings({ clienteId }) {
           <button type="button" className="aps-btn aps-btn-outline" disabled={busy} onClick={disconnect}><Unplug size={14} /> Desconectar</button></div>
       </div> : <div className="aps-integration-empty"><PlugZap size={28} /><p>Instagram / Meta não conectado.</p>
         {status.error_code && <small>{statusMessage(status.error_code)}</small>}
-        <button type="button" className="aps-btn aps-btn-primary" disabled={busy} onClick={connect}>{busy ? <Loader2 size={14} className="ap-spin-icon" /> : <Instagram size={14} />} Conectar Instagram</button>
+        {!oauthAvailable && <small>A conexão está aguardando a configuração segura do App Meta.</small>}
+        <button type="button" className="aps-btn aps-btn-primary" disabled={busy || !oauthAvailable} onClick={connect} title={oauthAvailable ? undefined : 'Configuração do App Meta pendente'}>{busy ? <Loader2 size={14} className="ap-spin-icon" /> : <Instagram size={14} />} {oauthAvailable ? 'Conectar Instagram' : 'Configuração Meta pendente'}</button>
       </div>}
     </div>
   </div>
