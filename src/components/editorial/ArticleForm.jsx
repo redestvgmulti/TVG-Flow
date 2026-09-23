@@ -134,9 +134,11 @@ export default function ArticleForm({
     }
 
     function selectSourceMode(nextSourceMode) {
+        setSelectedFile(null);
         setFormData(previous => ({
             ...previous,
             source_mode: nextSourceMode,
+            image_url: '',
             idempotency_key: null,
         }));
     }

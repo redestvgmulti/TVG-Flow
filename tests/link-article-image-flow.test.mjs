@@ -6,10 +6,12 @@ const root = new URL('../', import.meta.url)
 const source = path => readFile(new URL(path, root), 'utf8')
 
 test('link creation skips image upload and extracts source image before saving production intent', async () => {
-  const [wizard, canonical, form, scraper] = await Promise.all([
+  const [wizard, canonical, form, admin, staff, scraper] = await Promise.all([
     source('src/components/editorial/ArticleWizard.jsx'),
     source('src/components/editorial/CanonicalArticleWizard.jsx'),
     source('src/components/editorial/ArticleForm.jsx'),
+    source('src/pages/admin/AutoPublisher.jsx'),
+    source('src/pages/admin/EmployeeMode.jsx'),
     source('supabase/functions/ap-link-scraper/index.ts'),
   ])
 
@@ -21,5 +23,7 @@ test('link creation skips image upload and extracts source image before saving p
   assert.match(canonical, /captureEditorialArticleSource\(supabase, \{/)
   assert.match(canonical, /sourceImageUrl: sourceImageUrl \|\| null/)
   assert.match(canonical, /saveEditorialArticleProductionIntent\(supabase, buildProductionIntentPayload/)
+  assert.match(admin, /finalImageUrl = isLinkMode \? \(scrapedImage \|\| null\)/)
+  assert.match(staff, /resolvedImage = sourceMode === 'link' \? scrapedImage/)
   assert.match(scraper, /meta\[property='og:image:secure_url'\]/)
 })

@@ -609,7 +609,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
 
             const resolvedTitle = sourceMode === 'link' ? scrapedTitle : titulo.trim();
             const resolvedText = sourceMode === 'link' ? scrapedConteudo : conteudo.trim();
-            const resolvedImage = image_url || scrapedImage || '';
+            const resolvedImage = sourceMode === 'link' ? scrapedImage : (image_url || '');
             const sourceError = validateSource(sourceMode, {
                 url: url_original,
                 title: resolvedTitle,
@@ -633,7 +633,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
             }
 
             let finalImageUrl = resolvedImage || null;
-            if (selectedFile && sourceImageRequired) {
+            if (sourceMode !== 'link' && selectedFile && sourceImageRequired) {
                 finalImageUrl = await handleFileUpload(selectedFile);
             }
 

@@ -713,6 +713,9 @@ export default function AutoPublisher() {
                 scrapedTitle = data.title || ''
                 scrapedConteudo = data.content || ''
                 scrapedImage = data.image_url || ''
+                if (!scrapedTitle.trim() || !scrapedConteudo.trim()) {
+                    throw new Error('SOURCE_CONTENT_MISSING')
+                }
             } catch {
                 setManualFormErrors({ url_original: 'Falha ao extrair dados do link. Verifique a URL.' })
                 setIsSubmittingManual(false)
@@ -721,8 +724,8 @@ export default function AutoPublisher() {
         }
 
         // 4. Image upload
-        let finalImageUrl = formData.image_url || scrapedImage || null
-        if (selectedFile && sourceImageRequired) {
+        let finalImageUrl = isLinkMode ? (scrapedImage || null) : (formData.image_url || null)
+        if (!isLinkMode && selectedFile && sourceImageRequired) {
             try {
                 const fileExt = selectedFile.name.split('.').pop()
                 const fileName = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`
@@ -760,8 +763,8 @@ export default function AutoPublisher() {
             cliente_id: clienteId,
             auth_user_id: finalAuthUserId,
             url_original: formData.url_original || null,
-            headline: formData.titulo || scrapedTitle || 'Pauta OMNI',
-            text: formData.conteudo || scrapedConteudo || '',
+            headline: isLinkMode ? scrapedTitle : formData.titulo,
+            text: isLinkMode ? scrapedConteudo : formData.conteudo,
             context_tag: editorialTagFromVisualTitleId(visualTitles, selectedVisualTitleId),
             content_type: formData.content_type || 'feed',
             source_image: sourceImageRequired ? finalImageUrl : null,
