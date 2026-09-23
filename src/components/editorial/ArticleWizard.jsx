@@ -135,9 +135,15 @@ export default function ArticleWizard({
         switch (key) {
             case 'formato':
                 if (territorialComposerEnabled) {
-                    return territorialComposerState === 'ready' ? '' : 'Aguardando o compositor territorial carregar.';
+                    return territorialComposerState === 'ready'
+                        ? ''
+                        : territorialComposerState === 'error'
+                            ? 'Não foi possível carregar a configuração editorial.'
+                            : 'Aguardando o compositor territorial carregar.';
                 }
-                if (visualModelsState !== 'available') return 'Aguardando os modelos visuais carregarem.';
+                if (visualModelsState === 'loading') return 'Aguardando os modelos visuais carregarem.';
+                if (visualModelsState === 'error') return 'Não foi possível carregar os modelos visuais.';
+                if (visualModelsState !== 'available') return 'Nenhum modelo visual está disponível.';
                 return formData.content_type && formData.visual_model
                     ? ''
                     : 'Escolha o formato e a finalidade da arte para continuar.';
@@ -168,6 +174,11 @@ export default function ArticleWizard({
 
     const blocker = getBlocker(currentStep.key);
     const canContinue = !blocker;
+    const formatLoading = currentStep.key === 'formato' && (
+        territorialComposerEnabled
+            ? territorialComposerState === 'loading' || territorialComposerState === 'idle'
+            : visualModelsState === 'loading'
+    );
     const stepCopy = currentStep.key === 'detalhes'
         ? {
             title: 'Classificação editorial',
@@ -176,7 +187,9 @@ export default function ArticleWizard({
                 : 'O selo define a identidade visual aplicada e a categoria exibida na arte.',
         }
         : STEP_COPY[currentStep.key];
-    const footerHint = blocker
+    const footerHint = formatLoading
+        ? ''
+        : blocker
         ? blocker
         : isLastStep
             ? 'Tudo certo. Nada é publicado sem sua aprovação.'
@@ -394,7 +407,7 @@ export default function ArticleWizard({
 
                 {currentStep.key === 'formato' && (
                     <div className="ap-wizard-panel">
-                        <div className="ap-af-format" role="tablist">
+                        {availableFormats.length > 0 && <div className="ap-af-format" role="tablist">
                             {availableFormats.map(({ slug: val, label: lbl }) => {
                                 const Icon = FORMAT_ICONS[val] ?? ImageIcon;
                                 const active = formData.content_type === val;
@@ -412,7 +425,7 @@ export default function ArticleWizard({
                                     </button>
                                 );
                             })}
-                        </div>
+                        </div>}
 
                         {!territorialComposerEnabled && (visualModelsLoaded ? (
                             <div className="ap-af-panel">
@@ -453,13 +466,8 @@ export default function ArticleWizard({
                             </div>
                         ) : visualModelsState === 'empty' ? (
                             <div role="status" className="ap-af-alert ap-af-alert--warning">Nenhum modelo visual está habilitado para este formato.</div>
-                        ) : (
-                            <div role="status" className="ap-af-alert ap-af-alert--info">Carregando modelos visuais...</div>
-                        ))}
+                        ) : null)}
 
-                        {territorialComposerEnabled && territorialComposerState === 'loading' && (
-                            <div role="status" className="ap-af-alert ap-af-alert--info">Carregando compositor territorial...</div>
-                        )}
                         {territorialComposerEnabled && territorialComposerState === 'error' && (
                             <div role="alert" className="ap-af-alert ap-af-alert--error">
                                 <span>{territorialComposerError || 'Não foi possível carregar o compositor territorial.'}</span>

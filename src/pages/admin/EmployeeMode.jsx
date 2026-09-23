@@ -899,7 +899,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
             });
             if (error) throw error;
             toast.success('Arte aprovada e disponível em seu histórico.');
-            await fetchHistory(0, false);
+            await fetchHistory(0);
         } catch (error) {
             console.error('[EmployeeMode] MATERIAL_APPROVAL_FAILED', error);
             setErrorMsg('Não foi possível aprovar esta arte. Atualize e tente novamente.');
@@ -908,27 +908,41 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
         }
     };
 
-    const fetchHistory = async (page = 0, append = false) => {
+    const fetchHistory = async (page = 0) => {
         setIsLoadingHistory(true);
         try {
-            const { data, error } = await supabase
+            const pageEnd = (page + 1) * ITEMS_PER_PAGE;
+            const historyQuery = () => supabase
                 .schema('ap')
                 .from('candidate_news')
                 .select('id, titulo, headline, caption, render_url, render_completed_at, gerado_em, created_at, status, content_type, acao_baixou, acao_copiou, template_nome_snapshot, context_tag, fonte_id, criado_por_user_id, creator_name_snapshot, current_generation_id, approved_generation_id')
-                .eq('criado_por_user_id', user?.id)
-                .order('gerado_em', { ascending: false })
-                .range(page * ITEMS_PER_PAGE, (page + 1) * ITEMS_PER_PAGE - 1);
+                .eq('criado_por_user_id', user?.id);
 
-            if (error) throw error;
+            // Older materials may have no gerado_em. Fetch each timestamp group
+            // separately so pagination still follows the date shown to the user.
+            const [generated, legacy] = await Promise.all([
+                historyQuery()
+                    .not('gerado_em', 'is', null)
+                    .order('gerado_em', { ascending: false })
+                    .order('id', { ascending: false })
+                    .range(0, pageEnd),
+                historyQuery()
+                    .is('gerado_em', null)
+                    .order('created_at', { ascending: false, nullsFirst: false })
+                    .order('id', { ascending: false })
+                    .range(0, pageEnd),
+            ]);
 
-            if (data) {
-                if (append) {
-                    setHistoryItems(prev => [...prev, ...data]);
-                } else {
-                    setHistoryItems(data);
-                }
-                setHasMoreHistory(data.length === ITEMS_PER_PAGE);
-            }
+            if (generated.error) throw generated.error;
+            if (legacy.error) throw legacy.error;
+
+            const allItems = [...(generated.data || []), ...(legacy.data || [])].sort((a, b) => {
+                const aTime = Date.parse(a.gerado_em || a.created_at || '') || 0;
+                const bTime = Date.parse(b.gerado_em || b.created_at || '') || 0;
+                return bTime - aTime || b.id.localeCompare(a.id);
+            });
+            setHistoryItems(allItems.slice(0, pageEnd));
+            setHasMoreHistory(allItems.length > pageEnd);
         } catch (err) {
             console.error("Erro ao carregar histórico:", err);
         } finally {
@@ -941,7 +955,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
         if (!isOpen || activeTab !== 'history' || !user?.id) return;
         const timeoutId = window.setTimeout(() => {
             setHistoryPage(0);
-            fetchHistory(0, false);
+            fetchHistory(0);
         }, 0);
         return () => window.clearTimeout(timeoutId);
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -950,7 +964,7 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
     const handleLoadMore = () => {
         const nextPage = historyPage + 1;
         setHistoryPage(nextPage);
-        fetchHistory(nextPage, true);
+        fetchHistory(nextPage);
     };
 
     if (!isOpen) return null;

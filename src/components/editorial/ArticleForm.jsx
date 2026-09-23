@@ -144,7 +144,7 @@ export default function ArticleForm({
     return (
         <form onSubmit={onSubmit} className="ap-af">
             {/* Formato */}
-            <div className="ap-af-format" role="tablist">
+            {availableFormats.length > 0 && <div className="ap-af-format" role="tablist">
                 {availableFormats.map(({ slug: val, label: lbl }) => {
                     const Icon = FORMAT_ICONS[val] ?? ImageIcon;
                     const active = formData.content_type === val;
@@ -162,7 +162,7 @@ export default function ArticleForm({
                         </button>
                     );
                 })}
-            </div>
+            </div>}
 
             {/* Modelo visual: junto com o formato, endereça o template fixo. */}
             {!territorialComposerEnabled && (visualModelsLoaded ? (
@@ -209,17 +209,8 @@ export default function ArticleForm({
                 <div role="status" className="ap-af-alert ap-af-alert--warning">
                     Nenhum modelo visual está habilitado para este formato.
                 </div>
-            ) : (
-                <div role="status" className="ap-af-alert ap-af-alert--info">
-                    Carregando modelos visuais...
-                </div>
-            ))}
+            ) : null)}
 
-            {territorialComposerEnabled && territorialComposerState === 'loading' && (
-                <div role="status" className="ap-af-alert ap-af-alert--info">
-                    Carregando compositor territorial...
-                </div>
-            )}
             {territorialComposerEnabled && territorialComposerState === 'error' && (
                 <div role="alert" className="ap-af-alert ap-af-alert--error">
                     <span>{territorialComposerError || 'Não foi possível carregar o compositor territorial.'}</span>

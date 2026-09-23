@@ -2155,6 +2155,18 @@
   box-shadow: var(--shadow-1);
 }
 
+.ap-wizard .ap-af-format {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.ap-wizard .ap-af-format-btn {
+  width: 100%;
+  min-height: 44px;
+  justify-content: flex-start;
+  padding-inline: 14px;
+}
+
 /* ── Painel de modelo visual ──────────────────────────────── */
 .ap-af-panel {
   display: flex;
