@@ -53,7 +53,8 @@ const STATUS_TAB = {
     ready_for_scoring: 'coletadas',
     scored: 'coletadas',
     selected: 'pendentes',
-    pending_render: 'aprovadas',
+    // Keep manually generated articles visible through rendering and review.
+    pending_render: 'pendentes',
     processing: 'aprovadas',
     pending_review: 'pendentes',
     ready_to_publish: 'aprovadas',
@@ -211,8 +212,8 @@ export default function AutoPublisher() {
 
         let statuses = []
         if (currentTab === 'coletadas') statuses = ['raw', 'ready_for_scoring', 'scored', 'failed', 'rejected']
-        if (currentTab === 'pendentes') statuses = ['selected', 'studio_selected', 'studio_ready', 'pending_review']
-        if (currentTab === 'aprovadas') statuses = ['pending_render', 'processing', 'render_complete', 'ready_to_publish', 'approved', 'queued_for_posting']
+        if (currentTab === 'pendentes') statuses = ['selected', 'studio_selected', 'studio_ready', 'pending_render', 'pending_review']
+        if (currentTab === 'aprovadas') statuses = ['processing', 'render_complete', 'ready_to_publish', 'approved', 'queued_for_posting']
         if (currentTab === 'publicadas') statuses = ['posted']
 
         if (statuses.length === 0) {
@@ -704,7 +705,8 @@ export default function AutoPublisher() {
 
             toast.success("Matéria enviada para processamento!")
             setManualSubmitSucceeded(true)
-            fetchItems(tab)
+            setTab('pendentes')
+            fetchItems('pendentes')
         } catch (err) {
             toast.error(err.message || "Erro ao gerar matéria.")
         } finally {
@@ -1096,6 +1098,7 @@ function PendenteCard({ item, onReject, onStudio, onApproveSelected, onEdit, isP
     const isStudio = item.status === 'studio_selected' || item.status === 'studio_ready'
 
     const handleApprove = async () => {
+        if (!['selected', 'pending_review'].includes(item.status)) return
         setIsApprovingLocal(true)
         try {
             await onApproveSelected(item)
@@ -1103,6 +1106,38 @@ function PendenteCard({ item, onReject, onStudio, onApproveSelected, onEdit, isP
             setIsApprovingLocal(false)
         }
     }
+
+    const handleCopy = async () => {
+        const text = `${item.headline ?? item.titulo}\n\n${item.caption ?? ''}`
+        await navigator.clipboard.writeText(text)
+        toast.success('Texto copiado.')
+    }
+
+    const handleDownload = async () => {
+        const url = item.render_url ?? item.imagem_url
+        if (!url) return
+
+        try {
+            const response = await fetch(url)
+            if (!response.ok) throw new Error('DOWNLOAD_FAILED')
+            const blob = await response.blob()
+            const extension = blob.type.includes('png') ? 'png' : blob.type.includes('webp') ? 'webp' : 'jpg'
+            const blobUrl = URL.createObjectURL(blob)
+            const anchor = document.createElement('a')
+            anchor.href = blobUrl
+            anchor.download = `tvg_noticia_${item.id.slice(0, 6)}.${extension}`
+            document.body.appendChild(anchor)
+            anchor.click()
+            anchor.remove()
+            window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000)
+        } catch {
+            const separator = url.includes('?') ? '&' : '?'
+            window.open(`${url}${separator}download=`, '_blank', 'noopener,noreferrer')
+        }
+    }
+
+    const isRendering = ['pending_render', 'processing'].includes(item.status)
+    const canApprove = ['selected', 'pending_review'].includes(item.status)
 
     return (
         <div className="ap-review-card insta-mock" style={{ maxWidth: '400px', margin: '0 auto', paddingBottom: '16px', border: (item.content_type === 'feed' && !item.imagem_url && !item.imagem_storage && !item.render_url) ? '2px solid #ef4444' : '' }}>
@@ -1218,12 +1253,18 @@ function PendenteCard({ item, onReject, onStudio, onApproveSelected, onEdit, isP
                     <button onClick={() => onEdit(item)} disabled={isProcessing} title="Editar Matéria" style={{ padding: '0 12px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '8px', color: '#475569', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600, fontSize: '13px' }}>
                         <Pencil size={14} /> Editar
                     </button>
-                    <button className="ap-card-btn-black" onClick={() => onStudio(item)} disabled={isProcessing}>
+                    <button className="ap-card-btn-black" onClick={() => onStudio(item)} disabled={isProcessing || isRendering}>
                         <Video size={14} /> Studio
                     </button>
-                    <button className="ap-card-btn-primary" onClick={handleApprove} disabled={isProcessing || isApprovingLocal}>
+                    <button className="ap-card-btn-secondary" onClick={handleDownload} disabled={isRendering || !item.render_url} title="Baixar Arte">
+                        <Download size={12} /> Baixar
+                    </button>
+                    <button className="ap-card-btn-copy" onClick={handleCopy} disabled={!item.caption && !item.headline} title="Copiar texto">
+                        <Copy size={12} /> Copiar
+                    </button>
+                    <button className="ap-card-btn-primary" onClick={handleApprove} disabled={isProcessing || isApprovingLocal || !canApprove}>
                         {isApprovingLocal ? <Loader2 size={14} className="ap-spin-icon" /> : null}
-                        {isApprovingLocal ? (item.status === 'selected' ? 'Preparando...' : 'Aprovando...') : (item.status === 'selected' ? 'Gerar arte' : 'Aprovar')}
+                        {isApprovingLocal ? (item.status === 'selected' ? 'Preparando...' : 'Aprovando...') : item.status === 'pending_render' ? 'Renderizando...' : (item.status === 'selected' ? 'Gerar arte' : 'Aprovar')}
                     </button>
                 </div>
             </div>
