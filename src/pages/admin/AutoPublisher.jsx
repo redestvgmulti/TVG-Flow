@@ -798,7 +798,8 @@ export default function AutoPublisher() {
 
             toast.success("Matéria enviada para processamento!")
             setManualSubmitSucceeded(true)
-            fetchItems(tab)
+            setTab('em_producao')
+            fetchItems('em_producao')
         } catch (err) {
             toast.error(err.message || "Erro ao gerar matéria.")
         } finally {
@@ -1289,6 +1290,36 @@ function PendenteCard({ item, onReject, onStudio, onApproveSelected, onEdit, onC
         }
     }
 
+    const handleCopy = async () => {
+        try {
+            await navigator.clipboard.writeText(`${item.headline ?? item.titulo ?? ''}\n\n${item.caption ?? ''}`)
+            toast.success('Texto copiado.')
+        } catch {
+            toast.error('Não foi possível copiar o texto.')
+        }
+    }
+
+    const handleDownload = async () => {
+        if (!item.render_url) return
+        try {
+            const response = await fetch(item.render_url)
+            if (!response.ok) throw new Error('DOWNLOAD_FAILED')
+            const blob = await response.blob()
+            const extension = blob.type.includes('png') ? 'png' : blob.type.includes('webp') ? 'webp' : blob.type.includes('mp4') ? 'mp4' : 'jpg'
+            const blobUrl = URL.createObjectURL(blob)
+            const anchor = document.createElement('a')
+            anchor.href = blobUrl
+            anchor.download = `tvg_noticia_${item.id.slice(0, 6)}.${extension}`
+            document.body.appendChild(anchor)
+            anchor.click()
+            anchor.remove()
+            window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000)
+        } catch {
+            const separator = item.render_url.includes('?') ? '&' : '?'
+            window.open(`${item.render_url}${separator}download=`, '_blank', 'noopener,noreferrer')
+        }
+    }
+
     return (
         <div className="ap-review-card insta-mock" style={{ maxWidth: '400px', margin: '0 auto', paddingBottom: '16px', border: (item.content_type === 'feed' && !item.imagem_url && !item.imagem_storage && !item.render_url) ? '2px solid #ef4444' : '' }}>
             {/* Header */}
@@ -1411,6 +1442,12 @@ function PendenteCard({ item, onReject, onStudio, onApproveSelected, onEdit, onC
                     {item.status === 'pending_review' && item.render_url && <button className="ap-card-btn-secondary" onClick={() => onCorrection(item)} disabled={isProcessing}>Voltar para corrigir</button>}
                     {canStartStudio && <button className="ap-card-btn-black" onClick={() => onStudio(item)} disabled={isProcessing}>
                         <Video size={14} /> Studio
+                    </button>}
+                    {item.status === 'pending_review' && item.render_url && <button className="ap-card-btn-secondary" onClick={handleDownload} title="Baixar Arte">
+                        <Download size={12} /> Baixar
+                    </button>}
+                    {(item.caption || item.headline || item.titulo) && <button className="ap-card-btn-copy" onClick={handleCopy} title="Copiar texto">
+                        <Copy size={12} /> Copiar
                     </button>}
                     <button className="ap-card-btn-primary" onClick={handleApprove} disabled={isProcessing || isApprovingLocal || (item.status !== 'selected' && !canApproveGeneration(item))} title={item.status === 'pending_review' && !item.current_generation_id ? 'Gere uma nova arte antes de aprovar este material antigo' : undefined}>
                         {isApprovingLocal ? <Loader2 size={14} className="ap-spin-icon" /> : null}
