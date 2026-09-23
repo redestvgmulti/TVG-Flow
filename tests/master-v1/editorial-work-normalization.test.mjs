@@ -5,6 +5,7 @@ import {
   mergeLegacyAndEditorialWork,
   normalizeEditorialWorkItem,
   normalizeLegacyWorkItem,
+  sortWorkItemsByRecentActivity,
 } from '../../src/services/editorialWorkNormalization.js'
 
 test('normalizeLegacyWorkItem tags origin and builds a stable unique id', () => {
@@ -56,4 +57,29 @@ test('mergeLegacyAndEditorialWork tolerates missing/empty inputs', () => {
   assert.deepEqual(mergeLegacyAndEditorialWork(null, null), [])
   assert.deepEqual(mergeLegacyAndEditorialWork(undefined, undefined), [])
   assert.equal(mergeLegacyAndEditorialWork([{ id: 'a' }], []).length, 1)
+})
+
+test('staff work lists place the latest activity first across legacy and editorial records', () => {
+  const merged = mergeLegacyAndEditorialWork([
+    { id: 'legacy-old', status: 'completed', adopted_at: '2026-08-31T11:07:00Z', production_completed_at: '2026-08-31T11:21:00Z' },
+    { id: 'legacy-new', status: 'adopted', adopted_at: '2026-09-23T10:00:00Z' },
+  ], [
+    { id: 'editorial-mid', article_id: 'editorial-mid', status: 'draft', created_at: '2026-09-20T09:00:00Z', updated_at: '2026-09-21T15:49:00Z' },
+  ])
+
+  assert.deepEqual(
+    sortWorkItemsByRecentActivity(merged).map(item => item.uniqueId),
+    ['legacy-legacy-new', 'editorial-editorial-mid', 'legacy-legacy-old'],
+  )
+})
+
+test('staff work ordering falls back to creation time and remains stable for equal dates', () => {
+  const items = [
+    { id: 'a', created_at: '2026-09-21T15:39:00Z' },
+    { id: 'b', created_at: '2026-09-21T15:49:00Z' },
+    { id: 'c', created_at: '2026-09-21T15:49:00Z' },
+  ]
+
+  assert.deepEqual(sortWorkItemsByRecentActivity(items).map(item => item.id), ['c', 'b', 'a'])
+  assert.equal(items[0].id, 'a', 'sorting must not mutate the source list')
 })

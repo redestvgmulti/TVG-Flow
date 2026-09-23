@@ -8,8 +8,8 @@ export const NAV_ITEMS = [
     { key: 'staff-meetings', label: 'Reuniões', path: '/staff/meetings', icon: Calendar, roles: ['staff'], section: 'staff', showOnMobileBottom: false },
     { key: 'request', label: 'Solicitar', path: '/staff/requests/new', icon: PlusSquare, roles: ['staff', 'profissional'], section: 'staff', isCTA: true, showOnMobileBottom: false },
     { key: 'content', label: 'Flow.IA', path: '/staff/content', icon: Bot, roles: ['staff', 'profissional'], section: 'staff', showOnMobileBottom: true },
+    { key: 'staff-autopublisher', label: 'Criar Matéria', path: '?modal=employee-mode', icon: Rss, roles: ['staff', 'profissional', 'employee'], section: 'tools', showOnMobileBottom: false },
     { key: 'staff-matters', label: 'Meu trabalho', path: '/staff/materias', icon: Newspaper, roles: ['staff', 'profissional', 'employee'], section: 'tools', showOnMobileBottom: false },
-    { key: 'staff-autopublisher', label: 'Criar Matéria Avulsa', path: '?modal=employee-mode', icon: Rss, roles: ['staff', 'profissional', 'employee'], section: 'tools', showOnMobileBottom: false },
     { key: 'profile', label: 'Perfil', path: '/staff/profile', icon: User, roles: ['staff', 'profissional'], section: 'staff', showOnMobileBottom: true },
 
     { key: 'admin-dashboard', label: 'Dashboard', path: '/admin', icon: LayoutGrid, roles: ['admin', 'super_admin'], section: 'main', showOnMobileBottom: true },

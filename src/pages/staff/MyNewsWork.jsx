@@ -7,7 +7,7 @@ import { resolveOperationalClienteId } from '../../services/visualTitleGroups'
 import { useAuth } from '../../contexts/AuthContext'
 import { useEditorialWorkflowFlag } from '../../hooks/useEditorialWorkflowFlag'
 import { listMyEditorialArticles } from '../../services/editorialArticlesService'
-import { mergeLegacyAndEditorialWork } from '../../services/editorialWorkNormalization'
+import { mergeLegacyAndEditorialWork, sortWorkItemsByRecentActivity } from '../../services/editorialWorkNormalization'
 import { operationalStageForEditorialStatus } from '../../services/editorialOperationalStage'
 import CanonicalEditorialEditor from '../../components/editorial/CanonicalEditorialEditor'
 import Modal from '../../components/ui/Modal'
@@ -75,7 +75,7 @@ export default function MyNewsWork() {
                 }
             }
 
-            setItems(mergeLegacyAndEditorialWork(legacyData, editorialData))
+            setItems(sortWorkItemsByRecentActivity(mergeLegacyAndEditorialWork(legacyData, editorialData)))
         } catch {
             toast.error('Não foi possível carregar suas matérias.')
         } finally {

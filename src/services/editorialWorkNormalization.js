@@ -34,3 +34,18 @@ export function mergeLegacyAndEditorialWork(legacyItems, editorialItems) {
   const normalizedEditorial = (editorialItems || []).map(normalizeEditorialWorkItem)
   return [...normalizedLegacy, ...normalizedEditorial]
 }
+
+export function sortWorkItemsByRecentActivity(items) {
+  const activityTime = item => Math.max(0, ...[
+    item.updated_at,
+    item.production_completed_at,
+    item.production_started_at,
+    item.adopted_at,
+    item.created_at,
+  ].map(value => value ? Date.parse(value) || 0 : 0))
+
+  return [...items].sort((a, b) =>
+    activityTime(b) - activityTime(a) ||
+    (b.uniqueId || b.id || '').localeCompare(a.uniqueId || a.id || ''),
+  )
+}
