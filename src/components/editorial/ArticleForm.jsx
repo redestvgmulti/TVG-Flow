@@ -329,7 +329,7 @@ export default function ArticleForm({
             </>}
 
             {/* Imagem aparece apenas quando o contrato da finalidade a utiliza. */}
-            {sourceImageSupported && (
+            {sourceImageSupported && (mode === 'admin' ? !formData.url_original : sourceMode !== 'link') && (
                 <div className="ap-af-field">
                     <FieldLabel required={sourceImageRequired}>{sourceMode === 'image' ? 'Imagem para análise e arte' : 'Foto (Fundo do Card)'}</FieldLabel>
                     <div

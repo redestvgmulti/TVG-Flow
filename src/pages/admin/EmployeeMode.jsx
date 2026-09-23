@@ -638,7 +638,9 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
             }
 
             if (sourceImageRequired && !finalImageUrl) {
-                throw new Error('Imagem obrigatória para esta finalidade.');
+                throw new Error(sourceMode === 'link'
+                    ? 'Não foi possível extrair uma imagem desta matéria. Confira o link ou use outra fonte.'
+                    : 'Imagem obrigatória para esta finalidade.');
             }
 
             // Sanitize professionalId (convert "null" string to null)

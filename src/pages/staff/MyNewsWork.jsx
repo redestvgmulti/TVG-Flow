@@ -7,7 +7,7 @@ import { resolveOperationalClienteId } from '../../services/visualTitleGroups'
 import { useAuth } from '../../contexts/AuthContext'
 import { useEditorialWorkflowFlag } from '../../hooks/useEditorialWorkflowFlag'
 import { listMyEditorialArticles } from '../../services/editorialArticlesService'
-import { mergeLegacyAndEditorialWork, sortWorkItemsByRecentActivity } from '../../services/editorialWorkNormalization'
+import { mergeLegacyAndEditorialWork, sortAdoptedWorkItems, sortWorkItemsByRecentActivity } from '../../services/editorialWorkNormalization'
 import { operationalStageForEditorialStatus } from '../../services/editorialOperationalStage'
 import CanonicalEditorialEditor from '../../components/editorial/CanonicalEditorialEditor'
 import Modal from '../../components/ui/Modal'
@@ -75,7 +75,7 @@ export default function MyNewsWork() {
                 }
             }
 
-            setItems(sortWorkItemsByRecentActivity(mergeLegacyAndEditorialWork(legacyData, editorialData)))
+            setItems(mergeLegacyAndEditorialWork(legacyData, editorialData))
         } catch {
             toast.error('Não foi possível carregar suas matérias.')
         } finally {
@@ -126,8 +126,8 @@ export default function MyNewsWork() {
         setReleasingId(null)
     }
 
-    const adoptedItems = items.filter(item => item.origin === 'legacy' && item.status === 'adopted' && !item.candidate_news_id)
-    const productionItems = items.filter(item => item.origin === 'editorial' || item.status !== 'adopted' || item.candidate_news_id)
+    const adoptedItems = sortAdoptedWorkItems(items.filter(item => item.origin === 'legacy' && item.status === 'adopted' && !item.candidate_news_id))
+    const productionItems = sortWorkItemsByRecentActivity(items.filter(item => item.origin === 'editorial' || item.status !== 'adopted' || item.candidate_news_id))
 
     return (
         <div className="ap-page ap-my-work-page">

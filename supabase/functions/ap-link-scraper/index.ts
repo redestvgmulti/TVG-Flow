@@ -106,14 +106,24 @@ Deno.serve(async (req: Request) => {
     const title = $("meta[property='og:title']").attr("content") ||
       $("title").text() ||
       $("h1").first().text();
-    let imageUrl = $("meta[property='og:image']").attr("content") ||
-      $("meta[name='twitter:image']").attr("content") ||
-      $("article img").first().attr("src");
+    const imageElement = $("article img, main img").first();
+    const srcset = imageElement.attr("srcset") || imageElement.attr("data-srcset") || "";
+    const imageUrl = [
+      $("meta[property='og:image:secure_url']").attr("content"),
+      $("meta[property='og:image']").attr("content"),
+      $("meta[name='twitter:image']").attr("content"),
+      $("meta[name='twitter:image:src']").attr("content"),
+      $("link[rel='image_src']").attr("href"),
+      imageElement.attr("data-src"),
+      imageElement.attr("data-original"),
+      imageElement.attr("src"),
+      srcset.split(",")[0]?.trim().split(/\s+/)[0],
+      $("body img").first().attr("src"),
+    ].map(candidate => normalizeMediaUrl(candidate, finalUrl)).find(Boolean) || "";
     let videoUrl = $("meta[property='og:video']").attr("content") ||
       $("meta[property='og:video:url']").attr("content") ||
       $("meta[property='og:video:secure_url']").attr("content") || null;
 
-    imageUrl = normalizeMediaUrl(imageUrl, finalUrl);
     videoUrl = normalizeMediaUrl(videoUrl || undefined, finalUrl) || null;
 
     let content = "";

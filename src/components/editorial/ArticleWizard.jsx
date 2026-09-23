@@ -118,10 +118,10 @@ export default function ArticleWizard({
             { key: 'origem', label: 'Origem' },
             { key: 'detalhes', label: 'Detalhes' },
         ];
-        if (formData.content_type !== 'reels' && (fixedFiveSteps || sourceImageRequired)) list.push({ key: 'imagem', label: 'Imagem' });
+        if (formData.source_mode !== 'link' && formData.content_type !== 'reels' && (fixedFiveSteps || sourceImageRequired)) list.push({ key: 'imagem', label: 'Imagem' });
         list.push({ key: 'revisao', label: 'Revisão' });
         return list;
-    }, [fixedFiveSteps, sourceImageRequired, formData.content_type]);
+    }, [fixedFiveSteps, sourceImageRequired, formData.content_type, formData.source_mode]);
 
     const currentIndex = Math.min(step, steps.length - 1);
     const currentStep = steps[currentIndex];
@@ -276,10 +276,12 @@ export default function ArticleWizard({
         // Clear the other mode's fields so a stale value can't silently
         // override the scraper (link mode) or linger unused (manual mode) —
         // submitManualNews decides link-vs-manual purely from url_original.
+        setSelectedFile(null);
         setFormData(previous => ({
             ...previous,
             source_mode: nextSourceMode,
             ...(nextSourceMode === 'link' ? { titulo: '', conteudo: '' } : { url_original: '' }),
+            image_url: '',
             idempotency_key: null,
         }));
     }
@@ -316,7 +318,7 @@ export default function ArticleWizard({
                 : `Manual: ${formData.source_titulo || formData.titulo || '—'}`,
             stepKey: 'origem',
         });
-        if (sourceImageRequired) {
+        if (sourceImageRequired && formData.source_mode !== 'link') {
             rows.push({ label: 'Imagem', value: selectedFile?.name || formData.image_url || '—', stepKey: 'imagem' });
         }
         return rows;

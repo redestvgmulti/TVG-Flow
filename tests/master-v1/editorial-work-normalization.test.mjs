@@ -5,6 +5,7 @@ import {
   mergeLegacyAndEditorialWork,
   normalizeEditorialWorkItem,
   normalizeLegacyWorkItem,
+  sortAdoptedWorkItems,
   sortWorkItemsByRecentActivity,
 } from '../../src/services/editorialWorkNormalization.js'
 
@@ -82,4 +83,15 @@ test('staff work ordering falls back to creation time and remains stable for equ
 
   assert.deepEqual(sortWorkItemsByRecentActivity(items).map(item => item.id), ['c', 'b', 'a'])
   assert.equal(items[0].id, 'a', 'sorting must not mutate the source list')
+})
+
+test('adopted pautas use adoption day and time even when a row was updated later', () => {
+  const items = [
+    { id: 'old', adopted_at: '2026-08-31T12:58:00Z', updated_at: '2026-09-23T12:00:00Z' },
+    { id: 'new', adopted_at: '2026-09-03T18:06:00Z', updated_at: '2026-09-03T18:06:00Z' },
+    { id: 'middle', adopted_at: '2026-09-01T18:41:00Z', updated_at: '2026-09-20T12:00:00Z' },
+  ]
+
+  assert.deepEqual(sortAdoptedWorkItems(items).map(item => item.id), ['new', 'middle', 'old'])
+  assert.equal(items[0].id, 'old', 'sorting must not mutate the source list')
 })

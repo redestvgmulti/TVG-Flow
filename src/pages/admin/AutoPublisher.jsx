@@ -737,7 +737,9 @@ export default function AutoPublisher() {
         }
 
         if (sourceImageRequired && !finalImageUrl) {
-            setManualFormErrors({ image_url: 'Imagem obrigatória para esta finalidade.' })
+            setManualFormErrors(isLinkMode
+                ? { url_original: 'Não foi possível extrair uma imagem desta matéria. Confira o link ou use outra fonte.' }
+                : { image_url: 'Imagem obrigatória para esta finalidade.' })
             setIsSubmittingManual(false)
             return
         }

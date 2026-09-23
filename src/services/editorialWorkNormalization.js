@@ -49,3 +49,11 @@ export function sortWorkItemsByRecentActivity(items) {
     (b.uniqueId || b.id || '').localeCompare(a.uniqueId || a.id || ''),
   )
 }
+
+export function sortAdoptedWorkItems(items) {
+  const adoptionTime = item => Date.parse(item.adopted_at || item.created_at || '') || 0
+  return [...items].sort((a, b) =>
+    adoptionTime(b) - adoptionTime(a) ||
+    (b.uniqueId || b.id || '').localeCompare(a.uniqueId || a.id || ''),
+  )
+}

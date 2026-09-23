@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import ArticleWizard from './ArticleWizard'
+import { composerRequiresSourceImage } from '../../services/territorialComposer'
 import { supabase } from '../../services/supabase'
 import { messageForRpcError } from '../../services/editorialArticleContract'
 import {
@@ -40,9 +41,9 @@ function userFacingError(error) {
   const code = error?.code || error?.message || 'UNKNOWN_ERROR'
   const friendly = messageForRpcError(code).description
   const wrapped = new Error(code)
-  wrapped.userMessage = friendly === messageForRpcError('UNKNOWN_ERROR').description
+  wrapped.userMessage = error?.userMessage || (friendly === messageForRpcError('UNKNOWN_ERROR').description
     ? 'Não foi possível preparar a matéria automaticamente. Tente novamente.'
-    : friendly
+    : friendly)
   return wrapped
 }
 
@@ -207,6 +208,19 @@ export default function CanonicalArticleWizard({
     throw Object.assign(new Error('EDITORIAL_AI_TIMEOUT'), { code: 'EDITORIAL_AI_TIMEOUT' })
   }
 
+  function requiresSourceImage() {
+    return formData.content_type !== 'reels' && (territorialComposerEnabled
+      ? composerRequiresSourceImage(territorialCatalog, formData.content_type)
+      : availableVisualModels.find(model => model.slug === formData.visual_model)?.sourceImage === 'required')
+  }
+
+  function missingLinkImageError() {
+    return Object.assign(new Error('SOURCE_IMAGE_NOT_FOUND'), {
+      code: 'SOURCE_IMAGE_NOT_FOUND',
+      userMessage: 'Não foi possível extrair uma imagem desta matéria. Confira o link ou use outra fonte.',
+    })
+  }
+
   async function prepareForReview() {
     if (preparedRef.current) return
     if (preparationPromiseRef.current) return preparationPromiseRef.current
@@ -264,6 +278,7 @@ export default function CanonicalArticleWizard({
         // the AI provider fails and the user needs to retry the text draft.
         sourceImageRef.current = sourceImageUrl
           || (/^https:\/\//i.test(capturedImageUrl) ? capturedImageUrl : '')
+        if (requiresSourceImage() && !sourceImageRef.current) throw missingLinkImageError()
         if (sourceImageRef.current) {
           setFormData(previous => ({ ...previous, image_url: sourceImageRef.current }))
         }
@@ -295,7 +310,7 @@ export default function CanonicalArticleWizard({
         const scraped = await scrapeArticleSource(supabase, formData.url_original)
         sourceTitle = (scraped.title || sourceTitle).trim()
         sourceBody = (scraped.content || '').trim()
-        sourceImageUrl = (sourceImageUrl || scraped.image_url || '').trim()
+        sourceImageUrl = (scraped.image_url || '').trim()
       }
       // The source is input for the editorial AI, not the finished article.
       // Accept any non-empty factual seed and let the AI produce the complete
@@ -303,6 +318,9 @@ export default function CanonicalArticleWizard({
       if (!sourceTitle) throw Object.assign(new Error('SOURCE_TITLE_REQUIRED'), { code: 'SOURCE_TITLE_REQUIRED' })
       if (!sourceBody) throw Object.assign(new Error('SOURCE_BODY_REQUIRED'), { code: 'SOURCE_BODY_REQUIRED' })
 
+      if (isLink && requiresSourceImage() && !sourceImageUrl) throw missingLinkImageError()
+
+      if (isLink) sourceImageRef.current = ''
       sourceImageUrl = await resolveProductionImageUrl(sourceImageUrl)
 
       if (!articleIdRef.current) {
@@ -404,6 +422,9 @@ export default function CanonicalArticleWizard({
     setIsSubmitting(true)
     try {
       const productionImageUrl = await resolveProductionImageUrl(sourceImageRef.current)
+      if (formData.source_mode === 'link' && requiresSourceImage() && !productionImageUrl) {
+        throw missingLinkImageError()
+      }
       canonicalForm = canonicalFormFromWizard(formData, productionImageUrl)
       let article = await getEditorialArticleForEdit(supabase, articleIdRef.current)
       const finalizedContentChanged = article.status === 'content_final' && (
@@ -465,7 +486,7 @@ export default function CanonicalArticleWizard({
         candidateNewsId,
       })
     } catch (error) {
-      toast.error(messageForRpcError(error?.code || error?.message).description)
+      toast.error(error?.userMessage || messageForRpcError(error?.code || error?.message).description)
     } finally {
       setIsSubmitting(false)
     }
