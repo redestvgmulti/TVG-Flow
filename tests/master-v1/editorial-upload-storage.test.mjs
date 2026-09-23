@@ -64,3 +64,15 @@ test('editorial upload policy is insert-only, tenant-aware and author-bound', as
   assert.match(migration, /editorial_uploads\/\[0-9a-fA-F-\]\{36\}/)
   assert.doesNotMatch(migration, /FOR UPDATE|FOR DELETE|WITH CHECK \(true\)/)
 })
+
+test('staff editorial uploads use the operational client scope without opening cross-client or cross-user paths', async () => {
+  const migration = await source('supabase/migrations/20260923170500_authorize_operational_editorial_uploads.sql')
+
+  assert.match(migration, /FOR INSERT\s+TO authenticated/)
+  assert.match(migration, /bucket_id = 'ap-images'/)
+  assert.match(migration, /\(storage\.foldername\(name\)\)\[1\] = 'editorial_uploads'/)
+  assert.match(migration, /SELECT ap\.get_operational_cliente_ids\(\)::text/)
+  assert.match(migration, /\(storage\.foldername\(name\)\)\[3\] = auth\.uid\(\)::text/)
+  assert.match(migration, /editorial_uploads\/\[0-9a-fA-F-\]\{36\}/)
+  assert.doesNotMatch(migration, /FOR UPDATE|FOR DELETE|WITH CHECK \(true\)/)
+})
