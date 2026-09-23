@@ -119,7 +119,11 @@ self.addEventListener('activate', (event) => {
             try {
                 const client = await self.clients.get(id)
                 if (client?.url && new URL(client.url).origin === self.location.origin) {
-                    await client.navigate(client.url)
+                    // Navigation can depend on this worker finishing activation.
+                    // Start it here, but never keep the activate event waiting for it.
+                    void client.navigate(client.url).catch(error => {
+                        console.warn('[SW] Update navigation failed:', error)
+                    })
                 }
             } catch (error) {
                 console.warn('[SW] Update navigation failed:', error)

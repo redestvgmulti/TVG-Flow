@@ -5,13 +5,13 @@ import test from 'node:test'
 
 const source = await readFile(new URL('../public/push-sw.js', import.meta.url), 'utf8')
 
-function workerHarness() {
+function workerHarness({ navigate = async () => {} } = {}) {
   const listeners = new Map()
   const navigations = []
   const client = {
     id: 'requesting-tab',
     url: 'https://tvgflow.vercel.app/staff/materias',
-    navigate: async url => { navigations.push(url) },
+    navigate: async url => { navigations.push(url); return navigate(url) },
   }
   const self = {
     location: { origin: 'https://tvgflow.vercel.app' },
@@ -39,6 +39,13 @@ test('ordinary service worker activation leaves open tabs in place', async () =>
 
 test('a tab requesting an update is navigated after activation even if its old bundle misses controllerchange', async () => {
   const { listeners, navigations } = workerHarness()
+  listeners.get('message')({ data: { type: 'SKIP_WAITING' }, source: { id: 'requesting-tab' } })
+  await activate(listeners)
+  assert.deepEqual(navigations, ['https://tvgflow.vercel.app/staff/materias'])
+})
+
+test('service worker activation does not wait for a page navigation to finish', async () => {
+  const { listeners, navigations } = workerHarness({ navigate: () => new Promise(() => {}) })
   listeners.get('message')({ data: { type: 'SKIP_WAITING' }, source: { id: 'requesting-tab' } })
   await activate(listeners)
   assert.deepEqual(navigations, ['https://tvgflow.vercel.app/staff/materias'])
