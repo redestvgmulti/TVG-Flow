@@ -106,11 +106,11 @@ export default function ArticleWizard({
     const visualModelsLoaded = visualModelsState === 'available' ||
         (visualModelsState === 'empty' && visualModelOptions.length > 0);
     const selectedModel = availableVisualModels.find(model => model.slug === formData.visual_model);
-    const sourceImageRequired = territorialComposerEnabled
+    const sourceImageRequired = formData.content_type !== 'reels' && (territorialComposerEnabled
         ? composerRequiresSourceImage(territorialCatalog, formData.content_type)
         : selectedModel
             ? selectedModel.sourceImage === 'required'
-            : false;
+            : false);
 
     const steps = useMemo(() => {
         const list = [
@@ -118,13 +118,14 @@ export default function ArticleWizard({
             { key: 'origem', label: 'Origem' },
             { key: 'detalhes', label: 'Detalhes' },
         ];
-        if (fixedFiveSteps || sourceImageRequired) list.push({ key: 'imagem', label: 'Imagem' });
+        if (formData.content_type !== 'reels' && (fixedFiveSteps || sourceImageRequired)) list.push({ key: 'imagem', label: 'Imagem' });
         list.push({ key: 'revisao', label: 'Revisão' });
         return list;
-    }, [fixedFiveSteps, sourceImageRequired]);
+    }, [fixedFiveSteps, sourceImageRequired, formData.content_type]);
 
-    const currentStep = steps[Math.min(step, steps.length - 1)];
-    const isLastStep = step === steps.length - 1;
+    const currentIndex = Math.min(step, steps.length - 1);
+    const currentStep = steps[currentIndex];
+    const isLastStep = currentIndex === steps.length - 1;
 
     // Returns the reason "Continuar" is disabled for a step, or '' when the
     // step is complete — a single source of truth for both the boolean gate
@@ -179,7 +180,7 @@ export default function ArticleWizard({
         ? blocker
         : isLastStep
             ? 'Tudo certo. Nada é publicado sem sua aprovação.'
-            : `Próximo: ${steps[step + 1]?.label ?? ''}`;
+            : `Próximo: ${steps[currentIndex + 1]?.label ?? ''}`;
 
     // Submit failures (dedupe, scraping, upload...) are only detected inside
     // submitManualNews, after the wizard already let the user reach Revisão.
@@ -206,7 +207,7 @@ export default function ArticleWizard({
 
     async function handleContinue() {
         if (!canContinue) return;
-        const next = step + 1;
+        const next = currentIndex + 1;
         if (steps[next]?.key === 'revisao' && onBeforeReview) {
             setIsPreparing(true);
             setPreparationError('');
@@ -224,6 +225,8 @@ export default function ArticleWizard({
     }
 
     function selectContentType(contentType) {
+        setStep(0);
+        setMaxReached(0);
         if (territorialComposerEnabled) {
             setSelectedFile(null);
             setVisualTitleFormatNotice('');
@@ -314,8 +317,10 @@ export default function ArticleWizard({
         return [
             formData.source_mode === 'link'
                 ? 'A IA extrai e valida o texto da URL informada.'
-                : 'A IA revisa o texto base que você escreveu.',
-            'A legenda com hashtags é escrita automaticamente.',
+                : 'O texto que você escreveu será mantido sem reescrita.',
+            formData.source_mode === 'link'
+                ? 'A legenda com hashtags é escrita automaticamente.'
+                : 'A legenda será mantida conforme você escrever.',
             `A arte em ${formatLabel} é renderizada no template ${templateLabel}.`,
             'A matéria aparece na fila para sua aprovação antes de ser publicada.',
         ];
@@ -649,7 +654,7 @@ export default function ArticleWizard({
                             <FieldError message={typeof errors.conteudo === 'string' ? errors.conteudo : ''} />
                         </div>}
                         {showEditorialDraft && <div className="ap-af-field">
-                            <FieldLabel required>Legenda</FieldLabel>
+                            <FieldLabel required={formData.source_mode !== 'manual'}>Legenda</FieldLabel>
                             <textarea
                                 rows={4}
                                 className={`ap-af-textarea${typeof errors.caption === 'string' ? ' ap-af-textarea--error' : ''}`}

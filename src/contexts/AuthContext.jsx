@@ -350,12 +350,11 @@ export function AuthProvider({ children }) {
     }
 
     async function signOut() {
-        const { error } = await supabase.auth.signOut()
+        const { error } = await supabase.auth.signOut({ scope: 'local' })
         if (error) throw error
-
-        setRole(null)
-        setProfessionalId(null)
-        setProfessionalName(null)
+        setAuthReady(false)
+        setAuthStatus('unauthenticated')
+        handleSignedOut()
     }
 
     const value = {

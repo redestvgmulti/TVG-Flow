@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { usePermission } from '../hooks/usePermission' // NEW: Use permission hook
 import { supabase } from '../services/supabase'
 import { Settings, ChevronRight, LogOut } from 'lucide-react'
+import { toast } from 'sonner'
 import { getNavigationItemsForRole } from '../config/navigation'
 
 // AutoPublisher's matter stage tabs all collapse onto the single "Matérias"
@@ -128,6 +129,16 @@ function Sidebar({ mobileMenuOpen, onClose }) {
         setProfileOpen(false)
         handleNavClick()
         navigate(path)
+    }
+
+    async function handleSignOut() {
+        setProfileOpen(false)
+        try {
+            await signOut()
+        } catch (error) {
+            console.error('[Sidebar] sign out failed', error)
+            toast.error('Não foi possível sair do sistema. Tente novamente.')
+        }
     }
 
     return (
@@ -317,10 +328,10 @@ function Sidebar({ mobileMenuOpen, onClose }) {
                                     </div>
                                 </button>
                                 <div className="popup-divider" />
-                                <div className="popup-item" onClick={signOut}>
+                                <button type="button" className="popup-item" onClick={() => void handleSignOut()}>
                                     <LogOut size={16} className="text-danger" />
                                     <span className="text-danger">Sair do Sistema</span>
-                                </div>
+                                </button>
                             </div>
                         </>
                     )}

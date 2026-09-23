@@ -279,9 +279,9 @@ export default function EmployeeMode({ isOpen, onClose, user: propUser, empresaI
     const selectedVisualModel = availableVisualModels.find(
         model => model.slug === formData.visual_model,
     );
-    const sourceImageRequired = territorialComposer.enabled
+    const sourceImageRequired = formData.content_type !== 'reels' && (territorialComposer.enabled
         ? composerRequiresSourceImage(territorialComposer.catalog, formData.content_type)
-        : selectedVisualModel?.sourceImage === 'required';
+        : selectedVisualModel?.sourceImage === 'required');
     const visualModelsState = visualModelsStateFor(
         masterRuntime.status,
         availableVisualModels,

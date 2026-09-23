@@ -23,7 +23,6 @@ import EditorialReviewPanel from '../../components/editorial/EditorialReviewPane
 import Modal from '../../components/ui/Modal'
 import { useEditorialWorkflowFlag } from '../../hooks/useEditorialWorkflowFlag'
 import {
-    startCollectedNewsEditorialProduction,
     startEditorialArticleFromBacklog,
 } from '../../services/editorialArticlesService'
 import { CREATION_MODES, messageForRpcError, resolveCreationMode } from '../../services/editorialArticleContract'
@@ -261,41 +260,6 @@ export default function AutoPublisher() {
         }
     }
 
-    async function startCanonicalProductionFromCollected(item) {
-        const started = await startCollectedNewsEditorialProduction(supabase, {
-            collectedNewsId: item.id,
-            requestId: crypto.randomUUID(),
-        })
-        const collected = started.collected_news || {}
-        const backlog = {
-            ...(started.backlog || {}),
-            collected_news_id: collected.id,
-            source_name: collected.source_name,
-            source_title: collected.title,
-            source_body: collected.content,
-            source_image_url: collected.image_url,
-            source_url: collected.canonical_url || collected.url_original,
-            source_sufficient: Boolean(started.source_sufficient),
-            source_requires_scrape: Boolean(started.source_requires_scrape),
-            source_captured: Boolean(started.source_captured),
-            auto_prepare: true,
-        }
-        setFormData(previous => ({
-            ...previous,
-            source_mode: 'link',
-            url_original: backlog.source_url || '',
-            source_titulo: backlog.source_title || '',
-            source_conteudo: backlog.source_body || '',
-            titulo: backlog.source_title || '',
-            conteudo: backlog.source_body || '',
-            image_url: backlog.source_image_url || '',
-            backlog_id: backlog.id,
-            idempotency_key: null,
-        }))
-        setCanonicalContext({ articleId: started.article.id, originBacklog: backlog })
-        setManualModalOpen(true)
-    }
-
     function handleCreateAnother() {
         resetManualForm()
     }
@@ -486,9 +450,9 @@ export default function AutoPublisher() {
     const selectedVisualModel = availableVisualModels.find(
         model => model.slug === formData.visual_model,
     )
-    const sourceImageRequired = territorialComposer.enabled
+    const sourceImageRequired = formData.content_type !== 'reels' && (territorialComposer.enabled
         ? composerRequiresSourceImage(territorialComposer.catalog, formData.content_type)
-        : selectedVisualModel?.sourceImage === 'required'
+        : selectedVisualModel?.sourceImage === 'required')
     const visualModelsState = visualModelsStateFor(
         masterRuntime.status,
         availableVisualModels,
@@ -981,7 +945,6 @@ export default function AutoPublisher() {
                     <CollectedNewsPanel
                         clienteId={clienteId}
                         onCountsChange={handleCollectedCountsChange}
-                        onProduce={startCanonicalProductionFromCollected}
                     />
                 )}
 

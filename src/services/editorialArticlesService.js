@@ -111,15 +111,37 @@ export async function captureEditorialArticleSource(supabase, {
 }
 
 export async function prepareEditorialAiDraft(supabase, { articleId, requestId }) {
-  const { data, error } = await supabase.functions.invoke('ap-editorial-ai-draft', {
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+  if (sessionError || !sessionData?.session?.access_token) {
+    throw new EditorialArticleError('AUTH_REQUIRED', sessionError)
+  }
+  let session = sessionData.session
+  if (session.expires_at && session.expires_at * 1000 <= Date.now() + 60000) {
+    const refreshed = await supabase.auth.refreshSession()
+    if (refreshed.error || !refreshed.data?.session?.access_token) {
+      throw new EditorialArticleError('AUTH_REQUIRED', refreshed.error)
+    }
+    session = refreshed.data.session
+  }
+  const invoke = token => supabase.functions.invoke('ap-editorial-ai-draft', {
     body: { article_id: articleId, request_id: requestId },
+    headers: { Authorization: `Bearer ${token}` },
   })
+  let { data, error } = await invoke(session.access_token)
+  if (error?.context?.status === 401) {
+    const refreshed = await supabase.auth.refreshSession()
+    if (refreshed.error || !refreshed.data?.session?.access_token) {
+      throw new EditorialArticleError('AUTH_REQUIRED', refreshed.error)
+    }
+    ;({ data, error } = await invoke(refreshed.data.session.access_token))
+  }
   if (error) {
     let responseBody = null
     if (typeof error?.context?.json === 'function') {
       responseBody = await error.context.json().catch(() => null)
     }
-    const code = data?.error || responseBody?.error || 'EDITORIAL_AI_PREPARATION_FAILED'
+    const code = data?.error || responseBody?.error
+      || (error?.context?.status === 401 ? 'AUTH_INVALID' : 'EDITORIAL_AI_PREPARATION_FAILED')
     throw new EditorialArticleError(code, error)
   }
   if (!data?.success || !data?.draft) {

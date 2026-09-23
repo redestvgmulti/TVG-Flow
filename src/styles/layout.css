@@ -437,13 +437,18 @@
 
 .popup-item {
   display: flex;
+  width: 100%;
   align-items: center;
   gap: 10px;
   padding: 10px;
   border-radius: 8px;
   cursor: pointer;
   font-size: 13px;
+  font-family: inherit;
   color: var(--color-text-inverse-dim);
+  background: transparent;
+  border: 0;
+  text-align: left;
   transition: background 0.18s ease, color 0.18s ease;
 }
 

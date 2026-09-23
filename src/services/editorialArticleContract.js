@@ -79,6 +79,10 @@ const MESSAGES = Object.freeze({
     title: 'Sessão expirada',
     description: 'Faça login novamente para continuar.',
   },
+  AUTH_INVALID: {
+    title: 'Sessão expirada',
+    description: 'Faça login novamente para continuar.',
+  },
   EDITORIAL_WORKFLOW_DISABLED: {
     title: 'Editor desativado',
     description: 'O editor editorial ainda não está habilitado para este cliente.',
