@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { motion as Motion, AnimatePresence } from 'framer-motion'
 import { RefreshCw } from 'lucide-react'
+import { toast } from 'sonner'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'
-import LoadingScreen from './LoadingScreen'
+import { activatePwaUpdate } from '../utils/activatePwaUpdate'
 import '../styles/update-banner.css'
 
 /**
@@ -17,20 +18,18 @@ export function UpdateBanner() {
 
     // Handle the update action
     const handleUpdate = async () => {
+        if (isUpdating) return
         setIsUpdating(true)
-        
-        // vite-plugin-pwa owns the controller change and performs one reload.
-        try {
-            await updateServiceWorker(true)
-        } catch (err) {
-            console.error('[PWA] updateServiceWorker failed:', err)
-            setIsUpdating(false)
-        }
-    }
 
-    // If update triggered, show loading
-    if (isUpdating) {
-        return <LoadingScreen message="Ativando nova versão…" />
+        const result = await activatePwaUpdate(updateServiceWorker, navigator.serviceWorker)
+        if (result.status === 'activated') {
+            window.location.reload()
+            return
+        }
+
+        if (result.error) console.error('[PWA] updateServiceWorker failed:', result.error)
+        setIsUpdating(false)
+        toast.error('Não foi possível ativar a nova versão. Tente novamente.')
     }
 
     // Show only if PWA detects update and user is online
@@ -60,8 +59,9 @@ export function UpdateBanner() {
                     <button
                         onClick={handleUpdate}
                         className="update-banner-button"
+                        disabled={isUpdating}
                     >
-                        Atualizar e recarregar
+                        {isUpdating ? 'Atualizando…' : 'Atualizar e recarregar'}
                     </button>
                 </div>
             </Motion.div>
