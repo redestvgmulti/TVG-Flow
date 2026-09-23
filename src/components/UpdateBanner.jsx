@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { motion as Motion, AnimatePresence } from 'framer-motion'
 import { RefreshCw } from 'lucide-react'
-import { toast } from 'sonner'
 import { useUpdateCheck } from '../hooks/useUpdateCheck'
 import { activatePwaUpdate } from '../utils/activatePwaUpdate'
 import '../styles/update-banner.css'
@@ -17,19 +16,10 @@ export function UpdateBanner() {
     const [isUpdating, setIsUpdating] = useState(false)
 
     // Handle the update action
-    const handleUpdate = async () => {
+    const handleUpdate = () => {
         if (isUpdating) return
         setIsUpdating(true)
-
-        const result = await activatePwaUpdate(updateServiceWorker, navigator.serviceWorker)
-        if (result.status === 'activated') {
-            window.location.reload()
-            return
-        }
-
-        if (result.error) console.error('[PWA] updateServiceWorker failed:', result.error)
-        setIsUpdating(false)
-        toast.error('Não foi possível ativar a nova versão. Tente novamente.')
+        activatePwaUpdate(updateServiceWorker, navigator.serviceWorker)
     }
 
     // Show only if PWA detects update and user is online

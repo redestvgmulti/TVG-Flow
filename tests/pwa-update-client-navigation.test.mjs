@@ -5,48 +5,19 @@ import test from 'node:test'
 
 const source = await readFile(new URL('../public/push-sw.js', import.meta.url), 'utf8')
 
-function workerHarness({ navigate = async () => {} } = {}) {
+test('push worker activation only claims clients and leaves update navigation to the app', async () => {
   const listeners = new Map()
-  const navigations = []
-  const client = {
-    id: 'requesting-tab',
-    url: 'https://tvgflow.vercel.app/staff/materias',
-    navigate: async url => { navigations.push(url); return navigate(url) },
-  }
+  let claims = 0
   const self = {
-    location: { origin: 'https://tvgflow.vercel.app' },
     addEventListener: (type, listener) => listeners.set(type, listener),
-    clients: {
-      claim: async () => {},
-      get: async id => id === client.id ? client : null,
-    },
+    clients: { claim: async () => { claims += 1 } },
   }
-  runInNewContext(source, { self, console, URL, setTimeout: callback => callback() })
-  return { listeners, navigations }
-}
+  runInNewContext(source, { self, console, URL })
 
-async function activate(listeners) {
   let activation
   listeners.get('activate')({ waitUntil: promise => { activation = promise } })
   await activation
-}
 
-test('ordinary service worker activation leaves open tabs in place', async () => {
-  const { listeners, navigations } = workerHarness()
-  await activate(listeners)
-  assert.deepEqual(navigations, [])
-})
-
-test('a tab requesting an update is navigated after activation even if its old bundle misses controllerchange', async () => {
-  const { listeners, navigations } = workerHarness()
-  listeners.get('message')({ data: { type: 'SKIP_WAITING' }, source: { id: 'requesting-tab' } })
-  await activate(listeners)
-  assert.deepEqual(navigations, ['https://tvgflow.vercel.app/staff/materias'])
-})
-
-test('service worker activation does not wait for a page navigation to finish', async () => {
-  const { listeners, navigations } = workerHarness({ navigate: () => new Promise(() => {}) })
-  listeners.get('message')({ data: { type: 'SKIP_WAITING' }, source: { id: 'requesting-tab' } })
-  await activate(listeners)
-  assert.deepEqual(navigations, ['https://tvgflow.vercel.app/staff/materias'])
+  assert.equal(claims, 1)
+  assert.equal(listeners.has('message'), false)
 })

@@ -2,26 +2,40 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { activatePwaUpdate } from '../src/utils/activatePwaUpdate.js'
 
-test('update completes only after the service worker takes control', async () => {
-    const serviceWorker = new EventTarget()
-    const result = activatePwaUpdate(() => {
-        queueMicrotask(() => serviceWorker.dispatchEvent(new Event('controllerchange')))
-    }, serviceWorker, 100)
-
-    assert.deepEqual(await result, { status: 'activated' })
+test('a stalled update releases its registration and reloads', async () => {
+  let unregisters = 0
+  let updates = 0
+  const serviceWorker = {
+    controller: {},
+    getRegistration: async () => ({ unregister: async () => { unregisters += 1 } }),
+  }
+  await new Promise(resolve => {
+    activatePwaUpdate(() => { updates += 1 }, serviceWorker, resolve, 5)
+  })
+  assert.equal(updates, 1)
+  assert.equal(unregisters, 1)
 })
 
-test('update releases the page if the service worker never activates', async () => {
-    const serviceWorker = new EventTarget()
-    assert.deepEqual(
-        await activatePwaUpdate(() => Promise.resolve(), serviceWorker, 10),
-        { status: 'timeout' },
-    )
+test('a changed controller reloads without unregistering the new worker', async () => {
+  let unregisters = 0
+  const serviceWorker = {
+    controller: {},
+    getRegistration: async () => ({ unregister: async () => { unregisters += 1 } }),
+  }
+  await new Promise(resolve => {
+    activatePwaUpdate(() => { serviceWorker.controller = {} }, serviceWorker, resolve, 5)
+  })
+  assert.equal(unregisters, 0)
 })
 
-test('update reports a failed activation request', async () => {
-    const error = new Error('registration failed')
-    const result = await activatePwaUpdate(() => Promise.reject(error), new EventTarget(), 100)
-    assert.equal(result.status, 'error')
-    assert.equal(result.error, error)
+test('an activation error immediately falls back to a reload', async () => {
+  let unregisters = 0
+  const serviceWorker = {
+    controller: {},
+    getRegistration: async () => ({ unregister: async () => { unregisters += 1 } }),
+  }
+  await new Promise(resolve => {
+    activatePwaUpdate(() => { throw new Error('worker unavailable') }, serviceWorker, resolve, 1000)
+  })
+  assert.equal(unregisters, 1)
 })

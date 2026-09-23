@@ -97,40 +97,10 @@ self.addEventListener('notificationclick', (event) => {
     )
 })
 
-// The update button in older clients waits for Workbox's controlling event.
-// Keep the requesting tab address so it can recover if that event is missed.
-const updateRequestClientIds = new Set()
-self.addEventListener('message', (event) => {
-    if (event.data?.type === 'SKIP_WAITING' && event.source?.id) {
-        updateRequestClientIds.add(event.source.id)
-    }
-})
-
 // Handle service worker activation
 self.addEventListener('activate', (event) => {
     console.log('[SW] Activated')
-    event.waitUntil((async () => {
-        await self.clients.claim()
-        if (!updateRequestClientIds.size) return
-
-        // Give Workbox's normal controllerchange reload a moment to finish.
-        await new Promise(resolve => setTimeout(resolve, 1500))
-        await Promise.all([...updateRequestClientIds].map(async id => {
-            try {
-                const client = await self.clients.get(id)
-                if (client?.url && new URL(client.url).origin === self.location.origin) {
-                    // Navigation can depend on this worker finishing activation.
-                    // Start it here, but never keep the activate event waiting for it.
-                    void client.navigate(client.url).catch(error => {
-                        console.warn('[SW] Update navigation failed:', error)
-                    })
-                }
-            } catch (error) {
-                console.warn('[SW] Update navigation failed:', error)
-            }
-        }))
-        updateRequestClientIds.clear()
-    })())
+    event.waitUntil(self.clients.claim())
 })
 
 // Handle errors
