@@ -7,7 +7,7 @@ export const NAV_ITEMS = [
     { key: 'calendar', label: 'Agenda', path: '/staff/calendar', icon: Calendar, roles: ['staff', 'profissional'], section: 'staff', showOnMobileBottom: true },
     { key: 'staff-meetings', label: 'Reuniões', path: '/staff/meetings', icon: Calendar, roles: ['staff'], section: 'staff', showOnMobileBottom: false },
     { key: 'request', label: 'Solicitar', path: '/staff/requests/new', icon: PlusSquare, roles: ['staff', 'profissional'], section: 'staff', isCTA: true, showOnMobileBottom: false },
-    { key: 'content', label: 'Assistentes', path: '/staff/content', icon: Bot, roles: ['staff', 'profissional'], section: 'staff', showOnMobileBottom: true },
+    { key: 'content', label: 'Flow.IA', path: '/staff/content', icon: Bot, roles: ['staff', 'profissional'], section: 'staff', showOnMobileBottom: true },
     { key: 'staff-matters', label: 'Meu trabalho', path: '/staff/materias', icon: Newspaper, roles: ['staff', 'profissional', 'employee'], section: 'tools', showOnMobileBottom: false },
     { key: 'staff-autopublisher', label: 'Criar Matéria Avulsa', path: '?modal=employee-mode', icon: Rss, roles: ['staff', 'profissional', 'employee'], section: 'tools', showOnMobileBottom: false },
     { key: 'profile', label: 'Perfil', path: '/staff/profile', icon: User, roles: ['staff', 'profissional'], section: 'staff', showOnMobileBottom: true },
@@ -16,7 +16,7 @@ export const NAV_ITEMS = [
     { key: 'admin-tasks', label: 'Tarefas', path: '/admin/tasks', icon: CheckSquare, roles: ['admin', 'super_admin'], section: 'main', showOnMobileBottom: true },
     { key: 'ap-backlog', label: 'Banco de pautas', path: '/admin/autopublisher/backlog', icon: Inbox, roles: ['admin', 'super_admin'], section: 'main', showOnMobileBottom: false },
     { key: 'admin-matters', label: 'Meu trabalho', path: '/admin/materias', icon: Newspaper, roles: ['admin', 'super_admin'], section: 'main', showOnMobileBottom: false },
-    { key: 'admin-content', label: 'Assistentes', path: '/admin/content', icon: Bot, roles: ['admin', 'super_admin'], section: 'main', showOnMobileBottom: false },
+    { key: 'admin-content', label: 'Flow.IA', path: '/admin/content', icon: Bot, roles: ['admin', 'super_admin'], section: 'main', showOnMobileBottom: false },
     { key: 'admin-calendar', label: 'Agenda', path: '/admin/calendar', icon: Calendar, roles: ['admin', 'super_admin'], section: 'main', showOnMobileBottom: false },
     { key: 'admin-meetings', label: 'Reuniões', path: '/admin/meetings', icon: Users, roles: ['admin', 'super_admin'], section: 'main', showOnMobileBottom: true },
     {

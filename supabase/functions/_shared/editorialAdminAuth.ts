@@ -35,7 +35,7 @@ export async function requireEditorialAdmin(
       ),
     });
     if (authorization.role !== "admin" && authorization.role !== "super_admin") {
-      throw new EditorialAdminAuthorizationError(403);
+      throw new EditorialAdminAuthorizationError("EDITORIAL_ADMIN_REQUIRED", 403);
     }
     return authorization;
   } catch (error) {
