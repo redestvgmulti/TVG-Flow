@@ -56,13 +56,22 @@ export default defineConfig({
         clientsClaim: true,
         // Keep updates waiting until the user confirms them in UpdateBanner.
         skipWaiting: false,
-        navigateFallback: '/index.html', // Offline fallback for navigation requests
-        navigateFallbackDenylist: [
-          /^\/api\//,  // Never fallback for API routes
-          /^\/__\//,   // Vite internal routes
-          /\.(?:png|jpg|jpeg|svg|gif|webp|ico|css|js|woff2)$/  // Static assets
-        ],
+        // Fetch the current app shell on every online navigation. A precached
+        // index.html can point at a JS bundle removed by a later deployment.
+        navigateFallback: null,
         runtimeCaching: [
+          {
+            urlPattern: ({ request, url }) => request.mode === 'navigate'
+              && url.origin === self.location.origin
+              && !url.pathname.startsWith('/api/')
+              && !url.pathname.startsWith('/__/'),
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'app-navigation',
+              precacheFallback: { fallbackURL: '/index.html' },
+              cacheableResponse: { statuses: [200] },
+            },
+          },
           // 🔐 AUTH ROUTES — NEVER CACHE (CRITICAL FIX FOR MOBILE LOGOUT)
           // iOS/Android clear SW cache in background, but NOT localStorage.
           // If auth routes are cached, token refresh fails → forced logout.
