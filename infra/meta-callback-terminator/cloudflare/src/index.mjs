@@ -9,10 +9,14 @@ const RESPONSE_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
 };
 
-function reply(status, location) {
+function reply(status, { location, diagnosticCode, upstreamStatus } = {}) {
+  const headers = { ...RESPONSE_HEADERS };
+  if (location) headers.Location = location;
+  if (diagnosticCode) headers['X-TVG-Terminator-Code'] = diagnosticCode;
+  if (upstreamStatus !== undefined) headers['X-TVG-Upstream-Status'] = String(upstreamStatus);
   return new Response(null, {
     status,
-    headers: location ? { ...RESPONSE_HEADERS, Location: location } : RESPONSE_HEADERS,
+    headers,
   });
 }
 
@@ -65,11 +69,12 @@ export function createWorker({ fetchImpl = fetch } = {}) {
       try {
         configuration = readConfiguration(env);
       } catch {
-        return reply(503);
+        return reply(503, { diagnosticCode: 'CONFIG_INVALID' });
       }
 
+      let upstream;
       try {
-        const upstream = await fetchImpl(configuration.callbackUrl, {
+        upstream = await fetchImpl(configuration.callbackUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -79,14 +84,21 @@ export function createWorker({ fetchImpl = fetch } = {}) {
           redirect: 'manual',
           signal: AbortSignal.timeout(8_000),
         });
-        const location = upstream.headers.get('location');
-        if (upstream.status !== 302 || !location || !isSafeRedirect(location, configuration.hubOrigin)) {
-          return reply(502);
-        }
-        return reply(302, location);
       } catch {
-        return reply(502);
+        return reply(502, { diagnosticCode: 'UPSTREAM_FETCH_FAILED' });
       }
+      if (upstream.status !== 302) {
+        return reply(502, {
+          diagnosticCode: 'UPSTREAM_NOT_REDIRECT',
+          upstreamStatus: upstream.status,
+        });
+      }
+      const location = upstream.headers.get('location');
+      if (!location) return reply(502, { diagnosticCode: 'UPSTREAM_LOCATION_MISSING' });
+      if (!isSafeRedirect(location, configuration.hubOrigin)) {
+        return reply(502, { diagnosticCode: 'UPSTREAM_REDIRECT_REJECTED' });
+      }
+      return reply(302, { location });
     },
   };
 }

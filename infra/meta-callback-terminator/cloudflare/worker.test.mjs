@@ -24,6 +24,8 @@ test('valid GET forwards a JSON POST to the bare Supabase callback URL', async (
   assert.equal(response.status, 302);
   assert.equal(response.headers.get('location'), 'https://tvgflow.vercel.app/admin/settings/integrations/meta/callback?meta=connected');
   assert.equal(response.headers.get('referrer-policy'), 'no-referrer');
+  assert.equal(response.headers.get('x-tvg-terminator-code'), null);
+  assert.equal(response.headers.get('x-tvg-upstream-status'), null);
   assert.equal(call.url.search, '');
   assert.equal(call.init.method, 'POST');
   assert.equal(call.init.redirect, 'manual');
@@ -41,19 +43,71 @@ test('wrong method, path, malformed state, duplicate or extra query are rejected
   assert.equal((await worker.fetch(request(`code=${code}&state=${'x'.repeat(8_200)}`), env)).status, 400);
 });
 
-test('invalid configuration and upstream failures fail closed', async () => {
+test('configuration failures expose only the fixed configuration diagnostic', async () => {
+  const worker = createWorker({ fetchImpl: async () => { throw new Error('upstream must not run'); } });
+  const response = await worker.fetch(request(), { ...env, TVG_HUB_ORIGIN: 'https://other.test' });
+  assert.equal(response.status, 503);
+  assert.equal(response.headers.get('x-tvg-terminator-code'), 'CONFIG_INVALID');
+  assert.equal(response.headers.get('x-tvg-upstream-status'), null);
+});
+
+test('upstream fetch exceptions expose only the fixed fetch diagnostic', async () => {
   const worker = createWorker({ fetchImpl: async () => { throw new Error('network failure'); } });
-  assert.equal((await worker.fetch(request(), { ...env, TVG_HUB_ORIGIN: 'https://other.test' })).status, 503);
-  assert.equal((await worker.fetch(request(), env)).status, 502);
+  const response = await worker.fetch(request(), env);
+  assert.equal(response.status, 502);
+  assert.equal(response.headers.get('x-tvg-terminator-code'), 'UPSTREAM_FETCH_FAILED');
+  assert.equal(response.headers.get('x-tvg-upstream-status'), null);
+});
+
+test('non-redirect upstream responses expose status without response content', async () => {
+  for (const status of [403, 500]) {
+    const worker = createWorker({ fetchImpl: async () => new Response('upstream body must not escape', { status }) });
+    const response = await worker.fetch(request(), env);
+    assert.equal(response.status, 502);
+    assert.equal(response.headers.get('x-tvg-terminator-code'), 'UPSTREAM_NOT_REDIRECT');
+    assert.equal(response.headers.get('x-tvg-upstream-status'), String(status));
+    assert.equal(await response.text(), '');
+  }
+});
+
+test('a redirect without location exposes only the missing-location diagnostic', async () => {
+  const worker = createWorker({ fetchImpl: async () => new Response(null, { status: 302 }) });
+  const response = await worker.fetch(request(), env);
+  assert.equal(response.status, 502);
+  assert.equal(response.headers.get('x-tvg-terminator-code'), 'UPSTREAM_LOCATION_MISSING');
+  assert.equal(response.headers.get('x-tvg-upstream-status'), null);
 });
 
 test('only allowlisted final redirects are exposed', async () => {
   const location = (value) => createWorker({ fetchImpl: async () => new Response(null, { status: 302, headers: { Location: value } }) });
-  assert.equal((await location('https://other.test/').fetch(request(), env)).status, 502);
-  assert.equal((await location('https://tvgflow.vercel.app/admin/settings/integrations/meta/callback?meta=connected&tenant=fixture').fetch(request(), env)).status, 502);
-  assert.equal((await location(`https://tvgflow.vercel.app/admin/settings/integrations/meta/callback?meta=error&code=${code}`).fetch(request(), env)).status, 502);
+  for (const value of [
+    'https://other.test/',
+    'https://tvgflow.vercel.app/admin/settings/integrations/meta/callback?meta=connected&tenant=fixture',
+    `https://tvgflow.vercel.app/admin/settings/integrations/meta/callback?meta=error&code=${code}`,
+  ]) {
+    const response = await location(value).fetch(request(), env);
+    assert.equal(response.status, 502);
+    assert.equal(response.headers.get('x-tvg-terminator-code'), 'UPSTREAM_REDIRECT_REJECTED');
+    assert.equal(response.headers.get('x-tvg-upstream-status'), null);
+  }
   const safe = await location('https://tvgflow.vercel.app/admin/settings/integrations/meta/callback?meta=error&code=META_OAUTH_STATE_INVALID').fetch(request(), env);
   assert.equal(safe.status, 302);
+  assert.equal(safe.headers.get('x-tvg-terminator-code'), null);
+});
+
+test('diagnostic response headers never contain fixture material', async () => {
+  const responses = await Promise.all([
+    createWorker({ fetchImpl: async () => { throw new Error('network failure'); } }).fetch(request(), env),
+    createWorker({ fetchImpl: async () => new Response(null, { status: 403 }) }).fetch(request(), env),
+    createWorker({ fetchImpl: async () => new Response(null, { status: 302 }) }).fetch(request(), env),
+    createWorker({ fetchImpl: async () => new Response(null, { status: 302, headers: { Location: 'https://other.test/' } }) }).fetch(request(), env),
+  ]);
+  for (const response of responses) {
+    const serializedHeaders = [...response.headers].map(([key, value]) => `${key}:${value}`).join('\n');
+    assert.equal(serializedHeaders.includes(code), false);
+    assert.equal(serializedHeaders.includes(state), false);
+    assert.equal(serializedHeaders.includes(secret), false);
+  }
 });
 
 test('source has no console logging and the committed config disables logs and traces', async () => {
