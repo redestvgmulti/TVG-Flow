@@ -102,10 +102,24 @@ export type MetaOAuthExchange = {
   pages: MetaPageCandidate[];
 };
 
+export type MetaInstagramDiscoveryTelemetry = {
+  pages_seen: number;
+  pages_with_access_token: number;
+  pages_with_instagram_account_id: number;
+  pages_with_username: number;
+  eligible_pages: number;
+};
+
+type MetaInstagramDiscoveryLogger = (
+  event: "META_INSTAGRAM_DISCOVERY",
+  counts: MetaInstagramDiscoveryTelemetry,
+) => void;
+
 export async function exchangeMetaOAuthCode(
   config: MetaAppConfig,
   code: string,
   fetchImpl: typeof fetch = fetch,
+  logDiscovery: MetaInstagramDiscoveryLogger = console.info,
 ): Promise<MetaOAuthExchange> {
   if (!code || code.length > 4096) throw new Error("META_OAUTH_CODE_INVALID");
   const exchangeUrl = new URL(
@@ -148,17 +162,23 @@ export async function exchangeMetaOAuthCode(
     ? new Date(Date.now() + expiresIn * 1000).toISOString()
     : null;
 
-  const graphGet = async (
+  const graphGetWithToken = async (
     path: string,
     fields: string,
+    accessToken: string,
     params: Record<string, string> = {},
   ) => {
-    const url = new URL(`/${config.graphApiVersion}/${path}`, META_GRAPH_ORIGIN);
+    const url = new URL(
+      `/${config.graphApiVersion}/${path}`,
+      META_GRAPH_ORIGIN,
+    );
     url.searchParams.set("fields", fields);
-    for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
+    for (const [key, value] of Object.entries(params)) {
+      url.searchParams.set(key, value);
+    }
     const response = await fetchImpl(url, {
       method: "GET",
-      headers: { Authorization: `Bearer ${userAccessToken}` },
+      headers: { Authorization: `Bearer ${accessToken}` },
       redirect: "error",
       signal: AbortSignal.timeout(META_REQUEST_TIMEOUT_MS),
     });
@@ -168,6 +188,11 @@ export async function exchangeMetaOAuthCode(
     }
     return json;
   };
+  const graphGet = (
+    path: string,
+    fields: string,
+    params: Record<string, string> = {},
+  ) => graphGetWithToken(path, fields, userAccessToken, params);
   const [me, permissionResult] = await Promise.all([
     graphGet("me", "id"),
     graphGet("me/permissions", "permission,status").then(
@@ -182,14 +207,26 @@ export async function exchangeMetaOAuthCode(
     ? permissionPayload.data
     : [];
   const grantedScopes: string[] = permissionResult.verified
-    ? permissionRows.map(asRecord).filter((permission: Record<string, unknown>) =>
-      permission.status === "granted"
-    ).map((permission: Record<string, unknown>) => stringValue(permission.permission)).filter((
+    ? permissionRows.map(asRecord).filter((
+      permission: Record<string, unknown>,
+    ) => permission.status === "granted").map((
+      permission: Record<string, unknown>,
+    ) => stringValue(permission.permission)).filter((
       scope: string | null,
     ): scope is string => Boolean(scope))
     : [];
 
   const pagesById = new Map<string, MetaPageCandidate>();
+  const telemetry: MetaInstagramDiscoveryTelemetry = {
+    pages_seen: 0,
+    pages_with_access_token: 0,
+    pages_with_instagram_account_id: 0,
+    pages_with_username: 0,
+    eligible_pages: 0,
+  };
+  let sawManagedPage = false;
+  let sawLinkedInstagram = false;
+  let sawProfileLookupFailure = false;
   const seenCursors = new Set<string>();
   let after: string | null = null;
   for (let pageNumber = 0; pageNumber < MAX_ACCOUNT_PAGES; pageNumber++) {
@@ -197,29 +234,56 @@ export async function exchangeMetaOAuthCode(
     try {
       accounts = await graphGet(
         "me/accounts",
-        "id,name,access_token,instagram_business_account{id,username}",
+        "id,name,access_token,tasks,instagram_business_account",
         after ? { after } : {},
       );
     } catch (error) {
-      if (pageNumber > 0) throw new Error("META_ACCOUNT_DISCOVERY_PARTIAL_FAILED");
+      if (pageNumber > 0) {
+        throw new Error("META_ACCOUNT_DISCOVERY_PARTIAL_FAILED");
+      }
       throw error;
     }
     const rawPages = Array.isArray(accounts.data) ? accounts.data : [];
     for (const rawPage of rawPages) {
+      sawManagedPage = true;
+      telemetry.pages_seen += 1;
       const page = asRecord(rawPage);
-    const instagram = asRecord(page.instagram_business_account);
+      const instagram = asRecord(page.instagram_business_account);
       const candidate = {
-      pageId: stringValue(page.id),
-      pageName: stringValue(page.name),
-      pageAccessToken: stringValue(page.access_token),
-      instagramUserId: stringValue(instagram.id),
-      instagramUsername: stringValue(instagram.username),
+        pageId: stringValue(page.id),
+        pageName: stringValue(page.name),
+        pageAccessToken: stringValue(page.access_token),
+        instagramUserId: stringValue(instagram.id),
+        instagramUsername: stringValue(instagram.username),
       };
+      if (candidate.pageAccessToken) telemetry.pages_with_access_token += 1;
+      if (candidate.instagramUserId) {
+        sawLinkedInstagram = true;
+        telemetry.pages_with_instagram_account_id += 1;
+      }
       if (
         candidate.pageId && candidate.pageName && candidate.pageAccessToken &&
-        candidate.instagramUserId && candidate.instagramUsername
+        candidate.instagramUserId
       ) {
-        pagesById.set(candidate.pageId, candidate as MetaPageCandidate);
+        if (!candidate.instagramUsername) {
+          try {
+            const profile = await graphGetWithToken(
+              candidate.instagramUserId,
+              "username",
+              candidate.pageAccessToken,
+            );
+            candidate.instagramUsername = stringValue(profile.username);
+          } catch {
+            sawProfileLookupFailure = true;
+          }
+        }
+        if (candidate.instagramUsername) {
+          telemetry.pages_with_username += 1;
+          telemetry.eligible_pages += 1;
+          pagesById.set(candidate.pageId, candidate as MetaPageCandidate);
+        } else {
+          sawProfileLookupFailure = true;
+        }
       }
       if (pagesById.size > MAX_ACCOUNT_ITEMS) {
         throw new Error("META_ACCOUNT_DISCOVERY_LIMIT_REACHED");
@@ -238,6 +302,15 @@ export async function exchangeMetaOAuthCode(
       throw new Error("META_ACCOUNT_DISCOVERY_LIMIT_REACHED");
     }
   }
+  logDiscovery("META_INSTAGRAM_DISCOVERY", telemetry);
+  if (!sawManagedPage) throw new Error("META_NO_MANAGED_PAGE");
+  if (!sawLinkedInstagram) {
+    throw new Error("META_NO_LINKED_PROFESSIONAL_INSTAGRAM");
+  }
+  if (!pagesById.size && sawProfileLookupFailure) {
+    throw new Error("META_INSTAGRAM_PROFILE_LOOKUP_FAILED");
+  }
+  if (!pagesById.size) throw new Error("META_NO_ELIGIBLE_INSTAGRAM_ACCOUNT");
   return {
     facebookUserId,
     userAccessToken,
