@@ -74,7 +74,7 @@ export function createWorker({ fetchImpl = fetch } = {}) {
 
       let upstream;
       try {
-        upstream = await fetchImpl(configuration.callbackUrl, {
+        upstream = await fetchImpl(configuration.callbackUrl.toString(), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

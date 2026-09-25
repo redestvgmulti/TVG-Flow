@@ -26,7 +26,9 @@ test('valid GET forwards a JSON POST to the bare Supabase callback URL', async (
   assert.equal(response.headers.get('referrer-policy'), 'no-referrer');
   assert.equal(response.headers.get('x-tvg-terminator-code'), null);
   assert.equal(response.headers.get('x-tvg-upstream-status'), null);
-  assert.equal(call.url.search, '');
+  assert.equal(typeof call.url, 'string');
+  assert.equal(call.url, 'https://gyooxmpyxncrezjiljrj.supabase.co/functions/v1/ap-meta-oauth-callback');
+  assert.equal(new URL(call.url).search, '');
   assert.equal(call.init.method, 'POST');
   assert.equal(call.init.redirect, 'manual');
   assert.equal(call.init.headers['x-meta-callback-ingress-secret'], secret);
