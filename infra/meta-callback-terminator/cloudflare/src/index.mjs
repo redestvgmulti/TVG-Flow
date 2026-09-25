@@ -51,7 +51,10 @@ function isSafeRedirect(location, hubOrigin) {
     DIAGNOSTIC_CODE_PATTERN.test(redirect.searchParams.get('code') ?? '');
 }
 
-export function createWorker({ fetchImpl = fetch } = {}) {
+export function createWorker({
+  fetchImpl = (input, init) => fetch(input, init),
+  requestImpl = Request,
+} = {}) {
   return {
     async fetch(request, env) {
       if (request.method !== 'GET') return reply(405);
@@ -72,9 +75,9 @@ export function createWorker({ fetchImpl = fetch } = {}) {
         return reply(503, { diagnosticCode: 'CONFIG_INVALID' });
       }
 
-      let upstream;
+      let upstreamRequest;
       try {
-        upstream = await fetchImpl(configuration.callbackUrl.toString(), {
+        upstreamRequest = new requestImpl(configuration.callbackUrl.toString(), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -84,6 +87,13 @@ export function createWorker({ fetchImpl = fetch } = {}) {
           redirect: 'manual',
           signal: AbortSignal.timeout(8_000),
         });
+      } catch {
+        return reply(502, { diagnosticCode: 'UPSTREAM_REQUEST_BUILD_FAILED' });
+      }
+
+      let upstream;
+      try {
+        upstream = await fetchImpl(upstreamRequest);
       } catch {
         return reply(502, { diagnosticCode: 'UPSTREAM_FETCH_FAILED' });
       }

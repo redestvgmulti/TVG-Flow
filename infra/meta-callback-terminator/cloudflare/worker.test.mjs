@@ -16,8 +16,8 @@ const request = (query = `code=${code}&state=${state}`, method = 'GET', path = '
 
 test('valid GET forwards a JSON POST to the bare Supabase callback URL', async () => {
   let call;
-  const worker = createWorker({ fetchImpl: async (url, init) => {
-    call = { url, init };
+  const worker = createWorker({ fetchImpl: async (upstreamRequest) => {
+    call = upstreamRequest;
     return new Response(null, { status: 302, headers: { Location: 'https://tvgflow.vercel.app/admin/settings/integrations/meta/callback?meta=connected' } });
   } });
   const response = await worker.fetch(request(), env);
@@ -26,13 +26,33 @@ test('valid GET forwards a JSON POST to the bare Supabase callback URL', async (
   assert.equal(response.headers.get('referrer-policy'), 'no-referrer');
   assert.equal(response.headers.get('x-tvg-terminator-code'), null);
   assert.equal(response.headers.get('x-tvg-upstream-status'), null);
-  assert.equal(typeof call.url, 'string');
+  assert.ok(call instanceof Request);
   assert.equal(call.url, 'https://gyooxmpyxncrezjiljrj.supabase.co/functions/v1/ap-meta-oauth-callback');
   assert.equal(new URL(call.url).search, '');
-  assert.equal(call.init.method, 'POST');
-  assert.equal(call.init.redirect, 'manual');
-  assert.equal(call.init.headers['x-meta-callback-ingress-secret'], secret);
-  assert.deepEqual(JSON.parse(call.init.body), { code, state });
+  assert.equal(call.method, 'POST');
+  assert.equal(call.redirect, 'manual');
+  assert.equal(call.headers.get('x-meta-callback-ingress-secret'), secret);
+  assert.equal(call.headers.get('code'), null);
+  assert.equal(call.headers.get('state'), null);
+  assert.deepEqual(await call.json(), { code, state });
+});
+
+test('the production default invokes global fetch with the constructed Request', async () => {
+  const originalFetch = globalThis.fetch;
+  let received;
+  globalThis.fetch = async (upstreamRequest) => {
+    received = upstreamRequest;
+    return new Response(null, { status: 302, headers: { Location: 'https://tvgflow.vercel.app/admin/settings/integrations/meta/callback?meta=connected' } });
+  };
+  try {
+    const response = await createWorker().fetch(request(), env);
+    assert.equal(response.status, 302);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assert.ok(received instanceof Request);
+  assert.equal(received.url, 'https://gyooxmpyxncrezjiljrj.supabase.co/functions/v1/ap-meta-oauth-callback');
+  assert.equal(received.redirect, 'manual');
 });
 
 test('wrong method, path, malformed state, duplicate or extra query are rejected before forwarding', async () => {
@@ -58,6 +78,21 @@ test('upstream fetch exceptions expose only the fixed fetch diagnostic', async (
   const response = await worker.fetch(request(), env);
   assert.equal(response.status, 502);
   assert.equal(response.headers.get('x-tvg-terminator-code'), 'UPSTREAM_FETCH_FAILED');
+  assert.equal(response.headers.get('x-tvg-upstream-status'), null);
+});
+
+test('upstream Request construction failures expose only the fixed build diagnostic', async () => {
+  const worker = createWorker({
+    fetchImpl: async () => { throw new Error('fetch must not run'); },
+    requestImpl: class {
+      constructor() {
+        throw new Error('request construction failed');
+      }
+    },
+  });
+  const response = await worker.fetch(request(), env);
+  assert.equal(response.status, 502);
+  assert.equal(response.headers.get('x-tvg-terminator-code'), 'UPSTREAM_REQUEST_BUILD_FAILED');
   assert.equal(response.headers.get('x-tvg-upstream-status'), null);
 });
 
@@ -99,6 +134,7 @@ test('only allowlisted final redirects are exposed', async () => {
 
 test('diagnostic response headers never contain fixture material', async () => {
   const responses = await Promise.all([
+    createWorker({ requestImpl: class { constructor() { throw new Error('request construction failed'); } } }).fetch(request(), env),
     createWorker({ fetchImpl: async () => { throw new Error('network failure'); } }).fetch(request(), env),
     createWorker({ fetchImpl: async () => new Response(null, { status: 403 }) }).fetch(request(), env),
     createWorker({ fetchImpl: async () => new Response(null, { status: 302 }) }).fetch(request(), env),
@@ -118,6 +154,8 @@ test('source has no console logging and the committed config disables logs and t
     readFile(new URL('./wrangler.jsonc', import.meta.url), 'utf8'),
   ]);
   assert.equal(/console\s*\./.test(source), false);
+  assert.equal(source.includes('fetchImpl = fetch'), false);
+  assert.match(source, /fetchImpl\s*=\s*\(input, init\)\s*=>\s*fetch\(input, init\)/);
   assert.match(config, /"logs"\s*:\s*\{\s*"enabled"\s*:\s*false\s*\}/);
   assert.match(config, /"traces"\s*:\s*\{\s*"enabled"\s*:\s*false\s*\}/);
   assert.equal(source.includes(secret), false);
