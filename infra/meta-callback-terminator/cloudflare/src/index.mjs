@@ -23,12 +23,14 @@ function reply(status, { location, diagnosticCode, upstreamStatus } = {}) {
   });
 }
 
-function probeReply(status, { diagnosticCode, getStatus, postStatus, headerStatus } = {}) {
+function probeReply(status, { diagnosticCode, getStatus, postStatus, headerStatus, requestStatus, signalStatus } = {}) {
   const headers = { ...RESPONSE_HEADERS };
   if (diagnosticCode) headers['X-TVG-Diagnostic-Code'] = diagnosticCode;
   if (getStatus !== undefined) headers['X-TVG-Probe-Get-Status'] = String(getStatus);
   if (postStatus !== undefined) headers['X-TVG-Probe-Post-Status'] = String(postStatus);
   if (headerStatus !== undefined) headers['X-TVG-Probe-Header-Status'] = String(headerStatus);
+  if (requestStatus !== undefined) headers['X-TVG-Probe-Request-Status'] = String(requestStatus);
+  if (signalStatus !== undefined) headers['X-TVG-Probe-Signal-Status'] = String(signalStatus);
   return new Response(null, { status, headers });
 }
 
@@ -74,10 +76,79 @@ async function runConnectivityProbe() {
     });
   }
 
+  let requestWithoutSignal;
+  try {
+    requestWithoutSignal = new Request(DIAGNOSTIC_TARGET, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-meta-callback-ingress-secret': DIAGNOSTIC_INVALID_INGRESS_SECRET,
+      },
+      body: '{}',
+      redirect: 'manual',
+    });
+  } catch {
+    return probeReply(502, {
+      diagnosticCode: 'PROBE_REQUEST_BUILD_FAILED',
+      getStatus: getResponse.status,
+      postStatus: postResponse.status,
+      headerStatus: headerResponse.status,
+    });
+  }
+
+  let requestResponse;
+  try {
+    requestResponse = await fetch(requestWithoutSignal);
+  } catch {
+    return probeReply(502, {
+      diagnosticCode: 'PROBE_REQUEST_FETCH_FAILED',
+      getStatus: getResponse.status,
+      postStatus: postResponse.status,
+      headerStatus: headerResponse.status,
+    });
+  }
+
+  let requestWithSignal;
+  try {
+    requestWithSignal = new Request(DIAGNOSTIC_TARGET, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-meta-callback-ingress-secret': DIAGNOSTIC_INVALID_INGRESS_SECRET,
+      },
+      body: '{}',
+      redirect: 'manual',
+      signal: AbortSignal.timeout(8_000),
+    });
+  } catch {
+    return probeReply(502, {
+      diagnosticCode: 'PROBE_SIGNAL_REQUEST_BUILD_FAILED',
+      getStatus: getResponse.status,
+      postStatus: postResponse.status,
+      headerStatus: headerResponse.status,
+      requestStatus: requestResponse.status,
+    });
+  }
+
+  let signalResponse;
+  try {
+    signalResponse = await fetch(requestWithSignal);
+  } catch {
+    return probeReply(502, {
+      diagnosticCode: 'PROBE_SIGNAL_FETCH_FAILED',
+      getStatus: getResponse.status,
+      postStatus: postResponse.status,
+      headerStatus: headerResponse.status,
+      requestStatus: requestResponse.status,
+    });
+  }
+
   return probeReply(204, {
     getStatus: getResponse.status,
     postStatus: postResponse.status,
     headerStatus: headerResponse.status,
+    requestStatus: requestResponse.status,
+    signalStatus: signalResponse.status,
   });
 }
 
