@@ -1,0 +1,69 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Meta OAuth callback terminator with HTTP API access logging disabled
+
+Parameters:
+  CallbackDomain:
+    Type: String
+    Description: Dedicated public callback FQDN
+  CertificateArn:
+    Type: String
+    Description: ACM certificate in this AWS Region for CallbackDomain
+  SupabaseCallbackUrl:
+    Type: String
+    Description: Fixed HTTPS URL ending in /functions/v1/ap-meta-oauth-callback
+  TvgHubOrigin:
+    Type: String
+    Description: Exact HTTPS origin for the final TVG Hub redirect
+  MetaCallbackIngressSecret:
+    Type: String
+    NoEcho: true
+    MinLength: 32
+    Description: Dedicated secret shared only with the Supabase callback
+
+Resources:
+  CallbackApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: prod
+      DisableExecuteApiEndpoint: true
+      DefinitionBody:
+        openapi: '3.0.1'
+        info:
+          title: meta-oauth-callback-terminator
+          version: '1.0'
+        paths: {}
+      DefaultRouteSettings:
+        ThrottlingRateLimit: 5
+        ThrottlingBurstLimit: 10
+      Domain:
+        DomainName: !Ref CallbackDomain
+        CertificateArn: !Ref CertificateArn
+        EndpointConfiguration: REGIONAL
+        SecurityPolicy: TLS_1_2
+      # Do not add AccessLogSettings. API Gateway HTTP API access logging is opt-in.
+
+  CallbackFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: handler.handler
+      Runtime: nodejs22.x
+      Timeout: 10
+      MemorySize: 128
+      Environment:
+        Variables:
+          SUPABASE_META_CALLBACK_URL: !Ref SupabaseCallbackUrl
+          TVG_HUB_ORIGIN: !Ref TvgHubOrigin
+          META_CALLBACK_INGRESS_SECRET: !Ref MetaCallbackIngressSecret
+      Events:
+        MetaCallback:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CallbackApi
+            Method: GET
+            Path: /meta/oauth/callback
+
+Outputs:
+  CallbackRedirectUri:
+    Value: !Sub https://${CallbackDomain}/meta/oauth/callback

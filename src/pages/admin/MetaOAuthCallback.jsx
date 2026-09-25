@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { CheckCircle2, Loader2, XCircle } from 'lucide-react'
-import { getMetaConnectionStatus } from '../../services/metaIntegration'
+import { getMetaConnectionStatus, META_OAUTH_PENDING_TENANT_KEY } from '../../services/metaIntegration'
 import { supabase } from '../../services/supabase'
 
 export default function MetaOAuthCallback() {
   const [params] = useSearchParams()
   const [state, setState] = useState('loading')
   useEffect(() => {
-    void getMetaConnectionStatus(supabase, params.get('tenant')).then(status => setState(status.connected ? 'connected' : (params.get('meta') === 'select' ? 'select' : 'error')))
+    void getMetaConnectionStatus(supabase, window.sessionStorage.getItem(META_OAUTH_PENDING_TENANT_KEY)).then(status => setState(status.connected ? 'connected' : (params.get('meta') === 'select' ? 'select' : 'error')))
       .catch(() => setState('error'))
   }, [params])
   if (state === 'loading') return <div className="ap-form-section" role="status"><Loader2 className="ap-spin-icon" /> Finalizando conexão Meta…</div>
