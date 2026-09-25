@@ -13,6 +13,7 @@ const env = {
 };
 const request = (query = `code=${code}&state=${state}`, method = 'GET', path = '/meta/oauth/callback') =>
   new Request(`https://meta-oauth-callback.redestvgmulti.workers.dev${path}${query === undefined ? '' : `?${query}`}`, { method });
+const probeRequest = () => request('', 'GET', '/__diag/upstream');
 
 test('valid GET forwards a JSON POST to the bare Supabase callback URL', async () => {
   let call;
@@ -53,6 +54,81 @@ test('the production default invokes global fetch with the constructed Request',
   assert.ok(received instanceof Request);
   assert.equal(received.url, 'https://gyooxmpyxncrezjiljrj.supabase.co/functions/v1/ap-meta-oauth-callback');
   assert.equal(received.redirect, 'manual');
+});
+
+test('connectivity probe reports a GET fetch failure without sensitive material', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => { throw new Error('network failure'); };
+  let response;
+  try {
+    response = await createWorker().fetch(probeRequest(), env);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assert.equal(response.status, 502);
+  assert.equal(response.headers.get('x-tvg-diagnostic-code'), 'PROBE_GET_FETCH_FAILED');
+  assert.equal(response.headers.get('x-tvg-probe-get-status'), null);
+  assert.equal(await response.text(), '');
+});
+
+test('connectivity probe performs only fixed, unauthenticated requests and exposes statuses', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (input, init) => {
+    calls.push({ input, init });
+    return new Response(null, { status: [405, 403, 403][calls.length - 1] });
+  };
+  let response;
+  try {
+    response = await createWorker().fetch(probeRequest(), env);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assert.equal(response.status, 204);
+  assert.equal(response.headers.get('x-tvg-diagnostic-code'), null);
+  assert.equal(response.headers.get('x-tvg-probe-get-status'), '405');
+  assert.equal(response.headers.get('x-tvg-probe-post-status'), '403');
+  assert.equal(response.headers.get('x-tvg-probe-header-status'), '403');
+  assert.equal(await response.text(), '');
+  assert.equal(calls.length, 3);
+  for (const call of calls) {
+    assert.equal(call.input, 'https://gyooxmpyxncrezjiljrj.supabase.co/functions/v1/ap-meta-oauth-callback');
+    assert.equal(new URL(call.input).search, '');
+    assert.equal(call.init.redirect, 'manual');
+    assert.equal(call.init.signal, undefined);
+    assert.equal(call.init.headers?.['x-meta-callback-ingress-secret'] === secret, false);
+    assert.equal(JSON.stringify(call.init).includes(code), false);
+    assert.equal(JSON.stringify(call.init).includes(state), false);
+  }
+  assert.equal(calls[0].init.method, 'GET');
+  assert.equal(calls[0].init.body, undefined);
+  assert.equal(calls[0].init.headers, undefined);
+  assert.equal(calls[1].init.method, 'POST');
+  assert.deepEqual(calls[1].init.headers, { 'Content-Type': 'application/json' });
+  assert.equal(calls[1].init.body, '{}');
+  assert.equal(calls[2].init.method, 'POST');
+  assert.equal(calls[2].init.headers['x-meta-callback-ingress-secret'], 'diagnostic-invalid-secret-do-not-use');
+});
+
+test('connectivity probe stops after the first failed stage', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (input, init) => {
+    calls.push({ input, init });
+    if (calls.length === 1) return new Response(null, { status: 405 });
+    throw new Error('network failure');
+  };
+  let response;
+  try {
+    response = await createWorker().fetch(probeRequest(), env);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assert.equal(response.status, 502);
+  assert.equal(response.headers.get('x-tvg-diagnostic-code'), 'PROBE_POST_FETCH_FAILED');
+  assert.equal(response.headers.get('x-tvg-probe-get-status'), '405');
+  assert.equal(response.headers.get('x-tvg-probe-post-status'), null);
+  assert.equal(calls.length, 2);
 });
 
 test('wrong method, path, malformed state, duplicate or extra query are rejected before forwarding', async () => {
