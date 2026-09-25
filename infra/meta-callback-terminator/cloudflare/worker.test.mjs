@@ -251,6 +251,20 @@ test('upstream fetch exceptions expose only the fixed fetch diagnostic', async (
   assert.equal(response.headers.get('x-tvg-upstream-status'), null);
 });
 
+test('an aborted upstream signal returns the fixed timeout diagnostic', async () => {
+  const originalTimeout = AbortSignal.timeout;
+  AbortSignal.timeout = () => AbortSignal.abort();
+  let response;
+  try {
+    response = await createWorker({ fetchImpl: async () => { throw new Error('abort'); } }).fetch(request(), env);
+  } finally {
+    AbortSignal.timeout = originalTimeout;
+  }
+  assert.equal(response.status, 504);
+  assert.equal(response.headers.get('x-tvg-terminator-code'), 'UPSTREAM_TIMEOUT');
+  assert.equal(response.headers.get('x-tvg-upstream-status'), null);
+});
+
 test('upstream Request construction failures expose only the fixed build diagnostic', async () => {
   const worker = createWorker({
     fetchImpl: async () => { throw new Error('fetch must not run'); },
@@ -325,7 +339,8 @@ test('source has no console logging and the committed config disables logs and t
   ]);
   assert.equal(/console\s*\./.test(source), false);
   assert.equal(source.includes('fetchImpl = fetch'), false);
-  assert.match(source, /fetchImpl\s*=\s*\(input, init\)\s*=>\s*fetch\(input, init\)/);
+  assert.equal(source.includes('fetchImpl = (input, init) => fetch(input, init)'), false);
+  assert.match(source, /:\s*await fetch\(upstreamRequest\)/);
   assert.match(config, /"logs"\s*:\s*\{\s*"enabled"\s*:\s*false\s*\}/);
   assert.match(config, /"traces"\s*:\s*\{\s*"enabled"\s*:\s*false\s*\}/);
   assert.equal(source.includes(secret), false);

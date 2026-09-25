@@ -184,7 +184,7 @@ function isSafeRedirect(location, hubOrigin) {
 }
 
 export function createWorker({
-  fetchImpl = (input, init) => fetch(input, init),
+  fetchImpl,
   requestImpl = Request,
 } = {}) {
   return {
@@ -211,8 +211,10 @@ export function createWorker({
         return reply(503, { diagnosticCode: 'CONFIG_INVALID' });
       }
 
+      let upstreamSignal;
       let upstreamRequest;
       try {
+        upstreamSignal = AbortSignal.timeout(8_000);
         upstreamRequest = new requestImpl(configuration.callbackUrl.toString(), {
           method: 'POST',
           headers: {
@@ -221,7 +223,7 @@ export function createWorker({
           },
           body: JSON.stringify({ code: code[0], state: state[0] }),
           redirect: 'manual',
-          signal: AbortSignal.timeout(8_000),
+          signal: upstreamSignal,
         });
       } catch {
         return reply(502, { diagnosticCode: 'UPSTREAM_REQUEST_BUILD_FAILED' });
@@ -229,8 +231,13 @@ export function createWorker({
 
       let upstream;
       try {
-        upstream = await fetchImpl(upstreamRequest);
+        upstream = fetchImpl
+          ? await fetchImpl(upstreamRequest)
+          : await fetch(upstreamRequest);
       } catch {
+        if (upstreamSignal.aborted) {
+          return reply(504, { diagnosticCode: 'UPSTREAM_TIMEOUT' });
+        }
         return reply(502, { diagnosticCode: 'UPSTREAM_FETCH_FAILED' });
       }
       if (upstream.status !== 302) {
