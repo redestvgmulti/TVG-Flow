@@ -1,7 +1,4 @@
 const CALLBACK_PATH = '/meta/oauth/callback';
-const DIAGNOSTIC_PATH = '/__diag/upstream';
-const DIAGNOSTIC_TARGET = 'https://gyooxmpyxncrezjiljrj.supabase.co/functions/v1/ap-meta-oauth-callback';
-const DIAGNOSTIC_INVALID_INGRESS_SECRET = 'diagnostic-invalid-secret-do-not-use';
 const STATE_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const DIAGNOSTIC_CODE_PATTERN = /^META_[A-Z_]+$/;
 const MAX_QUERY_BYTES = 8_192;
@@ -20,135 +17,6 @@ function reply(status, { location, diagnosticCode, upstreamStatus } = {}) {
   return new Response(null, {
     status,
     headers,
-  });
-}
-
-function probeReply(status, { diagnosticCode, getStatus, postStatus, headerStatus, requestStatus, signalStatus } = {}) {
-  const headers = { ...RESPONSE_HEADERS };
-  if (diagnosticCode) headers['X-TVG-Diagnostic-Code'] = diagnosticCode;
-  if (getStatus !== undefined) headers['X-TVG-Probe-Get-Status'] = String(getStatus);
-  if (postStatus !== undefined) headers['X-TVG-Probe-Post-Status'] = String(postStatus);
-  if (headerStatus !== undefined) headers['X-TVG-Probe-Header-Status'] = String(headerStatus);
-  if (requestStatus !== undefined) headers['X-TVG-Probe-Request-Status'] = String(requestStatus);
-  if (signalStatus !== undefined) headers['X-TVG-Probe-Signal-Status'] = String(signalStatus);
-  return new Response(null, { status, headers });
-}
-
-async function runConnectivityProbe() {
-  let getResponse;
-  try {
-    getResponse = await fetch(DIAGNOSTIC_TARGET, { method: 'GET', redirect: 'manual' });
-  } catch {
-    return probeReply(502, { diagnosticCode: 'PROBE_GET_FETCH_FAILED' });
-  }
-
-  let postResponse;
-  try {
-    postResponse = await fetch(DIAGNOSTIC_TARGET, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: '{}',
-      redirect: 'manual',
-    });
-  } catch {
-    return probeReply(502, {
-      diagnosticCode: 'PROBE_POST_FETCH_FAILED',
-      getStatus: getResponse.status,
-    });
-  }
-
-  let headerResponse;
-  try {
-    headerResponse = await fetch(DIAGNOSTIC_TARGET, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-meta-callback-ingress-secret': DIAGNOSTIC_INVALID_INGRESS_SECRET,
-      },
-      body: '{}',
-      redirect: 'manual',
-    });
-  } catch {
-    return probeReply(502, {
-      diagnosticCode: 'PROBE_CUSTOM_HEADER_FETCH_FAILED',
-      getStatus: getResponse.status,
-      postStatus: postResponse.status,
-    });
-  }
-
-  let requestWithoutSignal;
-  try {
-    requestWithoutSignal = new Request(DIAGNOSTIC_TARGET, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-meta-callback-ingress-secret': DIAGNOSTIC_INVALID_INGRESS_SECRET,
-      },
-      body: '{}',
-      redirect: 'manual',
-    });
-  } catch {
-    return probeReply(502, {
-      diagnosticCode: 'PROBE_REQUEST_BUILD_FAILED',
-      getStatus: getResponse.status,
-      postStatus: postResponse.status,
-      headerStatus: headerResponse.status,
-    });
-  }
-
-  let requestResponse;
-  try {
-    requestResponse = await fetch(requestWithoutSignal);
-  } catch {
-    return probeReply(502, {
-      diagnosticCode: 'PROBE_REQUEST_FETCH_FAILED',
-      getStatus: getResponse.status,
-      postStatus: postResponse.status,
-      headerStatus: headerResponse.status,
-    });
-  }
-
-  let requestWithSignal;
-  try {
-    requestWithSignal = new Request(DIAGNOSTIC_TARGET, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-meta-callback-ingress-secret': DIAGNOSTIC_INVALID_INGRESS_SECRET,
-      },
-      body: '{}',
-      redirect: 'manual',
-      signal: AbortSignal.timeout(8_000),
-    });
-  } catch {
-    return probeReply(502, {
-      diagnosticCode: 'PROBE_SIGNAL_REQUEST_BUILD_FAILED',
-      getStatus: getResponse.status,
-      postStatus: postResponse.status,
-      headerStatus: headerResponse.status,
-      requestStatus: requestResponse.status,
-    });
-  }
-
-  let signalResponse;
-  try {
-    signalResponse = await fetch(requestWithSignal);
-  } catch {
-    return probeReply(502, {
-      diagnosticCode: 'PROBE_SIGNAL_FETCH_FAILED',
-      getStatus: getResponse.status,
-      postStatus: postResponse.status,
-      headerStatus: headerResponse.status,
-      requestStatus: requestResponse.status,
-    });
-  }
-
-  return probeReply(204, {
-    getStatus: getResponse.status,
-    postStatus: postResponse.status,
-    headerStatus: headerResponse.status,
-    requestStatus: requestResponse.status,
-    signalStatus: signalResponse.status,
   });
 }
 
@@ -191,10 +59,6 @@ export function createWorker({
     async fetch(request, env) {
       if (request.method !== 'GET') return reply(405);
       const url = new URL(request.url);
-      if (url.pathname === DIAGNOSTIC_PATH) {
-        if (url.search) return reply(400);
-        return runConnectivityProbe();
-      }
       if (url.pathname !== CALLBACK_PATH) return reply(404);
       if (url.search.length - 1 > MAX_QUERY_BYTES) return reply(400);
       const code = url.searchParams.getAll('code');
