@@ -4,6 +4,7 @@
   "main": "src/index.mjs",
   "compatibility_date": "2026-09-25",
   "workers_dev": true,
+  "preview_urls": false,
   "observability": {
     "logs": { "enabled": false },
     "traces": { "enabled": false }
