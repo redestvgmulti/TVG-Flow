@@ -40,7 +40,7 @@ const env = {
   META_APP_ID: "123456",
   META_APP_SECRET: "fixture-app-secret",
   META_OAUTH_REDIRECT_URI:
-    "https://example.test/functions/v1/ap-meta-oauth-callback",
+    "https://callback.example.test/meta/oauth/callback",
   META_GRAPH_API_VERSION: "v99.0",
 };
 const json = (body: unknown, status = 200) =>

@@ -10,6 +10,10 @@ import {
   cleanupExpiredMetaSelectionSessions,
   createAdminClient,
 } from "../_shared/metaConnection.ts";
+import {
+  MetaCallbackIngressError,
+  parseMetaCallbackIngress,
+} from "../_shared/metaCallbackIngress.ts";
 
 function throwRpcFailure(error: unknown, fallback: string): never {
   const detail = error instanceof Error ? error.message : JSON.stringify(error);
@@ -20,16 +24,23 @@ function throwRpcFailure(error: unknown, fallback: string): never {
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method !== "GET") {
-    return new Response("Method not allowed", { status: 405 });
+  let code: string;
+  let state: string;
+  try {
+    ({ code, state } = await parseMetaCallbackIngress(
+      req,
+      Deno.env.get("META_CALLBACK_INGRESS_SECRET"),
+    ));
+  } catch (error) {
+    const status = error instanceof MetaCallbackIngressError ? error.status : 400;
+    return new Response("Callback rejected", {
+      status,
+      headers: { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" },
+    });
   }
   let redirectTarget = "/admin/settings/integrations/meta/callback";
   let admin: ReturnType<typeof createAdminClient> | null = null;
   try {
-    const query = new URL(req.url).searchParams;
-    const state = query.get("state") || "";
-    const code = query.get("code") || "";
-    if (!state || !code) throw new Error("META_OAUTH_CALLBACK_INVALID");
     admin = createAdminClient();
     const { data: stateRow, error: stateError } = await admin.schema("ap").rpc(
       "consume_meta_oauth_state",
@@ -97,7 +108,7 @@ Deno.serve(async (req: Request) => {
       if (connectionError) {
         throwRpcFailure(connectionError, "META_CONNECTION_STORE_FAILED");
       }
-      return appRedirect(redirectTarget, "connected", { tenant: stateRow.cliente_id });
+      return appRedirect(redirectTarget, "connected");
     }
     const candidates: Array<{
       facebook_page_id: string;
@@ -134,7 +145,7 @@ Deno.serve(async (req: Request) => {
       },
     );
     if (sessionError) throwRpcFailure(sessionError, "META_SELECTION_STORE_FAILED");
-    return appRedirect(redirectTarget, "select", { tenant: stateRow.cliente_id });
+    return appRedirect(redirectTarget, "select");
   } catch (error) {
     return appRedirect(redirectTarget, "error", {
       code: sanitizeMetaError(error),
