@@ -1,4 +1,8 @@
-/** Contract only. Production providers follow the real, read-only Meta POC. */
+/**
+ * Contract only. New Radar sources are reserved for Meta Business Discovery.
+ * `apify` remains a legacy compatibility type for the legacy worker;
+ * it must not be selected or invoked by the new Radar.
+ */
 export type InstagramRadarProviderName = 'meta_business_discovery' | 'apify';
 export type InstagramRadarMediaType = 'feed' | 'reel' | 'carousel' | 'unknown';
 

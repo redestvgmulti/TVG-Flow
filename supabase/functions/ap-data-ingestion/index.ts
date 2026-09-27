@@ -65,7 +65,10 @@ Deno.serve(async (req: Request) => {
   let sourceQuery = supabase
     .schema("ap").from("sources")
     .select("id, cliente_id, nome, url, tipo")
-    .eq("ativo", true);
+    .eq("ativo", true)
+    // Instagram sources are registered ahead of the official Meta provider.
+    // This generic collector must never route them through legacy RSS handling.
+    .neq("tipo", "instagram");
   if (disabledClienteIds.length) {
     sourceQuery = sourceQuery.not("cliente_id", "in", `(${disabledClienteIds.join(",")})`);
   }
