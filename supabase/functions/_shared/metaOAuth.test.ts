@@ -58,7 +58,7 @@ Deno.test("OAuth authorization URL is Meta HTTPS, configured-version and state-b
   assertEquals(url.searchParams.get("state"), state);
   assertEquals(
     url.searchParams.get("scope"),
-    "pages_show_list,pages_read_engagement,instagram_basic",
+    "pages_show_list,pages_read_engagement,instagram_basic,business_management",
   );
   assertEquals(url.searchParams.has("client_secret"), false);
 });
@@ -495,6 +495,7 @@ const META_GRANTED_PERMISSIONS = [
   { permission: "instagram_basic", status: "granted" },
   { permission: "pages_show_list", status: "granted" },
   { permission: "pages_read_engagement", status: "granted" },
+  { permission: "business_management", status: "granted" },
 ];
 
 Deno.test("capabilities are independent and error output is sanitized", () => {
@@ -503,6 +504,7 @@ Deno.test("capabilities are independent and error output is sanitized", () => {
       "pages_show_list",
       "pages_read_engagement",
       "instagram_basic",
+      "business_management",
     ]),
     {
       radar_read: true,
@@ -510,6 +512,14 @@ Deno.test("capabilities are independent and error output is sanitized", () => {
       comments: false,
       messages: false,
     },
+  );
+  assertEquals(
+    capabilitiesFromScopes([
+      "pages_show_list",
+      "pages_read_engagement",
+      "instagram_basic",
+    ]).radar_read,
+    false,
   );
   assertEquals(
     capabilitiesFromScopes(["instagram_content_publish"]).publishing,
