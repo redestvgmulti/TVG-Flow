@@ -1,0 +1,19 @@
+{
+  "$schema": "https://unpkg.com/wrangler@latest/config-schema.json",
+  "name": "meta-oauth-callback",
+  "main": "src/index.mjs",
+  "compatibility_date": "2026-09-25",
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": {
+    "logs": { "enabled": false },
+    "traces": { "enabled": false }
+  },
+  "vars": {
+    "SUPABASE_META_CALLBACK_URL": "https://gyooxmpyxncrezjiljrj.supabase.co/functions/v1/ap-meta-oauth-callback",
+    "TVG_HUB_ORIGIN": "https://tvgflow.vercel.app"
+  },
+  "secrets": {
+    "required": ["META_CALLBACK_INGRESS_SECRET"]
+  }
+}

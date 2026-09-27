@@ -111,8 +111,8 @@ verify_jwt = false
 [functions.ap-meta-oauth-start]
 verify_jwt = true
 
-# Meta redirects directly to this public callback. Authentication is the
-# single-use, expiring state stored server-side by ap-meta-oauth-start.
+# Called only by the external callback terminator with a dedicated ingress
+# secret. OAuth state remains single-use and is validated server-side.
 [functions.ap-meta-oauth-callback]
 verify_jwt = false
 

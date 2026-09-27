@@ -8,8 +8,10 @@ This release uses Instagram API with Facebook Login with read-only scopes:
 
 The application builds the authorization request server-side using the configured
 Graph version and the Facebook OAuth dialog endpoint. It sends client_id,
-redirect_uri, state, response_type=code and the scopes above. The callback exchanges
-code, extends the short-lived user token, reads me permissions and reads
+redirect_uri, state, response_type=code and the scopes above. Meta redirects to a
+dedicated external callback terminator. The terminator forwards code/state as a
+server-side JSON POST to the Supabase callback, without query parameters. The callback
+exchanges code, extends the short-lived user token, reads me permissions and reads
 me/accounts with id, name, access_token and instagram_business_account id/username.
 
 Page and user tokens are saved only through Supabase Vault. The database stores Vault
@@ -22,7 +24,8 @@ Provision these server-side Edge Function secrets before the first real connecti
 | --- | --- | --- |
 | META_APP_ID | Yes | Meta app ID. |
 | META_APP_SECRET | Yes | Meta app secret. Never expose or log it. |
-| META_OAUTH_REDIRECT_URI | Yes | Exact HTTPS callback registered in Meta, ending in /functions/v1/ap-meta-oauth-callback. |
+| META_OAUTH_REDIRECT_URI | Yes | Exact external HTTPS terminator URI registered in Meta, ending in /meta/oauth/callback. The token exchange uses the identical URI. |
+| META_CALLBACK_INGRESS_SECRET | Yes | Dedicated 32+ character secret shared only with the terminator; never expose to Meta or a browser. |
 | META_GRAPH_API_VERSION | Yes | Current supported Graph version, written vN.0. |
 | FRONTEND_URL | Yes in production | Trusted TVG Hub origin for post-callback redirect. |
 | META_ALLOWED_ORIGINS | Yes in production | Comma-separated, exact HTTPS browser-origin allowlist for authenticated Meta Functions. No wildcard is accepted. |
@@ -31,7 +34,10 @@ Do not provision Page ID, Instagram user ID, Page access token, user access toke
 pilot profile as permanent environment configuration. OAuth discovers those values and
 stores them tenant-scoped.
 
-The callback URL must exactly match the Meta app setting. Configure Facebook Login
+The terminator deployment and coordinated cutover are described in
+`infra/meta-callback-terminator/README.md`. Do not change the Meta redirect URI or
+deploy the POST-only Supabase callback until the terminator and ingress secret are
+ready. The callback URL must exactly match the Meta app setting. Configure Facebook Login
 redirect allow-list, app domains and the deauthorization callback at
 /functions/v1/ap-meta-deauthorize in the Meta dashboard. This endpoint verifies the
 signed request, first marks every matching connection revoked, then performs

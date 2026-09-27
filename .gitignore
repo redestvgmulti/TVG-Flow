@@ -31,6 +31,7 @@ FIX_USER_ROLE.sql
 .vercel
 .env*.local
 .env.local.bak
+infra/meta-callback-terminator/cloudflare/.dev.vars*
 
 # Supabase local
 supabase/.temp/
