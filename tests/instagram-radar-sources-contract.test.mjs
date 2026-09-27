@@ -34,6 +34,22 @@ test('the Radar UI has connected, disconnected, empty, local loading and error s
   assert.doesNotMatch(shell, /A descoberta ainda não está ativa nesta fase\./)
 })
 
+test('removal requires a local confirmation and keeps its dialog open on an error', async () => {
+  const shell = await readFile(new URL('src/components/editorial/InstagramRadarShell.jsx', root), 'utf8')
+
+  assert.match(shell, /setRemovalCandidate\(source\)/)
+  assert.match(shell, /async function confirmRemoval\(\)/)
+  assert.match(shell, /removalInFlight\.current/)
+  assert.match(shell, /await removeInstagramSource\(supabase, clienteId, removalCandidate\.id\)/)
+  assert.match(shell, /Remover perfil monitorado\?/)
+  assert.match(shell, /Cancelar/)
+  assert.match(shell, /disabled=\{removing\}/)
+  assert.match(shell, /setRemovalError\(errorMessage\(error\)\)/)
+  assert.match(shell, /setRemovalCandidate\(null\)/)
+  assert.match(shell, /applyInstagramSourceRemovalResult/)
+  assert.doesNotMatch(shell, /onClick=\{\(\) => removeInstagramSource/)
+})
+
 test('the generic collector explicitly excludes Instagram until the Meta provider exists', async () => {
   const ingestion = await readFile(new URL('supabase/functions/ap-data-ingestion/index.ts', root), 'utf8')
   assert.match(ingestion, /\.neq\("tipo", "instagram"\)/)

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  applyInstagramSourceRemovalResult,
   createInstagramSource,
   InstagramRadarError,
   listInstagramSources,
@@ -77,5 +78,20 @@ test('duplicate response remains deterministic for the UI', async () => {
   await assert.rejects(
     createInstagramSource(supabase, 'tenant-a', '@prefeituradegoiatuba'),
     error => error instanceof InstagramRadarError && error.code === 'INSTAGRAM_SOURCE_ALREADY_EXISTS',
+  )
+})
+
+test('a successful removal keeps a historically collected source paused and otherwise removes it', () => {
+  const sources = [{ id: 'one', ativo: true }, { id: 'two', ativo: true }]
+  assert.deepEqual(
+    applyInstagramSourceRemovalResult(sources, 'one', {
+      deactivated: true,
+      source: { id: 'one', ativo: false },
+    }),
+    [{ id: 'one', ativo: false }, { id: 'two', ativo: true }],
+  )
+  assert.deepEqual(
+    applyInstagramSourceRemovalResult(sources, 'one', { deactivated: false }),
+    [{ id: 'two', ativo: true }],
   )
 })

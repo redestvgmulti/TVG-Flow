@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Instagram, Loader2, Pause, Play, Plus, Radar, Trash2, X } from 'lucide-react'
 import { supabase } from '../../services/supabase'
 import {
+  applyInstagramSourceRemovalResult,
   createInstagramSource,
   listInstagramSources,
   normalizeInstagramProfile,
@@ -31,6 +32,10 @@ export default function InstagramRadarShell({ onConnect, clienteId }) {
   const [saving, setSaving] = useState(false)
   const [pendingId, setPendingId] = useState(null)
   const [operationError, setOperationError] = useState('')
+  const [removalCandidate, setRemovalCandidate] = useState(null)
+  const [removalError, setRemovalError] = useState('')
+  const [removing, setRemoving] = useState(false)
+  const removalInFlight = useRef(false)
 
   const loadStatus = useCallback(
     () => getMetaConnectionStatus(supabase, clienteId)
@@ -95,18 +100,20 @@ export default function InstagramRadarShell({ onConnect, clienteId }) {
     }
   }
 
-  async function removeSource(source) {
-    setPendingId(source.id)
-    setOperationError('')
+  async function confirmRemoval() {
+    if (!removalCandidate || removalInFlight.current) return
+    removalInFlight.current = true
+    setRemoving(true)
+    setRemovalError('')
     try {
-      const result = await removeInstagramSource(supabase, clienteId, source.id)
-      setSources(current => result.deactivated
-        ? current.map(item => item.id === source.id ? result.source : item)
-        : current.filter(item => item.id !== source.id))
+      const result = await removeInstagramSource(supabase, clienteId, removalCandidate.id)
+      setSources(current => applyInstagramSourceRemovalResult(current, removalCandidate.id, result))
+      setRemovalCandidate(null)
     } catch (error) {
-      setOperationError(errorMessage(error))
+      setRemovalError(errorMessage(error))
     } finally {
-      setPendingId(null)
+      removalInFlight.current = false
+      setRemoving(false)
     }
   }
 
@@ -149,7 +156,7 @@ export default function InstagramRadarShell({ onConnect, clienteId }) {
             <span className="aps-list-row-tag">{source.ativo ? 'Ativo' : 'Pausado'}</span>
             <div className="aps-list-row-actions">
               <button type="button" className="aps-btn aps-btn-outline" disabled={pendingId === source.id} onClick={() => updateActive(source)}>{source.ativo ? <Pause size={14} /> : <Play size={14} />}{source.ativo ? 'Pausar' : 'Ativar'}</button>
-              <button type="button" className="aps-btn aps-btn-outline" disabled={pendingId === source.id} onClick={() => removeSource(source)}><Trash2 size={14} /> Remover</button>
+              <button type="button" className="aps-btn aps-btn-outline" disabled={pendingId === source.id} onClick={() => { setRemovalCandidate(source); setRemovalError('') }}><Trash2 size={14} /> Remover</button>
             </div>
           </div>)}
         </div>}
@@ -168,6 +175,17 @@ export default function InstagramRadarShell({ onConnect, clienteId }) {
           <button type="submit" className="aps-btn aps-btn-primary" disabled={saving}>{saving && <Loader2 size={14} className="aps-spin" />}{saving ? 'Adicionando…' : 'Adicionar perfil'}</button>
         </div>
       </form>
+    </div>}
+    {removalCandidate && <div className="aps-radar-modal-backdrop" role="presentation">
+      <section className="aps-radar-modal" role="dialog" aria-modal="true" aria-labelledby="remove-instagram-source-title">
+        <h3 id="remove-instagram-source-title">Remover perfil monitorado?</h3>
+        <p>{removalCandidate.nome} deixará de ser monitorado pelo Radar.</p>
+        {removalError && <p role="alert" className="aps-radar-error">{removalError}</p>}
+        <div className="aps-radar-modal-actions">
+          <button type="button" className="aps-btn aps-btn-outline" disabled={removing} onClick={() => setRemovalCandidate(null)}>Cancelar</button>
+          <button type="button" className="aps-btn aps-btn-primary" disabled={removing} onClick={confirmRemoval}>{removing && <Loader2 size={14} className="aps-spin" />}{removing ? 'Removendo…' : 'Remover perfil'}</button>
+        </div>
+      </section>
     </div>}
   </div>
 }

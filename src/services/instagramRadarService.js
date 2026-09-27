@@ -47,4 +47,11 @@ export async function removeInstagramSource(supabase, clienteId, id) {
   return requestInstagramSources(supabase, clienteId, 'delete', { id })
 }
 
+export function applyInstagramSourceRemovalResult(sources, sourceId, result) {
+  if (result.deactivated) {
+    return sources.map(source => source.id === sourceId ? result.source : source)
+  }
+  return sources.filter(source => source.id !== sourceId)
+}
+
 export { normalizeInstagramProfile }
