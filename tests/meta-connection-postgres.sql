@@ -31,7 +31,7 @@ RETURNS TABLE (user_id uuid, role text, display_name text) LANGUAGE sql STABLE A
   SELECT '00000000-0000-4000-8000-000000000011'::uuid, 'admin'::text, 'test'::text
 $$;
 
-\i /workspace/supabase/migrations/20260921160000_meta_instagram_connection_infrastructure.sql
+\i /workspace/supabase/migrations/20260922194425_meta_instagram_connection_infrastructure.sql
 
 INSERT INTO public.clientes(id) VALUES
   ('00000000-0000-4000-8000-000000000001'),
