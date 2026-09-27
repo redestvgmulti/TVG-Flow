@@ -1,0 +1,6 @@
+-- HISTORICAL MARKER ONLY.
+-- This version already exists in the production migration history.
+-- Its original operation was a destructive, tenant-scoped production cleanup.
+-- It must never be replayed in another environment or at another time.
+-- No executable SQL belongs in this marker.
+-- Provenance: docs/migrations/README.md.

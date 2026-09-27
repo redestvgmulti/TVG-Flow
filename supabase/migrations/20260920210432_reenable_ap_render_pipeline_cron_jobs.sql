@@ -1,0 +1,6 @@
+-- HISTORICAL MARKER ONLY.
+-- This version already exists in the production migration history.
+-- Its original operation activated production scheduler jobs selected by
+-- deployment-specific numeric identifiers. It is intentionally not replayable.
+-- No executable SQL belongs in this marker.
+-- Provenance: docs/migrations/README.md.
