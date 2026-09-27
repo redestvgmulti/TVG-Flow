@@ -4,6 +4,7 @@ import {
   authorizeConfigRequest,
   ConfigAuthorizationError,
 } from "./authorization.ts";
+import { normalizeInstagramProfile } from "../_shared/social/instagramProfile.mjs";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,11 +13,12 @@ const corsHeaders = {
 };
 
 const RESOURCES = {
-  sources: { ownerColumn: "cliente_id", order: "created_at.asc" },
-  patrocinadores: { ownerColumn: "cliente_id", order: "created_at.asc" },
-  templates: { ownerColumn: "empresa_id", order: "ordem.asc,criado_em.asc" },
+  sources: { table: "sources", ownerColumn: "cliente_id", order: "created_at.asc" },
+  instagram_sources: { table: "sources", ownerColumn: "cliente_id", order: "created_at.asc" },
+  patrocinadores: { table: "patrocinadores", ownerColumn: "cliente_id", order: "created_at.asc" },
+  templates: { table: "templates", ownerColumn: "empresa_id", order: "ordem.asc,criado_em.asc" },
   // Legacy debt: this column contains cliente_id values in existing rows.
-  template_sets: { ownerColumn: "empresa_id", order: "created_at.asc" },
+  template_sets: { table: "template_sets", ownerColumn: "empresa_id", order: "created_at.asc" },
 } as const;
 
 type Resource = keyof typeof RESOURCES;
@@ -72,6 +74,132 @@ function sanitizedFields(payload: Record<string, unknown>, ownerColumn: string) 
   return fields;
 }
 
+function instagramSourceId(payload: Record<string, unknown>) {
+  const id = typeof payload.id === "string" ? payload.id : null;
+  if (!id) throw new ConfigRequestError("CONFIG_RECORD_ID_REQUIRED");
+  return id;
+}
+
+function sourcePayload(payload: unknown) {
+  const fields = payloadObject(payload);
+  if ("cliente_id" in fields || "empresa_id" in fields) {
+    throw new ConfigRequestError("OWNER_SCOPE_MANAGED_BY_SERVER", 403);
+  }
+  return fields;
+}
+
+async function instagramSourceHistoryExists(supabase: any, clienteId: string, sourceId: string) {
+  const [collected, runs] = await Promise.all([
+    supabase.from("collected_news").select("id", { count: "exact", head: true })
+      .eq("cliente_id", clienteId).eq("source_id", sourceId),
+    supabase.from("source_ingestion_runs").select("id", { count: "exact", head: true })
+      .eq("cliente_id", clienteId).eq("source_id", sourceId),
+  ]);
+  if (collected.error) throw collected.error;
+  if (runs.error) throw runs.error;
+  return (collected.count ?? 0) > 0 || (runs.count ?? 0) > 0;
+}
+
+async function handleInstagramSources({ supabase, clienteId, action, payload }: {
+  supabase: any;
+  clienteId: string;
+  action: Action;
+  payload: unknown;
+}) {
+  const sources = supabase.from("sources");
+  const fields = action === "list" ? null : sourcePayload(payload);
+
+  if (action === "list") {
+    const { data, error } = await sources
+      .select("id,nome,url,ativo,last_checked_at,last_success_at,last_error_code,consecutive_failures,last_discovered_count,last_collected_count,created_at")
+      .eq("cliente_id", clienteId)
+      .eq("tipo", "instagram")
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    return data ?? [];
+  }
+
+  if (action === "insert") {
+    if (Object.keys(fields!).some((key) => key !== "input")) {
+      throw new ConfigRequestError("INSTAGRAM_SOURCE_PAYLOAD_INVALID");
+    }
+    let profile;
+    try {
+      profile = normalizeInstagramProfile(fields!.input);
+    } catch {
+      throw new ConfigRequestError("INSTAGRAM_SOURCE_INVALID");
+    }
+
+    const { data: existing, error: existingError } = await sources
+      .select("id")
+      .eq("cliente_id", clienteId)
+      .eq("tipo", "instagram")
+      .eq("url", profile.url)
+      .maybeSingle();
+    if (existingError) throw existingError;
+    if (existing) throw new ConfigRequestError("INSTAGRAM_SOURCE_ALREADY_EXISTS", 409);
+
+    const { data, error } = await sources
+      .insert({
+        cliente_id: clienteId,
+        nome: `@${profile.username}`,
+        url: profile.url,
+        tipo: "instagram",
+        detected_type: "instagram",
+        ativo: true,
+      })
+      .select("id,nome,url,ativo,last_checked_at,last_success_at,last_error_code,consecutive_failures,last_discovered_count,last_collected_count,created_at")
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  const id = instagramSourceId(fields!);
+  if (action === "update") {
+    if (Object.keys(fields!).some((key) => key !== "id" && key !== "ativo") || typeof fields!.ativo !== "boolean") {
+      throw new ConfigRequestError("INSTAGRAM_SOURCE_PAYLOAD_INVALID");
+    }
+    const { data, error } = await sources
+      .update({ ativo: fields!.ativo })
+      .eq("id", id)
+      .eq("cliente_id", clienteId)
+      .eq("tipo", "instagram")
+      .select("id,nome,url,ativo,last_checked_at,last_success_at,last_error_code,consecutive_failures,last_discovered_count,last_collected_count,created_at")
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) throw new ConfigRequestError("CONFIG_RECORD_NOT_FOUND", 404);
+    return data;
+  }
+
+  if (Object.keys(fields!).some((key) => key !== "id")) {
+    throw new ConfigRequestError("INSTAGRAM_SOURCE_PAYLOAD_INVALID");
+  }
+  const hasHistory = await instagramSourceHistoryExists(supabase, clienteId, id);
+  if (hasHistory) {
+    const { data, error } = await sources
+      .update({ ativo: false })
+      .eq("id", id)
+      .eq("cliente_id", clienteId)
+      .eq("tipo", "instagram")
+      .select("id,nome,url,ativo,last_checked_at,last_success_at,last_error_code,consecutive_failures,last_discovered_count,last_collected_count,created_at")
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) throw new ConfigRequestError("CONFIG_RECORD_NOT_FOUND", 404);
+    return { success: true, deactivated: true, source: data };
+  }
+
+  const { data, error } = await sources
+    .delete()
+    .eq("id", id)
+    .eq("cliente_id", clienteId)
+    .eq("tipo", "instagram")
+    .select("id")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new ConfigRequestError("CONFIG_RECORD_NOT_FOUND", 404);
+  return { success: true, deactivated: false };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "METHOD_NOT_ALLOWED" }, 405);
@@ -102,8 +230,17 @@ Deno.serve(async (req: Request) => {
       auth: { autoRefreshToken: false, persistSession: false },
     }).schema("ap");
 
-    const { ownerColumn, order } = RESOURCES[resource];
-    const base = supabase.from(resource);
+    if (resource === "instagram_sources") {
+      return json(await handleInstagramSources({
+        supabase,
+        clienteId: authorization.clienteId,
+        action,
+        payload,
+      }));
+    }
+
+    const { table, ownerColumn, order } = RESOURCES[resource];
+    const base = supabase.from(table);
 
     if (action === "list") {
       let query = base

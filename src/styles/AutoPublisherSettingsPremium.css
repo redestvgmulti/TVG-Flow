@@ -31,6 +31,15 @@
 .aps-radar-columns > section:last-child { border-right: 0; }
 .aps-radar-columns h3, .aps-radar-columns p { margin-top: 0; }
 .aps-radar-section-head { display: flex; justify-content: space-between; gap: 12px; }
+.aps-radar-error { color: var(--color-danger); font-size: 12px; margin: 12px 0 0; }
+.aps-radar-modal-backdrop { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 20px; background: rgba(15, 23, 42, .45); }
+.aps-radar-modal { position: relative; width: min(100%, 460px); display: flex; flex-direction: column; gap: 12px; padding: 24px; border-radius: var(--radius-lg); background: var(--color-bg-surface); box-shadow: var(--shadow-3); }
+.aps-radar-modal h3, .aps-radar-modal p { margin: 0; }
+.aps-radar-modal label { font-size: 12px; font-weight: 600; color: var(--color-text-secondary); }
+.aps-radar-modal-close { position: absolute; top: 12px; right: 12px; border: 0; background: transparent; color: var(--color-text-secondary); cursor: pointer; }
+.aps-radar-modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.aps-spin { animation: aps-spin 1s linear infinite; }
+@keyframes aps-spin { to { transform: rotate(360deg); } }
 @media (max-width: 720px) { .aps-radar-columns { grid-template-columns: 1fr; } .aps-radar-columns > section { border-right: 0; border-bottom: 1px solid var(--color-border); } }
 
 .aps-rail {

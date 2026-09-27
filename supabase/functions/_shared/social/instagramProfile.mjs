@@ -4,6 +4,9 @@ const RESERVED = new Set(['p', 'reel', 'reels', 'stories', 'explore', 'direct', 
 export function normalizeInstagramProfile(input) {
   if (typeof input !== 'string') throw new Error('INSTAGRAM_SOURCE_INVALID');
   let username = input.trim();
+  if (/^(?:www\.)?instagram\.com\//i.test(username)) {
+    username = `https://${username}`;
+  }
   if (/^https?:\/\//i.test(username)) {
     let url;
     try { url = new URL(username); } catch { throw new Error('INSTAGRAM_SOURCE_INVALID'); }
