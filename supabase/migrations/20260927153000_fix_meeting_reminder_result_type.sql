@@ -13,6 +13,7 @@ RETURNS TABLE(
 LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
+SET search_path TO 'pg_catalog', 'public', 'ap', 'extensions'
 AS $$
 BEGIN
   RETURN QUERY

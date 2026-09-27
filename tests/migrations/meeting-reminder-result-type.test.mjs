@@ -19,4 +19,8 @@ test('meeting reminder RPC returns an integer minutes_until_start value', () => 
     /EXTRACT\(EPOCH FROM \(r\.data_inicio - NOW\(\)\)\) \/ 60 AS minutes_until_start/,
   )
   assert.match(migration, /CREATE OR REPLACE FUNCTION public\.get_upcoming_meeting_notifications\(interval_minutes integer\)/)
+  assert.match(
+    migration,
+    /SECURITY DEFINER\s+SET search_path TO 'pg_catalog', 'public', 'ap', 'extensions'/,
+  )
 })
