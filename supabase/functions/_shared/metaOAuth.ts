@@ -3,6 +3,8 @@ export const META_READ_SCOPES = [
   "pages_read_engagement",
   "instagram_basic",
   "business_management",
+  "instagram_manage_insights",
+  "ads_read",
 ] as const;
 const MAX_ACCOUNT_PAGES = 10;
 const MAX_ACCOUNT_ITEMS = 1_000;
@@ -329,6 +331,8 @@ export function capabilitiesFromScopes(scopes: string[]) {
     "pages_read_engagement",
     "instagram_basic",
     "business_management",
+    "instagram_manage_insights",
+    "ads_read",
   ].every((scope) => granted.has(scope));
   return {
     radar_read: radarRead,

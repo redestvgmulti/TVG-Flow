@@ -8,7 +8,7 @@ const connection = {
   instagram_user_id: "caller-id",
   graph_api_version: "v24.0",
   token_secret_ref: "vault-ref",
-  granted_scopes: ["pages_show_list", "pages_read_engagement", "instagram_basic", "business_management"],
+  granted_scopes: ["pages_show_list", "pages_read_engagement", "instagram_basic", "business_management", "instagram_manage_insights", "ads_read"],
   capabilities: { radar_read: true },
   expires_at: null,
 };
@@ -76,7 +76,8 @@ Deno.test("Business Discovery endpoint fails closed for connection, capability, 
     [{ row: { ...connection, status: "disconnected" } }, "META_RADAR_CONNECTION_UNAVAILABLE"],
     [{ row: { ...connection, token_secret_ref: null } }, "META_RADAR_CONNECTION_UNAVAILABLE"],
     [{ row: { ...connection, capabilities: { radar_read: false } } }, "META_RADAR_CAPABILITY_UNAVAILABLE"],
-    [{ row: { ...connection, granted_scopes: connection.granted_scopes.slice(0, 3) } }, "META_RADAR_CAPABILITY_UNAVAILABLE"],
+    [{ row: { ...connection, granted_scopes: connection.granted_scopes.filter((scope) => scope !== "instagram_manage_insights") } }, "META_RADAR_CAPABILITY_UNAVAILABLE"],
+    [{ row: { ...connection, granted_scopes: connection.granted_scopes.filter((scope) => scope !== "ads_read") } }, "META_RADAR_CAPABILITY_UNAVAILABLE"],
     [{ row: { ...connection, expires_at: "2020-01-01T00:00:00Z" } }, "META_RADAR_CONNECTION_EXPIRED"],
     [{ secret: null }, "META_RADAR_SECRET_UNAVAILABLE"],
   ];
