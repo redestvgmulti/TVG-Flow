@@ -24,7 +24,10 @@ type GraphMedia = {
 type GraphDiscovery = {
   username?: unknown;
   name?: unknown;
-  media?: { data?: unknown };
+  media?: {
+    data?: unknown;
+    paging?: { next?: unknown; cursors?: { after?: unknown } };
+  };
 };
 
 type GraphResponse = { business_discovery?: GraphDiscovery | null; error?: { code?: unknown; type?: unknown } };
@@ -70,10 +73,13 @@ function graphError(response: Response, body: GraphResponse) {
   if (code === 10 || response.status === 403) {
     return { code: "META_BUSINESS_DISCOVERY_PERMISSION_DENIED", retryable: false, unsupported: false };
   }
-  if (code === 100 || response.status === 404) {
-    return { code: "META_BUSINESS_DISCOVERY_UNSUPPORTED", retryable: false, unsupported: true };
-  }
   return { code: "META_BUSINESS_DISCOVERY_FAILED", retryable: response.status >= 500, unsupported: false };
+}
+
+function hasNextPage(discovery: GraphDiscovery) {
+  const paging = discovery.media?.paging;
+  return typeof paging?.next === "string" && paging.next.length > 0 ||
+    typeof paging?.cursors?.after === "string" && paging.cursors.after.length > 0;
 }
 
 function validateLimits(
@@ -212,7 +218,13 @@ export class MetaBusinessDiscoveryProvider implements InstagramRadarProvider {
         });
       }
       totalItems += items.length;
-      results.push(collection(source.id, startedAt, calls, { items, capability: "supported", complete: true }));
+      results.push(collection(source.id, startedAt, calls, {
+        items,
+        capability: "supported",
+        // This PR intentionally performs one Graph call per source. A cursor
+        // means the future worker must not advance its high-water mark yet.
+        complete: !hasNextPage(discovery),
+      }));
     }
     return results;
   }

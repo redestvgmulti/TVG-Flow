@@ -32,7 +32,7 @@ function handler(options: Record<string, unknown> = {}) {
   const providerFactory = class {
     constructor(_options: unknown) {}
     async collect() {
-      return [{
+      return [options.providerResult ?? {
         sourceId: "poc", provider: "meta_business_discovery", capability: "supported", complete: true,
         items: [{ externalId: "media-1", canonicalUrl: "https://www.instagram.com/p/example/", sourceUsername: "prefeitura", sourceName: "Prefeitura", caption: "", publishedAt: "2026-09-28T00:00:00.000Z", thumbnailUrl: null, mediaType: "feed" }],
         telemetry: { durationMs: 1, calls: 1, billedResults: null, costUsd: null },
@@ -57,7 +57,13 @@ Deno.test("Business Discovery endpoint derives its tenant and returns only safe 
   if (response.status !== 400 || (await response.json()).error !== "META_RADAR_INPUT_INVALID") throw new Error("body tenant was accepted");
   const success = await handler()(request({ input: "https://www.instagram.com/prefeitura/", limit: 5 }));
   const body = await success.json();
-  if (success.status !== 200 || body.target.username !== "prefeitura" || body.count !== 1 || JSON.stringify(body).includes("vault-ref")) throw new Error("safe success contract failed");
+  if (success.status !== 200 || body.target.username !== "prefeitura" || body.count !== 1 || body.capability !== "supported" || body.complete !== true || JSON.stringify(body).includes("vault-ref")) throw new Error("safe success contract failed");
+  const incomplete = await handler({ providerResult: {
+    sourceId: "poc", provider: "meta_business_discovery", capability: "supported", complete: false,
+    items: [], telemetry: { durationMs: 1, calls: 1, billedResults: null, costUsd: null },
+  } })(request({ input: "@prefeitura" }));
+  const incompleteBody = await incomplete.json();
+  if (incomplete.status !== 200 || incompleteBody.complete !== false || incompleteBody.capability !== "supported") throw new Error("incomplete success became an endpoint failure");
 });
 
 Deno.test("Business Discovery endpoint fails closed for connection, capability, expiry and Vault failures", async () => {

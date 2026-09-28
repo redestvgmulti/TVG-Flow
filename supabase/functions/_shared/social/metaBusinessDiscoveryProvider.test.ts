@@ -2,8 +2,8 @@ import { MetaBusinessDiscoveryProvider } from "./metaBusinessDiscoveryProvider.t
 
 const source = { id: "source-1", clienteId: "tenant-1", username: "@prefeituradegoiatuba", url: "https://www.instagram.com/prefeituradegoiatuba/" };
 
-function graphResponse(media: unknown[] = []) {
-  return { business_discovery: { username: "prefeituradegoiatuba", name: "Prefeitura", media: { data: media } } };
+function graphResponse(media: unknown[] = [], paging: Record<string, unknown> | undefined = undefined) {
+  return { business_discovery: { username: "prefeituradegoiatuba", name: "Prefeitura", media: { data: media, ...(paging ? { paging } : {}) } } };
 }
 
 function media(overrides: Record<string, unknown> = {}) {
@@ -89,6 +89,21 @@ Deno.test("Business Discovery enforces item and cursor caps", async () => {
   if (cappedSources.length !== 1 || calls !== 1) throw new Error("maxSources cap failed");
 });
 
+Deno.test("Business Discovery preserves incomplete pagination state without a second Graph call", async () => {
+  let calls = 0;
+  const withNext = await collect(async () => {
+    calls += 1;
+    return Response.json(graphResponse([media()], { next: "https://graph.facebook.com/next-page" }));
+  });
+  if (withNext[0].complete || withNext[0].capability !== "supported" || withNext[0].error || withNext[0].items.length !== 1 || calls !== 1) {
+    throw new Error("paging.next did not preserve incomplete success");
+  }
+  const withAfter = await collect(async () => Response.json(graphResponse([media()], { cursors: { after: "opaque-cursor" } })));
+  if (withAfter[0].complete || withAfter[0].error) throw new Error("paging.cursors.after did not preserve incomplete success");
+  const complete = await collect(async () => Response.json(graphResponse([media()])));
+  if (!complete[0].complete) throw new Error("single page was marked incomplete");
+});
+
 Deno.test("Business Discovery errors are deterministic and sanitized", async () => {
   const rateLimited = await collect(async () => Response.json({ error: { code: 613, message: "raw secret-adjacent Graph message" } }, { status: 400 }));
   if (rateLimited[0].error?.code !== "META_BUSINESS_DISCOVERY_RATE_LIMITED" || !rateLimited[0].error.retryable || JSON.stringify(rateLimited).includes("raw secret-adjacent")) throw new Error("rate limit mapping failed");
@@ -96,4 +111,6 @@ Deno.test("Business Discovery errors are deterministic and sanitized", async () 
   if (unsupported[0].capability !== "unsupported" || !unsupported[0].complete || unsupported[0].items.length) throw new Error("unsupported mapping failed");
   const timeout = await collect(async () => { throw new DOMException("timeout", "TimeoutError"); });
   if (timeout[0].error?.code !== "META_BUSINESS_DISCOVERY_TIMEOUT" || !timeout[0].error.retryable) throw new Error("timeout mapping failed");
+  const invalidRequest = await collect(async () => Response.json({ error: { code: 100, message: "invalid field" } }, { status: 400 }));
+  if (invalidRequest[0].error?.code !== "META_BUSINESS_DISCOVERY_FAILED" || invalidRequest[0].capability !== "unknown" || invalidRequest[0].complete) throw new Error("code 100 was incorrectly treated as unsupported");
 });

@@ -145,6 +145,8 @@ export function createMetaBusinessDiscoveryHandler(overrides: Partial<Dependenci
         },
         count: result.items.length,
         items: result.items,
+        capability: result.capability,
+        complete: result.complete,
         telemetry: { durationMs: result.telemetry.durationMs, calls: result.telemetry.calls },
       }, 200, cors);
     } catch {
