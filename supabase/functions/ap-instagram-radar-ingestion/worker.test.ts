@@ -1,6 +1,7 @@
 import { assert, assertEquals, assertMatch } from "jsr:@std/assert";
 import {
   BATCH_LIMIT,
+  createInstagramRadarIngestionHandler,
   hasRadarReadCapability,
   instagramContentHash,
   instagramExcerpt,
@@ -125,4 +126,170 @@ Deno.test("Worker response and run metadata omit captions, Vault references and 
   assertMatch(source, /provider: "meta_business_discovery"/);
   assertMatch(source, /external_id: item\.externalId/);
   assertMatch(source, /discovery_complete: collection\.complete/);
+});
+
+function workerHarness(
+  options: { updateError?: boolean; insertError?: boolean; created?: boolean } =
+    {},
+) {
+  const writes: Array<{ table: string; value: Record<string, unknown> }> = [];
+  const source = {
+    id: "source-a",
+    cliente_id: "tenant-a",
+    nome: "@prefeitura",
+    url: "https://www.instagram.com/prefeitura/",
+    tipo: "instagram",
+    consecutive_failures: 0,
+  };
+  const connection = {
+    instagram_user_id: "caller",
+    graph_api_version: "v26.0",
+    token_secret_ref: "vault-ref",
+    granted_scopes: allScopes,
+    capabilities: { radar_read: true },
+    expires_at: null,
+  };
+  const admin = {
+    schema: () => ({
+      from: (table: string) => {
+        const query: any = {
+          select: () => query,
+          eq: () => query,
+          order: () => query,
+          not: () => query,
+        };
+        query.limit = async () => ({
+          data: table === "sources" ? [source] : [],
+          error: null,
+        });
+        query.maybeSingle = async () => ({
+          data: table === "instagram_connections" ? connection : null,
+          error: null,
+        });
+        query.update = (value: Record<string, unknown>) => ({
+          eq: () => ({
+            eq: async () => ({
+              error: options.updateError ? { code: "x" } : null,
+            }),
+          }),
+        });
+        query.insert = async (value: Record<string, unknown>) => {
+          writes.push({ table, value });
+          return { error: options.insertError ? { code: "x" } : null };
+        };
+        return query;
+      },
+      rpc: async (name: string) =>
+        name === "meta_read_secret"
+          ? { data: "page-token", error: null }
+          : { data: { created: options.created ?? true }, error: null },
+    }),
+  };
+  class Provider {
+    constructor(_options: unknown) {}
+    async collect() {
+      return [{
+        sourceId: "source-a",
+        provider: "meta_business_discovery",
+        capability: "supported",
+        complete: false,
+        items: [item()],
+        telemetry: {
+          durationMs: 1,
+          calls: 1,
+          billedResults: null,
+          costUsd: null,
+        },
+      }];
+    }
+  }
+  class FakeTelemetry {
+    constructor(_admin: unknown) {}
+    async logStart(_value: unknown) {}
+    async logSuccess(_cost: number, _value: unknown) {}
+    async logError(_code: string, _cost: number, _value: unknown) {}
+  }
+  return {
+    writes,
+    handler: createInstagramRadarIngestionHandler({
+      createAdminClient: () => admin as never,
+      requireTrustedInternalRequest: () => {},
+      providerFactory: Provider as never,
+      telemetryFactory: FakeTelemetry as never,
+      now: () => new Date("2026-09-28T12:00:00Z"),
+    }),
+  };
+}
+
+Deno.test("Worker orchestration executes a recent item and records a successful incomplete collection", async () => {
+  const oldUrl = Deno.env.get("SUPABASE_URL");
+  const oldKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  Deno.env.set("SUPABASE_URL", "https://example.test");
+  Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "test-key");
+  try {
+    const harness = workerHarness();
+    const response = await harness.handler(
+      new Request("https://worker.test", { method: "POST" }),
+    );
+    const body = await response.json();
+    assertEquals(response.status, 200);
+    assertEquals(body.ok, true);
+    assertEquals(body.results[0].collected, 1);
+    assertEquals(body.results[0].complete, false);
+    assertEquals(
+      harness.writes.filter((write) =>
+        write.table === "source_ingestion_runs"
+      )[0].value.status,
+      "success",
+    );
+  } finally {
+    if (oldUrl) Deno.env.set("SUPABASE_URL", oldUrl);
+    else Deno.env.delete("SUPABASE_URL");
+    if (oldKey) Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", oldKey);
+    else Deno.env.delete("SUPABASE_SERVICE_ROLE_KEY");
+  }
+});
+
+Deno.test("Worker turns a source-state infrastructure failure into a sanitized 500", async () => {
+  const oldUrl = Deno.env.get("SUPABASE_URL");
+  const oldKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  Deno.env.set("SUPABASE_URL", "https://example.test");
+  Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "test-key");
+  try {
+    const response = await workerHarness({ updateError: true }).handler(
+      new Request("https://worker.test", { method: "POST" }),
+    );
+    assertEquals(response.status, 500);
+    assertEquals(
+      (await response.json()).error,
+      "RADAR_SOURCE_STATE_WRITE_FAILED",
+    );
+  } finally {
+    if (oldUrl) Deno.env.set("SUPABASE_URL", oldUrl);
+    else Deno.env.delete("SUPABASE_URL");
+    if (oldKey) Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", oldKey);
+    else Deno.env.delete("SUPABASE_SERVICE_ROLE_KEY");
+  }
+});
+
+Deno.test("Worker turns an ingestion-run infrastructure failure into a sanitized 500", async () => {
+  const oldUrl = Deno.env.get("SUPABASE_URL");
+  const oldKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  Deno.env.set("SUPABASE_URL", "https://example.test");
+  Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "test-key");
+  try {
+    const response = await workerHarness({ insertError: true }).handler(
+      new Request("https://worker.test", { method: "POST" }),
+    );
+    assertEquals(response.status, 500);
+    assertEquals(
+      (await response.json()).error,
+      "RADAR_INGESTION_RUN_WRITE_FAILED",
+    );
+  } finally {
+    if (oldUrl) Deno.env.set("SUPABASE_URL", oldUrl);
+    else Deno.env.delete("SUPABASE_URL");
+    if (oldKey) Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", oldKey);
+    else Deno.env.delete("SUPABASE_SERVICE_ROLE_KEY");
+  }
 });

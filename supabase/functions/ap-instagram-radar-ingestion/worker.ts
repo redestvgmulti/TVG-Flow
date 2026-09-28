@@ -62,6 +62,17 @@ type Dependencies = {
   now: () => Date;
 };
 
+export class RadarIngestionInfrastructureError extends Error {
+  constructor(
+    readonly code:
+      | "RADAR_SOURCE_STATE_WRITE_FAILED"
+      | "RADAR_INGESTION_RUN_WRITE_FAILED",
+  ) {
+    super(code);
+    this.name = "RadarIngestionInfrastructureError";
+  }
+}
+
 const defaults: Dependencies = {
   createAdminClient,
   requireTrustedInternalRequest,
@@ -141,12 +152,26 @@ async function updateSource(
   source: Source,
   update: Record<string, unknown>,
 ) {
-  await admin.schema("ap").from("sources").update(update).eq("id", source.id)
+  const { error } = await admin.schema("ap").from("sources").update(update).eq(
+    "id",
+    source.id,
+  )
     .eq("cliente_id", source.cliente_id);
+  if (error) {
+    throw new RadarIngestionInfrastructureError(
+      "RADAR_SOURCE_STATE_WRITE_FAILED",
+    );
+  }
 }
 
 async function insertRun(admin: any, values: Record<string, unknown>) {
-  await admin.schema("ap").from("source_ingestion_runs").insert(values);
+  const { error } = await admin.schema("ap").from("source_ingestion_runs")
+    .insert(values);
+  if (error) {
+    throw new RadarIngestionInfrastructureError(
+      "RADAR_INGESTION_RUN_WRITE_FAILED",
+    );
+  }
 }
 
 function resultFor(source: Source, values: Record<string, unknown>) {
@@ -195,7 +220,7 @@ async function recordSourceError(
  * Internal-only ingestion worker. It has no browser CORS surface and uses the
  * canonical RPC for all collected-news persistence.
  */
-export function createInstagramRadarIngestionHandler(
+function createInstagramRadarIngestionHandlerUnsafe(
   overrides: Partial<Dependencies> = {},
 ) {
   const dependencies = { ...defaults, ...overrides };
@@ -592,5 +617,40 @@ export function createInstagramRadarIngestionHandler(
       max_age_hours: MAX_AGE_HOURS,
       results,
     });
+  };
+}
+
+/** Converts only worker-infrastructure failures into a safe HTTP boundary. */
+export function createInstagramRadarIngestionHandler(
+  overrides: Partial<Dependencies> = {},
+) {
+  const run = createInstagramRadarIngestionHandlerUnsafe(overrides);
+  return async (req: Request) => {
+    try {
+      return await run(req);
+    } catch (error) {
+      const code = error instanceof RadarIngestionInfrastructureError
+        ? error.code
+        : "RADAR_INGESTION_FAILED";
+      // Best effort only: telemetry outages must never expose a database error.
+      try {
+        const admin = (overrides.createAdminClient ?? createAdminClient)();
+        const telemetry = new (overrides.telemetryFactory ?? Telemetry)(
+          admin as never,
+        );
+        const workerId = crypto.randomUUID();
+        await telemetry.logStart({
+          worker_name: "ap-instagram-radar-ingestion",
+          worker_id: workerId,
+          action: "internal_batch",
+          metadata: { mode: "instagram_radar", fatal: true },
+        });
+        await telemetry.logError(code, 0, {
+          mode: "instagram_radar",
+          fatal: true,
+        });
+      } catch { /* telemetry is explicitly best effort */ }
+      return json({ error: code }, 500);
+    }
   };
 }
