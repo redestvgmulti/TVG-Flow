@@ -119,6 +119,9 @@ verify_jwt = false
 [functions.ap-meta-connection-status]
 verify_jwt = true
 
+[functions.ap-meta-business-discovery]
+verify_jwt = true
+
 [functions.ap-meta-oauth-select]
 verify_jwt = true
 
