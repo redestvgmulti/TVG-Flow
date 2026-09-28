@@ -1,4 +1,5 @@
 import { createMetaBusinessDiscoveryHandler } from "./handler.ts";
+import { ConfigAuthorizationError } from "../ap-config/authorization.ts";
 
 const cors = { "Access-Control-Allow-Origin": "https://app.test" };
 const actor = { clienteId: "tenant-a", userId: "user-a", role: "admin" as const };
@@ -41,7 +42,10 @@ function handler(options: Record<string, unknown> = {}) {
   };
   return createMetaBusinessDiscoveryHandler({
     createAdminClient: () => adminMock(options) as never,
-    requireMetaAdmin: async () => actor,
+    requireMetaAdmin: async () => {
+      if (options.authError) throw options.authError;
+      return actor;
+    },
     metaCorsHeaders: () => cors,
     providerFactory: providerFactory as never,
     now: () => Date.parse("2026-09-28T00:00:00Z"),
@@ -84,4 +88,10 @@ Deno.test("Business Discovery endpoint fails closed for connection, capability, 
   if ((await invalid.json()).error !== "META_RADAR_INPUT_INVALID") throw new Error("invalid input accepted");
   const limit = await handler()(request({ input: "@prefeitura", limit: 6 }));
   if ((await limit.json()).error !== "META_RADAR_LIMIT_INVALID") throw new Error("limit accepted");
+});
+
+Deno.test("Business Discovery endpoint preserves canonical authorization failures", async () => {
+  const response = await handler({ authError: new ConfigAuthorizationError("TENANT_FORBIDDEN", 403) })(request({ input: "@prefeitura" }));
+  const body = await response.json();
+  if (response.status !== 403 || body.error !== "TENANT_FORBIDDEN") throw new Error("authorization failure was converted to provider failure");
 });

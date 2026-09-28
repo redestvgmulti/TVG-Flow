@@ -82,6 +82,14 @@ function hasNextPage(discovery: GraphDiscovery) {
     typeof paging?.cursors?.after === "string" && paging.cursors.after.length > 0;
 }
 
+function thumbnailUrl(media: GraphMedia) {
+  const thumbnail = safeHttpsUrl(media.thumbnail_url);
+  // A VIDEO media_url can be a video asset, not a browser-safe thumbnail.
+  // CAROUSEL media_url semantics are not guaranteed to be visual either.
+  if (media.media_type !== "IMAGE") return thumbnail;
+  return thumbnail ?? safeHttpsUrl(media.media_url);
+}
+
 function validateLimits(
   limits: { maxSources: number; maxItemsPerSource: number; maxItemsTotal: number; maxCalls: number },
   sourceCount: number,
@@ -127,7 +135,7 @@ export class MetaBusinessDiscoveryProvider implements InstagramRadarProvider {
     validateLimits(limits, sources.length);
     const results: InstagramRadarCollection[] = [];
     let totalItems = 0;
-    let calls = 0;
+    let graphCalls = 0;
 
     for (const source of sources.slice(0, limits.maxSources)) {
       const startedAt = Date.now();
@@ -135,7 +143,7 @@ export class MetaBusinessDiscoveryProvider implements InstagramRadarProvider {
       try {
         profile = normalizeInstagramProfile(source.username);
       } catch {
-        results.push(collection(source.id, startedAt, calls, {
+        results.push(collection(source.id, startedAt, 0, {
           error: { code: "META_BUSINESS_DISCOVERY_UNSUPPORTED", retryable: false },
           capability: "unsupported",
           complete: true,
@@ -148,7 +156,13 @@ export class MetaBusinessDiscoveryProvider implements InstagramRadarProvider {
 
       const itemLimit = Math.min(limits.maxItemsPerSource, limits.maxItemsTotal - totalItems);
       if (itemLimit <= 0) {
-        results.push(collection(source.id, startedAt, calls, { capability: "supported", complete: true }));
+        // This source was not queried in this run, so the future worker must
+        // retain its high-water mark even though no error occurred.
+        results.push(collection(source.id, startedAt, 0, { capability: "unknown", complete: false }));
+        continue;
+      }
+      if (graphCalls >= limits.maxCalls) {
+        results.push(collection(source.id, startedAt, 0, { capability: "unknown", complete: false }));
         continue;
       }
       const fields = `business_discovery.username(${profile.username}){username,name,profile_picture_url,media.limit(${itemLimit}){id,caption,media_type,media_url,thumbnail_url,permalink,timestamp}}`;
@@ -159,7 +173,7 @@ export class MetaBusinessDiscoveryProvider implements InstagramRadarProvider {
       let response: Response;
       let body: GraphResponse;
       try {
-        calls += 1;
+        graphCalls += 1;
         response = await this.#fetch(url, {
           method: "GET",
           headers: { Authorization: `Bearer ${this.options.pageAccessToken}` },
@@ -169,7 +183,7 @@ export class MetaBusinessDiscoveryProvider implements InstagramRadarProvider {
         body = await response.json().catch(() => ({})) as GraphResponse;
       } catch (error) {
         const timeout = signal.aborted || error instanceof DOMException && error.name === "TimeoutError";
-        results.push(collection(source.id, startedAt, calls, {
+        results.push(collection(source.id, startedAt, 1, {
           error: { code: timeout ? "META_BUSINESS_DISCOVERY_TIMEOUT" : "META_BUSINESS_DISCOVERY_FAILED", retryable: true },
         }));
         continue;
@@ -177,7 +191,7 @@ export class MetaBusinessDiscoveryProvider implements InstagramRadarProvider {
 
       if (!response.ok || body.error) {
         const mapped = graphError(response, body);
-        results.push(collection(source.id, startedAt, calls, {
+        results.push(collection(source.id, startedAt, 1, {
           error: { code: mapped.code, retryable: mapped.retryable },
           capability: mapped.unsupported ? "unsupported" : "unknown",
           complete: mapped.unsupported,
@@ -187,7 +201,7 @@ export class MetaBusinessDiscoveryProvider implements InstagramRadarProvider {
 
       const discovery = body.business_discovery;
       if (!discovery || typeof discovery.username !== "string" || !discovery.username) {
-        results.push(collection(source.id, startedAt, calls, {
+        results.push(collection(source.id, startedAt, 1, {
           error: { code: "META_BUSINESS_DISCOVERY_UNSUPPORTED", retryable: false },
           capability: "unsupported",
           complete: true,
@@ -205,7 +219,7 @@ export class MetaBusinessDiscoveryProvider implements InstagramRadarProvider {
         const publishedAt = validTimestamp(candidate.timestamp);
         if (typeof candidate.id !== "string" || !candidate.id || !canonicalUrl || !publishedAt) continue;
         if (cutoffTime !== null && new Date(publishedAt).getTime() < cutoffTime) continue;
-        const thumbnailUrl = safeHttpsUrl(candidate.thumbnail_url) ?? safeHttpsUrl(candidate.media_url);
+        const thumbnail = thumbnailUrl(candidate);
         items.push({
           externalId: candidate.id,
           canonicalUrl,
@@ -213,12 +227,12 @@ export class MetaBusinessDiscoveryProvider implements InstagramRadarProvider {
           sourceName,
           caption: typeof candidate.caption === "string" ? candidate.caption : "",
           publishedAt,
-          thumbnailUrl,
+          thumbnailUrl: thumbnail,
           mediaType: mediaType(candidate.media_type, canonicalUrl),
         });
       }
       totalItems += items.length;
-      results.push(collection(source.id, startedAt, calls, {
+      results.push(collection(source.id, startedAt, 1, {
         items,
         capability: "supported",
         // This PR intentionally performs one Graph call per source. A cursor

@@ -61,6 +61,10 @@ Deno.test("Business Discovery normalizes official media without putting its toke
   if (items.map((item) => item.mediaType).join(",") !== "feed,carousel,reel,feed,unknown") throw new Error("media type mapping failed");
   if (items[0].externalId !== "meta-media-id" || items[0].canonicalUrl !== "https://www.instagram.com/p/example/") throw new Error("official identifiers not preserved");
   if (items[4].caption !== "" || items[4].thumbnailUrl !== "https://cdn.instagram.test/thumb.jpg") throw new Error("optional field normalization failed");
+  const videoWithoutThumbnail = await collect(async () => Response.json(graphResponse([
+    media({ media_type: "VIDEO", media_url: "https://cdn.instagram.test/video.mp4", thumbnail_url: undefined }),
+  ])));
+  if (videoWithoutThumbnail[0].items[0]?.thumbnailUrl !== null) throw new Error("video media_url was used as a thumbnail");
 });
 
 Deno.test("Business Discovery enforces item and cursor caps", async () => {
@@ -87,6 +91,21 @@ Deno.test("Business Discovery enforces item and cursor caps", async () => {
     limits: { maxSources: 1, maxItemsPerSource: 1, maxItemsTotal: 1, maxCalls: 1 },
   });
   if (cappedSources.length !== 1 || calls !== 1) throw new Error("maxSources cap failed");
+});
+
+Deno.test("Business Discovery leaves an unqueried source incomplete after the global item cap", async () => {
+  let calls = 0;
+  const results = await provider(async () => {
+    calls += 1;
+    return Response.json(graphResponse([media()]));
+  }).collect({
+    sources: [source, { ...source, id: "source-2", username: "@outra", url: "https://www.instagram.com/outra/" }],
+    newerThan: { "source-1": null, "source-2": null },
+    limits: { maxSources: 2, maxItemsPerSource: 5, maxItemsTotal: 1, maxCalls: 2 },
+  });
+  if (calls !== 1 || results[0].telemetry.calls !== 1 || results[1].telemetry.calls !== 0 || results[1].items.length || results[1].complete || results[1].capability !== "unknown" || results[1].error) {
+    throw new Error("global item cap incorrectly completed or queried the second source");
+  }
 });
 
 Deno.test("Business Discovery preserves incomplete pagination state without a second Graph call", async () => {

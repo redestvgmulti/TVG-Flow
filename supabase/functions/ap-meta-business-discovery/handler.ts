@@ -1,4 +1,5 @@
 import {
+  authFailure,
   createAdminClient,
   json,
   metaCorsHeaders,
@@ -96,7 +97,12 @@ export function createMetaBusinessDiscoveryHandler(overrides: Partial<Dependenci
       }
 
       const admin = dependencies.createAdminClient();
-      const actor = await dependencies.requireMetaAdmin(req, admin);
+      let actor;
+      try {
+        actor = await dependencies.requireMetaAdmin(req, admin);
+      } catch (error) {
+        return authFailure(error, cors);
+      }
       const { data: connection, error: connectionError } = await admin.schema("ap")
         .from("instagram_connections")
         .select("status,instagram_user_id,instagram_username,graph_api_version,token_secret_ref,granted_scopes,capabilities,expires_at")
