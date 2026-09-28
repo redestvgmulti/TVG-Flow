@@ -13,6 +13,8 @@ const REQUIRED_RADAR_SCOPES = [
   "pages_read_engagement",
   "instagram_basic",
   "business_management",
+  "instagram_manage_insights",
+  "ads_read",
 ];
 
 type Connection = {

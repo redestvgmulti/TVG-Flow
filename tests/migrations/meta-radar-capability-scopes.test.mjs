@@ -20,7 +20,7 @@ function functionBlock(migration, name) {
 }
 
 test('persisted Meta Radar capability requires all four read scopes', async () => {
-  const migration = await readFile(migrationUrl, 'utf8')
+  const migration = (await readFile(migrationUrl, 'utf8')).replace(/\r\n/g, '\n')
   const complete = functionBlock(migration, 'ap.complete_meta_oauth_connection')
   const select = functionBlock(migration, 'ap.select_meta_oauth_candidate')
 

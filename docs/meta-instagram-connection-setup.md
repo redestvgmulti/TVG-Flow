@@ -6,6 +6,8 @@ This release uses Instagram API with Facebook Login with read-only scopes:
 - pages_read_engagement
 - instagram_basic
 - business_management
+- instagram_manage_insights
+- ads_read
 
 The application builds the authorization request server-side using the configured
 Graph version and the Facebook OAuth dialog endpoint. It sends client_id,
@@ -17,10 +19,14 @@ me/accounts with id, name, access_token and instagram_business_account id/userna
 
 In the currently certified deployment topology, `business_management` is required
 so Pages administered within a Meta Business Portfolio are enumerated correctly by
-`/me/accounts`. This is a deployment-specific discovery requirement, not a claim
-that the permission is universally required for every Meta setup. The application
-uses these permissions only for read/discovery; publishing, comments and messages
-remain unavailable unless separately requested and granted.
+`/me/accounts`. The real Business Discovery proof succeeded with an expanded token
+that included `instagram_manage_insights`, `ads_read`, and `ads_management`. By
+product decision, the Radar contract requests `instagram_manage_insights` and
+`ads_read`; `ads_management` is not requested in this phase. This is a contract
+choice for the current deployment, not a universal requirement claim or isolated
+causal proof for any individual permission. The application uses these permissions
+only for read/discovery; publishing, comments and messages remain unavailable unless
+separately requested and granted.
 
 Page and user tokens are saved only through Supabase Vault. The database stores Vault
 UUID references only. The user token is retained as a server-side connection secret;
