@@ -109,3 +109,24 @@ BEGIN
     IF NOT FOUND THEN RAISE EXCEPTION 'META_SELECTION_ALREADY_CONSUMED' USING ERRCODE = '28000'; END IF;
     RETURN v_result;
 END; $$;
+
+-- Reconcile existing connected Meta rows without changing their scopes, secrets,
+-- connection state, or any capability other than the tightened Radar contract.
+UPDATE ap.instagram_connections
+SET capabilities = jsonb_set(
+  COALESCE(capabilities, '{}'::jsonb),
+  '{radar_read}',
+  to_jsonb(
+    COALESCE(granted_scopes, ARRAY[]::text[]) @> ARRAY[
+      'pages_show_list',
+      'pages_read_engagement',
+      'instagram_basic',
+      'business_management',
+      'instagram_manage_insights',
+      'ads_read'
+    ]::text[]
+  ),
+  true
+)
+WHERE provider = 'meta'
+  AND status = 'connected';

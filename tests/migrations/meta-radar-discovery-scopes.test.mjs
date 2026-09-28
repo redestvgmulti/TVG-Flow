@@ -19,6 +19,14 @@ function functionBlock(migration, name) {
   return match[0]
 }
 
+function reconciliationBlock(migration) {
+  const match = migration.match(
+    /UPDATE ap\.instagram_connections[\s\S]*?WHERE provider = 'meta'\s+AND status = 'connected';/,
+  )
+  assert.ok(match, 'expected connected Meta connection reconciliation')
+  return match[0]
+}
+
 test('persisted Meta Radar discovery capability requires all six read scopes', async () => {
   const migration = (await readFile(migrationUrl, 'utf8')).replace(/\r\n/g, '\n')
   const complete = functionBlock(migration, 'ap.complete_meta_oauth_connection')
@@ -30,5 +38,17 @@ test('persisted Meta Radar discovery capability requires all six read scopes', a
     assert.match(definition, new RegExp(escapeRegExp(radarScopes)))
     assert.doesNotMatch(definition, new RegExp(escapeRegExp(priorRadarScopes)))
     assert.match(definition, /LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS \$\$/)
+  }
+
+  const reconciliation = reconciliationBlock(migration)
+  assert.match(reconciliation, /SET capabilities = jsonb_set\(/)
+  assert.match(reconciliation, /'\{radar_read\}'/)
+  assert.match(reconciliation, /COALESCE\(granted_scopes, ARRAY\[\]::text\[\]\) @> ARRAY\[[\s\S]*?\]::text\[\]/)
+  for (const scope of ['pages_show_list', 'pages_read_engagement', 'instagram_basic', 'business_management', 'instagram_manage_insights', 'ads_read']) {
+    assert.match(reconciliation, new RegExp(`'${scope}'`))
+  }
+  assert.match(reconciliation, /WHERE provider = 'meta'\s+AND status = 'connected';/)
+  for (const column of ['granted_scopes', 'token_secret_ref', 'revocation_secret_ref', 'status']) {
+    assert.doesNotMatch(reconciliation, new RegExp(`(?:SET|,)\\s*${column}\\s*=`))
   }
 })
