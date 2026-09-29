@@ -177,6 +177,21 @@ async function withEnv(run: () => Promise<void>) {
   }
 }
 
+async function withInternalWorkerSecret(
+  secret: string | null,
+  run: () => Promise<void>,
+) {
+  const previous = Deno.env.get("AP_INTERNAL_WORKER_SECRET");
+  if (secret === null) Deno.env.delete("AP_INTERNAL_WORKER_SECRET");
+  else Deno.env.set("AP_INTERNAL_WORKER_SECRET", secret);
+  try {
+    await run();
+  } finally {
+    if (previous === undefined) Deno.env.delete("AP_INTERNAL_WORKER_SECRET");
+    else Deno.env.set("AP_INTERNAL_WORKER_SECRET", previous);
+  }
+}
+
 type AdvancedOptions = {
   sources?: RadarSource[];
   disabledTenantIds?: string[];
@@ -319,6 +334,135 @@ async function runAdvanced(options: AdvancedOptions) {
   });
   return { ...test, response, body: await response.json() };
 }
+
+function authBoundaryHarness() {
+  const store = new AdvancedFakeStore({ sources: [] });
+  const sideEffects = { admin: 0, store: 0, telemetry: 0 };
+  class Provider {
+    constructor(_options: unknown) {}
+    async collect() {
+      return [];
+    }
+  }
+  class Telemetry {
+    constructor(_admin: unknown) {
+      sideEffects.telemetry += 1;
+    }
+    async logStart(_value: unknown) {}
+    async logSuccess(_cost: number, _value: unknown) {}
+    async logError(_code: string, _cost: number, _value: unknown) {}
+  }
+  return {
+    sideEffects,
+    handler: createInstagramRadarIngestionHandler({
+      createAdminClient: () => {
+        sideEffects.admin += 1;
+        return {} as never;
+      },
+      storeFactory: () => {
+        sideEffects.store += 1;
+        return store;
+      },
+      providerFactory: Provider as never,
+      telemetryFactory: Telemetry as never,
+      now: () => new Date("2026-09-28T12:00:00Z"),
+    }),
+  };
+}
+
+Deno.test("Internal worker auth rejects a POST without the header before dependencies", async () => {
+  await withEnv(async () => {
+    await withInternalWorkerSecret(crypto.randomUUID(), async () => {
+      const test = authBoundaryHarness();
+      const response = await test.handler(
+        new Request("https://worker.test", { method: "POST" }),
+      );
+      assertEquals(response.status, 401);
+      assertEquals(
+        await response.json(),
+        { error: "INTERNAL_WORKER_AUTH_REQUIRED" },
+      );
+      assertEquals(test.sideEffects, { admin: 0, store: 0, telemetry: 0 });
+    });
+  });
+});
+
+Deno.test("Internal worker auth rejects an incorrect header before dependencies", async () => {
+  await withEnv(async () => {
+    await withInternalWorkerSecret(crypto.randomUUID(), async () => {
+      const test = authBoundaryHarness();
+      const response = await test.handler(
+        new Request("https://worker.test", {
+          method: "POST",
+          headers: { "x-ap-internal-secret": crypto.randomUUID() },
+        }),
+      );
+      assertEquals(response.status, 401);
+      assertEquals(
+        await response.json(),
+        { error: "INTERNAL_WORKER_AUTH_REQUIRED" },
+      );
+      assertEquals(test.sideEffects, { admin: 0, store: 0, telemetry: 0 });
+    });
+  });
+});
+
+Deno.test("Internal worker auth rejects when its environment secret is absent", async () => {
+  await withEnv(async () => {
+    await withInternalWorkerSecret(null, async () => {
+      const test = authBoundaryHarness();
+      const response = await test.handler(
+        new Request("https://worker.test", {
+          method: "POST",
+          headers: { "x-ap-internal-secret": crypto.randomUUID() },
+        }),
+      );
+      assertEquals(response.status, 401);
+      assertEquals(
+        await response.json(),
+        { error: "INTERNAL_WORKER_AUTH_REQUIRED" },
+      );
+      assertEquals(test.sideEffects, { admin: 0, store: 0, telemetry: 0 });
+    });
+  });
+});
+
+Deno.test("Internal worker auth accepts the configured secret and enters normal handling", async () => {
+  await withEnv(async () => {
+    const secret = crypto.randomUUID();
+    await withInternalWorkerSecret(secret, async () => {
+      const test = authBoundaryHarness();
+      const response = await test.handler(
+        new Request("https://worker.test", {
+          method: "POST",
+          headers: { "x-ap-internal-secret": secret },
+        }),
+      );
+      assertEquals(response.status, 200);
+      assertEquals((await response.json()).ok, true);
+      assertEquals(test.sideEffects.admin, 1);
+      assertEquals(test.sideEffects.store, 1);
+    });
+  });
+});
+
+Deno.test("Internal worker auth preserves POST-only behavior before dependencies", async () => {
+  await withEnv(async () => {
+    const secret = crypto.randomUUID();
+    await withInternalWorkerSecret(secret, async () => {
+      const test = authBoundaryHarness();
+      const response = await test.handler(
+        new Request("https://worker.test", {
+          method: "GET",
+          headers: { "x-ap-internal-secret": secret },
+        }),
+      );
+      assertEquals(response.status, 405);
+      assertEquals(await response.json(), { error: "METHOD_NOT_ALLOWED" });
+      assertEquals(test.sideEffects, { admin: 0, store: 0, telemetry: 0 });
+    });
+  });
+});
 
 Deno.test("Radar worker uses the six-scope capability fail-closed contract", () => {
   assert(hasRadarReadCapability(connection));
