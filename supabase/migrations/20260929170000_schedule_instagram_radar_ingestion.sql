@@ -33,7 +33,7 @@ SELECT net.http_post(
         )
     ),
     body := '{}'::jsonb,
-    timeout_milliseconds := 10000
+    timeout_milliseconds := 120000
 )
 $cron$;
 
