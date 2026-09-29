@@ -1,4 +1,8 @@
 import { assert, assertEquals, assertMatch } from "jsr:@std/assert";
+import type {
+  InstagramRadarCollection,
+  InstagramRadarItem,
+} from "../_shared/social/instagramRadarProvider.ts";
 import {
   BATCH_LIMIT,
   createInstagramRadarIngestionHandler,
@@ -10,9 +14,18 @@ import {
   MAX_ITEMS_PER_SOURCE,
   PARSER_VERSION,
 } from "./worker.ts";
-import type { InstagramRadarItem } from "../_shared/social/instagramRadarProvider.ts";
+import {
+  type RadarCollectedNewsInput,
+  type RadarCollectedNewsResult,
+  type RadarConnection,
+  type RadarIngestionRunInput,
+  type RadarIngestionStore,
+  RadarIngestionStoreError,
+  type RadarSource,
+  type RadarSourceStateUpdate,
+} from "./store.ts";
 
-const allScopes = [
+const scopes = [
   "pages_show_list",
   "pages_read_engagement",
   "instagram_basic",
@@ -20,7 +33,22 @@ const allScopes = [
   "instagram_manage_insights",
   "ads_read",
 ];
-
+const source: RadarSource = {
+  id: "source-a",
+  cliente_id: "tenant-a",
+  nome: "@prefeitura",
+  url: "https://www.instagram.com/prefeitura/",
+  tipo: "instagram",
+  consecutive_failures: 0,
+};
+const connection: RadarConnection = {
+  instagram_user_id: "caller",
+  graph_api_version: "v26.0",
+  token_secret_ref: "vault-ref",
+  granted_scopes: scopes,
+  capabilities: { radar_read: true },
+  expires_at: null,
+};
 function item(overrides: Partial<InstagramRadarItem> = {}): InstagramRadarItem {
   return {
     externalId: "meta-media-id",
@@ -35,163 +63,75 @@ function item(overrides: Partial<InstagramRadarItem> = {}): InstagramRadarItem {
   };
 }
 
-Deno.test("Radar worker uses the six-scope capability fail-closed contract", () => {
-  assert(
-    hasRadarReadCapability({
-      capabilities: { radar_read: true },
-      granted_scopes: allScopes,
-      instagram_user_id: "id",
-      graph_api_version: "v26.0",
-      token_secret_ref: "ref",
-      expires_at: null,
-    }),
-  );
-  assert(
-    !hasRadarReadCapability({
-      capabilities: { radar_read: true },
-      granted_scopes: allScopes.slice(0, -1),
-      instagram_user_id: "id",
-      graph_api_version: "v26.0",
-      token_secret_ref: "ref",
-      expires_at: null,
-    }),
-  );
-  assert(
-    !hasRadarReadCapability({
-      capabilities: { radar_read: false },
-      granted_scopes: allScopes,
-      instagram_user_id: "id",
-      graph_api_version: "v26.0",
-      token_secret_ref: "ref",
-      expires_at: null,
-    }),
-  );
-});
+class FakeRadarIngestionStore implements RadarIngestionStore {
+  disabledTenantLoads = 0;
+  sourceLoads: Array<{ disabledTenantIds: string[]; limit: number }> = [];
+  connectionLoads: string[] = [];
+  secretReads: string[] = [];
+  ingestCalls: RadarCollectedNewsInput[] = [];
+  sourceUpdates: Array<
+    { sourceId: string; clienteId: string; update: RadarSourceStateUpdate }
+  > = [];
+  runInserts: RadarIngestionRunInput[] = [];
+  constructor(
+    private readonly options: {
+      updateError?: boolean;
+      insertError?: boolean;
+      created?: boolean;
+    } = {},
+  ) {}
+  async loadDisabledTenantIds() {
+    this.disabledTenantLoads++;
+    return [];
+  }
+  async loadInstagramSources(disabledTenantIds: string[], limit: number) {
+    this.sourceLoads.push({ disabledTenantIds, limit });
+    return [source];
+  }
+  async loadPrimaryMetaConnection(clienteId: string) {
+    this.connectionLoads.push(clienteId);
+    return connection;
+  }
+  async readMetaSecret(secretRef: string) {
+    this.secretReads.push(secretRef);
+    return "page-token";
+  }
+  async ingestCollectedNews(
+    input: RadarCollectedNewsInput,
+  ): Promise<RadarCollectedNewsResult> {
+    this.ingestCalls.push(input);
+    return { created: this.options.created ?? true };
+  }
+  async updateSourceState(
+    sourceId: string,
+    clienteId: string,
+    update: RadarSourceStateUpdate,
+  ) {
+    this.sourceUpdates.push({ sourceId, clienteId, update });
+    if (this.options.updateError) {
+      throw new RadarIngestionStoreError("RADAR_SOURCE_STATE_WRITE_FAILED");
+    }
+  }
+  async insertIngestionRun(run: RadarIngestionRunInput) {
+    this.runInserts.push(run);
+    if (this.options.insertError) {
+      throw new RadarIngestionStoreError("RADAR_INGESTION_RUN_WRITE_FAILED");
+    }
+  }
+}
 
-Deno.test("Instagram editorial mapping is deterministic and does not invent a headline", async () => {
-  assertEquals(instagramTitle(item()), "Primeira linha");
-  assertEquals(
-    instagramTitle(item({ caption: "  \n " })),
-    "Publicação de @prefeitura",
-  );
-  assertEquals(
-    instagramExcerpt(item({ caption: "  A   legenda\ncom espaços  " })),
-    "A legenda com espaços",
-  );
-  assertEquals(instagramExcerpt(item({ caption: "" })), null);
-  assertEquals(
-    await instagramContentHash(item()),
-    await instagramContentHash(item()),
-  );
-  assert(
-    (await instagramContentHash(item())) !==
-      await instagramContentHash(item({ externalId: "other" })),
-  );
-});
-
-Deno.test("Instagram ingestion worker contract preserves rolling-window and safe persistence boundaries", async () => {
-  const source = await Deno.readTextFile(
-    new URL("./worker.ts", import.meta.url),
-  );
-  assertEquals(BATCH_LIMIT, 25);
-  assertEquals(MAX_ITEMS_PER_SOURCE, 25);
-  assertEquals(MAX_AGE_HOURS, 24);
-  assertEquals(PARSER_VERSION, "instagram-meta-v1");
-  assertMatch(source, /\.eq\("tipo", "instagram"\)\.eq\("ativo", true\)/);
-  assertMatch(
-    source,
-    /\.order\("last_checked_at", \{ ascending: true, nullsFirst: true \}\)/,
-  );
-  assertMatch(source, /\.order\("created_at", \{ ascending: true \}\)/);
-  assertMatch(source, /\.rpc\(\s*"ingest_collected_news"/);
-  assertMatch(source, /complete: collection\.complete/);
-  assertMatch(source, /publishedAt < cutoffMs/);
-  assertMatch(source, /META_RADAR_CONNECTION_UNAVAILABLE/);
-  assertMatch(source, /META_RADAR_CAPABILITY_UNAVAILABLE/);
-  assertMatch(source, /META_RADAR_SECRET_UNAVAILABLE/);
-  assertMatch(source, /completed_with_errors/);
-  assert(!source.includes("Apify"));
-  assert(!source.includes('from("collected_news").insert'));
-  assert(!source.includes("access_token"));
-});
-
-Deno.test("Worker response and run metadata omit captions, Vault references and raw Meta pagination", async () => {
-  const source = await Deno.readTextFile(
-    new URL("./worker.ts", import.meta.url),
-  );
-  const response = source.slice(source.lastIndexOf("return json({ ok: true"));
-  assert(!response.includes("caption"));
-  assert(!response.includes("token_secret_ref"));
-  assert(!response.includes("paging"));
-  assertMatch(source, /provider: "meta_business_discovery"/);
-  assertMatch(source, /external_id: item\.externalId/);
-  assertMatch(source, /discovery_complete: collection\.complete/);
-});
-
-function workerHarness(
+function harness(
   options: { updateError?: boolean; insertError?: boolean; created?: boolean } =
     {},
 ) {
-  const writes: Array<{ table: string; value: Record<string, unknown> }> = [];
-  const source = {
-    id: "source-a",
-    cliente_id: "tenant-a",
-    nome: "@prefeitura",
-    url: "https://www.instagram.com/prefeitura/",
-    tipo: "instagram",
-    consecutive_failures: 0,
-  };
-  const connection = {
-    instagram_user_id: "caller",
-    graph_api_version: "v26.0",
-    token_secret_ref: "vault-ref",
-    granted_scopes: allScopes,
-    capabilities: { radar_read: true },
-    expires_at: null,
-  };
-  const admin = {
-    schema: () => ({
-      from: (table: string) => {
-        const query: any = {
-          select: () => query,
-          eq: () => query,
-          order: () => query,
-          not: () => query,
-        };
-        query.limit = async () => ({
-          data: table === "sources" ? [source] : [],
-          error: null,
-        });
-        query.maybeSingle = async () => ({
-          data: table === "instagram_connections" ? connection : null,
-          error: null,
-        });
-        query.update = (value: Record<string, unknown>) => ({
-          eq: () => ({
-            eq: async () => ({
-              error: options.updateError ? { code: "x" } : null,
-            }),
-          }),
-        });
-        query.insert = async (value: Record<string, unknown>) => {
-          writes.push({ table, value });
-          return { error: options.insertError ? { code: "x" } : null };
-        };
-        return query;
-      },
-      rpc: async (name: string) =>
-        name === "meta_read_secret"
-          ? { data: "page-token", error: null }
-          : { data: { created: options.created ?? true }, error: null },
-    }),
-  };
+  const store = new FakeRadarIngestionStore(options);
   class Provider {
     constructor(_options: unknown) {}
     async collect() {
       return [{
-        sourceId: "source-a",
-        provider: "meta_business_discovery",
-        capability: "supported",
+        sourceId: source.id,
+        provider: "meta_business_discovery" as const,
+        capability: "supported" as const,
         complete: false,
         items: [item()],
         telemetry: {
@@ -203,32 +143,265 @@ function workerHarness(
       }];
     }
   }
-  class FakeTelemetry {
+  class Telemetry {
     constructor(_admin: unknown) {}
-    async logStart(_value: unknown) {}
-    async logSuccess(_cost: number, _value: unknown) {}
-    async logError(_code: string, _cost: number, _value: unknown) {}
+    async logStart(_v: unknown) {}
+    async logSuccess(_c: number, _v: unknown) {}
+    async logError(_e: string, _c: number, _v: unknown) {}
   }
   return {
-    writes,
+    store,
     handler: createInstagramRadarIngestionHandler({
-      createAdminClient: () => admin as never,
+      createAdminClient: () => ({}) as never,
+      storeFactory: () => store,
       requireTrustedInternalRequest: () => {},
       providerFactory: Provider as never,
-      telemetryFactory: FakeTelemetry as never,
+      telemetryFactory: Telemetry as never,
       now: () => new Date("2026-09-28T12:00:00Z"),
     }),
   };
 }
 
-Deno.test("Worker orchestration executes a recent item and records a successful incomplete collection", async () => {
-  const oldUrl = Deno.env.get("SUPABASE_URL");
-  const oldKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+async function withEnv(run: () => Promise<void>) {
+  const url = Deno.env.get("SUPABASE_URL"),
+    key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   Deno.env.set("SUPABASE_URL", "https://example.test");
   Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "test-key");
   try {
-    const harness = workerHarness();
-    const response = await harness.handler(
+    await run();
+  } finally {
+    if (url) Deno.env.set("SUPABASE_URL", url);
+    else Deno.env.delete("SUPABASE_URL");
+    if (key) Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", key);
+    else Deno.env.delete("SUPABASE_SERVICE_ROLE_KEY");
+  }
+}
+
+type AdvancedOptions = {
+  sources?: RadarSource[];
+  disabledTenantIds?: string[];
+  connections?: Record<string, RadarConnection | null>;
+  secrets?: Record<string, string | null>;
+  collections?: Record<string, InstagramRadarCollection>;
+  ingest?: Array<boolean | Error>;
+  updateError?: boolean;
+  insertError?: boolean;
+};
+
+class AdvancedFakeStore implements RadarIngestionStore {
+  readonly connectionLoads: string[] = [];
+  readonly secretReads: string[] = [];
+  readonly ingestCalls: RadarCollectedNewsInput[] = [];
+  readonly sourceUpdates: Array<{
+    sourceId: string;
+    clienteId: string;
+    update: RadarSourceStateUpdate;
+  }> = [];
+  readonly runInserts: RadarIngestionRunInput[] = [];
+
+  constructor(readonly options: AdvancedOptions) {}
+  async loadDisabledTenantIds() {
+    return this.options.disabledTenantIds ?? [];
+  }
+  async loadInstagramSources(disabled: string[], _limit: number) {
+    return (this.options.sources ?? []).filter((value) =>
+      !disabled.includes(value.cliente_id)
+    );
+  }
+  async loadPrimaryMetaConnection(clienteId: string) {
+    this.connectionLoads.push(clienteId);
+    return this.options.connections?.[clienteId] ?? connection;
+  }
+  async readMetaSecret(ref: string) {
+    this.secretReads.push(ref);
+    return this.options.secrets && ref in this.options.secrets
+      ? this.options.secrets[ref]
+      : "page-token";
+  }
+  async ingestCollectedNews(input: RadarCollectedNewsInput) {
+    this.ingestCalls.push(input);
+    const result = this.options.ingest?.[this.ingestCalls.length - 1] ?? true;
+    if (result instanceof Error) throw result;
+    return { created: result };
+  }
+  async updateSourceState(
+    sourceId: string,
+    clienteId: string,
+    update: RadarSourceStateUpdate,
+  ) {
+    this.sourceUpdates.push({ sourceId, clienteId, update });
+    if (this.options.updateError) {
+      throw new RadarIngestionStoreError("RADAR_SOURCE_STATE_WRITE_FAILED");
+    }
+  }
+  async insertIngestionRun(run: RadarIngestionRunInput) {
+    this.runInserts.push(run);
+    if (this.options.insertError) {
+      throw new RadarIngestionStoreError("RADAR_INGESTION_RUN_WRITE_FAILED");
+    }
+  }
+}
+
+function collection(
+  sourceId: string,
+  options: Partial<InstagramRadarCollection> = {},
+): InstagramRadarCollection {
+  return {
+    sourceId,
+    provider: "meta_business_discovery",
+    capability: "supported",
+    complete: true,
+    items: [item()],
+    telemetry: { durationMs: 7, calls: 1, billedResults: null, costUsd: null },
+    ...options,
+  };
+}
+
+function advancedHarness(options: AdvancedOptions) {
+  const store = new AdvancedFakeStore(options);
+  const providerOptions: Array<{
+    graphApiVersion: string;
+    instagramUserId: string;
+    pageAccessToken: string;
+  }> = [];
+  const collectCalls: Array<{ sources: { id: string }[] }> = [];
+  const telemetry: unknown[] = [];
+  class Provider {
+    constructor(input: {
+      graphApiVersion: string;
+      instagramUserId: string;
+      pageAccessToken: string;
+    }) {
+      providerOptions.push(input);
+    }
+    async collect(input: { sources: { id: string }[] }) {
+      collectCalls.push(input);
+      return input.sources.map((value) =>
+        options.collections?.[value.id] ?? collection(value.id)
+      );
+    }
+  }
+  class CapturingTelemetry {
+    constructor(_admin: unknown) {}
+    async logStart(value: unknown) {
+      telemetry.push(value);
+    }
+    async logSuccess(_cost: number, value: unknown) {
+      telemetry.push(value);
+    }
+    async logError(_code: string, _cost: number, value: unknown) {
+      telemetry.push(value);
+    }
+  }
+  return {
+    store,
+    providerOptions,
+    collectCalls,
+    telemetry,
+    handler: createInstagramRadarIngestionHandler({
+      createAdminClient: () => ({}) as never,
+      storeFactory: () => store,
+      requireTrustedInternalRequest: () => {},
+      providerFactory: Provider as never,
+      telemetryFactory: CapturingTelemetry as never,
+      now: () => new Date("2026-09-28T12:00:00Z"),
+    }),
+  };
+}
+
+async function runAdvanced(options: AdvancedOptions) {
+  const test = advancedHarness(options);
+  let response!: Response;
+  await withEnv(async () => {
+    response = await test.handler(
+      new Request("https://worker.test", { method: "POST" }),
+    );
+  });
+  return { ...test, response, body: await response.json() };
+}
+
+Deno.test("Radar worker uses the six-scope capability fail-closed contract", () => {
+  assert(hasRadarReadCapability(connection));
+  assert(
+    !hasRadarReadCapability({
+      ...connection,
+      granted_scopes: scopes.slice(0, -1),
+    }),
+  );
+  assert(
+    !hasRadarReadCapability({
+      ...connection,
+      capabilities: { radar_read: false },
+    }),
+  );
+});
+
+Deno.test("Instagram editorial mapping is deterministic", async () => {
+  assertEquals(instagramTitle(item()), "Primeira linha");
+  assertEquals(
+    instagramTitle(item({ caption: "  \n " })),
+    "Publica\u00e7\u00e3o de @prefeitura",
+  );
+  assertEquals(
+    instagramExcerpt(item({ caption: "  A   legenda\ncom espa\u00e7os  " })),
+    "A legenda com espa\u00e7os",
+  );
+  assertEquals(instagramExcerpt(item({ caption: "" })), null);
+  assertEquals(
+    await instagramContentHash(item()),
+    await instagramContentHash(item()),
+  );
+  assert(
+    (await instagramContentHash(item())) !==
+      (await instagramContentHash(item({ externalId: "other" }))),
+  );
+});
+
+Deno.test("Worker delegates all Radar domain I/O to the store", async () => {
+  const worker = await Deno.readTextFile(
+    new URL("./worker.ts", import.meta.url),
+  );
+  const store = await Deno.readTextFile(new URL("./store.ts", import.meta.url));
+  assertEquals(BATCH_LIMIT, 25);
+  assertEquals(MAX_ITEMS_PER_SOURCE, 25);
+  assertEquals(MAX_AGE_HOURS, 24);
+  assertEquals(PARSER_VERSION, "instagram-meta-v1");
+  for (
+    const forbidden of [
+      'from("sources")',
+      'from("instagram_connections")',
+      'from("source_ingestion_runs")',
+      'rpc("meta_read_secret")',
+      'rpc("ingest_collected_news")',
+    ]
+  ) assert(!worker.includes(forbidden));
+  assertMatch(store, /\.eq\("tipo", "instagram"\)\.eq\("ativo", true\)/);
+  assertMatch(store, /\.order\("last_checked_at", \{/);
+  assertMatch(store, /\.order\("created_at", \{ ascending: true \}\)/);
+  assertMatch(store, /"ingest_collected_news"/);
+  assertMatch(worker, /complete: collection\.complete/);
+  assertMatch(worker, /publishedAt < cutoffMs/);
+  assert(!worker.includes("Apify"));
+  assert(!worker.includes("access_token"));
+});
+
+Deno.test("Worker response and run metadata omit sensitive provider data", async () => {
+  const worker = await Deno.readTextFile(
+    new URL("./worker.ts", import.meta.url),
+  );
+  const response = worker.slice(worker.lastIndexOf("return json({ ok: true"));
+  assert(!response.includes("caption"));
+  assert(!response.includes("token_secret_ref"));
+  assert(!response.includes("paging"));
+  assertMatch(worker, /provider: "meta_business_discovery"/);
+  assertMatch(worker, /external_id: item\.externalId/);
+  assertMatch(worker, /discovery_complete: collection\.complete/);
+});
+
+Deno.test("Worker orchestrates a recent item through a successful incomplete collection", async () =>
+  await withEnv(async () => {
+    const test = harness();
+    const response = await test.handler(
       new Request("https://worker.test", { method: "POST" }),
     );
     const body = await response.json();
@@ -236,27 +409,13 @@ Deno.test("Worker orchestration executes a recent item and records a successful 
     assertEquals(body.ok, true);
     assertEquals(body.results[0].collected, 1);
     assertEquals(body.results[0].complete, false);
-    assertEquals(
-      harness.writes.filter((write) =>
-        write.table === "source_ingestion_runs"
-      )[0].value.status,
-      "success",
-    );
-  } finally {
-    if (oldUrl) Deno.env.set("SUPABASE_URL", oldUrl);
-    else Deno.env.delete("SUPABASE_URL");
-    if (oldKey) Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", oldKey);
-    else Deno.env.delete("SUPABASE_SERVICE_ROLE_KEY");
-  }
-});
+    assertEquals(test.store.runInserts[0].status, "success");
+    assertEquals(test.store.ingestCalls.length, 1);
+  }));
 
-Deno.test("Worker turns a source-state infrastructure failure into a sanitized 500", async () => {
-  const oldUrl = Deno.env.get("SUPABASE_URL");
-  const oldKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  Deno.env.set("SUPABASE_URL", "https://example.test");
-  Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "test-key");
-  try {
-    const response = await workerHarness({ updateError: true }).handler(
+Deno.test("Worker turns a source-state write failure into a sanitized 500", async () =>
+  await withEnv(async () => {
+    const response = await harness({ updateError: true }).handler(
       new Request("https://worker.test", { method: "POST" }),
     );
     assertEquals(response.status, 500);
@@ -264,21 +423,11 @@ Deno.test("Worker turns a source-state infrastructure failure into a sanitized 5
       (await response.json()).error,
       "RADAR_SOURCE_STATE_WRITE_FAILED",
     );
-  } finally {
-    if (oldUrl) Deno.env.set("SUPABASE_URL", oldUrl);
-    else Deno.env.delete("SUPABASE_URL");
-    if (oldKey) Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", oldKey);
-    else Deno.env.delete("SUPABASE_SERVICE_ROLE_KEY");
-  }
-});
+  }));
 
-Deno.test("Worker turns an ingestion-run infrastructure failure into a sanitized 500", async () => {
-  const oldUrl = Deno.env.get("SUPABASE_URL");
-  const oldKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  Deno.env.set("SUPABASE_URL", "https://example.test");
-  Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "test-key");
-  try {
-    const response = await workerHarness({ insertError: true }).handler(
+Deno.test("Worker turns an ingestion-run write failure into a sanitized 500", async () =>
+  await withEnv(async () => {
+    const response = await harness({ insertError: true }).handler(
       new Request("https://worker.test", { method: "POST" }),
     );
     assertEquals(response.status, 500);
@@ -286,10 +435,286 @@ Deno.test("Worker turns an ingestion-run infrastructure failure into a sanitized
       (await response.json()).error,
       "RADAR_INGESTION_RUN_WRITE_FAILED",
     );
-  } finally {
-    if (oldUrl) Deno.env.set("SUPABASE_URL", oldUrl);
-    else Deno.env.delete("SUPABASE_URL");
-    if (oldKey) Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", oldKey);
-    else Deno.env.delete("SUPABASE_SERVICE_ROLE_KEY");
+  }));
+
+Deno.test("A/Q/R success writes exact source state and safe run", async () => {
+  const test = await runAdvanced({ sources: [source] });
+  assertEquals(test.response.status, 200);
+  assertEquals(test.body.ok, true);
+  assertEquals(test.body.results[0], {
+    source_id: source.id,
+    discovered: 1,
+    valid: 1,
+    collected: 1,
+    duplicates: 0,
+    skipped_old: 0,
+    errors: 0,
+    complete: true,
+    error_code: null,
+  });
+  assertEquals(test.store.sourceUpdates[0].update, {
+    detected_type: "instagram",
+    last_checked_at: "2026-09-28T12:00:00.000Z",
+    last_success_at: "2026-09-28T12:00:00.000Z",
+    last_error_code: null,
+    consecutive_failures: 0,
+    last_discovered_count: 1,
+    last_collected_count: 1,
+  });
+  const run = test.store.runInserts[0];
+  assertEquals(run.source_id, source.id);
+  assertEquals(run.cliente_id, source.cliente_id);
+  assertEquals(run.detected_type, "instagram");
+  assertEquals(run.status, "success");
+  assertEquals(run.discovered_count, 1);
+  assertEquals(run.collected_count, 1);
+  assertEquals(run.skipped_old_count, 0);
+  assertEquals(run.error_count, 0);
+  assertEquals(run.error_code, null);
+  assertEquals(run.started_at, "2026-09-28T12:00:00.000Z");
+  assertEquals(run.finished_at, "2026-09-28T12:00:00.000Z");
+  assertEquals(run.metadata.correlation_id, run.worker_id);
+  assertEquals(run.metadata.provider, "meta_business_discovery");
+  assertEquals(run.metadata.mode, "instagram_radar");
+  assertEquals(run.metadata.complete, true);
+  assertEquals(run.metadata.duplicate_count, 0);
+  assertEquals(run.metadata.valid_count, 1);
+  assertEquals(run.metadata.calls, 1);
+  assert(typeof run.metadata.duration_ms === "number");
+});
+
+Deno.test("B/C/I deduplication, old rolling-window items and incomplete pages remain successful", async () => {
+  const dedup = await runAdvanced({
+    sources: [source],
+    ingest: [false],
+    collections: { [source.id]: collection(source.id, { complete: false }) },
+  });
+  assertEquals(dedup.body.results[0].collected, 0);
+  assertEquals(dedup.body.results[0].duplicates, 1);
+  assertEquals(dedup.store.runInserts[0].status, "success");
+  assertEquals(dedup.store.runInserts[0].metadata.complete, false);
+  assertEquals(dedup.store.sourceUpdates[0].update.consecutive_failures, 0);
+  const old = await runAdvanced({
+    sources: [source],
+    collections: {
+      [source.id]: collection(source.id, {
+        items: [item({ publishedAt: "2026-09-27T11:59:59.000Z" })],
+      }),
+    },
+  });
+  assertEquals(old.store.ingestCalls.length, 0);
+  assertEquals(old.body.results[0].valid, 0);
+  assertEquals(old.body.results[0].skipped_old, 1);
+  assertEquals(old.store.runInserts[0].status, "success");
+});
+
+Deno.test("D provider error increments source failure and records error run", async () => {
+  const test = await runAdvanced({
+    sources: [{ ...source, consecutive_failures: 2 }],
+    collections: {
+      [source.id]: collection(source.id, {
+        items: [],
+        complete: false,
+        error: {
+          code: "META_BUSINESS_DISCOVERY_RATE_LIMITED",
+          retryable: true,
+        },
+      }),
+    },
+  });
+  assertEquals(test.store.ingestCalls.length, 0);
+  assertEquals(
+    test.store.sourceUpdates[0].update.last_error_code,
+    "META_BUSINESS_DISCOVERY_RATE_LIMITED",
+  );
+  assertEquals(test.store.sourceUpdates[0].update.consecutive_failures, 3);
+  assertEquals("last_success_at" in test.store.sourceUpdates[0].update, false);
+  assertEquals(test.store.runInserts[0].status, "error");
+  assertEquals(test.store.runInserts[0].error_count, 1);
+  assertEquals(
+    test.store.runInserts[0].error_code,
+    "META_BUSINESS_DISCOVERY_RATE_LIMITED",
+  );
+});
+
+Deno.test("E/F/G invalid capability, missing scope and Vault failure are fail-closed", async () => {
+  for (
+    const invalid of [
+      { ...connection, capabilities: { radar_read: false } },
+      { ...connection, granted_scopes: scopes.slice(0, -1) },
+    ]
+  ) {
+    const test = await runAdvanced({
+      sources: [source],
+      connections: { [source.cliente_id]: invalid },
+    });
+    assertEquals(test.store.secretReads.length, 0);
+    assertEquals(test.providerOptions.length, 0);
+    assertEquals(test.store.ingestCalls.length, 0);
+    assertEquals(
+      test.store.sourceUpdates[0].update.last_error_code,
+      "META_RADAR_CAPABILITY_UNAVAILABLE",
+    );
+    assertEquals(
+      test.store.runInserts[0].error_code,
+      "META_RADAR_CAPABILITY_UNAVAILABLE",
+    );
   }
+  const vault = await runAdvanced({
+    sources: [source],
+    secrets: { "vault-ref": null },
+  });
+  assertEquals(vault.providerOptions.length, 0);
+  assertEquals(vault.store.ingestCalls.length, 0);
+  assertEquals(
+    vault.store.sourceUpdates[0].update.last_error_code,
+    "META_RADAR_SECRET_UNAVAILABLE",
+  );
+});
+
+Deno.test("H item persistence failures continue and produce completed_with_errors", async () => {
+  const second = item({
+    externalId: "second",
+    canonicalUrl: "https://www.instagram.com/p/second/",
+  });
+  const test = await runAdvanced({
+    sources: [source],
+    ingest: [new Error("database details"), true],
+    collections: {
+      [source.id]: collection(source.id, { items: [item(), second] }),
+    },
+  });
+  assertEquals(test.store.ingestCalls.length, 2);
+  assertEquals(test.body.results[0].valid, 2);
+  assertEquals(test.body.results[0].collected, 1);
+  assertEquals(test.body.results[0].errors, 1);
+  assertEquals(
+    test.store.sourceUpdates[0].update.last_error_code,
+    "ITEM_PERSIST_FAILED",
+  );
+  assertEquals(test.store.sourceUpdates[0].update.consecutive_failures, 0);
+  assertEquals(test.store.sourceUpdates[0].update.last_collected_count, 1);
+  assertEquals(test.store.runInserts[0].status, "completed_with_errors");
+  assertEquals(test.store.runInserts[0].error_count, 1);
+  assertEquals(test.store.runInserts[0].error_code, "ITEM_PERSIST_FAILED");
+});
+
+Deno.test("J/K infrastructure writes terminate at sanitized HTTP boundaries", async () => {
+  for (
+    const [options, code] of [[
+      { updateError: true },
+      "RADAR_SOURCE_STATE_WRITE_FAILED",
+    ], [{ insertError: true }, "RADAR_INGESTION_RUN_WRITE_FAILED"]] as const
+  ) {
+    const test = await runAdvanced({ sources: [source], ...options });
+    assertEquals(test.response.status, 500);
+    assertEquals(test.body, { error: code });
+    assertEquals(test.body.ok, undefined);
+  }
+});
+
+Deno.test("L/M batches each tenant once and never crosses credentials", async () => {
+  const sourceB: RadarSource = {
+    ...source,
+    id: "source-b",
+    url: "https://www.instagram.com/camara/",
+  };
+  const same = await runAdvanced({ sources: [source, sourceB] });
+  assertEquals(same.store.connectionLoads, ["tenant-a"]);
+  assertEquals(same.store.secretReads, ["vault-ref"]);
+  assertEquals(same.providerOptions.length, 1);
+  assertEquals(same.collectCalls.length, 1);
+  assertEquals(same.collectCalls[0].sources.map((value) => value.id), [
+    source.id,
+    sourceB.id,
+  ]);
+  assertEquals(same.store.sourceUpdates.length, 2);
+  assertEquals(same.store.runInserts.length, 2);
+  const tenantB = "tenant-b";
+  const sourceOther: RadarSource = {
+    ...source,
+    id: "source-other",
+    cliente_id: tenantB,
+    url: "https://www.instagram.com/portal/",
+  };
+  const connectionB: RadarConnection = {
+    ...connection,
+    instagram_user_id: "caller-b",
+    token_secret_ref: "ref-b",
+  };
+  const separate = await runAdvanced({
+    sources: [source, sourceOther],
+    connections: { "tenant-a": connection, [tenantB]: connectionB },
+    secrets: { "vault-ref": "token-a", "ref-b": "token-b" },
+  });
+  assertEquals(separate.providerOptions, [{
+    graphApiVersion: "v26.0",
+    instagramUserId: "caller",
+    pageAccessToken: "token-a",
+  }, {
+    graphApiVersion: "v26.0",
+    instagramUserId: "caller-b",
+    pageAccessToken: "token-b",
+  }]);
+});
+
+Deno.test("N/O invalid and disabled sources are not sent to the provider", async () => {
+  const invalid: RadarSource = {
+    ...source,
+    id: "invalid",
+    url: "https://evil.example/not-instagram",
+  };
+  const valid: RadarSource = {
+    ...source,
+    id: "valid",
+    url: "https://www.instagram.com/valid/",
+  };
+  const test = await runAdvanced({ sources: [invalid, valid] });
+  assertEquals(test.collectCalls[0].sources.map((value) => value.id), [
+    "valid",
+  ]);
+  assertEquals(
+    test.store.runInserts.find((run) => run.source_id === "invalid")
+      ?.error_code,
+    "META_RADAR_SOURCE_INVALID",
+  );
+  assert(
+    test.store.ingestCalls.every((input) => input.p_source_id !== "invalid"),
+  );
+  const disabled = await runAdvanced({
+    sources: [source],
+    disabledTenantIds: ["tenant-a"],
+  });
+  assertEquals(disabled.store.connectionLoads.length, 0);
+  assertEquals(disabled.store.secretReads.length, 0);
+  assertEquals(disabled.providerOptions.length, 0);
+  assertEquals(disabled.store.ingestCalls.length, 0);
+});
+
+Deno.test("security serialization excludes tokens, captions, raw paging and cursors", async () => {
+  const sensitiveCaption = "CAPTION-NEVER-EXPOSE";
+  const test = await runAdvanced({
+    sources: [source],
+    collections: {
+      [source.id]: collection(source.id, {
+        items: [item({ caption: sensitiveCaption })],
+      }),
+    },
+  });
+  const serialized = JSON.stringify({
+    response: test.body,
+    run: test.store.runInserts[0].metadata,
+    telemetry: test.telemetry,
+  });
+  for (
+    const secret of [
+      "page-token",
+      "vault-ref",
+      "access_token",
+      sensitiveCaption,
+      "paging.next",
+      "paging",
+      "cursor",
+    ]
+  ) assert(!serialized.includes(secret));
 });

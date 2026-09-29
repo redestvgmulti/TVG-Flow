@@ -8,6 +8,15 @@ import type {
   InstagramRadarSource,
 } from "../_shared/social/instagramRadarProvider.ts";
 import { Telemetry } from "../_shared/telemetry.ts";
+import {
+  type RadarConnection,
+  type RadarIngestionRunMetadata,
+  type RadarIngestionStore,
+  RadarIngestionStoreError,
+  type RadarSource,
+  type RadarSourceStateUpdate,
+  SupabaseRadarIngestionStore,
+} from "./store.ts";
 
 export const BATCH_LIMIT = 25;
 export const MAX_ITEMS_PER_SOURCE = 25;
@@ -22,24 +31,6 @@ const REQUIRED_RADAR_SCOPES = [
   "instagram_manage_insights",
   "ads_read",
 ];
-
-type Source = {
-  id: string;
-  cliente_id: string;
-  nome: string | null;
-  url: string;
-  tipo: string;
-  consecutive_failures: number | null;
-};
-
-type Connection = {
-  instagram_user_id: string | null;
-  graph_api_version: string | null;
-  token_secret_ref: string | null;
-  granted_scopes: string[] | null;
-  capabilities: Record<string, unknown> | null;
-  expires_at: string | null;
-};
 
 type Provider = {
   collect(options: {
@@ -56,25 +47,16 @@ type Provider = {
 
 type Dependencies = {
   createAdminClient: typeof createAdminClient;
+  storeFactory: (admin: unknown) => RadarIngestionStore;
   requireTrustedInternalRequest: typeof requireTrustedInternalRequest;
   providerFactory: typeof MetaBusinessDiscoveryProvider;
   telemetryFactory: typeof Telemetry;
   now: () => Date;
 };
 
-export class RadarIngestionInfrastructureError extends Error {
-  constructor(
-    readonly code:
-      | "RADAR_SOURCE_STATE_WRITE_FAILED"
-      | "RADAR_INGESTION_RUN_WRITE_FAILED",
-  ) {
-    super(code);
-    this.name = "RadarIngestionInfrastructureError";
-  }
-}
-
 const defaults: Dependencies = {
   createAdminClient,
+  storeFactory: (admin) => new SupabaseRadarIngestionStore(admin),
   requireTrustedInternalRequest,
   providerFactory: MetaBusinessDiscoveryProvider,
   telemetryFactory: Telemetry,
@@ -88,7 +70,7 @@ function json(body: unknown, status = 200) {
   });
 }
 
-export function hasRadarReadCapability(connection: Connection) {
+export function hasRadarReadCapability(connection: RadarConnection) {
   return connection.capabilities?.radar_read === true &&
     Array.isArray(connection.granted_scopes) &&
     REQUIRED_RADAR_SCOPES.every((scope) =>
@@ -96,7 +78,7 @@ export function hasRadarReadCapability(connection: Connection) {
     );
 }
 
-function connectionExpired(connection: Connection, now: Date) {
+function connectionExpired(connection: RadarConnection, now: Date) {
   if (!connection.expires_at) return false;
   const timestamp = new Date(connection.expires_at).getTime();
   return Number.isNaN(timestamp) || timestamp <= now.getTime();
@@ -136,8 +118,8 @@ export async function instagramContentHash(item: InstagramRadarItem) {
   ).join("");
 }
 
-function groupByTenant(sources: Source[]) {
-  const groups = new Map<string, Source[]>();
+function groupByTenant(sources: RadarSource[]) {
+  const groups = new Map<string, RadarSource[]>();
   for (const source of sources) {
     groups.set(source.cliente_id, [
       ...(groups.get(source.cliente_id) ?? []),
@@ -147,54 +129,27 @@ function groupByTenant(sources: Source[]) {
   return groups;
 }
 
-async function updateSource(
-  admin: any,
-  source: Source,
-  update: Record<string, unknown>,
-) {
-  const { error } = await admin.schema("ap").from("sources").update(update).eq(
-    "id",
-    source.id,
-  )
-    .eq("cliente_id", source.cliente_id);
-  if (error) {
-    throw new RadarIngestionInfrastructureError(
-      "RADAR_SOURCE_STATE_WRITE_FAILED",
-    );
-  }
-}
-
-async function insertRun(admin: any, values: Record<string, unknown>) {
-  const { error } = await admin.schema("ap").from("source_ingestion_runs")
-    .insert(values);
-  if (error) {
-    throw new RadarIngestionInfrastructureError(
-      "RADAR_INGESTION_RUN_WRITE_FAILED",
-    );
-  }
-}
-
-function resultFor(source: Source, values: Record<string, unknown>) {
+function resultFor(source: RadarSource, values: Record<string, unknown>) {
   return { source_id: source.id, ...values };
 }
 
 async function recordSourceError(
-  admin: any,
-  source: Source,
+  store: RadarIngestionStore,
+  source: RadarSource,
   workerId: string,
   startedAt: string,
   code: string,
-  metadata: Record<string, unknown>,
+  metadata: Pick<RadarIngestionRunMetadata, "calls" | "complete">,
   now: Date,
 ) {
-  await updateSource(admin, source, {
+  await store.updateSourceState(source.id, source.cliente_id, {
     last_checked_at: now.toISOString(),
     last_error_code: code,
     consecutive_failures: Number(source.consecutive_failures ?? 0) + 1,
     last_discovered_count: 0,
     last_collected_count: 0,
   });
-  await insertRun(admin, {
+  await store.insertIngestionRun({
     source_id: source.id,
     cliente_id: source.cliente_id,
     worker_id: workerId,
@@ -240,6 +195,7 @@ function createInstagramRadarIngestionHandlerUnsafe(
       return json({ error: "SERVER_CONFIGURATION_ERROR" }, 500);
     }
     const admin = dependencies.createAdminClient();
+    const store = dependencies.storeFactory(admin);
     const workerId = crypto.randomUUID();
     const startedAt = dependencies.now();
     const cutoffMs = startedAt.getTime() - MAX_AGE_HOURS * 60 * 60 * 1000;
@@ -251,43 +207,24 @@ function createInstagramRadarIngestionHandlerUnsafe(
       metadata: { mode: "instagram_radar", parser_version: PARSER_VERSION },
     });
 
-    const { data: disabledConfigs, error: configError } = await admin.schema(
-      "ap",
-    ).from("system_config")
-      .select("cliente_id").eq("ingestion_enabled", false);
-    if (configError) {
+    let disabledIds: string[];
+    try {
+      disabledIds = await store.loadDisabledTenantIds();
+    } catch {
       await runTelemetry.logError("FETCH_SYSTEM_CONFIG_FAILED", 0, {
         mode: "instagram_radar",
       });
       return json({ error: "FETCH_SYSTEM_CONFIG_FAILED" }, 500);
     }
-    const disabledIds = (disabledConfigs ?? []).map((
-      row: { cliente_id: string },
-    ) => row.cliente_id);
-    let sourceQuery: any = admin.schema("ap").from("sources")
-      .select(
-        "id,cliente_id,nome,url,tipo,consecutive_failures,last_checked_at,created_at",
-      )
-      .eq("tipo", "instagram").eq("ativo", true)
-      .order("last_checked_at", { ascending: true, nullsFirst: true })
-      .order("created_at", { ascending: true });
-    if (disabledIds.length) {
-      sourceQuery = sourceQuery.not(
-        "cliente_id",
-        "in",
-        `(${disabledIds.join(",")})`,
-      );
-    }
-    const { data: rawSources, error: sourceError } = await sourceQuery.limit(
-      BATCH_LIMIT,
-    );
-    if (sourceError) {
+    let sources: RadarSource[];
+    try {
+      sources = await store.loadInstagramSources(disabledIds, BATCH_LIMIT);
+    } catch {
       await runTelemetry.logError("FETCH_SOURCES_FAILED", 0, {
         mode: "instagram_radar",
       });
       return json({ error: "FETCH_SOURCES_FAILED" }, 500);
     }
-    const sources = (rawSources ?? []) as Source[];
     const results: Array<Record<string, unknown>> = [];
     const sourceTelemetry = new Map<string, InstanceType<typeof Telemetry>>();
     for (const source of sources) {
@@ -308,40 +245,40 @@ function createInstagramRadarIngestionHandlerUnsafe(
 
     for (const [clienteId, tenantSources] of groupByTenant(sources)) {
       const sourceStartedAt = startedAt.toISOString();
-      const { data: connection, error: connectionError } = await admin.schema(
-        "ap",
-      ).from("instagram_connections")
-        .select(
-          "instagram_user_id,graph_api_version,token_secret_ref,granted_scopes,capabilities,expires_at",
-        )
-        .eq("cliente_id", clienteId).eq("provider", "meta").eq(
-          "status",
-          "connected",
-        ).eq("is_primary", true)
-        .order("updated_at", { ascending: false }).maybeSingle();
-      const typedConnection = connection as Connection | null;
-      let tenantError: string | null = connectionError || !typedConnection ||
+      let typedConnection: RadarConnection | null = null;
+      let connectionReadFailed = false;
+      try {
+        typedConnection = await store.loadPrimaryMetaConnection(clienteId);
+      } catch {
+        connectionReadFailed = true;
+      }
+      let tenantError: string | null =
+        connectionReadFailed || !typedConnection ||
           !typedConnection.instagram_user_id ||
           !typedConnection.graph_api_version ||
           !typedConnection.token_secret_ref ||
           connectionExpired(typedConnection, startedAt)
-        ? "META_RADAR_CONNECTION_UNAVAILABLE"
-        : !hasRadarReadCapability(typedConnection)
-        ? "META_RADAR_CAPABILITY_UNAVAILABLE"
-        : null;
+          ? "META_RADAR_CONNECTION_UNAVAILABLE"
+          : !hasRadarReadCapability(typedConnection)
+          ? "META_RADAR_CAPABILITY_UNAVAILABLE"
+          : null;
       let pageAccessToken: string | null = null;
       if (!tenantError) {
-        const secret = await admin.schema("ap").rpc("meta_read_secret", {
-          p_secret_id: typedConnection!.token_secret_ref,
-        });
-        if (secret.error || typeof secret.data !== "string" || !secret.data) {
+        try {
+          pageAccessToken = await store.readMetaSecret(
+            typedConnection!.token_secret_ref!,
+          );
+        } catch {
+          pageAccessToken = null;
+        }
+        if (!pageAccessToken) {
           tenantError = "META_RADAR_SECRET_UNAVAILABLE";
-        } else pageAccessToken = secret.data;
+        }
       }
       if (tenantError) {
         for (const source of tenantSources) {
           await recordSourceError(
-            admin,
+            store,
             source,
             workerId,
             sourceStartedAt,
@@ -382,7 +319,7 @@ function createInstagramRadarIngestionHandlerUnsafe(
           });
         } catch {
           await recordSourceError(
-            admin,
+            store,
             source,
             workerId,
             sourceStartedAt,
@@ -458,7 +395,7 @@ function createInstagramRadarIngestionHandlerUnsafe(
           const code = collection?.error?.code ??
             "META_BUSINESS_DISCOVERY_FAILED";
           await recordSourceError(
-            admin,
+            store,
             source,
             workerId,
             sourceStartedAt,
@@ -502,41 +439,37 @@ function createInstagramRadarIngestionHandlerUnsafe(
           }
           valid += 1;
           try {
-            const { data, error } = await admin.schema("ap").rpc(
-              "ingest_collected_news",
-              {
-                p_cliente_id: source.cliente_id,
-                p_source_id: source.id,
-                p_url_original: item.canonicalUrl,
-                p_canonical_url: item.canonicalUrl,
-                p_title: instagramTitle(item),
-                p_excerpt: instagramExcerpt(item),
-                p_content: item.caption || null,
-                p_image_url: item.thumbnailUrl,
-                p_published_at: item.publishedAt,
-                p_content_hash: await instagramContentHash(item),
-                p_parser_version: PARSER_VERSION,
-                p_metadata: {
-                  platform: "instagram",
-                  provider: "meta_business_discovery",
-                  external_id: item.externalId,
-                  media_type: item.mediaType,
-                  source_username: item.sourceUsername,
-                  source_name: item.sourceName,
-                  discovery_complete: collection.complete,
-                  parser_version: PARSER_VERSION,
-                },
+            const outcome = await store.ingestCollectedNews({
+              p_cliente_id: source.cliente_id,
+              p_source_id: source.id,
+              p_url_original: item.canonicalUrl,
+              p_canonical_url: item.canonicalUrl,
+              p_title: instagramTitle(item),
+              p_excerpt: instagramExcerpt(item),
+              p_content: item.caption || null,
+              p_image_url: item.thumbnailUrl,
+              p_published_at: item.publishedAt,
+              p_content_hash: await instagramContentHash(item),
+              p_parser_version: PARSER_VERSION,
+              p_metadata: {
+                platform: "instagram",
+                provider: "meta_business_discovery",
+                external_id: item.externalId,
+                media_type: item.mediaType,
+                source_username: item.sourceUsername,
+                source_name: item.sourceName,
+                discovery_complete: collection.complete,
+                parser_version: PARSER_VERSION,
               },
-            );
-            if (error) throw error;
-            if (data?.created === true) collected += 1;
+            });
+            if (outcome.created) collected += 1;
             else duplicates += 1;
           } catch {
             errors += 1;
           }
         }
         const errorCode = errors ? "ITEM_PERSIST_FAILED" : null;
-        await updateSource(admin, source, {
+        await store.updateSourceState(source.id, source.cliente_id, {
           detected_type: "instagram",
           last_checked_at: now.toISOString(),
           last_success_at: now.toISOString(),
@@ -546,7 +479,7 @@ function createInstagramRadarIngestionHandlerUnsafe(
           last_collected_count: collected,
         });
         const status = errors ? "completed_with_errors" : "success";
-        await insertRun(admin, {
+        await store.insertIngestionRun({
           source_id: source.id,
           cliente_id: source.cliente_id,
           worker_id: workerId,
@@ -629,7 +562,9 @@ export function createInstagramRadarIngestionHandler(
     try {
       return await run(req);
     } catch (error) {
-      const code = error instanceof RadarIngestionInfrastructureError
+      const code = error instanceof RadarIngestionStoreError &&
+          (error.code === "RADAR_SOURCE_STATE_WRITE_FAILED" ||
+            error.code === "RADAR_INGESTION_RUN_WRITE_FAILED")
         ? error.code
         : "RADAR_INGESTION_FAILED";
       // Best effort only: telemetry outages must never expose a database error.
