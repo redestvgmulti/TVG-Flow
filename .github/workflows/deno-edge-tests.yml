@@ -26,6 +26,7 @@ jobs:
       - run: deno --version
       - run: >-
           deno test --node-modules-dir=auto --allow-env
+          --allow-read=supabase/functions/ap-instagram-radar-ingestion/worker.ts
           supabase/functions/_shared/social/instagramRadarImage.test.ts
           supabase/functions/ap-instagram-radar-ingestion/worker.test.ts
           supabase/functions/ap-instagram-radar-image-backfill/handler.test.ts
