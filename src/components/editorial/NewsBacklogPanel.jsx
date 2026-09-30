@@ -5,7 +5,9 @@ import { ptBR } from 'date-fns/locale'
 import { supabase } from '../../services/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 
-const POLL_INTERVAL_MS = 15_000
+// ap.news_backlog is not currently in the Realtime publication. Keep a
+// visible-tab safety refresh without continuously polling every 15 seconds.
+const BACKLOG_FALLBACK_REFRESH_MS = 5 * 60_000
 
 function formatCreatedAt(value) {
     if (!value) return ''
@@ -75,9 +77,9 @@ export default function NewsBacklogPanel({ clienteId, onStartProduction }) {
 
     useEffect(() => {
         const initialTimer = window.setTimeout(() => { void load() }, 0)
-        const pollTimer = window.setInterval(() => {
+        const fallbackTimer = window.setInterval(() => {
             if (document.visibilityState === 'visible') void load({ silent: true })
-        }, POLL_INTERVAL_MS)
+        }, BACKLOG_FALLBACK_REFRESH_MS)
         const refresh = () => {
             if (document.visibilityState === 'visible') void load({ silent: true })
         }
@@ -85,7 +87,7 @@ export default function NewsBacklogPanel({ clienteId, onStartProduction }) {
         document.addEventListener('visibilitychange', refresh)
         return () => {
             window.clearTimeout(initialTimer)
-            window.clearInterval(pollTimer)
+            window.clearInterval(fallbackTimer)
             window.removeEventListener('focus', refresh)
             document.removeEventListener('visibilitychange', refresh)
         }
