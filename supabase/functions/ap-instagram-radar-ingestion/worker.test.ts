@@ -157,6 +157,7 @@ function harness(
       requireTrustedInternalRequest: () => {},
       providerFactory: Provider as never,
       telemetryFactory: Telemetry as never,
+      archiveImage: async () => null,
       now: () => new Date("2026-09-28T12:00:00Z"),
     }),
   };
@@ -199,6 +200,7 @@ type AdvancedOptions = {
   secrets?: Record<string, string | null>;
   collections?: Record<string, InstagramRadarCollection>;
   ingest?: Array<boolean | Error>;
+  archiveUrl?: string | null;
   updateError?: boolean;
   insertError?: boolean;
 };
@@ -281,6 +283,7 @@ function advancedHarness(options: AdvancedOptions) {
   }> = [];
   const collectCalls: Array<{ sources: { id: string }[] }> = [];
   const telemetry: unknown[] = [];
+  const archiveCalls: Array<{ externalId: string; thumbnailUrl: string | null }> = [];
   class Provider {
     constructor(input: {
       graphApiVersion: string;
@@ -313,12 +316,20 @@ function advancedHarness(options: AdvancedOptions) {
     providerOptions,
     collectCalls,
     telemetry,
+    archiveCalls,
     handler: createInstagramRadarIngestionHandler({
       createAdminClient: () => ({}) as never,
       storeFactory: () => store,
       requireTrustedInternalRequest: () => {},
       providerFactory: Provider as never,
       telemetryFactory: CapturingTelemetry as never,
+      archiveImage: async (input) => {
+        archiveCalls.push({
+          externalId: input.externalId,
+          thumbnailUrl: input.thumbnailUrl,
+        });
+        return options.archiveUrl ?? null;
+      },
       now: () => new Date("2026-09-28T12:00:00Z"),
     }),
   };
@@ -365,6 +376,7 @@ function authBoundaryHarness() {
       },
       providerFactory: Provider as never,
       telemetryFactory: Telemetry as never,
+      archiveImage: async () => null,
       now: () => new Date("2026-09-28T12:00:00Z"),
     }),
   };
@@ -556,6 +568,20 @@ Deno.test("Worker orchestrates a recent item through a successful incomplete col
     assertEquals(test.store.runInserts[0].status, "success");
     assertEquals(test.store.ingestCalls.length, 1);
   }));
+
+Deno.test("Worker persists the stable Instagram image URL when archival succeeds", async () => {
+  const storedImageUrl = "https://project.supabase.co/storage/v1/object/public/ap-images/radar/instagram/image.jpg";
+  const test = await runAdvanced({
+    sources: [source],
+    archiveUrl: storedImageUrl,
+  });
+  assertEquals(test.response.status, 200);
+  assertEquals(test.archiveCalls, [{
+    externalId: "meta-media-id",
+    thumbnailUrl: "https://cdn.example/image.jpg",
+  }]);
+  assertEquals(test.store.ingestCalls[0].p_image_url, storedImageUrl);
+});
 
 Deno.test("Worker turns a source-state write failure into a sanitized 500", async () =>
   await withEnv(async () => {

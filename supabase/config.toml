@@ -30,6 +30,9 @@ verify_jwt = true
 [functions.ap-instagram-radar-ingestion]
 verify_jwt = false
 
+[functions.ap-instagram-radar-image-backfill]
+  verify_jwt = false
+
 [functions.ap-source-probe]
 verify_jwt = true
 

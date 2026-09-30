@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { CheckCircle2, ExternalLink, Inbox, Loader2, RefreshCcw, Trash2 } from 'lucide-react'
+import { CheckCircle2, ExternalLink, Inbox, Instagram, Loader2, RefreshCcw, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase } from '../../services/supabase'
 import EditorialReasonModal from './EditorialReasonModal'
@@ -24,6 +24,11 @@ function formatDate(value) {
         dateStyle: 'short',
         timeStyle: 'short',
     }).format(new Date(value))
+}
+
+function isOfficialInstagramRadarItem(item) {
+    return item?.metadata?.platform === 'instagram'
+        && item?.metadata?.provider === 'meta_business_discovery'
 }
 
 export default function CollectedNewsPanel({ clienteId, onCountsChange }) {
@@ -155,7 +160,12 @@ export default function CollectedNewsPanel({ clienteId, onCountsChange }) {
                         <article key={item.id} className={`ap-collected-item${item.image_url ? ' has-thumb' : ''}`}>
                             {item.image_url && <img src={item.image_url} alt="" className="ap-collected-thumb" loading="lazy" />}
                             <div className="ap-collected-main">
-                                <div className="ap-collected-source">{item.source_name || domainOf(item.canonical_url)} · coletada em {formatDate(item.collected_at)}</div>
+                                <div className="ap-collected-source">
+                                    <span>{item.source_name || domainOf(item.canonical_url)} · coletada em {formatDate(item.collected_at)}</span>
+                                    {isOfficialInstagramRadarItem(item) && (
+                                        <Instagram className="ap-collected-instagram-mark" size={12} strokeWidth={2} aria-label="Origem: Instagram" title="Origem: Instagram" />
+                                    )}
+                                </div>
                                 <h3>{item.title}</h3>
                                 {item.excerpt && <p>{item.excerpt}</p>}
                                 <div className="ap-collected-meta">

@@ -1,0 +1,32 @@
+name: Deno edge tests
+
+on:
+  pull_request:
+    paths:
+      - "supabase/functions/**"
+      - ".github/workflows/deno-edge-tests.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "supabase/functions/**"
+      - ".github/workflows/deno-edge-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  deno-edge-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.9.7
+      - run: deno --version
+      - run: >-
+          deno test --node-modules-dir=auto --allow-env
+          --allow-read=supabase/functions/ap-instagram-radar-ingestion/worker.ts,supabase/functions/ap-instagram-radar-ingestion/store.ts
+          supabase/functions/_shared/social/instagramRadarImage.test.ts
+          supabase/functions/ap-instagram-radar-ingestion/worker.test.ts
+          supabase/functions/ap-instagram-radar-image-backfill/handler.test.ts
