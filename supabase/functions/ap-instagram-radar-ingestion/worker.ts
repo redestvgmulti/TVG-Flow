@@ -2,6 +2,10 @@ import { requireTrustedInternalRequest } from "../_shared/internalWorkerAuth.ts"
 import { createAdminClient } from "../_shared/metaConnection.ts";
 import { MetaBusinessDiscoveryProvider } from "../_shared/social/metaBusinessDiscoveryProvider.ts";
 import { normalizeInstagramProfile } from "../_shared/social/instagramProfile.mjs";
+import {
+  instagramEditorialExcerpt,
+  instagramEditorialTitle,
+} from "../_shared/social/collectedNewsEditorial.ts";
 import type {
   InstagramRadarCollection,
   InstagramRadarItem,
@@ -84,21 +88,16 @@ function connectionExpired(connection: RadarConnection, now: Date) {
   return Number.isNaN(timestamp) || timestamp <= now.getTime();
 }
 
-function text(value: string | null | undefined, max: number) {
-  return (value ?? "").replace(/\s+/g, " ").trim().slice(0, max);
-}
-
 /** Deterministic editorial fields only; no generated headline is used. */
 export function instagramTitle(item: InstagramRadarItem) {
-  const firstLine = item.caption.split(/\r?\n/).find((line) => line.trim()) ??
-    "";
-  const title = text(firstLine, 180);
-  return title.length >= 3 ? title : `Publicação de @${item.sourceUsername}`;
+  return instagramEditorialTitle(
+    item.caption,
+    `Publicação de @${item.sourceUsername}`,
+  );
 }
 
 export function instagramExcerpt(item: InstagramRadarItem) {
-  const excerpt = text(item.caption, 500);
-  return excerpt || null;
+  return instagramEditorialExcerpt(item.caption);
 }
 
 export async function instagramContentHash(item: InstagramRadarItem) {
