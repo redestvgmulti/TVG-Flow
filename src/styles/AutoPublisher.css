@@ -935,11 +935,15 @@
 
 .ap-collected-item {
   display: grid;
-  grid-template-columns: 112px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 18px;
   align-items: center;
   padding: 18px 20px;
   border-bottom: 1px solid #eef2f7;
+}
+
+.ap-collected-item.has-thumb {
+  grid-template-columns: 112px minmax(0, 1fr) auto;
 }
 
 .ap-collected-item:last-child {
@@ -1097,8 +1101,12 @@
   }
 
   .ap-collected-item {
-    grid-template-columns: 72px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
     gap: 12px;
+  }
+
+  .ap-collected-item.has-thumb {
+    grid-template-columns: 72px minmax(0, 1fr);
   }
 
   .ap-collected-thumb {
