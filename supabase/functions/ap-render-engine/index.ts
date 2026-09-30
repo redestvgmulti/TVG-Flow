@@ -334,12 +334,17 @@ Deno.serve(async (req) => {
     : crypto.randomUUID();
   const targetId = reqBody.newsId || reqBody.news_id;
   const runTelemetry = new Telemetry(supabase);
-  await runTelemetry.logStart({
-    worker_name: "ap-render-engine",
-    worker_id: correlationId,
-    action: targetId ? "internal_target" : "internal_batch",
-    metadata: { mode: targetId ? "internal_target" : "internal_batch" },
-  });
+  let telemetryStarted = false;
+  const startTelemetry = async () => {
+    if (telemetryStarted) return;
+    telemetryStarted = true;
+    await runTelemetry.logStart({
+      worker_name: "ap-render-engine",
+      worker_id: correlationId,
+      action: targetId ? "internal_target" : "internal_batch",
+      metadata: { mode: targetId ? "internal_target" : "internal_batch" },
+    });
+  };
   const lockExpiry = new Date(Date.now() - 10 * 60 * 1000).toISOString();
   let query = supabase
     .schema("ap")
@@ -352,6 +357,7 @@ Deno.serve(async (req) => {
 
   const { data: items, error: selectionError } = await query;
   if (selectionError) {
+    await startTelemetry();
     await runTelemetry.logError("RENDER_SELECTION_FAILED", 0, {
       mode: targetId ? "internal_target" : "internal_batch",
       result: "error",
@@ -365,16 +371,22 @@ Deno.serve(async (req) => {
     );
   }
   if (!items?.length) {
-    await runTelemetry.logSuccess(0, {
-      mode: targetId ? "internal_target" : "internal_batch",
-      result: "no_items",
-      processed: 0,
-    });
+    // Empty scheduled batches are expected. Avoid an insert+update pair in
+    // worker_telemetry every minute; targeted requests remain observable.
+    if (targetId) {
+      await startTelemetry();
+      await runTelemetry.logSuccess(0, {
+        mode: "internal_target",
+        result: "no_items",
+        processed: 0,
+      });
+    }
     return new Response(JSON.stringify({ ok: true, message: "No items" }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
+  await startTelemetry();
   const results = [];
   for (const selectedItem of items) {
     const generation = await beginGeneration(supabase, selectedItem.id);

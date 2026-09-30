@@ -102,8 +102,8 @@ function Sidebar({ mobileMenuOpen, onClose }) {
 
         return () => {
             window.clearTimeout(initialRefresh)
-            taskSubscription.unsubscribe()
-            meetingSubscription.unsubscribe()
+            supabase.removeChannel(taskSubscription)
+            supabase.removeChannel(meetingSubscription)
         }
         // The count loaders read the current authenticated user and are only
         // re-subscribed when the role changes.

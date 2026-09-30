@@ -6,6 +6,8 @@ import { Menu, X } from 'lucide-react'
 import { supabase } from '../services/supabase'
 import { getOperationalStatus } from '../services/operationalStatus'
 
+const OPERATIONAL_STATUS_FALLBACK_MS = 15 * 60_000
+
 function Header({ onMobileMenuToggle, mobileMenuOpen, hideMobileMenu }) {
     const { user, role } = useAuth()
     const navigate = useNavigate()
@@ -26,27 +28,40 @@ function Header({ onMobileMenuToggle, mobileMenuOpen, hideMobileMenu }) {
         }
 
         let isMounted = true
+        let refreshInFlight = false
         const refreshOperationalStatus = async () => {
+            if (refreshInFlight) return
+            refreshInFlight = true
             try {
                 const status = await getOperationalStatus()
                 if (isMounted) setOperationalStatus(status)
             } catch (error) {
                 console.warn('Unable to load operational status:', error)
                 if (isMounted) setOperationalStatus({ tone: 'unavailable', message: 'Status operacional indisponível' })
+            } finally {
+                refreshInFlight = false
             }
         }
 
+        const refreshWhenVisible = () => {
+            if (document.visibilityState === 'visible') void refreshOperationalStatus()
+        }
+
         refreshOperationalStatus()
-        const refreshTimer = window.setInterval(refreshOperationalStatus, 60_000)
+        const refreshTimer = window.setInterval(refreshWhenVisible, OPERATIONAL_STATUS_FALLBACK_MS)
+        window.addEventListener('focus', refreshWhenVisible)
+        document.addEventListener('visibilitychange', refreshWhenVisible)
         const channel = supabase
             .channel(`header-operational-status-${user.id}`)
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'tarefas' }, refreshOperationalStatus)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'tarefas' }, refreshWhenVisible)
             .subscribe()
 
         return () => {
             isMounted = false
             window.clearInterval(refreshTimer)
-            channel.unsubscribe()
+            window.removeEventListener('focus', refreshWhenVisible)
+            document.removeEventListener('visibilitychange', refreshWhenVisible)
+            supabase.removeChannel(channel)
         }
     }, [user?.id])
 
