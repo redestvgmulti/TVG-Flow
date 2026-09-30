@@ -152,7 +152,7 @@ export default function CollectedNewsPanel({ clienteId, onCountsChange }) {
             ) : (
                 <div className="ap-collected-list">
                     {items.map(item => (
-                        <article key={item.id} className="ap-collected-item">
+                        <article key={item.id} className={`ap-collected-item${item.image_url ? ' has-thumb' : ''}`}>
                             {item.image_url && <img src={item.image_url} alt="" className="ap-collected-thumb" loading="lazy" />}
                             <div className="ap-collected-main">
                                 <div className="ap-collected-source">{item.source_name || domainOf(item.canonical_url)} · coletada em {formatDate(item.collected_at)}</div>
