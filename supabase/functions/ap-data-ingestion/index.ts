@@ -1,7 +1,14 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { requireTrustedInternalRequest } from "../_shared/internalWorkerAuth.ts";
-import { collectSource, SourceCollectionError } from "../_shared/sourceCollector.mjs";
+import {
+  collectSource,
+  SourceCollectionError,
+} from "../_shared/sourceCollector.mjs";
+import {
+  collectedNewsExcerpt,
+  collectedNewsTitle,
+} from "../_shared/social/collectedNewsEditorial.ts";
 import { Telemetry } from "../_shared/telemetry.ts";
 
 const BATCH_LIMIT = 50;
@@ -18,7 +25,8 @@ function json(body: unknown, status = 200) {
 
 function domainOf(value: string | null | undefined) {
   try {
-    return new URL(value || "").hostname.toLowerCase().replace(/^www\./, "") || null;
+    return new URL(value || "").hostname.toLowerCase().replace(/^www\./, "") ||
+      null;
   } catch {
     return null;
   }
@@ -27,7 +35,9 @@ function domainOf(value: string | null | undefined) {
 async function sha256(value: string) {
   const bytes = new TextEncoder().encode(value);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return [...new Uint8Array(digest)].map((byte) =>
+    byte.toString(16).padStart(2, "0")
+  ).join("");
 }
 
 Deno.serve(async (req: Request) => {
@@ -40,7 +50,9 @@ Deno.serve(async (req: Request) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!supabaseUrl || !serviceRoleKey) return json({ error: "SERVER_CONFIGURATION_ERROR" }, 500);
+  if (!supabaseUrl || !serviceRoleKey) {
+    return json({ error: "SERVER_CONFIGURATION_ERROR" }, 500);
+  }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -60,7 +72,9 @@ Deno.serve(async (req: Request) => {
     .schema("ap").from("system_config")
     .select("cliente_id")
     .eq("ingestion_enabled", false);
-  const disabledClienteIds = disabledConfigs?.map((row: any) => row.cliente_id) ?? [];
+  const disabledClienteIds = disabledConfigs?.map((row: any) =>
+    row.cliente_id
+  ) ?? [];
 
   let sourceQuery = supabase
     .schema("ap").from("sources")
@@ -70,11 +84,19 @@ Deno.serve(async (req: Request) => {
     // This generic collector must never route them through legacy RSS handling.
     .neq("tipo", "instagram");
   if (disabledClienteIds.length) {
-    sourceQuery = sourceQuery.not("cliente_id", "in", `(${disabledClienteIds.join(",")})`);
+    sourceQuery = sourceQuery.not(
+      "cliente_id",
+      "in",
+      `(${disabledClienteIds.join(",")})`,
+    );
   }
-  const { data: sources, error: sourceError } = await sourceQuery.limit(BATCH_LIMIT);
+  const { data: sources, error: sourceError } = await sourceQuery.limit(
+    BATCH_LIMIT,
+  );
   if (sourceError) {
-    await runTelemetry.logError("FETCH_SOURCES_FAILED", 0, { mode: "curated_collection" });
+    await runTelemetry.logError("FETCH_SOURCES_FAILED", 0, {
+      mode: "curated_collection",
+    });
     return json({ error: "FETCH_SOURCES_FAILED" }, 500);
   }
 
@@ -100,43 +122,54 @@ Deno.serve(async (req: Request) => {
     });
 
     try {
-      const discovery = await collectSource(source, { maxItems: MAX_ITEMS_PER_SOURCE });
+      const discovery = await collectSource(source, {
+        maxItems: MAX_ITEMS_PER_SOURCE,
+      });
       detectedType = discovery.detectedType;
       discovered = discovery.items.length;
 
       for (const item of discovery.items) {
-        const publishedMs = item.publishedAt ? new Date(item.publishedAt).getTime() : null;
-        if (publishedMs && Number.isFinite(publishedMs) && publishedMs < cutoffMs) {
+        const publishedMs = item.publishedAt
+          ? new Date(item.publishedAt).getTime()
+          : null;
+        if (
+          publishedMs && Number.isFinite(publishedMs) && publishedMs < cutoffMs
+        ) {
           skippedOld += 1;
           continue;
         }
         valid += 1;
         try {
+          const title = collectedNewsTitle(item.title, "Matéria coletada");
+          const excerpt = collectedNewsExcerpt(item.excerpt);
           const contentHash = await sha256([
             item.canonicalUrl || item.url,
-            item.title,
-            item.excerpt || "",
+            title,
+            excerpt || "",
             item.content || "",
           ].join("\n"));
-          const { data, error } = await supabase.schema("ap").rpc("ingest_collected_news", {
-            p_cliente_id: source.cliente_id,
-            p_source_id: source.id,
-            p_url_original: item.url,
-            p_canonical_url: item.canonicalUrl || item.url,
-            p_title: item.title,
-            p_excerpt: item.excerpt || null,
-            p_content: item.content || null,
-            p_image_url: item.imageUrl || null,
-            p_published_at: item.publishedAt || null,
-            p_content_hash: contentHash,
-            p_parser_version: PARSER_VERSION,
-            p_metadata: {
-              detected_type: discovery.detectedType,
-              discovery_url: discovery.discoveryUrl,
-              source_domain: domainOf(source.url),
-              article_domain: domainOf(item.canonicalUrl || item.url),
+          const { data, error } = await supabase.schema("ap").rpc(
+            "ingest_collected_news",
+            {
+              p_cliente_id: source.cliente_id,
+              p_source_id: source.id,
+              p_url_original: item.url,
+              p_canonical_url: item.canonicalUrl || item.url,
+              p_title: title,
+              p_excerpt: excerpt,
+              p_content: item.content || null,
+              p_image_url: item.imageUrl || null,
+              p_published_at: item.publishedAt || null,
+              p_content_hash: contentHash,
+              p_parser_version: PARSER_VERSION,
+              p_metadata: {
+                detected_type: discovery.detectedType,
+                discovery_url: discovery.discoveryUrl,
+                source_domain: domainOf(source.url),
+                article_domain: domainOf(item.canonicalUrl || item.url),
+              },
             },
-          });
+          );
           if (error) throw error;
           if (data?.created) collected += 1;
           else duplicates += 1;
@@ -190,15 +223,20 @@ Deno.serve(async (req: Request) => {
         },
       });
     } catch (error) {
-      errorCode = error instanceof SourceCollectionError ? error.code : "SOURCE_COLLECTION_FAILED";
+      errorCode = error instanceof SourceCollectionError
+        ? error.code
+        : "SOURCE_COLLECTION_FAILED";
       errors += 1;
-      const { data: currentSource } = await supabase.schema("ap").from("sources")
+      const { data: currentSource } = await supabase.schema("ap").from(
+        "sources",
+      )
         .select("consecutive_failures")
         .eq("id", source.id).eq("cliente_id", source.cliente_id).maybeSingle();
       await supabase.schema("ap").from("sources").update({
         last_checked_at: new Date().toISOString(),
         last_error_code: errorCode,
-        consecutive_failures: Number(currentSource?.consecutive_failures || 0) + 1,
+        consecutive_failures: Number(currentSource?.consecutive_failures || 0) +
+          1,
         last_discovered_count: 0,
         last_collected_count: 0,
       }).eq("id", source.id).eq("cliente_id", source.cliente_id);
@@ -245,14 +283,23 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  const totalCollected = results.reduce((sum, result) => sum + Number(result.collected || 0), 0);
-  const totalErrors = results.reduce((sum, result) => sum + Number(result.errors || 0), 0);
+  const totalCollected = results.reduce(
+    (sum, result) => sum + Number(result.collected || 0),
+    0,
+  );
+  const totalErrors = results.reduce(
+    (sum, result) => sum + Number(result.errors || 0),
+    0,
+  );
   await runTelemetry.logSuccess(0, {
     mode: "curated_collection",
     result: totalErrors ? "completed_with_errors" : "success",
     sources: results.length,
     collected: totalCollected,
-    duplicates: results.reduce((sum, result) => sum + Number(result.duplicates || 0), 0),
+    duplicates: results.reduce(
+      (sum, result) => sum + Number(result.duplicates || 0),
+      0,
+    ),
     errors: totalErrors,
     started_at: startedAt,
   });
