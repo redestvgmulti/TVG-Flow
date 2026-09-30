@@ -1,6 +1,7 @@
 import { requireTrustedInternalRequest } from "../_shared/internalWorkerAuth.ts";
 import { createAdminClient } from "../_shared/metaConnection.ts";
 import { MetaBusinessDiscoveryProvider } from "../_shared/social/metaBusinessDiscoveryProvider.ts";
+import { archiveInstagramRadarImage } from "../_shared/social/instagramRadarImage.ts";
 import { normalizeInstagramProfile } from "../_shared/social/instagramProfile.mjs";
 import {
   instagramEditorialExcerpt,
@@ -55,6 +56,7 @@ type Dependencies = {
   requireTrustedInternalRequest: typeof requireTrustedInternalRequest;
   providerFactory: typeof MetaBusinessDiscoveryProvider;
   telemetryFactory: typeof Telemetry;
+  archiveImage: typeof archiveInstagramRadarImage;
   now: () => Date;
 };
 
@@ -64,6 +66,7 @@ const defaults: Dependencies = {
   requireTrustedInternalRequest,
   providerFactory: MetaBusinessDiscoveryProvider,
   telemetryFactory: Telemetry,
+  archiveImage: archiveInstagramRadarImage,
   now: () => new Date(),
 };
 
@@ -438,6 +441,13 @@ function createInstagramRadarIngestionHandlerUnsafe(
           }
           valid += 1;
           try {
+            const archivedImageUrl = await dependencies.archiveImage({
+              storage: admin.storage,
+              clienteId: source.cliente_id,
+              sourceId: source.id,
+              externalId: item.externalId,
+              thumbnailUrl: item.thumbnailUrl,
+            });
             const outcome = await store.ingestCollectedNews({
               p_cliente_id: source.cliente_id,
               p_source_id: source.id,
@@ -446,7 +456,9 @@ function createInstagramRadarIngestionHandlerUnsafe(
               p_title: instagramTitle(item),
               p_excerpt: instagramExcerpt(item),
               p_content: item.caption || null,
-              p_image_url: item.thumbnailUrl,
+              // Never persist the short-lived Graph CDN URL. If archival fails,
+              // keep the item without an image rather than creating a broken card.
+              p_image_url: archivedImageUrl,
               p_published_at: item.publishedAt,
               p_content_hash: await instagramContentHash(item),
               p_parser_version: PARSER_VERSION,

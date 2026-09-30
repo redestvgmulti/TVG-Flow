@@ -963,11 +963,20 @@
 }
 
 .ap-collected-source {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   color: #64748b;
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: .03em;
+}
+
+.ap-collected-instagram-mark {
+  flex: 0 0 auto;
+  color: #a8558f;
+  opacity: .78;
 }
 
 .ap-collected-main h3 {
