@@ -332,9 +332,11 @@ export default function ArticleWizard({
         return [
             formData.source_mode === 'link'
                 ? 'A IA extrai e valida o texto da URL informada.'
-                : 'O texto que você escreveu será mantido sem reescrita.',
-            formData.source_mode === 'link'
-                ? 'A legenda com hashtags é escrita automaticamente.'
+                : showEditorialDraft
+                    ? 'A IA reescreve a matéria a partir do texto-base informado.'
+                    : 'O texto que você escreveu será mantido sem reescrita.',
+            formData.source_mode === 'link' || showEditorialDraft
+                ? 'A legenda é escrita automaticamente conforme as regras editoriais.'
                 : 'A legenda será mantida conforme você escrever.',
             `A arte em ${formatLabel} é renderizada no template ${templateLabel}.`,
             'A matéria aparece na fila para sua aprovação antes de ser publicada.',
@@ -484,7 +486,7 @@ export default function ArticleWizard({
                         <div className="ap-wizard-origin-grid">
                             {[
                                 { value: 'link', label: 'Importar de um link', desc: 'A IA extrai headline e texto direto da URL.' },
-                                { value: 'manual', label: 'Escrever manualmente', desc: 'Você digita a headline e o texto base.' },
+                                { value: 'manual', label: 'Escrever manualmente', desc: showEditorialDraft ? 'Digite ou cole o texto-base; a IA reescreve a matéria.' : 'Você digita a headline e o texto base.' },
                             ].map(option => {
                                 const active = (formData.source_mode || 'link') === option.value;
                                 return (
@@ -519,7 +521,7 @@ export default function ArticleWizard({
                         ) : (
                             <>
                                 <div className="ap-af-field">
-                                    <FieldLabel required>Headline Maior</FieldLabel>
+                                    <FieldLabel required>{showEditorialDraft ? 'Título da fonte' : 'Headline Maior'}</FieldLabel>
                                     <input
                                         className={`ap-af-input${typeof errors.titulo === 'string' ? ' ap-af-input--error' : ''}`}
                                         disabled={sourceLocked}
@@ -664,7 +666,7 @@ export default function ArticleWizard({
                             <FieldError message={typeof errors.conteudo === 'string' ? errors.conteudo : ''} />
                         </div>}
                         {showEditorialDraft && <div className="ap-af-field">
-                            <FieldLabel required={formData.source_mode !== 'manual'}>Legenda</FieldLabel>
+                            <FieldLabel required>Legenda</FieldLabel>
                             <textarea
                                 rows={4}
                                 className={`ap-af-textarea${typeof errors.caption === 'string' ? ' ap-af-textarea--error' : ''}`}

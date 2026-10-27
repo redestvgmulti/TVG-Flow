@@ -4,17 +4,17 @@ import { readFile } from 'node:fs/promises'
 import { canonicalEditorialFields } from '../supabase/functions/_shared/canonicalEditorial.mjs'
 
 const source = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8')
-const manualText = 'A Prefeitura de Goiatuba anunciou nesta manhã a inauguração da nova unidade.'
+const reviewedText = 'A Prefeitura de Goiatuba anunciou nesta manhã a inauguração da nova unidade.'
 
-test('manual editorial text is preserved exactly without an LLM rewrite', () => {
+test('render mapping preserves reviewed editorial text without a second LLM rewrite', () => {
   const fields = canonicalEditorialFields({
     titulo: 'Inauguração',
-    conteudo: manualText,
+    conteudo: reviewedText,
     caption: null,
     context_tag: 'CIDADE',
   })
 
-  assert.equal(fields.caption, manualText)
+  assert.equal(fields.caption, reviewedText)
   assert.equal(fields.headline, 'Inauguração')
   assert.equal(fields.context_tag, 'CIDADE')
 })

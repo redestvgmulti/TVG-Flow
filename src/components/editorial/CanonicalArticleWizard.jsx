@@ -227,11 +227,8 @@ export default function CanonicalArticleWizard({
     const preparation = (async () => {
       setErrors({})
       setAutomaticPreparation({ status: 'preparing', error: '' })
-      const isManual = formData.source_mode === 'manual' && !originBacklog?.collected_news_id
-      if (!isManual) {
-        const aiEnabled = await getEditorialAiDraftStatus(supabase)
-        if (!aiEnabled) throw new Error('EDITORIAL_AI_DISABLED')
-      }
+      const aiEnabled = await getEditorialAiDraftStatus(supabase)
+      if (!aiEnabled) throw new Error('EDITORIAL_AI_DISABLED')
 
       if (originBacklog?.collected_news_id) {
         const current = await getEditorialArticleForEdit(supabase, articleIdRef.current)
@@ -347,29 +344,16 @@ export default function CanonicalArticleWizard({
         resetRequestId(requests, 'source')
       }
 
-      if (isManual) {
-        await saveEditorialArticleDraft(supabase, buildDraftPayload({
-          ...canonicalFormFromWizard(formData, sourceImageUrl),
-          headline: sourceTitle,
-          body: sourceBody,
-        }, {
-          articleId: articleIdRef.current,
-          requestId: requestId(requests, 'manualDraft'),
-          expectedRevisionNumber: current.revision_number,
-        }))
-        resetRequestId(requests, 'manualDraft')
-      } else {
-        await prepareEditorialAiDraft(supabase, {
-          articleId: articleIdRef.current,
-          requestId: requestId(requests, 'aiDraft'),
-        })
-        resetRequestId(requests, 'aiDraft')
-      }
+      await prepareEditorialAiDraft(supabase, {
+        articleId: articleIdRef.current,
+        requestId: requestId(requests, 'aiDraft'),
+      })
+      resetRequestId(requests, 'aiDraft')
 
       const prepared = await getEditorialArticleForEdit(supabase, articleIdRef.current)
       applyPreparedArticle(prepared, { sourceTitle, sourceBody, sourceImageUrl })
       setAutomaticPreparation({ status: 'ready', error: '' })
-      toast.success(isManual ? 'Texto manual salvo para revisão.' : 'Matéria preparada para sua revisão.')
+      toast.success('Matéria preparada para sua revisão.')
     })()
     preparationPromiseRef.current = preparation
     try {
@@ -398,7 +382,7 @@ export default function CanonicalArticleWizard({
     if (isSubmitting || !articleIdRef.current || !preparedRef.current) return
 
     let canonicalForm = canonicalFormFromWizard(formData, sourceImageRef.current)
-    const contentErrors = validateContentStep(canonicalForm, { requireAiFields: formData.source_mode !== 'manual' })
+    const contentErrors = validateContentStep(canonicalForm, { requireAiFields: true })
     const intentErrors = validateProductionIntentStep(canonicalForm, {
       territorialComposerEnabled,
       territorialCatalog,
@@ -496,7 +480,7 @@ export default function CanonicalArticleWizard({
     if (isSavingDraft || !articleIdRef.current || !preparedRef.current) return
 
     const canonicalForm = canonicalFormFromWizard(formData, sourceImageRef.current)
-    const contentErrors = validateContentStep(canonicalForm, { requireAiFields: formData.source_mode !== 'manual' })
+    const contentErrors = validateContentStep(canonicalForm, { requireAiFields: true })
     if (Object.keys(contentErrors).length) {
       setErrors({
         ...(contentErrors.headline ? { titulo: contentErrors.headline } : {}),
