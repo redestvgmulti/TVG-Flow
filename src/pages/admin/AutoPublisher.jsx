@@ -1409,7 +1409,7 @@ function PendenteCard({ item, onReject, onStudio, onApproveSelected, onEdit, onC
                 {/* Caption */}
                 {item.caption && !isStudio && (
                     <>
-                        <p style={{ fontSize: '13px', color: '#262626', margin: '4px 0 0 0', display: isExpanded ? 'block' : '-webkit-box', WebkitLineClamp: isExpanded ? 'initial' : 3, WebkitBoxOrient: 'vertical', overflow: isExpanded ? 'visible' : 'hidden' }}>
+                        <p className="ap-card-caption" style={{ fontSize: '13px', color: '#262626', margin: '4px 0 0 0', display: isExpanded ? 'block' : '-webkit-box', WebkitLineClamp: isExpanded ? 'initial' : 3, WebkitBoxOrient: 'vertical', overflow: isExpanded ? 'visible' : 'hidden' }}>
                             {item.caption}
                         </p>
                         {item.caption.length > 100 && (
@@ -1597,7 +1597,7 @@ function AprovadaCard({ item, onReject, isProcessing, showPublish = true }) {
                 </p>
                 {item.caption && (
                     <>
-                        <p style={{ fontSize: '13px', color: '#262626', margin: '4px 0 0 0', display: isExpanded ? 'block' : '-webkit-box', WebkitLineClamp: isExpanded ? 'initial' : 3, WebkitBoxOrient: 'vertical', overflow: isExpanded ? 'visible' : 'hidden' }}>
+                        <p className="ap-card-caption" style={{ fontSize: '13px', color: '#262626', margin: '4px 0 0 0', display: isExpanded ? 'block' : '-webkit-box', WebkitLineClamp: isExpanded ? 'initial' : 3, WebkitBoxOrient: 'vertical', overflow: isExpanded ? 'visible' : 'hidden' }}>
                             {item.caption}
                         </p>
                         {item.caption.length > 100 && (
