@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import vm from 'node:vm'
 import { validateContentStep } from '../../src/services/editorialArticleForm.js'
+import { assertEditorialRevision, canKeepLocalEditorialText, isEditorialRevisionConflict } from '../../src/services/editorialRevisionConflict.js'
 
 const source = await readFile(new URL('../../src/components/editorial/CanonicalArticleWizard.jsx', import.meta.url), 'utf8')
 
@@ -16,7 +17,12 @@ function componentFunction(name, next) {
 }
 
 const preparation = componentFunction('prepareForReview', '\n  useEffect(() => {')
-const saveDraft = componentFunction('saveHumanDraft', '\n  function createAnother()')
+const saveDraft = componentFunction('saveHumanDraft', '\n  async function refreshRevisionConflict()')
+const submitDraft = componentFunction('submit', '\n  async function saveHumanDraft()')
+const refreshConflict = componentFunction('refreshRevisionConflict', '\n  async function showRevisionConflict()')
+const showConflict = componentFunction('showRevisionConflict', '\n  function resolveRevisionConflict(')
+const resolveStart = source.indexOf('  function resolveRevisionConflict(')
+const resolveConflict = source.slice(resolveStart, source.indexOf('\n  function createAnother()', resolveStart)).trim()
 const applyStart = source.indexOf('  function applyPreparedArticle(')
 const applyPrepared = source.slice(applyStart, source.indexOf('\n  async function resolveProductionImageUrl', applyStart)).trim()
 const formStart = source.indexOf('function canonicalFormFromWizard(')
@@ -36,7 +42,7 @@ function harness({ mode = 'manual', aiEnabled = true, aiFailures = 0, body = ori
   const events = []
   let captured = null
   let article = { id: 'article-1', revision_number: 0, ai_source_captured: false }
-  const counts = { create: 0, capture: 0, ai: 0, scrape: 0, save: 0 }
+  const counts = { create: 0, capture: 0, ai: 0, scrape: 0, save: 0, finalize: 0, intent: 0, approve: 0, dispatch: 0 }
   const context = {
     formData: { source_mode: mode, titulo: 'Pauta original da comissão', conteudo: body, content_type: 'reels', image_url: '', url_original: 'https://example.com/noticia' },
     originBacklog: null,
@@ -48,6 +54,29 @@ function harness({ mode = 'manual', aiEnabled = true, aiFailures = 0, body = ori
     requests: { current: {} },
     supabase: {},
     isSavingDraft: false,
+    isSubmitting: false,
+    mutationInFlightRef: { current: false },
+    revisionConflictRef: { current: false },
+    revisionConflict: null,
+    isRefreshingConflict: false,
+    setRevisionConflict(value) { context.revisionConflict = value },
+    setIsRefreshingConflict(value) { context.isRefreshingConflict = value },
+    setIsSubmitting(value) { context.isSubmitting = value },
+    setSubmitSucceeded(value) { context.submitSucceeded = value },
+    assertEditorialRevision,
+    canKeepLocalEditorialText,
+    isEditorialRevisionConflict,
+    territorialComposerEnabled: false,
+    territorialCatalog: null,
+    masterConfigs: [], masterControl: {}, poolCounts: {},
+    validateProductionIntentStep: () => ({}),
+    buildProductionIntentPayload: (form, options) => ({ ...form, ...options }),
+    buildFinalizePayload: (form, options) => ({ ...form, ...options }),
+    saveEditorialArticleProductionIntent: async () => { counts.intent += 1 },
+    finalizeEditorialArticle: async () => { counts.finalize += 1; article = { ...article, revision_number: article.revision_number + 1, status: 'content_final' } },
+    approveEditorialArticleForRender: async () => { counts.approve += 1; article = { ...article, status: 'ready_for_render' } },
+    dispatchEditorialArticleRender: async () => { counts.dispatch += 1; article = { ...article, status: 'dispatched', candidate_news_id: 'candidate-1' }; return { candidate_news_id: 'candidate-1' } },
+    onComplete(value) { context.completion = value },
     errors: {},
     setErrors(value) { context.errors = value },
     setAutomaticPreparation(value) { context.preparationStatus = value },
@@ -69,7 +98,10 @@ function harness({ mode = 'manual', aiEnabled = true, aiFailures = 0, body = ori
       context.origin = payload
       return article
     },
-    getEditorialArticleForEdit: async () => ({ ...article }),
+    getEditorialArticleForEdit: async () => {
+      if (context.readFailure) throw new Error('NETWORK_ERROR')
+      return { ...article }
+    },
     captureEditorialArticleSource: async (_client, payload) => {
       counts.capture += 1
       events.push('capture')
@@ -91,15 +123,24 @@ function harness({ mode = 'manual', aiEnabled = true, aiFailures = 0, body = ori
     saveEditorialArticleDraft: async (_client, payload) => {
       counts.save += 1
       events.push('save')
+      if (payload.expectedRevisionNumber !== article.revision_number) {
+        throw Object.assign(new Error('EDITORIAL_REVISION_CONFLICT'), { code: 'EDITORIAL_REVISION_CONFLICT' })
+      }
       article = { ...article, ...payload, revision_number: article.revision_number + 1 }
     },
   }
   context.applyPreparedArticle = vm.runInNewContext(`(${applyPrepared})`, context)
   context.canonicalFormFromWizard = vm.runInNewContext(`(${canonicalForm})`, context)
+  context.refreshRevisionConflict = vm.runInNewContext(`(${refreshConflict})`, context)
+  context.showRevisionConflict = vm.runInNewContext(`(${showConflict})`, context)
   return {
     context, counts, events,
     prepare: vm.runInNewContext(`(${preparation})`, context),
     save: vm.runInNewContext(`(${saveDraft})`, context),
+    submit: () => vm.runInNewContext(`(${submitDraft})`, context)({ preventDefault() {} }),
+    resolve: vm.runInNewContext(`(${resolveConflict})`, context),
+    updateRemote(value) { article = { ...article, ...value } },
+    remote: () => article,
     captured: () => captured,
   }
 }
@@ -197,4 +238,125 @@ test('saving edits after AI preparation does not rewrite them again', async () =
   assert.equal(h.counts.save, 1)
   assert.equal(h.context.formData.conteudo, edited)
   assert.equal(h.context.formData.source_conteudo, originalBody)
+})
+
+test('a stale draft preserves local text and blocks further saves and finalization until resolved', async () => {
+  const h = harness()
+  await h.prepare()
+  h.context.formData.conteudo = 'Edição humana local que ainda não foi salva.'
+  h.updateRemote({ revision_number: 2, body: 'Outra sessão salvou esta versão.' })
+  await h.save()
+  assert.equal(h.context.formData.conteudo, 'Edição humana local que ainda não foi salva.')
+  assert.equal(h.context.revisionConflict.article.body, 'Outra sessão salvou esta versão.')
+  assert.equal(h.context.revisionNumberRef.current, 1)
+  await h.save()
+  await h.submit()
+  assert.equal(h.counts.save, 1)
+  assert.equal(h.counts.finalize, 0)
+  assert.equal(h.context.revisionConflictRef.current, true)
+})
+
+test('keeping local text requires an explicit choice and a separate save; later races still conflict', async () => {
+  const h = harness()
+  await h.prepare()
+  h.context.formData.conteudo = 'Texto humano conferido na comparação.'
+  h.updateRemote({ revision_number: 2 })
+  await h.save()
+  h.resolve('local')
+  assert.equal(h.counts.save, 1, 'Choosing local text must not save it automatically')
+  assert.equal(h.context.revisionNumberRef.current, 2)
+  h.updateRemote({ revision_number: 3 })
+  await h.save()
+  assert.equal(h.context.revisionConflictRef.current, true, 'A new remote edit must still be protected')
+  h.resolve('local')
+  await h.save()
+  assert.equal(h.remote().revision_number, 4)
+  assert.equal(h.remote().body, 'Texto humano conferido na comparação.')
+  assert.equal(h.counts.ai, 1)
+})
+
+test('loading remote text is explicit and does not save or regenerate it', async () => {
+  const h = harness()
+  await h.prepare()
+  h.updateRemote({ revision_number: 2, body: 'Texto salvo em outra sessão.' })
+  await h.save()
+  h.resolve('remote')
+  assert.equal(h.context.formData.conteudo, 'Texto salvo em outra sessão.')
+  assert.equal(h.context.revisionConflict, null)
+  assert.equal(h.context.revisionNumberRef.current, 2)
+  assert.equal(h.counts.save, 1)
+  assert.equal(h.counts.ai, 1)
+})
+
+test('failed conflict refresh preserves text and blocks mutation; retry only reads', async () => {
+  const h = harness()
+  await h.prepare()
+  h.updateRemote({ revision_number: 2 })
+  h.context.readFailure = true
+  await h.save()
+  assert.ok(h.context.revisionConflict.error)
+  assert.equal(h.context.formData.conteudo, rewritten.body)
+  await h.save()
+  assert.equal(h.counts.save, 1)
+  h.context.readFailure = false
+  await h.context.refreshRevisionConflict()
+  assert.equal(h.context.revisionConflict.article.revision_number, 2)
+  assert.equal(h.counts.save, 1)
+})
+
+test('submit cannot replace another session edits merely by reading its newer revision', async () => {
+  const h = harness()
+  await h.prepare()
+  h.updateRemote({ revision_number: 2, body: 'Texto da outra sessão.' })
+  await h.submit()
+  assert.equal(h.counts.intent, 0)
+  assert.equal(h.counts.finalize, 0)
+  assert.equal(h.counts.approve, 0)
+  assert.equal(h.context.revisionConflictRef.current, true)
+  assert.equal(h.remote().body, 'Texto da outra sessão.')
+})
+
+test('save and submit cannot overlap even before React updates the busy state', async () => {
+  const h = harness()
+  await h.prepare()
+  let release
+  const pending = new Promise(resolve => { release = resolve })
+  const save = h.context.saveEditorialArticleDraft
+  h.context.saveEditorialArticleDraft = async (...args) => { await pending; return save(...args) }
+  const first = h.save()
+  h.context.isSavingDraft = false // Simulate a second click before React commits its update.
+  await h.submit()
+  await h.save()
+  release()
+  await first
+  assert.equal(h.counts.save, 1)
+  assert.equal(h.counts.finalize, 0)
+  assert.equal(h.context.mutationInFlightRef.current, false)
+})
+
+test('an article that advanced cannot accept local text; an approved article still permits handoff retry', async () => {
+  const h = harness()
+  await h.prepare()
+  h.updateRemote({ revision_number: 2, status: 'content_final' })
+  await h.save()
+  h.resolve('local')
+  assert.equal(h.context.revisionConflictRef.current, true)
+  h.resolve('remote')
+  h.updateRemote({ revision_number: 3, status: 'ready_for_render' })
+  await h.submit()
+  assert.equal(h.counts.finalize, 0)
+  assert.equal(h.counts.approve, 0)
+  assert.equal(h.counts.dispatch, 1)
+  assert.equal(h.context.submitSucceeded, true)
+})
+
+test('normal creation still finalizes, approves and dispatches the reviewed text', async () => {
+  const h = harness()
+  await h.prepare()
+  await h.submit()
+  assert.equal(h.counts.finalize, 1)
+  assert.equal(h.counts.approve, 1)
+  assert.equal(h.counts.dispatch, 1)
+  assert.equal(h.context.submitSucceeded, true)
+  assert.equal(h.counts.ai, 1)
 })

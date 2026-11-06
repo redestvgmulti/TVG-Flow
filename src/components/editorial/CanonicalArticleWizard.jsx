@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import ArticleWizard from './ArticleWizard'
+import EditorialRevisionConflict from './EditorialRevisionConflict'
+import { assertEditorialRevision, canKeepLocalEditorialText, isEditorialRevisionConflict } from '../../services/editorialRevisionConflict'
 import { composerRequiresSourceImage } from '../../services/territorialComposer'
 import { supabase } from '../../services/supabase'
 import { messageForRpcError } from '../../services/editorialArticleContract'
@@ -105,6 +107,8 @@ export default function CanonicalArticleWizard({
   const [submitSucceeded, setSubmitSucceeded] = useState(false)
   const [sourceLocked, setSourceLocked] = useState(Boolean(originBacklog))
   const [automaticPreparation, setAutomaticPreparation] = useState({ status: 'idle', error: '' })
+  const [revisionConflict, setRevisionConflict] = useState(null)
+  const [isRefreshingConflict, setIsRefreshingConflict] = useState(false)
   const articleIdRef = useRef(articleId)
   const sourceImageRef = useRef('')
   const uploadedSourceFileRef = useRef({ file: null, url: '' })
@@ -113,13 +117,15 @@ export default function CanonicalArticleWizard({
   const preparationPromiseRef = useRef(null)
   const autoPrepareStartedRef = useRef(false)
   const requests = useRef({})
+  const mutationInFlightRef = useRef(false)
+  const revisionConflictRef = useRef(false)
 
   useEffect(() => {
     if (!articleId) return
     let active = true
     getEditorialArticleForEdit(supabase, articleId)
       .then(row => {
-        if (!active) return
+        if (!active || mutationInFlightRef.current || revisionConflictRef.current) return
         articleIdRef.current = row.id
         revisionNumberRef.current = row.revision_number
         sourceImageRef.current = row.source_image_url || row.original_source_image_url || ''
@@ -379,7 +385,7 @@ export default function CanonicalArticleWizard({
 
   async function submit(e) {
     e.preventDefault()
-    if (isSubmitting || !articleIdRef.current || !preparedRef.current) return
+    if (isSubmitting || isSavingDraft || mutationInFlightRef.current || revisionConflictRef.current || !articleIdRef.current || !preparedRef.current) return
 
     let canonicalForm = canonicalFormFromWizard(formData, sourceImageRef.current)
     const contentErrors = validateContentStep(canonicalForm, { requireAiFields: true })
@@ -403,6 +409,7 @@ export default function CanonicalArticleWizard({
     }
 
     setErrors({})
+    mutationInFlightRef.current = true
     setIsSubmitting(true)
     try {
       const productionImageUrl = await resolveProductionImageUrl(sourceImageRef.current)
@@ -411,6 +418,7 @@ export default function CanonicalArticleWizard({
       }
       canonicalForm = canonicalFormFromWizard(formData, productionImageUrl)
       let article = await getEditorialArticleForEdit(supabase, articleIdRef.current)
+      assertEditorialRevision(article, revisionNumberRef.current)
       const finalizedContentChanged = article.status === 'content_final' && (
         (article.headline || '').trim() !== (canonicalForm.headline || '').trim()
         || (article.body || '').trim() !== (canonicalForm.body || '').trim()
@@ -424,6 +432,7 @@ export default function CanonicalArticleWizard({
         })
         resetRequestId(requests, 'reopenAfterFailure')
         article = await getEditorialArticleForEdit(supabase, article.id)
+        revisionNumberRef.current = article.revision_number
       }
       if (article.status === 'draft' || article.status === 'editing' || article.status === 'changes_requested') {
         await saveEditorialArticleProductionIntent(supabase, buildProductionIntentPayload(canonicalForm, {
@@ -440,6 +449,7 @@ export default function CanonicalArticleWizard({
         }))
         resetRequestId(requests, 'finalize')
         article = await getEditorialArticleForEdit(supabase, article.id)
+        revisionNumberRef.current = article.revision_number
       }
 
       if (article.status === 'content_final') {
@@ -450,6 +460,7 @@ export default function CanonicalArticleWizard({
         })
         resetRequestId(requests, 'approve')
         article = await getEditorialArticleForEdit(supabase, article.id)
+        revisionNumberRef.current = article.revision_number
       }
 
       let dispatchResult = null
@@ -470,14 +481,19 @@ export default function CanonicalArticleWizard({
         candidateNewsId,
       })
     } catch (error) {
-      toast.error(error?.userMessage || messageForRpcError(error?.code || error?.message).description)
+      if (isEditorialRevisionConflict(error)) {
+        await showRevisionConflict()
+      } else {
+        toast.error(error?.userMessage || messageForRpcError(error?.code || error?.message).description)
+      }
     } finally {
+      mutationInFlightRef.current = false
       setIsSubmitting(false)
     }
   }
 
   async function saveHumanDraft() {
-    if (isSavingDraft || !articleIdRef.current || !preparedRef.current) return
+    if (isSavingDraft || isSubmitting || mutationInFlightRef.current || revisionConflictRef.current || !articleIdRef.current || !preparedRef.current) return
 
     const canonicalForm = canonicalFormFromWizard(formData, sourceImageRef.current)
     const contentErrors = validateContentStep(canonicalForm, { requireAiFields: true })
@@ -492,6 +508,7 @@ export default function CanonicalArticleWizard({
     }
 
     setErrors({})
+    mutationInFlightRef.current = true
     setIsSavingDraft(true)
     try {
       await saveEditorialArticleDraft(supabase, buildDraftPayload(canonicalForm, {
@@ -505,10 +522,48 @@ export default function CanonicalArticleWizard({
       toast.success('Rascunho salvo.')
     } catch (error) {
       resetRequestId(requests, 'humanDraft')
-      toast.error(messageForRpcError(error?.code || error?.message).description)
+      if (isEditorialRevisionConflict(error)) {
+        await showRevisionConflict()
+      } else {
+        toast.error(messageForRpcError(error?.code || error?.message).description)
+      }
     } finally {
+      mutationInFlightRef.current = false
       setIsSavingDraft(false)
     }
+  }
+
+  async function refreshRevisionConflict() {
+    setIsRefreshingConflict(true)
+    try {
+      const article = await getEditorialArticleForEdit(supabase, articleIdRef.current)
+      setRevisionConflict({ article, error: '' })
+    } catch {
+      setRevisionConflict({ article: null, error: 'Não foi possível carregar a versão salva. Seu texto continua nesta tela. Tente atualizar a comparação.' })
+    } finally {
+      setIsRefreshingConflict(false)
+    }
+  }
+
+  async function showRevisionConflict() {
+    revisionConflictRef.current = true
+    resetRequestId(requests, 'humanDraft')
+    resetRequestId(requests, 'finalize')
+    resetRequestId(requests, 'approve')
+    setRevisionConflict({ article: null, error: '' })
+    await refreshRevisionConflict()
+  }
+
+  function resolveRevisionConflict(choice) {
+    const article = revisionConflict?.article
+    if (!article || isRefreshingConflict) return
+    if (choice === 'local' && !canKeepLocalEditorialText(article)) return
+    if (choice === 'remote') applyPreparedArticle(article, { preserveImage: true })
+    else if (choice === 'local') revisionNumberRef.current = article.revision_number
+    else return
+    revisionConflictRef.current = false
+    setRevisionConflict(null)
+    toast.success(choice === 'local' ? 'Seu texto foi mantido. Revise e salve novamente.' : 'Texto salvo carregado para revisão.')
   }
 
   function createAnother() {
@@ -518,6 +573,8 @@ export default function CanonicalArticleWizard({
     revisionNumberRef.current = null
     preparedRef.current = false
     requests.current = {}
+    revisionConflictRef.current = false
+    setRevisionConflict(null)
     setSourceLocked(false)
     setAutomaticPreparation({ status: 'idle', error: '' })
     autoPrepareStartedRef.current = false
@@ -546,6 +603,17 @@ export default function CanonicalArticleWizard({
       }}
       onSaveDraft={saveHumanDraft}
       isSavingDraft={isSavingDraft}
+      hasRevisionConflict={Boolean(revisionConflict)}
+      revisionConflictPanel={revisionConflict && (
+        <EditorialRevisionConflict
+          localForm={formData}
+          article={revisionConflict.article}
+          error={revisionConflict.error}
+          loading={isRefreshingConflict}
+          onRefresh={refreshRevisionConflict}
+          onResolve={resolveRevisionConflict}
+        />
+      )}
       sourceLocked={sourceLocked}
       fixedFiveSteps
       showEditorialDraft

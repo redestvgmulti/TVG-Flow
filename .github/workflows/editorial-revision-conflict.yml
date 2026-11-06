@@ -1,0 +1,62 @@
+name: Editorial revision conflict
+
+on:
+  pull_request:
+    paths:
+      - 'src/components/editorial/**'
+      - 'src/services/editorialRevisionConflict.js'
+      - 'supabase/migrations/*editorial_revision_conflict*'
+      - 'tests/master-v1/manual-editorial-ai-preparation.test.mjs'
+      - 'tests/migrations/editorial-revision-conflict-http409.test.mjs'
+      - '.github/workflows/editorial-revision-conflict.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/components/editorial/**'
+      - 'src/services/editorialRevisionConflict.js'
+      - 'supabase/migrations/*editorial_revision_conflict*'
+      - 'tests/master-v1/manual-editorial-ai-preparation.test.mjs'
+      - 'tests/migrations/editorial-revision-conflict-http409.test.mjs'
+      - '.github/workflows/editorial-revision-conflict.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  revision-conflict:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['55322:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # Test an older release as well: it must receive PT409 rather than enter
+      # its hasql serialization retry loop. No hosted Supabase access is used.
+      - name: Install official PostgREST fixture
+        run: |
+          curl --fail --silent --show-error --location https://github.com/PostgREST/postgrest/releases/download/v13.0.4/postgrest-v13.0.4-linux-static-x86-64.tar.xz | tar -xJ -C "$RUNNER_TEMP"
+          chmod +x "$RUNNER_TEMP/postgrest"
+      - name: Verify editor and real HTTP concurrency
+        env:
+          LOCAL_PG_PORT: 55322
+          POSTGREST_BINARY: ${{ runner.temp }}/postgrest
+        run: >-
+          node --test
+          tests/master-v1/editorial-editor-contract.test.mjs
+          tests/master-v1/editorial-editor-reducer.test.mjs
+          tests/master-v1/editorial-editor-form.test.mjs
+          tests/master-v1/manual-editorial-ai-preparation.test.mjs
+          tests/migrations/editorial-revision-conflict-http409.test.mjs
+      - run: npx eslint src/components/editorial/ArticleWizard.jsx src/components/editorial/CanonicalArticleWizard.jsx src/components/editorial/EditorialRevisionConflict.jsx src/services/editorialRevisionConflict.js
+      - run: npm run build
