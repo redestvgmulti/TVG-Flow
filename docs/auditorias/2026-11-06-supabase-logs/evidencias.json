@@ -1,0 +1,349 @@
+{
+    "project":  "gyooxmpyxncrezjiljrj",
+    "date":  "2026-11-06",
+    "capture_window_utc":  {
+                               "start":  "2026-11-06T11:00:00Z",
+                               "end":  "2026-11-06T12:00:00Z"
+                           },
+    "extended_window_utc":  {
+                                "start":  "2026-11-05T14:25:00Z",
+                                "end":  "2026-11-06T14:25:00Z"
+                            },
+    "level_counts":  [
+                         {
+                             "level":  "info",
+                             "severity":  "",
+                             "source":  "auth_audit_logs",
+                             "status":  "",
+                             "total":  8
+                         },
+                         {
+                             "level":  "info",
+                             "severity":  "",
+                             "source":  "auth_logs",
+                             "status":  "",
+                             "total":  8
+                         },
+                         {
+                             "level":  "",
+                             "severity":  "",
+                             "source":  "edge_logs",
+                             "status":  "200",
+                             "total":  678
+                         },
+                         {
+                             "level":  "",
+                             "severity":  "",
+                             "source":  "edge_logs",
+                             "status":  "201",
+                             "total":  206
+                         },
+                         {
+                             "level":  "",
+                             "severity":  "",
+                             "source":  "edge_logs",
+                             "status":  "204",
+                             "total":  206
+                         },
+                         {
+                             "level":  "",
+                             "severity":  "",
+                             "source":  "edge_logs",
+                             "status":  "101",
+                             "total":  11
+                         },
+                         {
+                             "level":  "",
+                             "severity":  "",
+                             "source":  "function_edge_logs",
+                             "status":  "200",
+                             "total":  98
+                         },
+                         {
+                             "level":  "",
+                             "severity":  "",
+                             "source":  "function_edge_logs",
+                             "status":  "404",
+                             "total":  1
+                         },
+                         {
+                             "level":  "log",
+                             "severity":  "",
+                             "source":  "function_logs",
+                             "status":  "",
+                             "total":  129
+                         },
+                         {
+                             "level":  "info",
+                             "severity":  "",
+                             "source":  "function_logs",
+                             "status":  "",
+                             "total":  97
+                         },
+                         {
+                             "level":  "",
+                             "severity":  "",
+                             "source":  "pgbouncer_logs",
+                             "status":  "",
+                             "total":  155
+                         },
+                         {
+                             "level":  "",
+                             "severity":  "ERROR",
+                             "source":  "postgres_logs",
+                             "status":  "",
+                             "total":  3596
+                         },
+                         {
+                             "level":  "",
+                             "severity":  "LOG",
+                             "source":  "postgres_logs",
+                             "status":  "",
+                             "total":  10
+                         },
+                         {
+                             "level":  "",
+                             "severity":  "",
+                             "source":  "postgrest_logs",
+                             "status":  "",
+                             "total":  71
+                         },
+                         {
+                             "level":  "info",
+                             "severity":  "",
+                             "source":  "realtime_logs",
+                             "status":  "",
+                             "total":  32
+                         },
+                         {
+                             "level":  "info",
+                             "severity":  "",
+                             "source":  "storage_logs",
+                             "status":  "",
+                             "total":  223
+                         }
+                     ],
+    "postgres_events":  [
+                            {
+                                "context":  "PL/pgSQL function ap.save_editorial_article_draft_v2(uuid,text,text,text,text,text,jsonb,uuid,integer) line 29 at RAISE",
+                                "event_message":  "EDITORIAL_REVISION_CONFLICT",
+                                "first_at":  "2026-11-06T11:00:00.286000",
+                                "last_at":  "2026-11-06T11:59:59.325000",
+                                "severity":  "ERROR",
+                                "sqlstate":  "40001",
+                                "total":  3596
+                            },
+                            {
+                                "context":  "",
+                                "event_message":  "logical decoding found consistent point at 2F6/841CA160",
+                                "first_at":  "2026-11-06T11:13:17.029000",
+                                "last_at":  "2026-11-06T11:13:17.048000",
+                                "severity":  "LOG",
+                                "sqlstate":  "00000",
+                                "total":  2
+                            },
+                            {
+                                "context":  "",
+                                "event_message":  "unexpected EOF on standby connection",
+                                "first_at":  "2026-11-06T11:08:27.997000",
+                                "last_at":  "2026-11-06T11:33:16.738000",
+                                "severity":  "LOG",
+                                "sqlstate":  "08P01",
+                                "total":  2
+                            },
+                            {
+                                "context":  "",
+                                "event_message":  "logical decoding found consistent point at 2F6/91337A80",
+                                "first_at":  "2026-11-06T11:39:46.689000",
+                                "last_at":  "2026-11-06T11:39:46.708000",
+                                "severity":  "LOG",
+                                "sqlstate":  "00000",
+                                "total":  2
+                            },
+                            {
+                                "context":  "",
+                                "event_message":  "starting logical decoding for slot \"supabase_realtime_messages_replication_slot_2_148_1_538439a\"",
+                                "first_at":  "2026-11-06T11:13:17.048000",
+                                "last_at":  "2026-11-06T11:39:46.708000",
+                                "severity":  "LOG",
+                                "sqlstate":  "00000",
+                                "total":  2
+                            },
+                            {
+                                "context":  "",
+                                "event_message":  "logical decoding found consistent point at 2F6/913356F0",
+                                "first_at":  "2026-11-06T11:39:46.627000",
+                                "last_at":  "2026-11-06T11:39:46.627000",
+                                "severity":  "LOG",
+                                "sqlstate":  "00000",
+                                "total":  1
+                            },
+                            {
+                                "context":  "",
+                                "event_message":  "logical decoding found consistent point at 2F6/841C7948",
+                                "first_at":  "2026-11-06T11:13:16.842000",
+                                "last_at":  "2026-11-06T11:13:16.842000",
+                                "severity":  "LOG",
+                                "sqlstate":  "00000",
+                                "total":  1
+                            }
+                        ],
+    "capture_conflict_session":  [
+                                     {
+                                         "distinct_transactions":  3596,
+                                         "first_at":  "2026-11-06T11:00:00.286000",
+                                         "last_at":  "2026-11-06T11:59:59.325000",
+                                         "pid":  "987358",
+                                         "session":  "6ac3ed91.f10de",
+                                         "total":  3596
+                                     }
+                                 ],
+    "extended_conflict_session":  [
+                                      {
+                                          "first_at":  "2026-11-05T14:25:00.321000",
+                                          "last_at":  "2026-11-06T14:22:45.321000",
+                                          "pid":  "987358",
+                                          "session":  "6ac3ed91.f10de",
+                                          "total":  86087
+                                      }
+                                  ],
+    "activity_snapshot":  {
+                              "pid":  987358,
+                              "application_name":  "postgrest",
+                              "usename":  "authenticator",
+                              "state":  "active",
+                              "backend_start":  "2026-10-05 18:33:53.401864+00",
+                              "xact_start":  "2026-11-06 14:22:09.152268+00",
+                              "query_start":  "2026-11-06 14:22:09.152605+00",
+                              "state_change":  "2026-11-06 14:22:09.152606+00",
+                              "wait_event_type":  null,
+                              "wait_event":  null
+                          },
+    "functions_raising_editorial_conflict":  [
+                                                 {
+                                                     "schema_name":  "ap",
+                                                     "proname":  "save_editorial_article_draft",
+                                                     "arguments":  "p_article_id uuid, p_headline text, p_body text, p_request_id uuid, p_expected_revision_number integer"
+                                                 },
+                                                 {
+                                                     "schema_name":  "ap",
+                                                     "proname":  "approve_editorial_article_for_render",
+                                                     "arguments":  "p_article_id uuid, p_expected_revision_number integer, p_request_id uuid"
+                                                 },
+                                                 {
+                                                     "schema_name":  "ap",
+                                                     "proname":  "finalize_editorial_article",
+                                                     "arguments":  "p_article_id uuid, p_headline text, p_body text, p_request_id uuid, p_expected_revision_number integer"
+                                                 },
+                                                 {
+                                                     "schema_name":  "ap",
+                                                     "proname":  "save_editorial_article_draft_v2",
+                                                     "arguments":  "p_article_id uuid, p_headline text, p_body text, p_caption text, p_context_tag text, p_category text, p_location jsonb, p_request_id uuid, p_expected_revision_number integer"
+                                                 },
+                                                 {
+                                                     "schema_name":  "ap",
+                                                     "proname":  "finalize_editorial_article_v2",
+                                                     "arguments":  "p_article_id uuid, p_headline text, p_body text, p_caption text, p_context_tag text, p_category text, p_location jsonb, p_request_id uuid, p_expected_revision_number integer"
+                                                 }
+                                             ],
+    "additional_events":  [
+                              {
+                                  "event_message":  "Warp server error: Thread killed by timeout manager",
+                                  "first_at":  "2026-11-06T11:01:07.307226",
+                                  "last_at":  "2026-11-06T11:59:37.472176",
+                                  "source":  "postgrest_logs",
+                                  "total":  70
+                              },
+                              {
+                                  "event_message":  "Disconnecting broadcast changes handler in the step : :streaming",
+                                  "first_at":  "2026-11-06T11:08:27.996000",
+                                  "last_at":  "2026-11-06T11:33:16.734000",
+                                  "source":  "realtime_logs",
+                                  "total":  2
+                              },
+                              {
+                                  "event_message":  "Initializing replication connection (detalhes internos omitidos)",
+                                  "first_at":  "2026-11-06T11:39:46.371000",
+                                  "last_at":  "2026-11-06T11:39:46.371000",
+                                  "source":  "realtime_logs",
+                                  "total":  1
+                              },
+                              {
+                                  "event_message":  "Warp server error: Thread killed by timeout manager06/Nov/2026:11:21:37 +0000: Warp server error: Thread killed by timeout manager",
+                                  "first_at":  "2026-11-06T11:21:37.366831",
+                                  "last_at":  "2026-11-06T11:21:37.366831",
+                                  "source":  "postgrest_logs",
+                                  "total":  1
+                              },
+                              {
+                                  "event_message":  "Initializing replication connection (detalhes internos omitidos)",
+                                  "first_at":  "2026-11-06T11:13:16.714000",
+                                  "last_at":  "2026-11-06T11:13:16.714000",
+                                  "source":  "realtime_logs",
+                                  "total":  1
+                              },
+                              {
+                                  "event_message":  "POST | 404 | https://gyooxmpyxncrezjiljrj.supabase.co/functions/v1/process-notifications",
+                                  "first_at":  "2026-11-06T11:23:02.148000",
+                                  "last_at":  "2026-11-06T11:23:02.148000",
+                                  "source":  "function_edge_logs",
+                                  "total":  1
+                              }
+                          ],
+    "pgbouncer_categories":  [
+                                 {
+                                     "category":  "login attempt",
+                                     "total":  75
+                                 },
+                                 {
+                                     "category":  "client close request",
+                                     "total":  68
+                                 },
+                                 {
+                                     "category":  "server idle timeout",
+                                     "total":  6
+                                 },
+                                 {
+                                     "category":  "new connection to server",
+                                     "total":  1
+                                 },
+                                 {
+                                     "category":  "new connection to server",
+                                     "total":  1
+                                 },
+                                 {
+                                     "category":  "new connection to server",
+                                     "total":  1
+                                 },
+                                 {
+                                     "category":  "new connection to server",
+                                     "total":  1
+                                 },
+                                 {
+                                     "category":  "new connection to server",
+                                     "total":  1
+                                 },
+                                 {
+                                     "category":  "new connection to server",
+                                     "total":  1
+                                 }
+                             ],
+    "missing_notification_endpoint":  {
+                                          "present_in_current_function_list":  false,
+                                          "slug":  "process-notifications",
+                                          "client":  [
+                                                         {
+                                                             "client":  "curl/8.5.0",
+                                                             "referer":  "",
+                                                             "role":  "",
+                                                             "status":  "404",
+                                                             "timestamp":  "2026-11-06T11:23:02.148000"
+                                                         }
+                                                     ]
+                                      },
+    "local_tests":  {
+                        "scope":  "editorial contract, form, reducer",
+                        "failed":  0,
+                        "passed":  40
+                    }
+}
