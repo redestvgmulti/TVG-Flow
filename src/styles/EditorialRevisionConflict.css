@@ -1,0 +1,25 @@
+.ap-revision-conflict {
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid #f59e0b;
+  border-radius: 12px;
+  background: var(--color-bg-secondary, #fffbeb);
+  color: var(--color-text-primary, #1f2937);
+}
+
+.ap-revision-conflict h3, .ap-revision-conflict h4 { margin: 0 0 8px; }
+.ap-revision-conflict p { font-size: 13px; line-height: 1.6; }
+.ap-revision-conflict-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.ap-revision-conflict-field { grid-column: 1 / -1; min-width: 0; }
+.ap-revision-conflict-values { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.ap-revision-conflict-values p { margin: 6px 0; padding: 10px; max-height: 200px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; border: 1px solid var(--color-border, #d1d5db); border-radius: 8px; }
+.ap-revision-conflict-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.ap-revision-conflict-actions button { white-space: normal; }
+
+@media (max-width: 600px) {
+  .ap-revision-conflict-grid > div:not(.ap-revision-conflict-field) { display: none; }
+  .ap-revision-conflict-values { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .ap-revision-conflict-values p:first-child::before { content: 'Seu texto: '; font-weight: 700; }
+  .ap-revision-conflict-values p:last-child::before { content: 'Texto salvo: '; font-weight: 700; }
+  .ap-revision-conflict-actions button { flex: 1 1 100%; }
+}

@@ -85,6 +85,8 @@ export default function ArticleWizard({
     onRetryPreparation,
     onSaveDraft,
     isSavingDraft = false,
+    revisionConflictPanel = null,
+    hasRevisionConflict = false,
 }) {
     const [step, setStep] = useState(0);
     const [maxReached, setMaxReached] = useState(0);
@@ -706,6 +708,7 @@ export default function ArticleWizard({
                 )}
             </div>
 
+            {revisionConflictPanel}
             <div className="ap-wizard-footer">
                 <div className={`ap-wizard-footer-hint${blocker || preparationError || automaticPreparationError ? ' is-blocked' : ''}`} role={preparationError || automaticPreparationError ? 'alert' : undefined}>
                     {isPreparing || preparationStatus === 'preparing' ? 'Preparando matéria...' : preparationError || automaticPreparationError || footerHint}
@@ -719,13 +722,13 @@ export default function ArticleWizard({
                     {isLastStep ? (
                         <>
                             {onSaveDraft && (
-                                <button type="button" disabled={isSubmitting || isSavingDraft} className="ap-wizard-back-btn" onClick={() => void onSaveDraft()}>
+                                <button type="button" disabled={isSubmitting || isSavingDraft || hasRevisionConflict} className="ap-wizard-back-btn" onClick={() => void onSaveDraft()}>
                                     {isSavingDraft ? 'Salvando...' : 'Salvar rascunho'}
                                 </button>
                             )}
                             {/* Distinct `key` from the Continuar button below is load-bearing, not
                                 decorative: it prevents the advancing click from becoming submit. */}
-                            <button key="submit" type="submit" disabled={isSubmitting || isSavingDraft} className="ap-af-submit">
+                            <button key="submit" type="submit" disabled={isSubmitting || isSavingDraft || hasRevisionConflict} className="ap-af-submit">
                                 {isSubmitting ? (<><span className="ap-af-submit-spinner" aria-hidden="true" />Enviando...</>) : submitLabel}
                             </button>
                         </>
