@@ -104,7 +104,7 @@ test('editorial revision conflicts preserve ACL, revisions and HTTP liveness', {
     const server = spawn(process.env.POSTGREST_BINARY, [], {
       windowsHide: true,
       env: { ...process.env,
-        PGRST_DB_URI: `postgres://postgres@127.0.0.1:${connection.port}/${ctx.databaseName}`,
+        PGRST_DB_URI: `postgres://${encodeURIComponent(connection.user)}:${encodeURIComponent(connection.password)}@127.0.0.1:${connection.port}/${ctx.databaseName}`,
         PGRST_DB_SCHEMAS: 'ap', PGRST_DB_ANON_ROLE: 'anon', PGRST_JWT_SECRET: secret,
         PGRST_SERVER_HOST: '127.0.0.1', PGRST_SERVER_PORT: String(httpPort),
       }, stdio: ['ignore', 'pipe', 'pipe'],
@@ -117,7 +117,7 @@ test('editorial revision conflicts preserve ACL, revisions and HTTP liveness', {
       for (let i = 0; i < 60; i++) {
         try { ready = (await fetch(`http://127.0.0.1:${httpPort}/`, { signal: AbortSignal.timeout(500) })).status === 200 } catch { /* Wait only for the isolated local fixture. */ }
         if (ready) break
-        if (server.exitCode !== null) throw new Error(serverLog)
+        if (server.exitCode !== null) throw new Error(`PostgREST fixture exited with ${server.exitCode}: ${serverLog}`)
         await new Promise(resolve => setTimeout(resolve, 100))
       }
       assert.ok(ready, serverLog)
